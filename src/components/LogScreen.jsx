@@ -207,7 +207,7 @@ export default function LogScreen({
                 {onToggleExUnit && (
                   <button onClick={() => onToggleExUnit(ex.name)}
                     style={{ padding: "3px 9px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: "1px solid var(--border2)", background: exUnit !== unit ? "var(--text)" : "var(--card2)", color: exUnit !== unit ? "var(--bg)" : "var(--text2)" }}>
-                    {{ kg: "kg", lbs: "lbs", BW: "自重" }[exUnit] || exUnit}
+                    {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
                   </button>
                 )}
                 <button onClick={() => moveEx(i, -1)} style={{ background: "none", color: i === 0 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▲</button>
@@ -229,9 +229,9 @@ export default function LogScreen({
                       {prev.sets?.map((s, i) => (
                         <span key={i}>
                           {i > 0 && <span style={{ color: "var(--text5)", margin: "0 4px" }}>/</span>}
-                          {s.weight === "BW" ? "BW" : `${dispW(s.weight, exUnit)}${exUnit}`}×{s.reps}
+                          {s.weight === "BW" ? "自重" : `${dispW(s.weight, exUnit)}${exUnit}`}×{s.reps}
                         </span>
-                      )) || `${prev.weight === "BW" ? "BW" : `${dispW(prev.weight, exUnit)}${exUnit}`}×${prev.reps}`}
+                      )) || `${prev.weight === "BW" ? "自重" : `${dispW(prev.weight, exUnit)}${exUnit}`}×${prev.reps}`}
                     </div>
                   </>
                 )}
