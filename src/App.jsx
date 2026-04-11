@@ -41,6 +41,51 @@ export default function GymApp() {
   const [unit, setUnit]       = useState(() => load("unit", "kg"));
   const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const handleSetLogDate = (date) => {
+  setLogDate(date);
+  // その日に記録があればhistory画面へ
+  const hasRecord = Object.values(history).some(recs =>
+    recs.some(r => r.date === date)
+  );
+  if (hasRecord) setScreen("history");
+};
+
+
+  // ─── スワイプバック ────────────────────────────
+useEffect(() => {
+  const BACK_MAP = {
+    prep: "home",
+    log: "prep",
+    setup_routine: "home",
+    history: "home",
+  };
+
+  let startX = 0;
+  let startY = 0;
+
+  const onTouchStart = (e) => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  };
+
+  const onTouchEnd = (e) => {
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    // 横スワイプ（右方向50px以上、縦ズレが横より小さい）
+    if (dx > 50 && Math.abs(dy) < Math.abs(dx)) {
+      const dest = BACK_MAP[screen];
+      if (dest) setScreen(dest);
+    }
+  };
+
+  window.addEventListener("touchstart", onTouchStart);
+  window.addEventListener("touchend", onTouchEnd);
+  return () => {
+    window.removeEventListener("touchstart", onTouchStart);
+    window.removeEventListener("touchend", onTouchEnd);
+  };
+}, [screen]);
+
 
   // ─── AI Coach ─────────────────────────────────────
   const [aiMsgs, setAiMsgs] = useState([{ role: "assistant", content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪" }]);
@@ -486,7 +531,7 @@ export default function GymApp() {
           onGoToSetup={() => setScreen("setup_routine")}
           unit={unit}
           logDate={logDate}
-          setLogDate={setLogDate}
+          setLogDate={handsetLogDate}
         />
       )}
 
