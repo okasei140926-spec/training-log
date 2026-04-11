@@ -569,13 +569,25 @@ useEffect(() => {
                 </div>
               );
             })}
-          <button onClick={() => { setSelectedDateRecord(null);
-            setTodayLabels([]);
-            setSessionEx(null);
-            setLogData({});
-            setExerciseUnits({});
-            setScreen("log")
-          }}
+          <button onClick={() => {
+  const date = selectedDateRecord;
+  setSelectedDateRecord(null);
+  // その日の種目と記録をセット
+  const dayExercises = Object.entries(history)
+    .filter(([, recs]) => recs.some(r => r.date === date))
+    .map(([name]) => ({ id: Date.now() + Math.random(), name }));
+  const dayLogData = {};
+  dayExercises.forEach(({ name }) => {
+    const rec = history[name]?.find(r => r.date === date);
+    if (rec?.sets) dayLogData[name] = rec.sets.map(s => ({ ...s, done: true }));
+  });
+  setTodayLabels([]);
+  setSessionEx(dayExercises);
+  setLogData(dayLogData);
+  setExerciseUnits({});
+  setScreen("log");
+}}
+
             style={{ width: "100%", marginTop: 20, padding: "14px", borderRadius: 12, background: "var(--text)", color: "var(--bg)", fontWeight: 800, fontSize: 15 }}>
             この日に記録する
           </button>
