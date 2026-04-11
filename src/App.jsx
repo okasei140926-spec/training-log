@@ -51,6 +51,11 @@ export default function GymApp() {
   if (hasRecord) setSelectedDateRecord(date);
 };
 
+useEffect(() => {
+  const today = new Date().toISOString().split("T")[0];
+      if (logDate < today)
+    setLogDate(today);
+  }, []);
 
   // ─── スワイプバック ────────────────────────────
 useEffect(() => {

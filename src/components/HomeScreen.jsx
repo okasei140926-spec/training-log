@@ -113,7 +113,7 @@ export default function HomeScreen({ muscleEx, history, todayLabels, setTodayLab
         {todayLabels.length > 0 ? (
           <button onClick={onStartWorkout}
             style={{ width: "100%", padding: "18px", borderRadius: 16, background: btnColor, color: LABEL_COLORS[todayLabels[0]] ? "#000" : "var(--bg)", fontWeight: 900, fontSize: 17 }}>
-            メニューを確認して始める 💪
+            スタート 💪
           </button>
         ) : (
           <div style={{ textAlign: "center", color: "var(--text4)", padding: "8px 0", fontSize: 14 }}>
