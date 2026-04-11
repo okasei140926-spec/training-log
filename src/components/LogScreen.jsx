@@ -208,31 +208,26 @@ export default function LogScreen({
               const canCopy = idx < sets.length - 1;
               return (
                 <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 1fr 46px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: "var(--border)", fontSize: 11, color: "var(--text2)", fontWeight: 700, alignSelf: "center" }}>
-                    {idx + 1}
-                  </div>
+                  <button onClick={() => setField(ex.name, idx, "weight", set.weight === "BW" ? "" : "BW")}
+  style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.weight === "BW" ? "var(--text)" : "var(--border)", fontSize: 11, color: set.weight === "BW" ? "var(--bg)" : "var(--text2)", fontWeight: 700, alignSelf: "center", border: "none" }}>
+  {idx + 1}
+</button>
+
+                  
                   {set.weight === "BW" ? (
                     <button onClick={() =>
                   setField(ex.name, idx, "weight", "")}
-                      style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px",
+                      style={{ width: "100%", background: "var(--card2)", border: "2px solid var(--border2)", borderRadius: 10, padding: "10px 8px",
                         color: "var(--text2)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
-                            自重
+                            自重 <span style={{ fontSize: 10, color: "var(--text4)" }}>タップでkg</span>
                         </button>
                   ) : (
-                    <div style={{ display: "flex", gap: 4 }}>
-                        <input type="text"
-                    inputMode="decimal" value={set.weight}
+                        <input type="text" inputMode="decimal" value={set.weight}
                           onChange={e => setField(ex.name, idx, "weight", e.target.value)}
-                    placeholder="0"
-                          style={{ flex: 1, background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 4px", color: "var(--text)", fontSize: 16, fontWeight: 700,
+                          onLongPress={() => setField(ex.name, idx, "weight", "BW")}
+                        placeholder="0"
+                          style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700,
                             textAlign: "center" }} />
-                            <button onClick={() => 
-                            setField(ex.name, idx, "weight", "BW")}
-                                style={{ padding: "4px 6px", borderRadius: 8, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 9, fontWeight: 700 }}
-                            >
-                                BW
-                            </button>
-                        </div>
                     )}
 
                   <input type="text" inputMode="numeric" value={set.reps}
