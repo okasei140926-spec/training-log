@@ -542,7 +542,14 @@ useEffect(() => {
       muscleEx={muscleEx}
       history={history}
       todayLabels={todayLabels}
-      setTodayLabels={(labels) => { setTodayLabels(labels); setSessionEx(null); setLogData({}); setExerciseUnits({}); }}
+      setTodayLabels={(labels) => { 
+  setTodayLabels(labels); 
+  setSessionEx(null); 
+  setLogData({}); 
+  setExerciseUnits({});
+  if (labels.length > 0) setScreen("log");
+}}
+
       onStartWorkout={() => handlePrepStart(exercises)}
       onStartFree={handleStartFree}
       onGoToSetup={() => setScreen("setup_routine")}
