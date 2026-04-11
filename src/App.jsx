@@ -40,7 +40,14 @@ export default function GymApp() {
   // eslint-disable-next-line no-unused-vars
   const [unit, setUnit]       = useState(() => load("unit", "kg"));
   const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
-  const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [logDate, setLogDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-$
+    {String(d.getMonth()
+    +1).padStart(2,"0")}-$
+    {String(d.getDate()).padStart(2,"0")}`;
+  });
+
   const [selectedDateRecord, setSelectedDateRecord] = useState(null);
   const handleSetLogDate = (date) => {
   setLogDate(date);
@@ -347,7 +354,11 @@ useEffect(() => {
     setLogData({});
     setSessionEx(null);
     setExerciseUnits({});
-    setLogDate(new Date().toISOString().split("T")[0]);
+    const d = new Date();
+    setLogDate(`${d.getFullYear()}-$
+    {String(d.getMonth()
+    +1).padStart(2,"0")}-$
+    {String(d.getDate()).padStart(2,"0")}`);
     stopTimer();
     setSummary({ exCount, setCount, prs });
     setScreen("home");
