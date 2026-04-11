@@ -4,7 +4,6 @@ import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 
 import HomeScreen    from "./components/HomeScreen";
-import PrepScreen    from "./components/PrepScreen";
 import LogScreen     from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
@@ -154,6 +153,7 @@ useEffect(() => {
   const baseExercises = todayLabels.flatMap(l => (muscleEx[l] || []).map(ex => ({ ...ex, label: l })));
   const exercises     = sessionEx !== null ? sessionEx : baseExercises;
 
+  // eslint-disable-next-line no-unuserd-vars
   const lastWorkoutExercises = (() => {
     if (!Object.keys(history).length) return [];
     const allDates = Object.values(history).flatMap(recs => recs.map(r => r.date));
