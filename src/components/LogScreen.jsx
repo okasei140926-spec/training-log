@@ -52,7 +52,7 @@ export default function LogScreen({
   const title = todayLabels.length ? todayLabels.join(" + ") : "ワークアウト";
 
   return (
-    <div className="fade-in" style={{ padding: "20px" }}>
+    <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         {onBack && (
           <button onClick={onBack} style={{ background: "none", color: "var(--text2)", fontSize: 22, padding: "0 4px", lineHeight: 1 }}>‹</button>
@@ -223,16 +223,16 @@ export default function LogScreen({
                   <input type="text" inputMode="numeric" value={set.reps}
                     onChange={e => setField(ex.name, idx, "reps", e.target.value)} placeholder="0"
                     style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, height: "100%" }}>
                     {canCopy && exUnit !== "BW" && onCopyDown ? (
                       <button onClick={() => onCopyDown(ex.name, idx)}
-                        style={{ flex: 1, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
-                        ↓kg
+                        style={{ flex: 1, minHeight: 18, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
+                        ↓{exUnit === "lbs" ? "lbs" : "kg"}
                       </button>
                     ) : <div style={{ flex: 1 }} />}
                     {canCopy && onCopyDownReps ? (
                       <button onClick={() => onCopyDownReps(ex.name, idx)}
-                        style={{ flex: 1, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
+                        style={{ flex: 1, minHeight: 18, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
                         ↓rep
                       </button>
                     ) : <div style={{ flex: 1 }} />}

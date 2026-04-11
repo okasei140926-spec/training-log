@@ -452,26 +452,6 @@ export default function GymApp() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => {
-            const newUnit = unit === "kg" ? "lbs" : "kg";
-            setUnit(newUnit);
-            setLogData(p => {
-              const out = {};
-              Object.entries(p).forEach(([exName, sets]) => {
-                if (exerciseUnits[exName] != null) { out[exName] = sets; return; }
-                out[exName] = sets.map(s => {
-                  if (!s.weight || s.weight === "BW" || s.weight === "") return s;
-                  const n = Number(s.weight);
-                  if (isNaN(n) || n === 0) return s;
-                  const v = newUnit === "lbs"
-                    ? String(Math.round(n * KG_TO_LBS * 10) / 10)
-                    : String(Math.round(n / KG_TO_LBS * 100) / 100);
-                  return { ...s, weight: v };
-                });
-              });
-              return out;
-            });
-          }} style={S.pillBtn}>{unit}</button>
           <button onClick={() => setIsDark(p => !p)} style={S.pillBtn}>{isDark ? "☀️" : "🌙"}</button>
           <button onClick={() => setScreen("setup_routine")} style={S.pillBtn}>⚙</button>
         </div>

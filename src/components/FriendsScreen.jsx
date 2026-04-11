@@ -36,14 +36,22 @@ export default function FriendsScreen({ history, onCopyMenu }) {
   };
 
   const today = new Date().toISOString().split("T")[0];
+  const thresholdDate = new Date();
+  thresholdDate.setDate(thresholdDate.getDate() - 2);
+  const thresholdStr = thresholdDate.toISOString().split("T")[0];
 
-  const myTodayExercises = Object.entries(history)
-    .filter(([, recs]) => recs[recs.length - 1]?.date === today)
+  const myRecentExercises = Object.entries(history)
+    .filter(([, recs]) => recs[recs.length - 1]?.date >= thresholdStr)
     .map(([name, recs]) => {
       const last   = recs[recs.length - 1];
       const topSet = last.sets?.reduce((best, s) => Number(s.weight) > Number(best.weight) ? s : best, last.sets[0]);
-      return { name, weight: topSet?.weight || last.weight, reps: topSet?.reps || last.reps };
-    });
+      return { name, weight: topSet?.weight || last.weight, reps: topSet?.reps || last.reps, date: last.date };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const myTodayExercises = myRecentExercises.filter(e => e.date === today);
+
+  const activeRecently = myRecentExercises.length > 0;
 
   const myBests = KEY_EXERCISES.reduce((acc, ex) => {
     const recs = history[ex];
@@ -57,11 +65,11 @@ export default function FriendsScreen({ history, onCopyMenu }) {
   return (
     <div className="fade-in" style={{ padding: "20px" }}>
 
-      <div style={S.sLabel}>今日のアクティビティ</div>
+      <div style={S.sLabel}>最近のアクティビティ（3日間）</div>
 
       {/* 自分のカード */}
       <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: activeToday ? 14 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: activeRecently ? 14 : 0 }}>
           <div style={{ width: 44, height: 44, borderRadius: 22, background: "var(--text)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "var(--bg)", flexShrink: 0 }}>
             YOU
           </div>
@@ -75,13 +83,16 @@ export default function FriendsScreen({ history, onCopyMenu }) {
               )}
             </div>
             <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
-              {activeToday ? `${myTodayExercises.length}種目完了` : "まだ今日のトレーニングなし"}
+              {activeRecently ? `直近3日 ${myRecentExercises.length}種目` : "直近3日の記録なし"}
             </div>
           </div>
         </div>
-        {activeToday && myTodayExercises.map((ex, i) => (
+        {activeRecently && myRecentExercises.map((ex, i) => (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--card2)", borderRadius: 10, marginBottom: 6 }}>
-            <div style={{ fontSize: 13, color: "var(--text3)" }}>{ex.name}</div>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--text3)" }}>{ex.name}</div>
+              <div style={{ fontSize: 10, color: "var(--text4)" }}>{ex.date === today ? "今日" : ex.date}</div>
+            </div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
               {ex.weight}kg <span style={{ color: "var(--text2)", fontWeight: 400 }}>×</span> {ex.reps}rep
             </div>
