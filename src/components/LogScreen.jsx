@@ -19,6 +19,7 @@ export default function LogScreen({
   const [customInput, setCustomInput] = useState("");
   const [editingId, setEditingId]     = useState(null);
   const [editingName, setEditingName] = useState("");
+  const [activeExIdx, setActiveExIdx] = useState(0);
   const editRef = useRef(null);
 
   const accentColor = dayColor || "var(--text)";
@@ -159,6 +160,31 @@ export default function LogScreen({
           if (!best) return s;
           return Number(s.weight) * (1 + Number(s.reps) / 30) >= Number(best.weight) * (1 + Number(best.reps) / 30) ? s : best;
         }, null);
+
+        if (i !== activeExIdx) {
+  const doneSetsCount = sets.filter(s => s.done && s.weight && s.reps).length;
+  return (
+    <React.Fragment key={ex.id}>
+      <div onClick={() => setActiveExIdx(i)}
+        style={{ background: "var(--card)", borderRadius: 16, padding: "12px 16px", marginBottom: 12, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{ex.name}</div>
+          <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
+            {doneSetsCount > 0 ? `${doneSetsCount}セット完了` : "タップして開始"}
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text3)" }}>▼</div>
+      </div>
+      {i < exercises.length - 1 && (
+        <button onClick={() => { onSetInsertIndex && onSetInsertIndex(i); setShowAdd(true); }}
+          style={{ width: "100%", marginBottom: 4, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
+          ＋ 種目を追加
+        </button>
+      )}
+    </React.Fragment>
+  );
+}
+
 
         return (
 

@@ -249,8 +249,11 @@ useEffect(() => {
   setLogData(p => {
     const s = [...(p[name] || getExSets(name))];
     const updated = { ...s[idx], [field]: val };
-    const isDone = (updated.weight || updated.weight === "BW") && updated.reps;
-    s[idx] = { ...updated, done: isDone };
+    if (field !== "done") {
+        const isDone = (updated.weight || updated.weight === "BW") && updated.reps;
+        updated.done = isDone;
+    }
+    s[idx] = updated;
     return { ...p, [name]: s };
   });
 };
