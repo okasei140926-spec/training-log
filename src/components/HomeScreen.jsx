@@ -8,7 +8,11 @@ export default function HomeScreen({ muscleEx, history, todayLabels, setTodayLab
   const selectedExercises = todayLabels.flatMap(l => muscleEx[l] || []);
   const btnColor = LABEL_COLORS[todayLabels[0]] || "var(--text)";
   const hasAnyExercises = Object.values(muscleEx).some(arr => arr.length > 0);
-  const todayStr = new Date().toISOString().split("T")[0];
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}-$
+  {String(d.getMonth()
+  +1).padStart(2,"0")}-$
+  {String(d.getDate()).padStart(2,"0")}`;
   const isToday = !logDate || logDate === todayStr;
 
   return (
