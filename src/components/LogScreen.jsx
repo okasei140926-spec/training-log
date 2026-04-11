@@ -236,13 +236,13 @@ export default function LogScreen({
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, height: "100%" }}>
                     {canCopy && exUnit !== "BW" && onCopyDown ? (
                       <button onClick={() => onCopyDown(ex.name, idx)}
-                        style={{ flex: 1, minHeight: 18, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
+                        style={{ flex: 1, minHeight: 28, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
                         ↓{exUnit === "lbs" ? "lbs" : "kg"}
                       </button>
                     ) : <div style={{ flex: 1 }} />}
                     {canCopy && onCopyDownReps ? (
                       <button onClick={() => onCopyDownReps(ex.name, idx)}
-                        style={{ flex: 1, minHeight: 18, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
+                        style={{ flex: 1, minHeight: 28, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
                         ↓rep
                       </button>
                     ) : <div style={{ flex: 1 }} />}
