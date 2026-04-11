@@ -282,7 +282,7 @@ export default function LogScreen({
     style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
 )}
 
-{canCopy && exUnit !== "BW" && onCopyDown ? (
+{canCopy && set.weight !== "BW" && onCopyDown ? (
   <button onClick={() => onCopyDown(ex.name, idx - 1)}
     style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
     ↓
