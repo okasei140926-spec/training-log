@@ -51,13 +51,6 @@ export default function GymApp() {
   if (hasRecord) setSelectedDateRecord(date);
 };
 
-// eslint-disable-next-line react-hooks/exhaustive-deps
-useEffect(() => {
-  const today = new Date().toISOString().split("T")[0];
-      if (logDate < today)
-    setLogDate(today);
-  }, []);
-
   // ─── スワイプバック ────────────────────────────
 useEffect(() => {
   const BACK_MAP = {
