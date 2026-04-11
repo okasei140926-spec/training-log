@@ -153,7 +153,7 @@ useEffect(() => {
   const baseExercises = todayLabels.flatMap(l => (muscleEx[l] || []).map(ex => ({ ...ex, label: l })));
   const exercises     = sessionEx !== null ? sessionEx : baseExercises;
 
-  // eslint-disable-next-line no-unuserd-vars
+  // eslint-disable-next-line no-unused-vars
   const lastWorkoutExercises = (() => {
     if (!Object.keys(history).length) return [];
     const allDates = Object.values(history).flatMap(recs => recs.map(r => r.date));
