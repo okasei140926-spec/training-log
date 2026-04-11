@@ -531,7 +531,7 @@ useEffect(() => {
           onGoToSetup={() => setScreen("setup_routine")}
           unit={unit}
           logDate={logDate}
-          setLogDate={handsetLogDate}
+          setLogDate={handleSetLogDate}
         />
       )}
 
