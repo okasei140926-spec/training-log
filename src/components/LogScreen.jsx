@@ -233,13 +233,30 @@ export default function LogScreen({
             </div>
 
             {sets.map((set, idx) => {
-              const canCopy = idx < sets.length - 1;
-              return (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 1fr 46px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
-                  <button onClick={() => setField(ex.name, idx, "weight", set.weight === "BW" ? "" : "BW")}
-  style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.weight === "BW" ? "var(--text)" : "var(--border)", fontSize: 11, color: set.weight === "BW" ? "var(--bg)" : "var(--text2)", fontWeight: 700, alignSelf: "center", border: "none" }}>
-  {idx + 1}
-</button>
+  const canCopy = idx < sets.length - 1;
+  
+  // 完了済みセットはコンパクト表示
+  if (set.done && set.weight && set.reps) {
+    return (
+      <div key={idx} onClick={() => setField(ex.name, idx, "done", false)}
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", marginBottom: 6, borderRadius: 10, background: "var(--card2)", border: "1px solid var(--border)" }}>
+        <div style={{ width: 20, height: 20, borderRadius: 10, background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#000", fontWeight: 900, flexShrink: 0 }}>
+          {idx + 1}
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", flex: 1 }}>
+          {set.weight === "BW" ? "自重" : `${set.weight}kg`} × {set.reps}rep
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text3)" }}>タップで編集</div>
+      </div>
+    );
+  }
+
+  return (
+    <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 1fr 46px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
+      <button onClick={() => setField(ex.name, idx, "weight", set.weight === "BW" ? "" : "BW")}
+        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.weight === "BW" ? "var(--text)" : "var(--border)", fontSize: 11, color: set.weight === "BW" ? "var(--bg)" : "var(--text2)", fontWeight: 700, alignSelf: "center", border: "none" }}>
+        {idx + 1}
+      </button>            
 
                   
                   {set.weight === "BW" ? (
