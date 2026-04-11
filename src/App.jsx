@@ -252,8 +252,7 @@ useEffect(() => {
   const addSet = (name) => {
     setLogData(p => {
       const s = [...(p[name] || getExSets(name))];
-      const l = s[s.length - 1] || { weight: "", reps: "", done: false };
-      return { ...p, [name]: [...s, { ...l, done: false }] };
+      return { ...p, [name]: [...s, { weight: "", reps: "", done: false }] };
     });
   };
 
