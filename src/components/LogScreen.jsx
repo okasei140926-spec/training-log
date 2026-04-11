@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { calc1RM, dispW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
+import { LABEL_COLORS } from "../constants/suggestions";
 
 const PRESET_SECS = [30, 60, 90, 120];
 
@@ -10,7 +11,7 @@ export default function LogScreen({
   exercises, logData, getExSets, setField, addSet, removeSet, removeEx,
   timerLeft, intervalSec, setIntervalSec, startTimer, stopTimer,
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-  getExUnit, onToggleExUnit, onSetInsertIndex,
+  getExUnit, onToggleExUnit, onSetInsertIndex, muscleEx, setTodayLabels,
 }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
@@ -59,6 +60,30 @@ export default function LogScreen({
         )}
         <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
       </div>
+
+      {/* 部位チップ */}
+<div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 8, msOverflowStyle: "none", scrollbarWidth: "none" }}>
+  {Object.keys(muscleEx || {}).filter(lbl => (muscleEx[lbl] || []).length > 0).map(lbl => {
+    const isSelected = todayLabels.includes(lbl);
+    const col = LABEL_COLORS[lbl];
+    return (
+      <button key={lbl} onClick={() => {
+        if (isSelected) {
+          (muscleEx[lbl] || []).forEach(e => removeEx(e.name));
+          setTodayLabels(p => p.filter(l => l !== lbl));
+        } else {
+          (muscleEx[lbl] || []).forEach(e => onAddEx(e.name));
+          setTodayLabels(p => [...p, lbl]);
+        }
+      }}
+        style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",
+          background: isSelected ? col : "var(--card2)",
+          color: isSelected ? "#000" : "var(--text2)" }}>
+        {lbl}
+      </button>
+    );
+  })}
+</div>
 
       {/* タイマーエリア */}
       {timerLeft !== null ? (

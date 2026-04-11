@@ -647,6 +647,8 @@ useEffect(() => {
           unit={unit}
           getExUnit={getExUnit}
           onToggleExUnit={toggleExUnit}
+          muscleEx={muscleEx}
+          setTodayLabels={setTodayLabels}
         />
       )}
 
