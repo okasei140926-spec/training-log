@@ -152,7 +152,7 @@ export default function PrepScreen({
 
       <button onClick={() => canStart && onStart(exercises)}
         style={{ width: "100%", padding: 18, borderRadius: 16, background: canStart ? btnColor : "var(--card2)", color: canStart ? btnText : "var(--text4)", fontWeight: 900, fontSize: 18 }}>
-        {canStart ? "START 💪" : "種目を選んでください"}
+        {"START 💪"}
       </button>
 
       {showAdd && (
