@@ -10,7 +10,7 @@ export default function LogScreen({
   exercises, logData, getExSets, setField, addSet, removeSet, removeEx,
   timerLeft, intervalSec, setIntervalSec, startTimer, stopTimer,
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-  getExUnit, onToggleExUnit,
+  getExUnit, onToggleExUnit, onSetInsertIndex,
 }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
@@ -260,7 +260,7 @@ export default function LogScreen({
             </button>
           </div>
           {i < exercises.length - 1 && (
-            <button onClick={() => setShowAdd(true)}
+            <button onClick={() => { onSetInsertIndex && onSetInsertIndex(i); setShowAdd(true); }}
               style={{ width: "100%", marginBottom: 8, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
               ＋ 種目を追加
             </button>

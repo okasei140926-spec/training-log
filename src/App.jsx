@@ -273,6 +273,8 @@ useEffect(() => {
     setExerciseUnits(p => { const n = { ...p }; delete n[name]; return n; });
   };
 
+  const [insertIndex, setInsertIndex] = useState(null);
+
   const addExToSession = (name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -280,8 +282,14 @@ useEffect(() => {
     setSessionEx(p => {
       const current = p !== null ? p : [...baseExercises];
       if (current.find(e => e.name === trimmed)) return current;
+      if (insertIndex !== null) {
+        const next = [...current];
+        next.splice(insertIndex + 1, 0, ex);
+        return next;
+      }
       return [...current, ex];
     });
+    setInsertIndex(null);
   };
 
   const reorderEx = (fromIdx, toIdx) => {
@@ -603,6 +611,7 @@ useEffect(() => {
           stopTimer={stopTimer}
           saveLog={saveLog}
           onAddEx={addExToSession}
+          onSetInsertIndex={setInsertIndex}
           onQuickAddEx={quickAddToSession}
           onReorderEx={reorderEx}
           onRenameEx={renameEx}
