@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { save, load } from "../utils/helpers";
+import { save } from "../utils/helpers";
 
 const STEPS = [
   {

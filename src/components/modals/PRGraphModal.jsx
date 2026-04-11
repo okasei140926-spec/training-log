@@ -1,4 +1,4 @@
-import { calc1RM, dispW, KG_TO_LBS } from "../../utils/helpers";
+import { calc1RM, KG_TO_LBS } from "../../utils/helpers";
 
 export default function PRGraphModal({ exName, history, unit = "kg", onClose }) {
   const recs = history[exName] || [];
