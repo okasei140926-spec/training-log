@@ -59,7 +59,7 @@ export default function GymApp() {
 useEffect(() => {
   const BACK_MAP = {
     prep: "home",
-    log: "prep",
+    log: "home",
     setup_routine: "home",
     history: "home",
   };
@@ -246,12 +246,15 @@ useEffect(() => {
   };
 
   const setField = (name, idx, field, val) => {
-    setLogData(p => {
-      const s = [...(p[name] || getExSets(name))];
-      s[idx] = { ...s[idx], [field]: val };
-      return { ...p, [name]: s };
-    });
-  };
+  setLogData(p => {
+    const s = [...(p[name] || getExSets(name))];
+    const updated = { ...s[idx], [field]: val };
+    const isDone = (updated.weight || updated.weight === "BW") && updated.reps;
+    s[idx] = { ...updated, done: isDone };
+    return { ...p, [name]: s };
+  });
+};
+  
 
   const addSet = (name) => {
     setLogData(p => {
@@ -603,19 +606,6 @@ useEffect(() => {
     )}
   </>
 )}
-
-      {screen === "prep" && (
-        <PrepScreen
-          todayLabels={todayLabels}
-          dayColor={dayColor}
-          initialExercises={exercises}
-          history={history}
-          lastWorkoutExercises={lastWorkoutExercises}
-          onStart={handlePrepStart}
-          onBack={() => setScreen("home")}
-          unit={unit}
-        />
-      )}
 
       {screen === "log" && (
         <LogScreen
