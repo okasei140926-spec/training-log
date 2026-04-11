@@ -19,7 +19,7 @@ export default function GymApp() {
   const [muscleEx, setMuscleEx]   = useState(() => load("routineEx", {}));
   const [history, setHistory]     = useState(() => load("history", {}));
 
-  const [screen, setScreen]       = useState("home");
+  const [screen, setScreen]       = useState("log");
   const [todayLabels, setTodayLabels] = useState([]);
   const [logData, setLogData]     = useState({});
   const [sessionEx, setSessionEx] = useState(null);
