@@ -254,6 +254,7 @@ export default function LogScreen({
             <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 6 }}>
               <div />
               <div style={{ fontSize: 10, color: "var(--text2)", textAlign: "center" }}>{exUnit === "BW" ? "自重" : exUnit}</div>
+              <div />
               <div style={{ fontSize: 10, color: "var(--text2)", textAlign: "center" }}>rep</div>
               <div />
             </div>
