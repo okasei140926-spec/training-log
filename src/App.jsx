@@ -37,6 +37,7 @@ export default function GymApp() {
 
   const [summary, setSummary] = useState(null);
   const [isDark, setIsDark]   = useState(() => load("isDark", true));
+  // eslint-disable-next-line no-unused-vars
   const [unit, setUnit]       = useState(() => load("unit", "kg"));
   const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -173,13 +174,25 @@ export default function GymApp() {
       return { ...p, [name]: current };
     });
   };
+  
+  const getExistingSets = (name) => {
+    const records = history[name];
+    if (!records) return null;
+    const existing = records.find(r => r.date === logDate);
+    if (!existing || !existing.sets)
+    return null;
+    return existing.sets.map(s => ({ ...s, done: true}));
+    };
 
   const getExSets = (name) => {
     if (logData[name]) return logData[name];
+    const existing = getExistingSets(name);
+    if (existing && existing.length > 0)
+    return existing;
     return [
-      { weight: "", reps: "", done: false },
-      { weight: "", reps: "", done: false },
-      { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
     ];
   };
 
@@ -279,7 +292,12 @@ export default function GymApp() {
       const new1RM = calc1RM(stored);
       const old1RM = prev ? calc1RM(prev.sets) : 0;
       if (new1RM > old1RM) prs.push({ name: ex.name, diff: Math.round((new1RM - old1RM) * (exUnit === "lbs" ? KG_TO_LBS : 1)) });
-      nh[ex.name].push({ sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate });
+      const existingIdx = nh[ex.name].findIndex(r => r.date === logDate);
+      if (existingIdx >= 0) {
+        nh[ex.name][existingIdx] = { sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate };
+      } else {
+        nh[ex.name].push({ sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate });
+      }
     });
     setHistory(nh);
     setLogData({});
