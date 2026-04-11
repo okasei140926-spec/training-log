@@ -569,7 +569,13 @@ useEffect(() => {
                 </div>
               );
             })}
-          <button onClick={() => { setSelectedDateRecord(null); setScreen("prep"); }}
+          <button onClick={() => { setSelectedDateRecord(null);
+            setTodayLabels([]);
+            setSessionEx(null);
+            setLogData({});
+            setExerciseUnits({});
+            setScreen("log")
+          }}
             style={{ width: "100%", marginTop: 20, padding: "14px", borderRadius: 12, background: "var(--text)", color: "var(--bg)", fontWeight: 800, fontSize: 15 }}>
             この日に記録する
           </button>
