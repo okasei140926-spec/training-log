@@ -211,15 +211,30 @@ export default function LogScreen({
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: "var(--border)", fontSize: 11, color: "var(--text2)", fontWeight: 700, alignSelf: "center" }}>
                     {idx + 1}
                   </div>
-                  {exUnit === "BW" ? (
-                    <div style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text2)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
-                      自重
-                    </div>
+                  {set.weight === "BW" ? (
+                    <button onClick={() =>
+                  setField(ex.name, idx, "weight", "")}
+                      style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px",
+                        color: "var(--text2)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
+                            自重
+                        </button>
                   ) : (
-                    <input type="text" inputMode="decimal" value={set.weight}
-                      onChange={e => setField(ex.name, idx, "weight", e.target.value)} placeholder="0"
-                      style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
-                  )}
+                    <div style={{ display: "flex", gap: 4 }}>
+                        <input type="text"
+                    inputMode="decimal" value={set.weight}
+                          onChange={e => setField(ex.name, idx, "weight", e.target.value)}
+                    placeholder="0"
+                          style={{ flex: 1, background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 4px", color: "var(--text)", fontSize: 16, fontWeight: 700,
+                            textAlign: "center" }} />
+                            <button onClick={() => 
+                            setField(ex.name, idx, "weight", "BW")}
+                                style={{ padding: "4px 6px", borderRadius: 8, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 9, fontWeight: 700 }}
+                            >
+                                BW
+                            </button>
+                        </div>
+                    )}
+
                   <input type="text" inputMode="numeric" value={set.reps}
                     onChange={e => setField(ex.name, idx, "reps", e.target.value)} placeholder="0"
                     style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
