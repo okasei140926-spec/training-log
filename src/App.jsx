@@ -528,7 +528,7 @@ useEffect(() => {
       history={history}
       todayLabels={todayLabels}
       setTodayLabels={(labels) => { setTodayLabels(labels); setSessionEx(null); setLogData({}); setExerciseUnits({}); }}
-      onStartWorkout={() => setScreen("prep")}
+      onStartWorkout={() => handlePrepStart(exercises)}
       onStartFree={handleStartFree}
       onGoToSetup={() => setScreen("setup_routine")}
       unit={unit}
