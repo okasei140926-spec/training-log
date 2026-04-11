@@ -136,7 +136,10 @@ export default function LogScreen({
         }, null);
 
         return (
-          <div key={ex.id} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPRPace ? "#4ade8055" : "var(--border)"}` }}>
+
+  <React.Fragment key={ex.id}>
+    <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPRPace ? "#4ade8055" : "var(--border)"}` }}>
+
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                 {isEditing ? (
@@ -242,7 +245,7 @@ export default function LogScreen({
                     ) : <div style={{ flex: 1 }} />}
                     {canCopy && onCopyDownReps ? (
                       <button onClick={() => onCopyDownReps(ex.name, idx)}
-                        style={{ flex: 1, minHeight: 28, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
+                        style={{ flex: 1, minHeight: 18, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
                         ↓rep
                       </button>
                     ) : <div style={{ flex: 1 }} />}
@@ -251,18 +254,21 @@ export default function LogScreen({
               );
             })}
 
-            <button onClick={() => addSet(ex.name)}
+                        <button onClick={() => addSet(ex.name)}
               style={{ width: "100%", marginTop: 4, padding: "8px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text3)", fontSize: 13 }}>
               ＋ セット追加
             </button>
           </div>
+          {i < exercises.length - 1 && (
+            <button onClick={() => setShowAdd(true)}
+              style={{ width: "100%", marginBottom: 8, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
+              ＋ 種目を追加
+            </button>
+          )}
+        </React.Fragment>
         );
       })}
 
-      <button onClick={() => setShowAdd(true)}
-        style={{ width: "100%", padding: "15px", borderRadius: 14, background: "var(--card2)", border: `1px solid ${accentColor}55`, color: accentColor, fontSize: 15, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-        <span style={{ fontSize: 20, lineHeight: 1 }}>＋</span> 種目を追加
-      </button>
 
       <button onClick={saveLog}
         style={{ width: "100%", padding: 16, borderRadius: 14, background: accentColor, color: accentText, fontWeight: 800, fontSize: 16 }}>
