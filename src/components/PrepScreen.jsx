@@ -74,7 +74,7 @@ export default function PrepScreen({
             {isEditing ? (
               <input ref={editRef} value={editingName}
                 onChange={e => setEditingName(e.target.value)}
-                onBlur={() => confirmEdit(ex.id)}
+                onBlur={() => setTimeout(() => confirmEdit(ex.id), 500)}
                 onKeyDown={e => { if (e.key === "Enter") confirmEdit(ex.id); if (e.key === "Escape") setEditingId(null); }}
                 style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid var(--text2)", color: "var(--text)", fontSize: 14, fontWeight: 700, padding: "2px 0" }} />
             ) : (

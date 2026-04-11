@@ -67,9 +67,9 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 9999, display: "flex", alignItems: "flex-end" }}
+    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 9999, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
       onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px calc(16px + env(safe-area-inset-bottom, 0px))", maxHeight: "90vh", overflowY: "auto" }}
+      <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px 16px", maxHeight: "90vh", overflowY: "auto" }}
         onClick={e => e.stopPropagation()}>
 
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: "var(--text)" }}>種目を追加</div>
