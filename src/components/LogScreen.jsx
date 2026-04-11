@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { calc1RM, dispW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 
