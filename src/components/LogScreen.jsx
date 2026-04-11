@@ -251,7 +251,7 @@ export default function LogScreen({
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 1fr 46px", gap: 6, marginBottom: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 6 }}>
               <div />
               <div style={{ fontSize: 10, color: "var(--text2)", textAlign: "center" }}>{exUnit === "BW" ? "自重" : exUnit}</div>
               <div style={{ fontSize: 10, color: "var(--text2)", textAlign: "center" }}>rep</div>
@@ -262,7 +262,7 @@ export default function LogScreen({
   const canCopy = idx < sets.length - 1;
   
   return (
-    <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 1fr 46px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
+    <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
       <button onClick={() => setField(ex.name, idx, "weight", set.weight === "BW" ? "" : "BW")}
         style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.weight === "BW" ? "var(--text)" : "var(--border)", fontSize: 11, color: set.weight === "BW" ? "var(--bg)" : "var(--text2)", fontWeight: 700, alignSelf: "center", border: "none" }}>
         {idx + 1}
@@ -270,41 +270,38 @@ export default function LogScreen({
 
                   
                   {set.weight === "BW" ? (
-                    <button onClick={() =>
-                  setField(ex.name, idx, "weight", "")}
-                      style={{ width: "100%", background: "var(--card2)", border: "2px solid var(--border2)", borderRadius: 10, padding: "10px 8px",
-                        color: "var(--text2)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
-                            自重 <span style={{ fontSize: 10, color: "var(--text4)" }}>タップでkg</span>
-                        </button>
-                  ) : (
-                        <input type="text" inputMode="decimal" value={set.weight}
-                          onChange={e => setField(ex.name, idx, "weight", e.target.value)}
-                          onLongPress={() => setField(ex.name, idx, "weight", "BW")}
-                        placeholder="0"
-                          style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700,
-                            textAlign: "center" }} />
-                    )}
+  <button onClick={() => setField(ex.name, idx, "weight", "")}
+    style={{ width: "100%", background: "var(--card2)", border: "2px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text2)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
+    自重 <span style={{ fontSize: 10, color: "var(--text4)" }}>タップでkg</span>
+  </button>
+) : (
+  <input type="text" inputMode="decimal" value={set.weight}
+    onChange={e => setField(ex.name, idx, "weight", e.target.value)}
+    placeholder="0"
+    style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
+)}
 
-                  <input type="text" inputMode="numeric" value={set.reps}
-                    onChange={e => setField(ex.name, idx, "reps", e.target.value)} placeholder="0"
-                    style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, height: "100%" }}>
-                    {canCopy && exUnit !== "BW" && onCopyDown ? (
-                      <button onClick={() => onCopyDown(ex.name, idx)}
-                        style={{ flex: 1, minHeight: 28, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
-                        ↓{exUnit === "lbs" ? "lbs" : "kg"}
-                      </button>
-                    ) : <div style={{ flex: 1 }} />}
-                    {canCopy && onCopyDownReps ? (
-                      <button onClick={() => onCopyDownReps(ex.name, idx)}
-                        style={{ flex: 1, minHeight: 18, borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 10, fontWeight: 700 }}>
-                        ↓rep
-                      </button>
-                    ) : <div style={{ flex: 1 }} />}
-                  </div>
-                </div>
-              );
-            })}
+{canCopy && exUnit !== "BW" && onCopyDown ? (
+  <button onClick={() => onCopyDown(ex.name, idx)}
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
+    ↓
+  </button>
+) : <div />}
+
+<input type="text" inputMode="numeric" value={set.reps}
+  onChange={e => setField(ex.name, idx, "reps", e.target.value)} placeholder="0"
+  style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
+
+{canCopy && onCopyDownReps ? (
+  <button onClick={() => onCopyDownReps(ex.name, idx)}
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
+    ↓
+  </button>
+) : <div />}
+</div>
+);
+})}
+
 
                         <button onClick={() => addSet(ex.name)}
               style={{ width: "100%", marginTop: 4, padding: "8px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text3)", fontSize: 13 }}>
