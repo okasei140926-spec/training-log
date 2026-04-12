@@ -3,7 +3,6 @@ import { load, save, calc1RM, storeW, KG_TO_LBS } from "./utils/helpers";
 import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 
-import HomeScreen    from "./components/HomeScreen";
 import LogScreen     from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
@@ -541,75 +540,6 @@ useEffect(() => {
         </div>
       </div>
 
-
-      {screen === "home" && (
-  <>
-    <HomeScreen
-      muscleEx={muscleEx}
-      history={history}
-      todayLabels={todayLabels}
-      setTodayLabels={(labels) => { 
-  setTodayLabels(labels); 
-  setSessionEx(null); 
-  setLogData({}); 
-  setExerciseUnits({});
-  if (labels.length > 0) setScreen("log");
-}}
-
-      onStartWorkout={() => handlePrepStart(exercises)}
-      onStartFree={handleStartFree}
-      onGoToSetup={() => setScreen("setup_routine")}
-      unit={unit}
-      logDate={logDate}
-      setLogDate={handleSetLogDate}
-    />
-    {selectedDateRecord && (
-      <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 9999 }}
-        onClick={() => setSelectedDateRecord(null)}>
-        <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px 32px", maxHeight: "75vh", overflowY: "auto" }}
-          onClick={e => e.stopPropagation()}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>{selectedDateRecord}</div>
-          {Object.entries(history)
-            .filter(([, recs]) => recs.some(r => r.date === selectedDateRecord))
-            .map(([name, recs]) => {
-              const rec = recs.find(r => r.date === selectedDateRecord);
-              return (
-                <div key={name} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{name}</div>
-                  <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-                    {rec.sets?.map(s => `${s.weight}kg×${s.reps}`).join(" / ")}
-                  </div>
-                </div>
-              );
-            })}
-          <button onClick={() => {
-  const date = selectedDateRecord;
-  setSelectedDateRecord(null);
-  // その日の種目と記録をセット
-  const dayExercises = Object.entries(history)
-    .filter(([, recs]) => recs.some(r => r.date === date))
-    .map(([name]) => ({ id: Date.now() + Math.random(), name }));
-  const dayLogData = {};
-  dayExercises.forEach(({ name }) => {
-    const rec = history[name]?.find(r => r.date === date);
-    if (rec?.sets) dayLogData[name] = rec.sets.map(s => ({ ...s, done: true }));
-  });
-  setTodayLabels([]);
-  setSessionEx(dayExercises);
-  setLogData(dayLogData);
-  setExerciseUnits({});
-  setScreen("log");
-}}
-
-            style={{ width: "100%", marginTop: 20, padding: "14px", borderRadius: 12, background: "var(--text)", color: "var(--bg)", fontWeight: 800, fontSize: 15 }}>
-            この日に記録する
-          </button>
-        </div>
-      </div>
-    )}
-  </>
-)}
-
       {screen === "log" && (
         <LogScreen
           onBack={() => setScreen("home")}
@@ -679,7 +609,6 @@ useEffect(() => {
 
       <div style={S.bottomNav}>
         {[
-          { id: "home",    icon: "🏠", label: "Home" },
           { id: "log",     icon: "✏️", label: "Log" },
           { id: "friends", icon: "👥", label: "Friends" },
           { id: "history", icon: "📊", label: "記録" },

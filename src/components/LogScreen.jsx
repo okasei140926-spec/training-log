@@ -71,7 +71,7 @@ export default function LogScreen({
       <button key={lbl} onClick={() => {
         if (isSelected) {
           (SUGGESTIONS[lbl] || []).forEach(e => removeEx(e));
-          setTodayLabels(p => p.filter(l => l === lbl));
+          setTodayLabels(p => p.filter(l => l !== lbl));
         } else {
             // historyから前回この部位でやった種目を取得
           const suggestions = SUGGESTIONS[lbl] || [];
