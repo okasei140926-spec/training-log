@@ -86,60 +86,6 @@ export default function LogScreen({
   })}
 </div>
 
-      {/* タイマーエリア */}
-      {timerLeft !== null ? (
-        <div style={{ background: timerLeft === 0 ? "#4ade8022" : "var(--card2)", border: `1px solid ${timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--border2)"}`, borderRadius: 16, padding: "16px 20px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 2 }}>休憩中</div>
-            <div style={{ fontSize: 36, fontWeight: 900, color: timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)" }}>
-              {timerLeft === 0 ? "GO! 💪" : `${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`}
-            </div>
-          </div>
-          <button onClick={stopTimer} style={{ padding: "8px 16px", borderRadius: 20, background: "var(--card2)", color: "var(--text2)", fontSize: 13 }}>スキップ</button>
-        </div>
-      ) : (
-        <div style={{ background: "var(--card)", borderRadius: 12, padding: "12px 14px", marginBottom: 16, border: "1px solid var(--border)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 11, color: "var(--text2)", marginRight: 2, flexShrink: 0 }}>休憩</div>
-            {PRESET_SECS.map(s => (
-              <button key={s} onClick={() => { setIntervalSec(s); setCustomMode(false); }}
-                style={{ padding: "5px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600, flexShrink: 0, border: "none",
-                  background: intervalSec === s && !isCustom ? "var(--text)" : "var(--border)",
-                  color:      intervalSec === s && !isCustom ? "var(--bg)"   : "var(--text2)" }}>
-                {s < 60 ? `${s}s` : `${s / 60}m`}
-              </button>
-            ))}
-            {customMode ? (
-              <input type="text" inputMode="numeric" autoFocus
-                value={customInput} onChange={e => setCustomInput(e.target.value)}
-                onBlur={confirmCustom} onKeyDown={e => e.key === "Enter" && confirmCustom()}
-                placeholder="秒"
-                style={{ width: 52, padding: "5px 8px", borderRadius: 16, fontSize: 12, background: "var(--text)", color: "var(--bg)", border: "none", textAlign: "center" }} />
-            ) : (
-              <button onClick={() => { setCustomMode(true); setCustomInput(isCustom ? String(intervalSec) : ""); }}
-                style={{ padding: "5px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600, flexShrink: 0, border: "none",
-                  background: isCustom ? "var(--text)" : "var(--border)",
-                  color:      isCustom ? "var(--bg)"   : "var(--text2)" }}>
-                {isCustom ? `${intervalSec}s` : "カスタム"}
-              </button>
-            )}
-            <button onClick={() => { setIntervalSec(0); setCustomMode(false); stopTimer(); }}
-              style={{ padding: "5px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600, flexShrink: 0,
-                background: isTimerOff ? "#FF4D4D22" : "var(--border)",
-                color: isTimerOff ? "#FF4D4D" : "var(--text2)",
-                border: isTimerOff ? "1px solid #FF4D4D44" : "none" }}>
-              OFF
-            </button>
-          </div>
-          {!isTimerOff && (
-            <button onClick={startTimer}
-              style={{ width: "100%", marginTop: 10, padding: "9px", borderRadius: 10, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text3)", fontSize: 13, fontWeight: 700 }}>
-              ⏱ 休憩スタート
-            </button>
-          )}
-        </div>
-      )}
-
       {/* 種目カード */}
       {exercises.map((ex, i) => {
         const sets      = logData[ex.name] || getExSets(ex.name);
@@ -335,6 +281,44 @@ export default function LogScreen({
           existingNames={exercises.map(e => e.name)}
         />
       )}
+       {/* フローティングタイマー */}
+<div style={{ position: "fixed", bottom: 90, right: 20, zIndex: 100 }}>
+  {timerLeft !== null ? (
+    <button onClick={stopTimer}
+      style={{ width: 64, height: 64, borderRadius: 32, background: timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)", color: timerLeft === 0 ? "#000" : "var(--bg)", fontWeight: 900, fontSize: timerLeft === 0 ? 11 : 14, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none" }}>
+      {timerLeft === 0 ? "GO!💪" : `${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`}
+    </button>
+  ) : (
+    <button onClick={isTimerOff ? null : startTimer}
+      style={{ width: 64, height: 64, borderRadius: 32, background: isTimerOff ? "var(--border)" : "var(--text)", color: isTimerOff ? "var(--text3)" : "var(--bg)", fontSize: 24, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none" }}>
+      ⏱
+    </button>
+  )}
+</div>
+
+{/* タイマー設定（小さく下に） */}
+{timerLeft === null && (
+  <div style={{ position: "fixed", bottom: 162, right: 12, zIndex: 100, display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+    {PRESET_SECS.map(s => (
+      <button key={s} onClick={() => { setIntervalSec(s); setCustomMode(false); }}
+        style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700, border: "none",
+          background: intervalSec === s && !isCustom ? "var(--text)" : "var(--card2)",
+          color: intervalSec === s && !isCustom ? "var(--bg)" : "var(--text2)",
+          boxShadow: "0 2px 6px #0002" }}>
+        {s < 60 ? `${s}s` : `${s / 60}m`}
+      </button>
+    ))}
+    <button onClick={() => { setIntervalSec(0); setCustomMode(false); stopTimer(); }}
+      style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700,
+        background: isTimerOff ? "#FF4D4D22" : "var(--card2)",
+        color: isTimerOff ? "#FF4D4D" : "var(--text2)",
+        border: isTimerOff ? "1px solid #FF4D4D44" : "none",
+        boxShadow: "0 2px 6px #0002" }}>
+      OFF
+    </button>
+  </div>
+)}
+
     </div>
   );
 }
