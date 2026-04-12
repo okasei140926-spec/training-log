@@ -27,6 +27,13 @@ export default function LogScreen({
   const [CustomMode, setCustomMode] = useState(false);
   const [customInput, setCustomInput] = useState("");
 
+  const confirmCustom = () => {
+  const val = parseInt(customInput);
+  if (val > 0) setIntervalSec(val);
+  setCustomMode(false);
+};
+
+
   const startEdit = (ex) => {
     setEditingId(ex.id);
     setEditingName(ex.name);
