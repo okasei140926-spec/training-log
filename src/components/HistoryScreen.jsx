@@ -9,6 +9,7 @@ export default function HistoryScreen({ history, onEditHistory, onDeleteHistory,
   const [viewMode,   setViewMode]   = useState("list");
   const [editTarget, setEditTarget] = useState(null);
   const [graphTarget, setGraphTarget] = useState(null);
+  const [openDates, setOpenDates] = useState({});
 
   return (
     <div className="fade-in" style={{ padding: "20px" }}>
@@ -54,34 +55,50 @@ export default function HistoryScreen({ history, onEditHistory, onDeleteHistory,
       });
       return Object.entries(byDate)
         .sort(([a], [b]) => b.localeCompare(a))
-        .map(([date, entries]) => (
-          <div key={date} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", marginBottom: 8, letterSpacing: 1 }}>{date}</div>
-            <div style={{ background: "var(--card)", borderRadius: 16, border: "1px solid var(--border)", overflow: "hidden" }}>
-              {entries.map(({ name, rec }, i) => (
-                <div key={name} style={{ padding: "12px 16px", borderBottom: i < entries.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{name}</div>
-                    <button onClick={() => {
-                      const recs = history[name];
-                      const historyIdx = recs.findIndex(r => r.date === date);
-                      setEditTarget({ exName: name, record: rec, historyIdx });
-                    }}
-                      style={{ padding: "2px 10px", borderRadius: 10, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text2)", fontSize: 11 }}>
-                      編集 →
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-                    {rec.sets?.map(s => `${dispW(s.weight, unit)}${s.weight === "BW" ? "" : unit}×${s.reps}`).join(" / ")}
-                  </div>
+        .map(([date, entries]) => {
+            const isOpen = openDates[date] !==false; 
+            //デフォルト開く
+            return (
+                <div key={date}
+            style={{ marginBottom: 12 }}>
+                   <button onClick={() =>
+            setOpenDates(p => ({ ...p, [date]: !isOpen }))}
+                style={{ width: "100%",
+                    display: "flex", justifyContent: "space-between",
+                    alignItems: "center", padding: "10px 14px", background: "var(--card2)",
+                    borderRadius: isOpen ? "12px 12px 0 0" : 12, border: "1px solid var(--border)", borderBottom: isOpen ? "none" : "1px solid var(--border)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{date}</div>
+          <div style={{ fontSize: 12, color: "var(--text3)" }}>{isOpen ? "▲" : "▼"} {entries.length}種目</div>
+        </button>
+        {isOpen && (
+          <div style={{ background: "var(--card)", borderRadius: "0 0 12px 12px", border: "1px solid var(--border)", borderTop: "none", overflow: "hidden" }}>
+            {entries.map(({ name, rec }, i) => (
+              <div key={name} style={{ padding: "12px 16px", borderBottom: i < entries.length - 1 ? "1px solid var(--border)" : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{name}</div>
+                  <button onClick={() => {
+                    const recs = history[name];
+                    const historyIdx = recs.findIndex(r => r.date === date);
+                    setEditTarget({ exName: name, record: rec, historyIdx });
+                  }}
+                    style={{ padding: "2px 10px", borderRadius: 10, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text2)", fontSize: 11 }}>
+                    編集 →
+                  </button>
                 </div>
-              ))}
-            </div>
+                <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                  {rec.sets?.map(s => `${dispW(s.weight, unit)}${s.weight === "BW" ? "" : unit}×${s.reps}`).join(" / ")}
+                </div>
+              </div>
+            ))}
           </div>
-        ));
-    })()}
-  </>
-)}
+        )}
+      </div>
+    );
+  });
+})()}
+    </>
+    )}      
+
       {editTarget && (
         <HistoryEditModal
           exName={editTarget.exName}
