@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { calc1RM, dispW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
-import { LABEL_COLORS } from "../constants/suggestions";
+import { LABEL_COLORS, QUICK_LABELS, SUGGESTIONS } from "../constants/suggestions";
 
 const PRESET_SECS = [30, 60, 90, 120];
 
@@ -11,7 +11,7 @@ export default function LogScreen({
   exercises, logData, getExSets, setField, addSet, removeSet, removeEx,
   timerLeft, intervalSec, setIntervalSec, startTimer, stopTimer,
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-  getExUnit, onToggleExUnit, onSetInsertIndex, muscleEx, setTodayLabels,
+  getExUnit, onToggleExUnit, onSetInsertIndex, muscleEx, setTodayLabels, history,
 }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
@@ -64,16 +64,20 @@ export default function LogScreen({
 
       {/* 部位チップ */}
 <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 8, msOverflowStyle: "none", scrollbarWidth: "none" }}>
-  {Object.keys(muscleEx || {}).filter(lbl => (muscleEx[lbl] || []).length > 0).map(lbl => {
+  {QUICK_LABELS.map(lbl => {
     const isSelected = todayLabels.includes(lbl);
     const col = LABEL_COLORS[lbl];
     return (
       <button key={lbl} onClick={() => {
         if (isSelected) {
-          (muscleEx[lbl] || []).forEach(e => removeEx(e.name));
-          setTodayLabels(p => p.filter(l => l !== lbl));
+          (SUGGESTIONS[lbl] || []).forEach(e => removeEx(e));
+          setTodayLabels(p => p.filter(l => l == lbl));
         } else {
-          (muscleEx[lbl] || []).forEach(e => onAddEx(e.name));
+            // historyから前回この部位でやった種目を取得
+          const suggestions = SUGGESTIONS[lbl] || [];
+          const prevExercises = suggestions.filter(name => history[name]?.length > 0);
+          const toAdd = prevExercises.length > 0 ? prevExercises : suggestions.slice(0, 3);
+          toAdd.forEach(name => onAddEx(name));
           setTodayLabels(p => [...p, lbl]);
         }
       }}
