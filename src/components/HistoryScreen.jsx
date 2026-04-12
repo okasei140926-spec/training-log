@@ -17,11 +17,10 @@ export default function HistoryScreen({ history, onEditHistory, onDeleteHistory,
       </div>
 
       {/* カレンダービュー */}
-      {viewMode === "calendar" && (
-        <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", border: "1px solid var(--border)" }}>
-          <CalendarView history={history} unit={unit} onEditRecord={(exName, record, historyIdx) => setEditTarget({ exName, record, historyIdx })} onLogForDate={onLogForDate} />
-        </div>
-      )}
+      <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", border: "1px solid var(--border)" }}>
+  <CalendarView history={history} unit={unit} onEditRecord={(exName, record, historyIdx) => setEditTarget({ exName, record, historyIdx })} onLogForDate={onLogForDate} />
+</div>
+
 
       {editTarget && (
         <HistoryEditModal
