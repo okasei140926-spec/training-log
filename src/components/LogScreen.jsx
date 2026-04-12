@@ -259,7 +259,7 @@ export default function LogScreen({
 
 
       <button onClick={saveLog}
-        style={{ width: "100%", padding: 16, borderRadius: 14, background: accentColor, color: accentText, fontWeight: 800, fontSize: 16 }}>
+        style={{ width: "100%", padding: 16, borderRadius: 14, background: accentColor, color: accentText, fontWeight: 800, fontSize: 16, marginTop: 20 }}>
         SAVE WORKOUT ✓
       </button>
 
