@@ -43,44 +43,6 @@ export default function GymApp() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   });
 
-
-
-  // ─── スワイプバック ────────────────────────────
-useEffect(() => {
-  const BACK_MAP = {
-    prep: "home",
-    log: "home",
-    setup_routine: "home",
-    history: "home",
-  };
-
-  let startX = 0;
-  let startY = 0;
-
-  const onTouchStart = (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-  };
-
-  const onTouchEnd = (e) => {
-    const dx = e.changedTouches[0].clientX - startX;
-    const dy = e.changedTouches[0].clientY - startY;
-    // 横スワイプ（右方向50px以上、縦ズレが横より小さい）
-    if (dx > 50 && Math.abs(dy) < Math.abs(dx)) {
-      const dest = BACK_MAP[screen];
-      if (dest) setScreen(dest);
-    }
-  };
-
-  window.addEventListener("touchstart", onTouchStart);
-  window.addEventListener("touchend", onTouchEnd);
-  return () => {
-    window.removeEventListener("touchstart", onTouchStart);
-    window.removeEventListener("touchend", onTouchEnd);
-  };
-}, [screen]);
-
-
   // ─── AI Coach ─────────────────────────────────────
   const [aiMsgs, setAiMsgs] = useState([{ role: "assistant", content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪" }]);
   const [aiInput, setAiInput] = useState("");
