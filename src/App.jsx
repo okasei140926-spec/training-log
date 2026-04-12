@@ -478,10 +478,18 @@ export default function GymApp() {
               : "記録"}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => setIsDark(p => !p)} style={S.pillBtn}>{isDark ? "☀️" : "🌙"}</button>
-          <button onClick={() => setScreen("setup_routine")} style={S.pillBtn}>⚙</button>
-        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+  {screen === "log" && (
+    <button onClick={timerLeft !== null ? stopTimer : startTimer}
+      style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "none",
+        background: timerLeft !== null ? (timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)") : "var(--card2)",
+        color: timerLeft !== null ? (timerLeft === 0 ? "#000" : "var(--bg)") : "var(--text2)" }}>
+      {timerLeft !== null ? (timerLeft === 0 ? "GO!💪" : `⏱ ${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`) : "⏱"}
+    </button>
+  )}
+  <button onClick={() => setIsDark(p => !p)} style={S.pillBtn}>{isDark ? "☀️" : "🌙"}</button>
+</div>
+
       </div>
 
       {screen === "log" && (

@@ -275,44 +275,6 @@ export default function LogScreen({
           existingNames={exercises.map(e => e.name)}
         />
       )}
-       {/* フローティングタイマー */}
-<div style={{ position: "fixed", bottom: 90, right: 20, zIndex: 100 }}>
-  {timerLeft !== null ? (
-    <button onClick={stopTimer}
-      style={{ width: 64, height: 64, borderRadius: 32, background: timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)", color: timerLeft === 0 ? "#000" : "var(--bg)", fontWeight: 900, fontSize: timerLeft === 0 ? 11 : 14, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none" }}>
-      {timerLeft === 0 ? "GO!💪" : `${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`}
-    </button>
-  ) : (
-    <button onClick={isTimerOff ? null : startTimer}
-      style={{ width: 64, height: 64, borderRadius: 32, background: isTimerOff ? "var(--border)" : "var(--text)", color: isTimerOff ? "var(--text3)" : "var(--bg)", fontSize: 24, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none" }}>
-      ⏱
-    </button>
-  )}
-</div>
-
-{/* タイマー設定（小さく下に） */}
-{timerLeft === null && (
-  <div style={{ position: "fixed", bottom: 162, right: 12, zIndex: 100, display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-    {PRESET_SECS.map(s => (
-      <button key={s} onClick={() => { setIntervalSec(s); }}
-        style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700, border: "none",
-          background: intervalSec === s && !isCustom ? "var(--text)" : "var(--card2)",
-          color: intervalSec === s && !isCustom ? "var(--bg)" : "var(--text2)",
-          boxShadow: "0 2px 6px #0002" }}>
-        {s < 60 ? `${s}s` : `${s / 60}m`}
-      </button>
-    ))}
-    <button onClick={() => { setIntervalSec(0); stopTimer(); }}
-      style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700,
-        background: isTimerOff ? "#FF4D4D22" : "var(--card2)",
-        color: isTimerOff ? "#FF4D4D" : "var(--text2)",
-        border: isTimerOff ? "1px solid #FF4D4D44" : "none",
-        boxShadow: "0 2px 6px #0002" }}>
-      OFF
-    </button>
-  </div>
-)}
-
     </div>
   );
 }
