@@ -524,7 +524,6 @@ useEffect(() => {
 
       {screen === "log" && (
         <LogScreen
-          onBack={() => setScreen("home")}
           todayLabels={todayLabels}
           dayColor={dayColor}
           exercises={exercises}

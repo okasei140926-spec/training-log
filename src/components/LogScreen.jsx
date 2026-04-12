@@ -6,7 +6,6 @@ import { LABEL_COLORS, QUICK_LABELS, SUGGESTIONS } from "../constants/suggestion
 const PRESET_SECS = [30, 60, 90, 120];
 
 export default function LogScreen({
-  onBack,
   todayLabels, dayColor,
   exercises, logData, getExSets, setField, addSet, removeSet, removeEx,
   timerLeft, intervalSec, setIntervalSec, startTimer, stopTimer,
@@ -56,9 +55,6 @@ export default function LogScreen({
   return (
     <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        {onBack && (
-          <button onClick={onBack} style={{ background: "none", color: "var(--text2)", fontSize: 22, padding: "0 4px", lineHeight: 1 }}>‹</button>
-        )}
         <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
       </div>
 
