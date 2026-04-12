@@ -3,14 +3,13 @@ import { calc1RM, dispW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import { LABEL_COLORS, QUICK_LABELS, SUGGESTIONS } from "../constants/suggestions";
 
-const PRESET_SECS = [30, 60, 90, 120];
+
 
 export default function LogScreen({
   todayLabels, dayColor,
-  exercises, logData, getExSets, setField, addSet, removeSet, removeEx,
-  timerLeft, intervalSec, setIntervalSec, startTimer, stopTimer,
+  exercises, logData, getExSets, setField, addSet, removeEx,
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-  getExUnit, onToggleExUnit, onSetInsertIndex, muscleEx, setTodayLabels, history,
+  getExUnit, onToggleExUnit, onSetInsertIndex, setTodayLabels, history,
 }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
