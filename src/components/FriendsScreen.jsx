@@ -87,17 +87,35 @@ export default function FriendsScreen({ history, onCopyMenu }) {
             </div>
           </div>
         </div>
-        {activeRecently && myRecentExercises.map((ex, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--card2)", borderRadius: 10, marginBottom: 6 }}>
-            <div>
+        {activeRecently && (() => {
+  const byDate = {};
+  myRecentExercises.forEach(ex => {
+    if (!byDate[ex.date]) byDate[ex.date] = [];
+    byDate[ex.date].push(ex);
+  });
+  return Object.entries(byDate)
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, exs]) => {
+      const isOpen = openDates[date] !== false;
+      return (
+        <div key={date} style={{ marginBottom: 6 }}>
+          <button onClick={() => setOpenDates(p => ({ ...p, [date]: !isOpen }))}
+            style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "6px 8px", background: "var(--border)", borderRadius: 8, border: "none", marginBottom: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)" }}>{date === today ? "今日" : date}</div>
+            <div style={{ fontSize: 11, color: "var(--text3)" }}>{isOpen ? "▲" : "▼"}</div>
+          </button>
+          {isOpen && exs.map((ex, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "var(--card2)", borderRadius: 10, marginBottom: 4 }}>
               <div style={{ fontSize: 13, color: "var(--text3)" }}>{ex.name}</div>
-              <div style={{ fontSize: 10, color: "var(--text4)" }}>{ex.date === today ? "今日" : ex.date}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
+                {ex.weight}kg × {ex.reps}rep
+              </div>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
-              {ex.weight}kg <span style={{ color: "var(--text2)", fontWeight: 400 }}>×</span> {ex.reps}rep
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      );
+    });
+})()}
       </div>
 
       {DEMO_FRIENDS.filter(f => f.today).map(f => (

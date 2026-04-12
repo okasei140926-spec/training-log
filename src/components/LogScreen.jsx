@@ -59,7 +59,7 @@ export default function LogScreen({
       </div>
 
       {/* 部位チップ */}
-<div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginBottom: 8, msOverflowStyle: "none", scrollbarWidth: "none" }}>
+<div style={{ display: "grid", gridTemplate : "1fr 1fr", gap: 8 }}>
   {QUICK_LABELS.map(lbl => {
     const isSelected = todayLabels.includes(lbl);
     const col = LABEL_COLORS[lbl];
