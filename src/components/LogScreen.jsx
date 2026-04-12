@@ -24,14 +24,6 @@ export default function LogScreen({
   const accentText  = dayColor ? "#000" : "var(--bg)";
   const isTimerOff  = intervalSec === 0;
   const isCustom    = !PRESET_SECS.includes(intervalSec) && intervalSec !== 0
-  const [CustomMode, setCustomMode] = useState(false);
-  const [customInput, setCustomInput] = useState("");
-
-  const confirmCustom = () => {
-  const val = parseInt(customInput);
-  if (val > 0) setIntervalSec(val);
-  setCustomMode(false);
-};
 
 
   const startEdit = (ex) => {
@@ -302,7 +294,7 @@ export default function LogScreen({
 {timerLeft === null && (
   <div style={{ position: "fixed", bottom: 162, right: 12, zIndex: 100, display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
     {PRESET_SECS.map(s => (
-      <button key={s} onClick={() => { setIntervalSec(s); setCustomMode(false); }}
+      <button key={s} onClick={() => { setIntervalSec(s); }}
         style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700, border: "none",
           background: intervalSec === s && !isCustom ? "var(--text)" : "var(--card2)",
           color: intervalSec === s && !isCustom ? "var(--bg)" : "var(--text2)",
@@ -310,7 +302,7 @@ export default function LogScreen({
         {s < 60 ? `${s}s` : `${s / 60}m`}
       </button>
     ))}
-    <button onClick={() => { setIntervalSec(0); setCustomMode(false); stopTimer(); }}
+    <button onClick={() => { setIntervalSec(0); stopTimer(); }}
       style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700,
         background: isTimerOff ? "#FF4D4D22" : "var(--card2)",
         color: isTimerOff ? "#FF4D4D" : "var(--text2)",
