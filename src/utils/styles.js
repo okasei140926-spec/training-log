@@ -1,6 +1,6 @@
 export const S = {
   root:        { minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'Helvetica Neue', sans-serif", maxWidth: 430, margin: "0 auto", position: "relative", paddingBottom: 80 },
-  header:      { padding: "24px 20px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" },
+  header:      { padding: "24px 20px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, background: "var(--bg)" },
   appLabel:    { fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase", marginBottom: 4 },
   headerTitle: { fontSize: 22, fontWeight: 700 },
   pillBtn:     { background: "var(--card2)", color: "var(--text)", padding: "6px 14px", borderRadius: 20, fontSize: 12, border: "1px solid var(--border2)", cursor: "pointer" },
