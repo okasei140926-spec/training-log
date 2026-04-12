@@ -10,6 +10,7 @@ export default function FriendsScreen({ history, onCopyMenu }) {
   const [cheers, setCheers]               = useState({});
   const [selectedFriend, setSelectedFriend] = useState(null);
   const [copied, setCopied]               = useState(false);
+  const [openDates, setOpenDates] = useState({});
 
   const handleCopyInvite = async () => {
     const url = window.location.href;
