@@ -22,8 +22,7 @@ export default function LogScreen({
 
   const accentColor = dayColor || "var(--text)";
   const accentText  = dayColor ? "#000" : "var(--bg)";
-  const isTimerOff  = intervalSec === 0;
-  const isCustom    = !PRESET_SECS.includes(intervalSec) && intervalSec !== 0
+
 
 
   const startEdit = (ex) => {
