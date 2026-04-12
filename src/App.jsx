@@ -43,15 +43,7 @@ export default function GymApp() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   });
 
-  const [selectedDateRecord, setSelectedDateRecord] = useState(null);
-  const handleSetLogDate = (date) => {
-  setLogDate(date);
-  // その日に記録があればhistory画面へ
-  const hasRecord = Object.values(history).some(recs =>
-    recs.some(r => r.date === date)
-  );
-  if (hasRecord) setSelectedDateRecord(date);
-};
+
 
   // ─── スワイプバック ────────────────────────────
 useEffect(() => {
@@ -381,16 +373,6 @@ useEffect(() => {
     setLogData({});
     setExerciseUnits({});
     setScreen("home");
-  };
-
-  const handlePrepStart = (preparedExercises) => {
-    setSessionEx(preparedExercises);
-    setScreen("log");
-  };
-
-  const handleStartFree = () => {
-    setSessionEx([]);
-    setScreen("prep");
   };
 
   const handleEditHistory = (exName, updatedRecord, historyIdx) => {
