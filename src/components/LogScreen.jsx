@@ -9,7 +9,7 @@ export default function LogScreen({
   todayLabels, dayColor,
   exercises, logData, getExSets, setField, addSet, removeEx,
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-  getExUnit, onToggleExUnit, onSetInsertIndex, setTodayLabels, history,
+  getExUnit, onToggleExUnit, onSetInsertIndex, setTodayLabels, history, logDate,
 }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
@@ -48,6 +48,7 @@ export default function LogScreen({
     <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
+        <div style={{ fontSize: 11, color: "var(--text4)" }}>{logDate}</div>
       </div>
 
       {/* 部位チップ */}

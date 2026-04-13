@@ -449,7 +449,7 @@ export default function GymApp() {
       <div className={isDark ? "" : "theme-light"} style={S.root}><style>{css}</style>
         <div style={S.header}>
           <div><div style={S.appLabel}>IRON LOG</div><div style={S.headerTitle}>種目設定</div></div>
-          <button onClick={() => setScreen("home")} style={S.pillBtn}>完了</button>
+          <button onClick={() => setScreen("log")} style={S.pillBtn}>完了</button>
         </div>
         <div style={{ padding: "20px" }}>
           <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 20, lineHeight: 1.6 }}>
@@ -565,6 +565,7 @@ export default function GymApp() {
           muscleEx={muscleEx}
           setTodayLabels={setTodayLabels}
           history={history}
+          logDate={logDate}
         />
       )}
 
