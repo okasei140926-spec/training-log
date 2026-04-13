@@ -51,7 +51,7 @@ export default function LogScreen({
       </div>
 
       {/* 部位チップ */}
-<div style={{ display: "grid", gridTemplateColumns : "1fr 1fr 1fr 1fr", gap: 8 }}>
+<div style={{ display: "grid", gridTemplateColumns : "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
   {QUICK_LABELS.map(lbl => {
     const isSelected = todayLabels.includes(lbl);
     const col = LABEL_COLORS[lbl];
