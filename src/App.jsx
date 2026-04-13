@@ -330,13 +330,31 @@ export default function GymApp() {
   };
 
   const handleLogForDate = (dateStr) => {
-    setLogDate(dateStr);
-    setTodayLabels([]);
+  setLogDate(dateStr);
+  setTodayLabels([]);
+  setExerciseUnits({});
+  
+  // その日の記録があればプリロード
+  const dayExercises = Object.entries(history)
+    .filter(([, recs]) => recs.some(r => r.date === dateStr))
+    .map(([name]) => ({ id: Date.now() + Math.random(), name }));
+  
+  if (dayExercises.length > 0) {
+    const dayLogData = {};
+    dayExercises.forEach(({ name }) => {
+      const rec = history[name]?.find(r => r.date === dateStr);
+      if (rec?.sets) dayLogData[name] = rec.sets.map(s => ({ ...s, done: true }));
+    });
+    setSessionEx(dayExercises);
+    setLogData(dayLogData);
+  } else {
     setSessionEx(null);
     setLogData({});
-    setExerciseUnits({});
-    setScreen("home");
-  };
+  }
+  
+  setScreen("log");
+};
+
 
   const handleEditHistory = (exName, updatedRecord, historyIdx) => {
     setHistory(prev => {
