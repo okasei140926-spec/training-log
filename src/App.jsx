@@ -117,10 +117,11 @@ export default function GymApp() {
   })();
 
   // ─── Timer ────────────────────────────────────────
-  const startTimer = () => {
-    if (!intervalSec) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-    setTimerLeft(intervalSec);
+  const startTimer = (sec) => {
+     const s = sec || intervalSec;
+     if (!s) return;
+     if (timerRef.current) clearInterval(timerRef.current);
+    setTimerLeft(s);
     timerRef.current = setInterval(() => {
       setTimerLeft(p => {
         if (p <= 1) {
@@ -480,9 +481,13 @@ export default function GymApp() {
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
   {screen === "log" && (
-    <button onClick={timerLeft !== null ? stopTimer : startTimer}
-    onContextMenu={(e) => { e.preventDefault(); setShowTimerMenu(p => !p); }}
-  onTouchStart={() => { const t = setTimeout(() => setShowTimerMenu(p => !p), 500); return () => clearTimeout(t); }}
+    <button onClick={() => {
+        if (timerLeft !== null) {
+            stopTimer();
+        } else {
+            setShowTimerMenu(p => !p);
+        }
+    }}
       style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "none",
         background: timerLeft !== null ? (timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)") : "var(--card2)",
         color: timerLeft !== null ? (timerLeft === 0 ? "#000" : "var(--bg)") : "var(--text2)" }}>
@@ -498,7 +503,7 @@ export default function GymApp() {
       {showTimerMenu && screen === "log" && (
         <div style={{ position: "fixed", top: 70, right: 20, zIndex: 200, background: "var(--card)", borderRadius: 12, padding: 12, border: "1px solid var(--border2)", display: "flex", gap: 6 }}>
           {[30, 60, 90, 120].map(s => (
-            <button key={s} onClick={() => { setIntervalSec(s); setShowTimerMenu(false); }}
+            <button key={s} onClick={() => { setIntervalSec(s); setShowTimerMenu(false); startTimer(s); }}
               style={{ padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: "none",
                 background: intervalSec === s ? "var(--text)" : "var(--card2)",
                 color: intervalSec === s ? "var(--bg)" : "var(--text2)" }}>
