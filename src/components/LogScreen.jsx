@@ -26,13 +26,13 @@ export default function LogScreen({
 
   const startEdit = (ex) => {
     setEditingId(ex.id);
-    setEditingName(ex.name);
+    setEditingName(ex);
     setTimeout(() => editRef.current?.focus(), 30);
   };
 
   const confirmEdit = (ex) => {
     const trimmed = editingName.trim();
-    if (trimmed && trimmed !== ex.name) onRenameEx(ex.id, trimmed);
+    if (trimmed && trimmed !== ex) onRenameEx(ex.id, trimmed);
     setEditingId(null);
   };
 
@@ -48,7 +48,7 @@ export default function LogScreen({
     <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
-        <div style={{ fontSize: 11, color: "var(--text4)" }}>{logDate}</div>
+        <div style={{ fontSize: 11, color: "var(--text4)" }}></div>
       </div>
 
       {/* 部位チップ */}
@@ -81,7 +81,7 @@ export default function LogScreen({
 
       {/* 種目カード */}
       {exercises.map((ex, i) => {
-        const sets      = logData[ex.name] || getExSets(ex.name);
+        const sets      = logData[ex.id] || getExSets(ex);
         const isEditing = editingId === ex.id;
         const prev      = getPrev ? getPrev(ex.name) : null;
         const pr        = getPR ? getPR(ex.name) : null;
@@ -203,37 +203,37 @@ export default function LogScreen({
   
   return (
     <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
-      <button onClick={() => setField(ex.name, idx, "weight", set.weight === "BW" ? "" : "BW")}
+      <button onClick={() => setField(ex, i, "weight", set.weight === "BW" ? "" : "BW")}
         style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.weight === "BW" ? "var(--text)" : "var(--border)", fontSize: 11, color: set.weight === "BW" ? "var(--bg)" : "var(--text2)", fontWeight: 700, alignSelf: "center", border: "none" }}>
-        {idx + 1}
+        {i + 1}
       </button>            
 
                   
                   {set.weight === "BW" ? (
-  <button onClick={() => setField(ex.name, idx, "weight", "")}
+  <button onClick={() => setField(ex, i, "weight", "")}
     style={{ width: "100%", background: "var(--card2)", border: "2px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text2)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
     自重 <span style={{ fontSize: 10, color: "var(--text4)" }}>タップでkg</span>
   </button>
 ) : (
   <input type="text" inputMode="decimal" value={set.weight}
-    onChange={e => setField(ex.name, idx, "weight", e.target.value)}
+    onChange={e => setField(ex, i, "weight", e.target.value)}
     placeholder="0"
     style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
 )}
 
 {canCopy && set.weight !== "BW" && onCopyDown ? (
-  <button onClick={() => onCopyDown(ex.name, idx - 1)}
+  <button onClick={() => onCopyDown(ex, i - 1)}
     style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
 
 <input type="text" inputMode="numeric" value={set.reps}
-  onChange={e => setField(ex.name, idx, "reps", e.target.value)} placeholder="0"
+  onChange={e => setField(ex, i, "reps", e.target.value)} placeholder="0"
   style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
 
 {canCopy && onCopyDownReps ? (
-  <button onClick={() => onCopyDownReps(ex.name, idx - 1)}
+  <button onClick={() => onCopyDownReps(ex, i - 1)}
     style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
     ↓
   </button>
@@ -243,7 +243,7 @@ export default function LogScreen({
 })}
 
 
-                        <button onClick={() => addSet(ex.name)}
+                        <button onClick={() => addSet(ex)}
               style={{ width: "100%", marginTop: 4, padding: "8px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text3)", fontSize: 13 }}>
               ＋ セット追加
             </button>

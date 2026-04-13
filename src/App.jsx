@@ -17,6 +17,10 @@ export default function GymApp() {
   const [muscleEx, setMuscleEx]   = useState(() => load("routineEx", {}));
   const [history, setHistory]     = useState(() => load("history", {}));
 
+  useEffect(() => {
+  console.log("historyの中身", history);
+}, [history]);
+
   const [screen, setScreen]       = useState("log");
   const [todayLabels, setTodayLabels] = useState([]);
   const [logData, setLogData]     = useState({});
@@ -199,16 +203,20 @@ export default function GymApp() {
     ];
   };
 
-  const setField = (name, idx, field, val) => {
+  const setField = (ex, idx, field, val) => {
+  const key = ex.id || ex.name;
+
   setLogData(p => {
-    const s = [...(p[name] || getExSets(name))];
+    const s = [...(p[key] || getExSets(ex))];
     const updated = { ...s[idx], [field]: val };
+
     if (field !== "done") {
-        const isDone = (updated.weight || updated.weight === "BW") && updated.reps;
-        updated.done = isDone;
+      const isDone = (updated.weight || updated.weight === "BW") && updated.reps;
+      updated.done = isDone;
     }
+
     s[idx] = updated;
-    return { ...p, [name]: s };
+    return { ...p, [key]: s };
   });
 };
   
@@ -238,7 +246,8 @@ export default function GymApp() {
   const addExToSession = (name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const ex = { id: Date.now() + (Math.random() * 1000 | 0), name: trimmed };
+    const ex = {
+        id: crypto.randomUUID(), name: trimmed };
     setSessionEx(p => {
       const current = p !== null ? p : [...baseExercises];
       if (current.find(e => e.name === trimmed)) return current;
@@ -295,7 +304,8 @@ export default function GymApp() {
     const nh = { ...history };
     let exCount = 0, setCount = 0, prs = [];
     exercises.forEach(ex => {
-      const sets = logData[ex.name] || getExSets(ex.name);
+      const key = ex.id || ex.name;
+      const sets = logData[key] || getExSets(ex);
       const valid = sets.filter(s => s.weight && s.reps);
       if (!valid.length) return;
       exCount++;
@@ -320,10 +330,8 @@ export default function GymApp() {
     setSessionEx(null);
     setExerciseUnits({});
     const d = new Date();
-    setLogDate(`${d.getFullYear()}-$
-    {String(d.getMonth()
-    +1).padStart(2,"0")}-$
-    {String(d.getDate()).padStart(2,"0")}`);
+    setLogDate(
+        `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
     stopTimer();
     setSummary({ exCount, setCount, prs });
     setScreen("log");
@@ -337,7 +345,10 @@ export default function GymApp() {
   // その日の記録があればプリロード
   const dayExercises = Object.entries(history)
     .filter(([, recs]) => recs.some(r => r.date === dateStr))
-    .map(([name]) => ({ id: Date.now() + Math.random(), name }));
+    .map(([name]) => ({ 
+        id: name,
+    name
+ }));
   
   if (dayExercises.length > 0) {
     const dayLogData = {};
