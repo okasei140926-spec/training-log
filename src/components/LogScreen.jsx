@@ -151,7 +151,7 @@ export default function LogScreen({
                 )}
                 <button onClick={() => moveEx(i, -1)} style={{ background: "none", color: i === 0 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▲</button>
                 <button onClick={() => moveEx(i, 1)} style={{ background: "none", color: i === exercises.length - 1 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▼</button>
-                <button onClick={() => removeEx(ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
+                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
               </div>
             </div>
 

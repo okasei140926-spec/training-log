@@ -235,11 +235,23 @@ export default function GymApp() {
     });
   };
 
-  const removeEx = (name) => {
-    setSessionEx(p => (p !== null ? p : [...baseExercises]).filter(e => e.name !== name));
-    setLogData(p => { const n = { ...p }; delete n[name]; return n; });
-    setExerciseUnits(p => { const n = { ...p }; delete n[name]; return n; });
-  };
+  const removeEx = (id, name) => {
+  setSessionEx(p =>
+    (p !== null ? p : [...baseExercises]).filter(e => e.id !== id)
+  );
+
+  setLogData(p => {
+    const n = { ...p };
+    delete n[name];
+    return n;
+  });
+
+  setExerciseUnits(p => {
+    const n = { ...p };
+    delete n[name];
+    return n;
+  });
+};
 
   const [insertIndex, setInsertIndex] = useState(null);
 
