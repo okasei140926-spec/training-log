@@ -97,7 +97,7 @@ export default function FriendsScreen({ history, onCopyMenu }) {
   return Object.entries(byDate)
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([date, exs]) => {
-      const isOpen = openDates[date] !== false;
+      const isOpen = openDates[date] === true;
       return (
         <div key={date} style={{ marginBottom: 6 }}>
           <button onClick={() => setOpenDates(p => ({ ...p, [date]: !isOpen }))}
