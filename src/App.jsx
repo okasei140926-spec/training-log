@@ -326,7 +326,7 @@ export default function GymApp() {
     {String(d.getDate()).padStart(2,"0")}`);
     stopTimer();
     setSummary({ exCount, setCount, prs });
-    setScreen("home");
+    setScreen("log");
   };
 
   const handleLogForDate = (dateStr) => {
