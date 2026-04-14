@@ -378,7 +378,7 @@ const addExToSession = (name) => {
   const saveLog = () => {
     const nh = { ...history };
     let exCount = 0, setCount = 0, prs = [];
-    exercises.forEach(ex, index => {
+    exercises.forEach((ex, index) => {
       const sets = logData[ex.name] || getExSets(ex);
       const valid = sets.filter(s => s.weight && s.reps);
       if (!valid.length) return;
