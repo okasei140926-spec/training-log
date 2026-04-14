@@ -14,7 +14,7 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
   const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(today.toISOString().split("T")[0]);
 
   // Build date → Set<label> map for colored dots
   const dateLabelColors = {};
@@ -142,6 +142,25 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
         })}
       </div>
 
+      {selectedDate === todayStr && onLogForDate && (
+  <button
+    onClick={() => onLogForDate(todayStr)}
+    style={{
+      width: "100%",
+      marginTop: 12,
+      padding: "11px",
+      borderRadius: 10,
+      background: "var(--text)",
+      color: "var(--bg)",
+      fontSize: 13,
+      fontWeight: 800,
+      border: "none"
+    }}
+  >
+    今日のワークアウトを追加
+  </button>
+)}
+
       {selectedDate && (
         <div style={{ marginTop: 14, background: "var(--card2)", borderRadius: 12, padding: "14px 16px", border: "1px solid var(--border2)" }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
@@ -172,13 +191,24 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
               </div>
             );
           })}
-          {onLogForDate && (
-            <button
-              onClick={() => onLogForDate(selectedDate)}
-              style={{ width: "100%", marginTop: 8, padding: "11px", borderRadius: 10, background: "var(--text)", color: "var(--bg)", fontSize: 13, fontWeight: 800, border: "none" }}>
-              この日に記録する
-            </button>
-          )}
+          {onLogForDate && selectedDate !== todayStr && (
+  <button
+    onClick={() => onLogForDate(selectedDate)}
+    style={{
+      width: "100%",
+      marginTop: 8,
+      padding: "11px",
+      borderRadius: 10,
+      background: "var(--text)",
+      color: "var(--bg)",
+      fontSize: 13,
+      fontWeight: 800,
+      border: "none"
+    }}
+  >
+    この日に記録する
+  </button>
+)}
         </div>
       )}
     </div>
