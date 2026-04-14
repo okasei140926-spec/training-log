@@ -367,7 +367,7 @@ return (
 
 {canCopy && set.weight !== "BW" && onCopyDown ? (
   <button onClick={() => onCopyDown(ex.name, idx - 1)}
-    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "#fff", fontSize: 11, fontWeight: 700 }}>
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text2)", fontSize: 12, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
@@ -395,7 +395,7 @@ return (
 
 {canCopy && onCopyDownReps ? (
   <button onClick={() => onCopyDownReps(ex.name, idx - 1)}
-    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "#fff", fontSize: 11, fontWeight: 700 }}>
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text2)", fontSize: 12, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
