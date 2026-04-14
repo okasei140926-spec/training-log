@@ -38,26 +38,6 @@ function SortableExerciseItem({ id, children }) {
   );
 }
 
-function SortableExerciseItem({ id, children }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {children}
-    </div>
-  );
-}
 
 export default function LogScreen({
   todayLabels, dayColor,
