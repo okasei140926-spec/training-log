@@ -24,11 +24,13 @@ function SortableExerciseItem({ id, children }) {
     setNodeRef,
     transform,
     transition,
+    isDragging,
   } = useSortable({ id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    opacity: isDragging ? 0.35 : 1,
   };
 
   const dragHandleProps = {
@@ -102,7 +104,7 @@ const handleDragEnd = (event) => {
 };
 
   return (
-    <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
+    <div className="fade-in" style={{ padding: "20px", paddingBottom: 200 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
         <div style={{ fontSize: 11, color: "var(--text4)" }}></div>
