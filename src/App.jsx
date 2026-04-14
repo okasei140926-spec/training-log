@@ -71,11 +71,14 @@ export default function GymApp() {
     const newUnit = CYCLE[currentUnit] || "kg";
 
     const makeBaseSets = () => ([
-      { weight: "", reps: "", done: false },
-      { weight: "", reps: "", done: false },
-      { weight: "", reps: "", done: false },
-    ]);
-    const currentSets = logData[name] || makeBaseSets;
+  { weight: "", reps: "", done: false },
+  { weight: "", reps: "", done: false },
+  { weight: "", reps: "", done: false },
+]);
+
+const currentSets = logData[name]
+  ? logData[name].map(s => ({ ...s }))
+  : makeBaseSets();
 
     if (newUnit === "BW") {
       setLogData(p => ({
@@ -159,30 +162,36 @@ export default function GymApp() {
   };
 
   const copySetDown = (name, idx) => {
-    setLogData(p => {
-      const current = [...(p[name] || [
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-      ])];
-      if (idx >= current.length - 1) return p;
-      current[idx + 1] = { ...current[idx + 1], weight: current[idx].weight };
-      return { ...p, [name]: current };
-    });
-  };
+  setLogData(p => {
+    const base = getExSets({ name }); // ←ここ重要
+    const current = [...(p[name] || base)];
+
+    if (idx >= current.length - 1) return p;
+
+    current[idx + 1] = {
+      ...current[idx + 1],
+      weight: current[idx].weight
+    };
+
+    return { ...p, [name]: current };
+  });
+};
 
   const copyRepDown = (name, idx) => {
-    setLogData(p => {
-      const current = [...(p[name] || [
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-      ])];
-      if (idx >= current.length - 1) return p;
-      current[idx + 1] = { ...current[idx + 1], reps: current[idx].reps };
-      return { ...p, [name]: current };
-    });
-  };
+  setLogData(p => {
+    const base = getExSets({ name }); // ←ここ重要
+    const current = [...(p[name] || base)];
+
+    if (idx >= current.length - 1) return p;
+
+    current[idx + 1] = {
+      ...current[idx + 1],
+      reps: current[idx].reps
+    };
+
+    return { ...p, [name]: current };
+  });
+};
   
   const getExistingSets = (name) => {
     const records = history[name];
@@ -193,20 +202,27 @@ export default function GymApp() {
     return existing.sets.map(s => ({ ...s, done: true}));
     };
 
-  const getExSets = (name) => {
-    if (logData[name]) return logData[name];
-    const existing = getExistingSets(name);
-    if (existing && existing.length > 0)
-    return existing;
-    return [
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-    ];
-  };
+  const makeBaseSets = () => ([
+  { weight: "", reps: "", done: false },
+  { weight: "", reps: "", done: false },
+  { weight: "", reps: "", done: false },
+]);
+
+const getExSets = (ex) => {
+  if (logData[ex.name]) {
+    return logData[ex.name].map(s => ({ ...s }));
+  }
+
+  const existing = getExistingSets(ex.name);
+  if (existing && existing.length > 0) {
+    return existing.map(s => ({ ...s }));
+  }
+
+  return makeBaseSets();
+};
 
   const setField = (ex, idx, field, val) => {
-  const key = ex.id || ex.name;
+  const key = ex.name;
 
   setLogData(p => {
     const s = [...(p[key] || getExSets(ex))];
@@ -223,17 +239,19 @@ export default function GymApp() {
 };
   
 
-  const addSet = (name) => {
+  const addSet = (ex) => {
     setLogData(p => {
-      const s = [...(p[name] || getExSets(name))];
-      return { ...p, [name]: [...s, { weight: "", reps: "", done: false }] };
+        const key = ex.name;
+        const s = [...(p[key] || getExSets(ex))];
+        return { ...p, [key]: [...s, { weight: "", reps: "", done: false }] };
     });
   };
 
-  const removeSet = (name, idx) => {
+  const removeSet = (ex, idx) => {
     setLogData(p => {
-      const s = (p[name] || getExSets(name)).filter((_, i) => i !== idx);
-      return { ...p, [name]: s };
+        const key = ex.name
+        const s = (p[key] || getExSets(ex)).filter((_, i) => i !== idx);
+        return { ...p, [key]: s };
     });
   };
 
@@ -350,8 +368,7 @@ const addExToSession = (name) => {
     const nh = { ...history };
     let exCount = 0, setCount = 0, prs = [];
     exercises.forEach(ex => {
-      const key = ex.id || ex.name;
-      const sets = logData[key] || getExSets(ex);
+      const sets = logData[ex.name] || getExSets(ex);
       const valid = sets.filter(s => s.weight && s.reps);
       if (!valid.length) return;
       exCount++;
@@ -521,9 +538,9 @@ const addExToSession = (name) => {
                 <div style={{ background: "var(--card)", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
                   {!exList.length && <div style={{ padding: "12px 14px", fontSize: 13, color: "var(--text4)" }}>種目なし</div>}
                   {exList.map((ex, i) => (
-                    <div key={ex.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderBottom: i < exList.length - 1 ? "1px solid var(--card2)" : "none" }}>
+                    <div key={ex.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderBottom: i < exList.length - 1 ? "1px solid var(--card2)" : "none" }}>
                       <span style={{ fontSize: 14, color: "var(--text)" }}>{ex.name}</span>
-                      <button onClick={() => setMuscleEx(p => ({ ...p, [lbl]: p[lbl].filter(e => e.id !== ex.id) }))} style={{ background: "none", color: "var(--text3)", fontSize: 18 }}>×</button>
+                      <button onClick={() => setMuscleEx(p => ({ ...p, [lbl]: p[lbl].filter(e => e.id !== ex.name) }))} style={{ background: "none", color: "var(--text3)", fontSize: 18 }}>×</button>
                     </div>
                   ))}
                   <button onClick={() => openAddEx(lbl)} style={{ width: "100%", padding: "12px 14px", background: "transparent", border: "none", color: col, fontSize: 13, textAlign: "left", fontWeight: 700 }}>＋ 種目を追加</button>

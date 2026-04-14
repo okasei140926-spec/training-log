@@ -155,7 +155,7 @@ const handleDragEnd = (event) => {
     
       {exercises.map((ex, i) => {
 
-        const sets      = logData[ex.id] || getExSets(ex);
+        const sets      = logData[ex.name] || getExSets(ex);
         const isEditing = editingId === ex.id;
         const prev      = getPrev ? getPrev(ex.name) : null;
         const pr        = getPR ? getPR(ex.name) : null;
