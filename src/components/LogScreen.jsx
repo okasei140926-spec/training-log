@@ -328,8 +328,7 @@ return (
 
 {sets.map((set, idx) => {
     const canCopy = idx > 0;
-    const setNo = idx + 1;
-  
+    
   return (
     <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
       <button onClick={() => setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")}
