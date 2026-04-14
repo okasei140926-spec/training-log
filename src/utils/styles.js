@@ -11,10 +11,10 @@ export const S = {
 export const css = `
   :root {
     --bg: #0f0f0f;
-    --card: #1a1a1a;
+    --card: #6a17c2;
     --card2: #242424;
     --card-modal: #1e1e1e;
-    --border: #333333;
+    --border: #33d022;
     --border2: #444444;
     --border3: #555555;
     --text: #ffffff;
