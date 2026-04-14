@@ -195,7 +195,14 @@ const handleDragEnd = (event) => {
             border: "1px solid var(--border)",
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center"
+            alignItems: "center",
+            transition: "transform 0.1s ease"
+          }}
+          onTouchStart={(e) => {
+            e.currentTarget.style.transform = "scale(0.97)";
+          }}
+          onTouchEnd={(e) => {
+            e.currentTarget.style.transform = "scale(1)"
           }}
         >
           <div>
@@ -276,9 +283,6 @@ return (
                 {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
               </button>
             )}
-
-            <button onClick={() => moveEx(i, -1)} style={{ background: "none", color: i === 0 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▲</button>
-            <button onClick={() => moveEx(i, 1)} style={{ background: "none", color: i === exercises.length - 1 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▼</button>
             <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
           </div>
         </div>
