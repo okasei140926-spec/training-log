@@ -127,7 +127,7 @@ const handleDragEnd = (event) => {
       const toAdd = prevExercises.length > 0 ? prevExercises : suggestions.slice(0, 3);
 
       toAdd.forEach((name) => onAddEx(name));
-      setTodayLabels([lbl]);
+      setTodayLabels((p) => [...p, lbl]);
     }
   }}
         style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",
