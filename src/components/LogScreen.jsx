@@ -86,6 +86,19 @@ export default function LogScreen({
   })
 );
 
+const handleDragEnd = (event) => {
+  const { active, over } = event;
+
+  if (!over || active.id === over.id) return;
+
+  const oldIndex = exercises.findIndex((ex) => ex.id === active.id);
+  const newIndex = exercises.findIndex((ex) => ex.id === over.id);
+
+  if (oldIndex === -1 || newIndex === -1) return;
+
+  onReorderEx(oldIndex, newIndex);
+};
+
   return (
     <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
