@@ -10,7 +10,7 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
   names.forEach(n => { EX_TO_LABEL[n] = label; });
 });
 
-export default function CalendarView({ history, unit = "kg", onEditRecord, onLogForDate }) {
+export default function CalendarView({ history, logData, unit = "kg", onEditRecord, onLogForDate }) {
   const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -41,10 +41,42 @@ export default function CalendarView({ history, unit = "kg", onEditRecord, onLog
   const toStr = (d) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   const monthWorkouts = [...trainedDates].filter(d => d.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)).length;
 
-  const getDateExercises = (dateStr) =>
-    Object.entries(history)
-      .filter(([, recs]) => recs.some(r => r.date === dateStr))
-      .map(([name, recs]) => ({ name, record: recs.find(r => r.date === dateStr) }));
+  const getDateExercises = (dateStr) => {
+  // 保存済み
+  const saved = Object.entries(history)
+    .filter(([, recs]) => recs.some(r => r.date === dateStr))
+    .map(([name, recs]) => ({
+      name,
+      record: recs.find(r => r.date === dateStr)
+    }));
+
+  // 今日の編集中（logData）
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  if (dateStr !== todayStr) return saved;
+
+  const draft = Object.entries(logData || {})
+    .map(([name, sets]) => {
+      const valid = sets.filter(s => s.weight && s.reps);
+      if (!valid.length) return null;
+      return {
+        name,
+        record: { sets: valid, date: todayStr }
+      };
+    })
+    .filter(Boolean);
+
+  // 重複防止（draft優先）
+  const merged = [...saved];
+
+  draft.forEach(s => {
+    if (!merged.find(d => d.name === s.name)) {
+      merged.push(s);
+    }
+  });
+
+  return merged;
+};
 
   const handleDayClick = (ds) => {
     setSelectedDate(prev => prev === ds ? null : ds);

@@ -684,7 +684,7 @@ const addExToSession = (name) => {
         />
       )}
 
-      {screen === "history" && <HistoryScreen history={history} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleLogForDate} />}
+      {screen === "history" && <HistoryScreen history={history} logData={logData} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleLogForDate} />}
 
       {screen === "ai" && (
         <AIScreen

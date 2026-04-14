@@ -5,7 +5,7 @@ import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
 
 
-export default function HistoryScreen({ history, onEditHistory, onDeleteHistory, unit = "kg", onLogForDate }) {
+export default function HistoryScreen({ history, logData, onEditHistory, onDeleteHistory, unit = "kg", onLogForDate }) {
   const [editTarget, setEditTarget] = useState(null);
   const [graphTarget, setGraphTarget] = useState(null);
 
@@ -18,7 +18,7 @@ export default function HistoryScreen({ history, onEditHistory, onDeleteHistory,
 
       {/* カレンダービュー */}
       <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", border: "1px solid var(--border)" }}>
-  <CalendarView history={history} unit={unit} onEditRecord={(exName, record, historyIdx) => setEditTarget({ exName, record, historyIdx })} onLogForDate={onLogForDate} />
+  <CalendarView history={history} logData={logData} unit={unit} onEditRecord={(exName, record, historyIdx) => setEditTarget({ exName, record, historyIdx })} onLogForDate={onLogForDate} />
 </div>
 
 
