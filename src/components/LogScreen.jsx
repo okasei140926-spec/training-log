@@ -273,7 +273,19 @@ export default function LogScreen({
 
 
       <button onClick={saveLog}
-        style={{ width: "100%", padding: 16, borderRadius: 14, background: accentColor, color: accentText, fontWeight: 800, fontSize: 16, marginTop: 20 }}>
+        style={{ position: "fixed",
+        bottom: 20,
+        left: 20,
+        right: 20,
+        padding: 16, 
+        borderRadius: 14, 
+        background: accentColor, 
+        color: accentText, 
+        fontWeight: 800, 
+        fontSize: 16, 
+        border: "none",
+        zIndex: 100
+        }}>
         SAVE WORKOUT ✓
       </button>
 
@@ -292,7 +304,7 @@ export default function LogScreen({
       onClick={() => setShowAdd(true)}
       style={{
         position: "fixed",
-        bottom: 160,
+        bottom: 90,
         right: 20,
         width: 60,
         height: 60,
