@@ -170,25 +170,6 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
 )}
     
 
-      {selectedDate === todayStr && onLogForDate && (
-  <button
-    onClick={() => onLogForDate(todayStr)}
-    style={{
-      width: "100%",
-      marginTop: 12,
-      padding: "11px",
-      borderRadius: 10,
-      background: "var(--text)",
-      color: "var(--bg)",
-      fontSize: 13,
-      fontWeight: 800,
-      border: "none"
-    }}
-  >
-    今日のワークアウトを追加
-  </button>
-)}
-
       {selectedDate && (
         <div style={{ marginTop: 14, marginBottom: 24, background: "var(--card2)", borderRadius: 12, padding: "14px 16px", border: "1px solid var(--border2)" }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
