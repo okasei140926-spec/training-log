@@ -154,7 +154,6 @@ const handleDragEnd = (event) => {
 
     
       {exercises.map((ex, i) => {
-        let setIndex = 1;
 
         const sets      = logData[ex.id] || getExSets(ex);
         const isEditing = editingId === ex.id;
@@ -326,7 +325,9 @@ return (
               <div />
             </div>
 
-            {sets.map((set, idx) => {
+
+let setIndex = 1;
+{sets.map((set, idx) => {
   const canCopy = idx > 0;
   
   return (
