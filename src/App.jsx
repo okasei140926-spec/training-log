@@ -378,7 +378,7 @@ const addExToSession = (name) => {
   const saveLog = () => {
     const nh = { ...history };
     let exCount = 0, setCount = 0, prs = [];
-    exercises.forEach(ex => {
+    exercises.forEach(ex, index => {
       const sets = logData[ex.name] || getExSets(ex);
       const valid = sets.filter(s => s.weight && s.reps);
       if (!valid.length) return;
@@ -394,9 +394,9 @@ const addExToSession = (name) => {
       if (new1RM > old1RM) prs.push({ name: ex.name, diff: Math.round((new1RM - old1RM) * (exUnit === "lbs" ? KG_TO_LBS : 1)) });
       const existingIdx = nh[ex.name].findIndex(r => r.date === logDate);
       if (existingIdx >= 0) {
-        nh[ex.name][existingIdx] = { sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate };
+        nh[ex.name][existingIdx] = { sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate, order: index };
       } else {
-        nh[ex.name].push({ sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate });
+        nh[ex.name].push({ sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate, order: index });
       }
     });
     setHistory(nh);

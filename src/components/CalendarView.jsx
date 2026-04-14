@@ -168,7 +168,7 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
 )}
 
       {selectedDate && (
-        <div style={{ marginTop: 14, background: "var(--card2)", borderRadius: 12, padding: "14px 16px", border: "1px solid var(--border2)" }}>
+        <div style={{ marginTop: 14, marginBottom: 24, background: "var(--card2)", borderRadius: 12, padding: "14px 16px", border: "1px solid var(--border2)" }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
             {selectedDate}{selectedDate === todayStr ? " (今日)" : ""}
           </div>
@@ -182,7 +182,7 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
             return (
               <div key={name}
                 onClick={() => onEditRecord?.(name, record, historyIdx >= 0 ? historyIdx : undefined)}
-                style={{ marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid var(--border)", cursor: onEditRecord ? "pointer" : "default", borderRadius: 6, padding: "6px 8px" }}>
+                style={{ marginBottom: 8, paddingBottom: 110, borderBottom: "1px solid var(--border)", cursor: onEditRecord ? "pointer" : "default", borderRadius: 6, padding: "6px 8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                   {labelColor && <div style={{ width: 6, height: 6, borderRadius: "50%", background: labelColor, flexShrink: 0 }} />}
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{name}</div>
