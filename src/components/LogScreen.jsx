@@ -304,18 +304,17 @@ export default function LogScreen({
       onClick={() => setShowAdd(true)}
       style={{
         position: "fixed",
-        bottom: 90,
-        right: 20,
-        width: 60,
-        height: 60,
+        bottom: "90px",
+        right: "20px",
+        width: "60px",
+        height: "60px",
         borderRadius: "50%",
-        background: "var(--text)",
-        color: "var(--bg)",
-        fontSize: 28,
-        fontWeight: 700,
+        background: "red",
+        color: "white",
+        fontSize: "28px",
+        fontWeight: "700",
         border: "none",
-        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
-        zIndex: 100
+        zIndex: 9999
       }}
     >
       ＋
