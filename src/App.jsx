@@ -107,7 +107,7 @@ export default function GymApp() {
 
   // ─── Derived ──────────────────────────────────────
   const dayColor      = LABEL_COLORS[todayLabels[0]] || null;
-  const baseExercises = [...todayLabels].reverse().flatMap(l =>
+  const baseExercises = todayLabels.flatMap(l =>
   (muscleEx[l] || []).map(ex => ({ ...ex, label: l }))
 );
   const exercises     = sessionEx !== null ? sessionEx : baseExercises;
