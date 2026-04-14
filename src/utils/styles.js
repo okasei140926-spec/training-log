@@ -1,5 +1,5 @@
 export const S = {
-  root:        { minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'Helvetica Neue', sans-serif", maxWidth: 430, margin: "0 auto", position: "relative", paddingBottom: 80 },
+  root:        { minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'Helvetica Neue', sans-serif", maxWidth: 430, margin: "0 auto", paddingBottom: 0 },
   header:      { padding: "24px 20px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, background: "var(--bg)" },
   appLabel:    { fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase", marginBottom: 4 },
   headerTitle: { fontSize: 22, fontWeight: 700 },
@@ -49,7 +49,7 @@ export const css = `
   ::-webkit-scrollbar { width: 0; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-  .fade-in { animation: fadeIn 0.3s ease forwards; }
+  .fade-in { opacity: 1; }
   .pressable {
     transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease;
     cursor: pointer;
