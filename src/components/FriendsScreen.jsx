@@ -38,7 +38,7 @@ export default function FriendsScreen({ history, onCopyMenu }) {
 
   const today = new Date().toISOString().split("T")[0];
   const thresholdDate = new Date();
-  thresholdDate.setDate(thresholdDate.getDate() - 2);
+  thresholdDate.setDate(thresholdDate.getDate() - 7);
   const thresholdStr = thresholdDate.toISOString().split("T")[0];
 
   const myRecentExercises = Object.entries(history)
