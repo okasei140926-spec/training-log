@@ -3,7 +3,61 @@ import { calc1RM, dispW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import { LABEL_COLORS, QUICK_LABELS, SUGGESTIONS } from "../constants/suggestions";
 
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
+function SortableExerciseItem({ id, children }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+}
+
+function SortableExerciseItem({ id, children }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      {children}
+    </div>
+  );
+}
 
 export default function LogScreen({
   todayLabels, dayColor,
@@ -44,12 +98,22 @@ export default function LogScreen({
 
   const title = todayLabels.length ? todayLabels.join(" + ") : "ワークアウト";
 
+  const sensors = useSensors(
+  useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 8,
+    },
+  })
+);
+
   return (
     <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
         <div style={{ fontSize: 11, color: "var(--text4)" }}></div>
       </div>
+
+
 
       {/* 部位チップ */}
 <div style={{ display: "grid", gridTemplateColumns : "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
@@ -80,6 +144,15 @@ export default function LogScreen({
 </div>
 
       {/* 種目カード */}
+      <DndContext
+  sensors={sensors}
+  collisionDetection={closestCenter}
+  onDragEnd={handleDragEnd}
+>
+  <SortableContext
+    items={exercises.map((ex) => ex.id)}
+    strategy={verticalListSortingStrategy}
+  >
       {exercises.map((ex, i) => {
         const sets      = logData[ex.id] || getExSets(ex);
         const isEditing = editingId === ex.id;
@@ -103,7 +176,7 @@ export default function LogScreen({
         if (i !== activeExIdx) {
   const doneSetsCount = sets.filter(s => s.done && s.weight && s.reps).length;
   return (
-    <React.Fragment key={ex.id}>
+    <SortableExerciseItem key={ex.id} id={ex.id}>
       <div onClick={() => setActiveExIdx(i)}
         style={{ background: "var(--card)", borderRadius: 16, padding: "12px 16px", marginBottom: 12, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
@@ -114,18 +187,13 @@ export default function LogScreen({
         </div>
         <div style={{ fontSize: 13, color: "var(--text3)" }}>▼</div>
       </div>
-        <button onClick={() => setShowAdd(true) }
-          style={{ width: "100%", marginBottom: 4, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
-        </button>
-      )
-    </React.Fragment>
+    </SortableExerciseItem>
   );
 }
 
 
-        return (
-
-  <React.Fragment key={ex.id}>
+return (
+  <SortableExerciseItem key={ex.id} id={ex.id}>
     <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPRPace ? "#4ade8055" : "var(--border)"}` }}>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -240,24 +308,8 @@ export default function LogScreen({
 );
 })}
 
-<button
-  onClick={() => {
-    setShowAdd(true);
-  }}
-  style={{
-    width: "100%",
-    padding: "14px",
-    marginTop: 8,
-    borderRadius: 14,
-    border: "1px dashed var(--border)",
-    background: "transparent",
-    color: "var(--text2)",
-    fontWeight: 700,
-    fontSize: 13
-  }}
->
-  ＋ 種目を追加
-</button>
+
+
 
 <button
   onClick={() => addSet(ex)}
@@ -278,10 +330,11 @@ export default function LogScreen({
 
           </div>
           
-        </React.Fragment>
+        </SortableExerciseItem>
         );
       })}
-
+</SortableContext>
+</DndContext>
 
       <button onClick={saveLog}
         style={{ position: "fixed",
