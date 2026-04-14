@@ -31,9 +31,14 @@ function SortableExerciseItem({ id, children }) {
     transition,
   };
 
+  const dragHandleProps = {
+    ...attributes,
+    ...listeners,
+  };
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      {children}
+    <div ref={setNodeRef} style={style}>
+      {children(dragHandleProps)}
     </div>
   );
 }
@@ -174,53 +179,110 @@ const handleDragEnd = (event) => {
           return Number(s.weight) * (1 + Number(s.reps) / 30) >= Number(best.weight) * (1 + Number(best.reps) / 30) ? s : best;
         }, null);
 
-        if (i !== activeExIdx) {
+       if (i !== activeExIdx) {
   const doneSetsCount = sets.filter(s => s.done && s.weight && s.reps).length;
+
   return (
     <SortableExerciseItem key={ex.id} id={ex.id}>
-      <div onClick={() => setActiveExIdx(i)}
-        style={{ background: "var(--card)", borderRadius: 16, padding: "12px 16px", marginBottom: 12, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{ex.name}</div>
-          <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
-            {doneSetsCount > 0 ? `${doneSetsCount}セット完了` : "タップして開始"}
+      {(dragHandleProps) => (
+        <div
+          onClick={() => setActiveExIdx(i)}
+          style={{
+            background: "var(--card)",
+            borderRadius: 16,
+            padding: "12px 16px",
+            marginBottom: 12,
+            border: "1px solid var(--border)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+              {ex.name}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
+              {doneSetsCount > 0 ? `${doneSetsCount}セット完了` : "タップして開始"}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              {...dragHandleProps}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text3)",
+                fontSize: 18,
+                padding: "4px 6px",
+                cursor: "grab"
+              }}
+            >
+              ⋮⋮
+            </button>
+            <div style={{ fontSize: 13, color: "var(--text3)" }}>▼</div>
           </div>
         </div>
-        <div style={{ fontSize: 13, color: "var(--text3)" }}>▼</div>
-      </div>
+      )}
     </SortableExerciseItem>
   );
 }
 
-
 return (
   <SortableExerciseItem key={ex.id} id={ex.id}>
-    <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPRPace ? "#4ade8055" : "var(--border)"}` }}>
+    {(dragHandleProps) => (
+      <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPRPace ? "#4ade8055" : "var(--border)"}` }}>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                {isEditing ? (
-                  <input ref={editRef} value={typeof editingName === "string" ? editingName: editingName?.name || ""}
-                    onChange={e => setEditingName(e.target.value)}
-                    onBlur={() => confirmEdit(ex)}
-                    onKeyDown={e => { if (e.key === "Enter") confirmEdit(ex); if (e.key === "Escape") setEditingId(null); }}
-                    style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid var(--text2)", color: "var(--text)", fontSize: 16, fontWeight: 700, padding: "2px 0" }} />
-                ) : (
-                  <div onClick={() => startEdit(ex)} style={{ fontSize: 16, fontWeight: 700, cursor: "text", color: "var(--text)" }}>{ex.name}</div>
-                )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+            {isEditing ? (
+              <input
+                ref={editRef}
+                value={typeof editingName === "string" ? editingName : editingName?.name || ""}
+                onChange={e => setEditingName(e.target.value)}
+                onBlur={() => confirmEdit(ex)}
+                onKeyDown={e => { if (e.key === "Enter") confirmEdit(ex); if (e.key === "Escape") setEditingId(null); }}
+                style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid var(--text2)", color: "var(--text)", fontSize: 16, fontWeight: 700, padding: "2px 0" }}
+              />
+            ) : (
+              <div onClick={() => startEdit(ex)} style={{ fontSize: 16, fontWeight: 700, cursor: "text", color: "var(--text)" }}>
+                {ex.name}
               </div>
-              <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
-                {onToggleExUnit && (
-                  <button onClick={() => onToggleExUnit(ex.name)}
-                    style={{ padding: "3px 9px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: "1px solid var(--border2)", background: exUnit !== unit ? "var(--text)" : "var(--card2)", color: exUnit !== unit ? "var(--bg)" : "var(--text2)" }}>
-                    {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
-                  </button>
-                )}
-                <button onClick={() => moveEx(i, -1)} style={{ background: "none", color: i === 0 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▲</button>
-                <button onClick={() => moveEx(i, 1)} style={{ background: "none", color: i === exercises.length - 1 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▼</button>
-                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
-              </div>
-            </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
+            <button
+              {...dragHandleProps}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text3)",
+                fontSize: 18,
+                padding: "4px 6px",
+                cursor: "grab"
+              }}
+            >
+              ⋮⋮
+            </button>
+
+            {onToggleExUnit && (
+              <button
+                onClick={() => onToggleExUnit(ex.name)}
+                style={{ padding: "3px 9px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: "1px solid var(--border2)", background: exUnit !== unit ? "var(--text)" : "var(--card2)", color: exUnit !== unit ? "var(--bg)" : "var(--text2)" }}
+              >
+                {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
+              </button>
+            )}
+
+            <button onClick={() => moveEx(i, -1)} style={{ background: "none", color: i === 0 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▲</button>
+            <button onClick={() => moveEx(i, 1)} style={{ background: "none", color: i === exercises.length - 1 ? "var(--border2)" : "var(--text3)", fontSize: 12, padding: "4px 5px" }}>▼</button>
+            <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
+          </div>
+        </div>
 
             {/* 前回の記録 + PR */}
             {(prev || pr) && (
@@ -277,30 +339,30 @@ return (
 
                   
                   {set.weight === "BW" ? (
-  <button onClick={() => setField(ex, i, "weight", "")}
+  <button onClick={() => setField(ex, idx, "weight", "")}
     style={{ width: "100%", background: "var(--card2)", border: "2px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text2)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
     自重 <span style={{ fontSize: 10, color: "var(--text4)" }}>タップでkg</span>
   </button>
 ) : (
   <input type="text" inputMode="decimal" value={set.weight}
-    onChange={e => setField(ex, i, "weight", e.target.value)}
+    onChange={e => setField(ex, idx, "weight", e.target.value)}
     placeholder="0"
     style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
 )}
 
 {canCopy && set.weight !== "BW" && onCopyDown ? (
-  <button onClick={() => onCopyDown(ex, i - 1)}
+  <button onClick={() => onCopyDown(ex, idx - 1)}
     style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
 
 <input type="text" inputMode="numeric" value={set.reps}
-  onChange={e => setField(ex, i, "reps", e.target.value)} placeholder="0"
+  onChange={e => setField(ex, idx, "reps", e.target.value)} placeholder="0"
   style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
 
 {canCopy && onCopyDownReps ? (
-  <button onClick={() => onCopyDownReps(ex, i - 1)}
+  <button onClick={() => onCopyDownReps(ex, idx - 1)}
     style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
     ↓
   </button>
@@ -330,7 +392,7 @@ return (
 </button>
 
           </div>
-          
+    )}
         </SortableExerciseItem>
         );
       })}
