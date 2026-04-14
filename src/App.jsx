@@ -263,22 +263,41 @@ export default function GymApp() {
   const [insertIndex, setInsertIndex] = useState(null);
 
   const addExToSession = (name) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const ex = {
-        id: crypto.randomUUID(), name: trimmed };
-    setSessionEx(p => {
-      const current = p !== null ? p : [...baseExercises];
-      if (current.find(e => e.name === trimmed)) return current;
-      if (insertIndex !== null) {
-        const next = [...current];
-        next.splice(insertIndex + 1, 0, ex);
-        return next;
-      }
-      return [...current, ex];
-    });
-    setInsertIndex(null);
+  const trimmed = name.trim();
+  if (!trimmed) return;
+
+  const ex = {
+    id: Date.now() + (Math.random() * 1000 | 0),
+    name: trimmed
   };
+
+  // ① 今のセッションに追加
+  setSessionEx(p => {
+    const current = p !== null ? p : [...baseExercises];
+    if (current.find(e => e.name === trimmed)) return current;
+    return [...current, ex];
+  });
+
+  // ② 今選ばれてる部位に保存
+  const label = todayLabels[0]; // ← 1つだけ前提
+
+  if (!label) return;
+
+  setMuscleEx(prev => {
+    const list = prev[label] || [];
+
+    // すでにあるなら追加しない
+    if (list.find(e => e.name === trimmed)) return prev;
+
+    return {
+      ...prev,
+      [label]: [
+        ...list,
+        { id: Date.now() + (Math.random() * 1000 | 0), name: trimmed }
+      ]
+    };
+  });
+};
 
   const reorderEx = (fromIdx, toIdx) => {
     setSessionEx(p => {
