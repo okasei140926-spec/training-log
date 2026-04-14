@@ -222,7 +222,6 @@ const handleDragEnd = (event) => {
             >
               ⋮⋮
             </button>
-            <div style={{ fontSize: 13, color: "var(--text3)" }}>▼</div>
           </div>
         </div>
       )}
