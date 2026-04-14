@@ -117,8 +117,6 @@ const handleDragEnd = (event) => {
       <button
   key={lbl}
   onClick={() => {
-    resetSession && resetSession();
-
     if (isSelected) {
       setTodayLabels((p) => p.filter((l) => l !== lbl));
     } else {
