@@ -114,12 +114,11 @@ export default function LogScreen({
         </div>
         <div style={{ fontSize: 13, color: "var(--text3)" }}>▼</div>
       </div>
-      {i < exercises.length - 1 && (
         <button onClick={() => { onSetInsertIndex && onSetInsertIndex(i); setShowAdd(true); }}
           style={{ width: "100%", marginBottom: 4, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
           ＋ 種目を追加
         </button>
-      )}
+      )
     </React.Fragment>
   );
 }
