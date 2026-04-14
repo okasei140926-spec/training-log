@@ -60,7 +60,7 @@ export default function LogScreen({
 
   const startEdit = (ex) => {
     setEditingId(ex.id);
-    setEditingName(ex);
+    setEditingName(ex.name);
     setTimeout(() => editRef.current?.focus(), 30);
   };
 
@@ -192,7 +192,7 @@ return (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                 {isEditing ? (
-                  <input ref={editRef} value={editingName}
+                  <input ref={editRef} value={typeof editingName === "string" ? editingName: editingName?.name || ""}
                     onChange={e => setEditingName(e.target.value)}
                     onBlur={() => confirmEdit(ex)}
                     onKeyDown={e => { if (e.key === "Enter") confirmEdit(ex); if (e.key === "Escape") setEditingId(null); }}
