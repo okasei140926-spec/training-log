@@ -149,6 +149,8 @@ const handleDragEnd = (event) => {
     items={exercises.map((ex) => ex.id)}
     strategy={verticalListSortingStrategy}
   >
+
+    let setIndex = 1;
       {exercises.map((ex, i) => {
         const sets      = logData[ex.id] || getExSets(ex);
         const isEditing = editingId === ex.id;
@@ -265,9 +267,9 @@ return (
   
   return (
     <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
-      <button onClick={() => setField(ex, i, "weight", set.weight === "BW" ? "" : "BW")}
+      <button onClick={() => setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")}
         style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.weight === "BW" ? "var(--text)" : "var(--border)", fontSize: 11, color: set.weight === "BW" ? "var(--bg)" : "var(--text2)", fontWeight: 700, alignSelf: "center", border: "none" }}>
-        {i + 1}
+        {setIndex++}
       </button>            
 
                   
