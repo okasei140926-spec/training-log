@@ -29,11 +29,11 @@ export const css = `
     --accent: #FF8C00;
   }
   .theme-light {
-    --bg: #f5f0eb;
-    --card: #ffffff;
+    --bg: #d67b20;
+    --card: #150e4a;
     --card2: #ede8e3;
     --card-modal: #faf8f5;
-    --border: #d9d0c7;
+    --border: #e01414;
     --border2: #c5b8ad;
     --border3: #b0a095;
     --text: #1a1008;
