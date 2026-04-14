@@ -118,6 +118,8 @@ const handleDragEnd = (event) => {
   key={lbl}
   onClick={() => {
     if (isSelected) {
+      const suggestions = SUGGESTIONS[lbl] || [];
+      suggestions.forEach(name => removeEx(exercises.find(e => e.name === name)?.id, name)) ; 
       setTodayLabels((p) => p.filter((l) => l !== lbl));
     } else {
       const suggestions = SUGGESTIONS[lbl] || [];
