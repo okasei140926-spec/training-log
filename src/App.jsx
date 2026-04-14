@@ -107,7 +107,9 @@ export default function GymApp() {
 
   // ─── Derived ──────────────────────────────────────
   const dayColor      = LABEL_COLORS[todayLabels[0]] || null;
-  const baseExercises = todayLabels.flatMap(l => (muscleEx[l] || []).map(ex => ({ ...ex, label: l })));
+  const baseExercises = [...todayLabels].reverse().flatMap(l =>
+  (muscleEx[l] || []).map(ex => ({ ...ex, label: l }))
+);
   const exercises     = sessionEx !== null ? sessionEx : baseExercises;
 
   // eslint-disable-next-line no-unused-vars
