@@ -292,7 +292,7 @@ export default function LogScreen({
       onClick={() => setShowAdd(true)}
       style={{
         position: "fixed",
-        bottom: 90,
+        bottom: 130,
         right: 20,
         width: 60,
         height: 60,
