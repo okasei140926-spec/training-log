@@ -78,12 +78,6 @@ export default function LogScreen({
     setEditingId(null);
   };
 
-  const moveEx = (idx, dir) => {
-    const target = idx + dir;
-    if (target < 0 || target >= exercises.length) return;
-    onReorderEx(idx, target);
-  };
-
   const title = todayLabels.length ? todayLabels.join(" + ") : "ワークアウト";
 
   const sensors = useSensors(
