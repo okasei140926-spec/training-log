@@ -127,7 +127,7 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
               style={{
                 padding: "8px 2px", borderRadius: 10, cursor: "pointer",
                 background: isSelected ? "#4ade8022" : isToday ? "var(--border2)" : "transparent",
-                border: `2px solid ${isSelected ? "#4ade80" : isSelected ? "4ade80" : "transparent"}`,
+                border: `2px solid ${isSelected || isToday ? "4ade80" : "transparent"}`,
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
               }}>
               <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 400,
@@ -147,6 +147,28 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
           );
         })}
       </div>
+
+{/* 👇ここに追加 */}
+{selectedDate && onLogForDate && (
+  <button
+    onClick={() => onLogForDate(selectedDate)}
+    style={{
+      width: "100%",
+      marginTop: 12,
+      padding: "11px",
+      borderRadius: 10,
+      background: "var(--text)",
+      color: "var(--bg)",
+      fontSize: 13,
+      fontWeight: 800,
+      border: "none"
+    }}
+  >
+
+    {selectedDate === todayStr ? "今日のワークアウトを追加" : "この日に記録する"}
+  </button>
+)}
+    
 
       {selectedDate === todayStr && onLogForDate && (
   <button
@@ -182,7 +204,7 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
             return (
               <div key={name}
                 onClick={() => onEditRecord?.(name, record, historyIdx >= 0 ? historyIdx : undefined)}
-                style={{ marginBottom: 8, paddingBottom: 110, borderBottom: "1px solid var(--border)", cursor: onEditRecord ? "pointer" : "default", borderRadius: 6, padding: "6px 8px" }}>
+                style={{ marginBottom: 8, padding: "6px 8px", borderBottom: "1px solid var(--border)", cursor: onEditRecord ? "pointer" : "default", borderRadius: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
                   {labelColor && <div style={{ width: 6, height: 6, borderRadius: "50%", background: labelColor, flexShrink: 0 }} />}
                   <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{name}</div>
@@ -197,24 +219,7 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
               </div>
             );
           })}
-          {onLogForDate && selectedDate !== todayStr && (
-  <button
-    onClick={() => onLogForDate(selectedDate)}
-    style={{
-      width: "100%",
-      marginTop: 8,
-      padding: "11px",
-      borderRadius: 10,
-      background: "var(--text)",
-      color: "var(--bg)",
-      fontSize: 13,
-      fontWeight: 800,
-      border: "none"
-    }}
-  >
-    この日に記録する
-  </button>
-)}
+          
         </div>
       )}
     </div>
