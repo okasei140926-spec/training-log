@@ -332,7 +332,7 @@ return (
   return (
     <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
       <button onClick={() => setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")}
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.weight === "BW" ? "var(--text)" : "var(--border)", fontSize: 11, color: set.weight === "BW" ? "var(--bg)" : "var(--text2)", fontWeight: 700, alignSelf: "center", border: "none" }}>
+        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: "var(--accent)", fontSize: 12, color: "#fff", fontWeight: 800, alignSelf: "center", border: "none" }}>
         {setIndex++}
       </button>            
 
