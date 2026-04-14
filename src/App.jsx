@@ -235,20 +235,27 @@ export default function GymApp() {
     });
   };
 
-  const removeEx = (id, name) => {
+  const removeEx = (idOrName, maybeName) => {
+  const isNameOnly = maybeName === undefined;
+  const targetId = isNameOnly ? null : idOrName;
+  const targetName = isNameOnly ? idOrName : maybeName;
+
   setSessionEx(p =>
-    (p !== null ? p : [...baseExercises]).filter(e => e.id !== id)
+    (p !== null ? p : [...baseExercises]).filter(e => {
+      if (targetId !== null) return e.id !== targetId;
+      return e.name !== targetName;
+    })
   );
 
   setLogData(p => {
     const n = { ...p };
-    delete n[name];
+    delete n[targetName];
     return n;
   });
 
   setExerciseUnits(p => {
     const n = { ...p };
-    delete n[name];
+    delete n[targetName];
     return n;
   });
 };
