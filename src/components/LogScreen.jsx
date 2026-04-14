@@ -334,7 +334,7 @@ return (
 
      {/* フローティング＋ボタン */}
 <button onClick={() => setShowAdd(true)}
-  style={{ position: "fixed", bottom: 90, right: 20, width: 52, height: 52, borderRadius: 26, background: accentColor, color: accentText, fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none", zIndex: 100 }}>
+  style={{ position: "fixed", bottom: 154, right: 20, width: 52, height: 52, borderRadius: 26, background: accentColor, color: accentText, fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none", zIndex: 101 }}>
   ＋
 </button>
 
