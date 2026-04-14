@@ -332,6 +332,12 @@ return (
 </SortableContext>
 </DndContext>
 
+     {/* フローティング＋ボタン */}
+<button onClick={() => setShowAdd(true)}
+  style={{ position: "fixed", bottom: 90, right: 20, width: 52, height: 52, borderRadius: 26, background: accentColor, color: accentText, fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none", zIndex: 100 }}>
+  ＋
+</button>
+
       <button onClick={saveLog}
         style={{ position: "fixed",
         bottom: 20,
