@@ -21,31 +21,36 @@ export default function GymApp() {
   console.log("historyの中身", history);
 }, [history]);
 
-  const [screen, setScreen]       = useState("log");
-  const [todayLabels, setTodayLabels] = useState([]);
-  const [logData, setLogData]     = useState({});
-  const [sessionEx, setSessionEx] = useState(null);
+  const [screen, setScreen] = useState("log");
 
-  const [intervalSec, setIntervalSec] = useState(() => load("intervalSec", 90));
-  const [timerLeft, setTimerLeft]     = useState(null);
-  const timerRef = useRef(null);
-  const [showTimerMenu, setShowTimerMenu] = useState(false);
-  const [exerciseUnits, setExerciseUnits] = useState({});
+const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
+const [logData, setLogData] = useState(() => load("draft_logData", {}));
+const [sessionEx, setSessionEx] = useState(() => load("draft_sessionEx", null));
 
-  // 設定画面用モーダル
-  const [showAddEx, setShowAddEx] = useState(false);
-  const [addTarget, setAddTarget] = useState(null);
-  const [newExName, setNewExName] = useState("");
+const [intervalSec, setIntervalSec] = useState(() => load("intervalSec", 90));
+const [timerLeft, setTimerLeft] = useState(null);
+const timerRef = useRef(null);
+const [showTimerMenu, setShowTimerMenu] = useState(false);
 
-  const [summary, setSummary] = useState(null);
-  const [isDark, setIsDark]   = useState(() => load("isDark", true));
-  // eslint-disable-next-line no-unused-vars
-  const [unit, setUnit]       = useState(() => load("unit", "kg"));
-  const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
-  const [logDate, setLogDate] = useState(() => {
+const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
+
+// 設定画面用モーダル
+const [showAddEx, setShowAddEx] = useState(false);
+const [addTarget, setAddTarget] = useState(null);
+const [newExName, setNewExName] = useState("");
+
+const [summary, setSummary] = useState(null);
+const [isDark, setIsDark] = useState(() => load("isDark", true));
+// eslint-disable-next-line no-unused-vars
+const [unit, setUnit] = useState(() => load("unit", "kg"));
+const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
+
+const [logDate, setLogDate] = useState(() =>
+  load("draft_logDate", (() => {
     const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  });
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })())
+);
 
   // ─── AI Coach ─────────────────────────────────────
   const [aiMsgs, setAiMsgs] = useState([{ role: "assistant", content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪" }]);
@@ -59,8 +64,14 @@ export default function GymApp() {
   useEffect(() => { save("intervalSec", intervalSec); }, [intervalSec]);
   useEffect(() => { save("isDark", isDark); }, [isDark]);
   useEffect(() => { save("unit", unit); }, [unit]);
+  useEffect(() => { save("draft_todayLabels", todayLabels); }, [todayLabels]);
+  useEffect(() => { save("draft_logData", logData); }, [logData]);
+  useEffect(() => { save("draft_sessionEx", sessionEx); }, [sessionEx]);
+  useEffect(() => { save("draft_exerciseUnits", exerciseUnits); }, [exerciseUnits]);
+  useEffect(() => { save("draft_logDate", logDate); }, [logDate]);
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
   useEffect(() => { aiEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
+
 
   // ─── Per-exercise unit ────────────────────────────
   const getExUnit = (name) => exerciseUnits[name] ?? unit;
@@ -392,6 +403,11 @@ const addExToSession = (name) => {
     setLogData({});
     setSessionEx(null);
     setExerciseUnits({});
+    save("draft_todayLabels", []);
+    save("draft_logData", {});
+    save("draft_sessionEx", null);
+    save("draft_exerciseUnits", {});
+    save("draft_logDate", "");
     const d = new Date();
     setLogDate(
         `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
@@ -640,10 +656,13 @@ const addExToSession = (name) => {
           history={history}
           logDate={logDate}
           resetSession={() => {
-    setSessionEx(null);
-    setLogData({});
-    setExerciseUnits({});
-  }}
+  setSessionEx(null);
+  setLogData({});
+  setExerciseUnits({});
+  save("draft_sessionEx", null);
+  save("draft_logData", {});
+  save("draft_exerciseUnits", {});
+}}
         />
       )}
 
