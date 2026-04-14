@@ -79,8 +79,14 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
 };
 
   const handleDayClick = (ds) => {
+  const hasLog = trainedDates.has(ds);
+
+  if (hasLog) {
     setSelectedDate(prev => prev === ds ? null : ds);
-  };
+  } else {
+    onLogForDate(ds);
+  }
+};
 
   const cells = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
@@ -121,7 +127,7 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
               style={{
                 padding: "8px 2px", borderRadius: 10, cursor: "pointer",
                 background: isSelected ? "#4ade8022" : isToday ? "var(--border2)" : "transparent",
-                border: `1px solid ${isSelected ? "#4ade80" : isToday ? "var(--text2)" : "transparent"}`,
+                border: `2px solid ${isSelected ? "#4ade80" : isSelected ? "4ade80" : "transparent"}`,
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
               }}>
               <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 400,
