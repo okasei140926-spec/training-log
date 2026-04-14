@@ -347,10 +347,6 @@ return (
   type="text"
   inputMode="decimal"
   value={set.weight}
-  ref={el => {
-    if (!inputRefs.current[ex.name]) inputRefs.current[ex.name] = {};
-    inputRefs.current[ex.name][`${idx}-w`] = el;
-  }}
   onChange={e => {
     setField(ex, idx, "weight", e.target.value);
   }}
@@ -380,10 +376,6 @@ return (
   type="text"
   inputMode="numeric"
   value={set.reps}
-  ref={el => {
-    if (!inputRefs.current[ex.name]) inputRefs.current[ex.name] = {};
-    inputRefs.current[ex.name][`${idx}-r`] = el;
-  }}
   onChange={e => {
     setField(ex, idx, "reps", e.target.value);
   }}
