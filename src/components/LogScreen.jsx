@@ -60,6 +60,7 @@ export default function LogScreen({
   const [editingName, setEditingName] = useState("");
   const [activeExIdx, setActiveExIdx] = useState(0);
   const editRef = useRef(null);
+  const inputRefs = useRef({});
 
   const accentColor = dayColor || "var(--text)";
   const accentText  = dayColor ? "#000" : "var(--bg)";
@@ -343,10 +344,33 @@ return (
     自重 <span style={{ fontSize: 10, color: "var(--text4)" }}>タップでkg</span>
   </button>
 ) : (
-  <input type="text" inputMode="decimal" value={set.weight}
-    onChange={e => setField(ex, idx, "weight", e.target.value)}
-    placeholder="0"
-    style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
+  <input
+  type="text"
+  inputMode="decimal"
+  value={set.weight}
+  ref={el => {
+    if (!inputRefs.current[ex.name]) inputRefs.current[ex.name] = {};
+    inputRefs.current[ex.name][`${idx}-w`] = el;
+  }}
+  onChange={e => {
+    setField(ex, idx, "weight", e.target.value);
+    setTimeout(() => {
+      inputRefs.current[ex.name]?.[`${idx}-r`]?.focus();
+    }, 0);
+  }}
+  placeholder="0"
+  style={{
+    width: "100%",
+    background: "var(--card2)",
+    border: "1px solid var(--border2)",
+    borderRadius: 10,
+    padding: "10px 8px",
+    color: "var(--text)",
+    fontSize: 16,
+    fontWeight: 700,
+    textAlign: "center"
+  }}
+/>
 )}
 
 {canCopy && set.weight !== "BW" && onCopyDown ? (
@@ -356,9 +380,33 @@ return (
   </button>
 ) : <div />}
 
-<input type="text" inputMode="numeric" value={set.reps}
-  onChange={e => setField(ex, idx, "reps", e.target.value)} placeholder="0"
-  style={{ width: "100%", background: "var(--card2)", border: "1px solid var(--border2)", borderRadius: 10, padding: "10px 8px", color: "var(--text)", fontSize: 16, fontWeight: 700, textAlign: "center" }} />
+<input
+  type="text"
+  inputMode="numeric"
+  value={set.reps}
+  ref={el => {
+    if (!inputRefs.current[ex.name]) inputRefs.current[ex.name] = {};
+    inputRefs.current[ex.name][`${idx}-r`] = el;
+  }}
+  onChange={e => {
+    setField(ex, idx, "reps", e.target.value);
+    setTimeout(() => {
+      inputRefs.current[ex.name]?.[`${idx + 1}-w`]?.focus();
+    }, 0);
+  }}
+  placeholder="0"
+  style={{
+    width: "100%",
+    background: "var(--card2)",
+    border: "1px solid var(--border2)",
+    borderRadius: 10,
+    padding: "10px 8px",
+    color: "var(--text)",
+    fontSize: 16,
+    fontWeight: 700,
+    textAlign: "center"
+  }}
+/>
 
 {canCopy && onCopyDownReps ? (
   <button onClick={() => onCopyDownReps(ex, idx - 1)}
