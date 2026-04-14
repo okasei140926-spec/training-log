@@ -11,12 +11,12 @@ export const S = {
 export const css = `
   :root {
     --bg: #0f0f0f;
-    --card: #6a17c2;
+    --card: #1a1a1a;
     --card2: #242424;
     --card-modal: #1e1e1e;
-    --border: #33d022;
-    --border2: #444444;
-    --border3: #555555;
+    --border: #ff3b3b;
+    --border2: #333333;
+    --border3: #444444;
     --text: #ffffff;
     --text2: #aaaaaa;
     --text3: #888888;
@@ -25,27 +25,27 @@ export const css = `
     --nav-bg: #0f0f0fee;
     --input-bg: #242424;
     --btn-secondary: #2a2a2a;
-    --accent: #FF4D00;
-    --accent: #FF8C00;
+    --accent: #ff3b3b;
+    --accent2: #ff7a00;
   }
   .theme-light {
-    --bg: #d67b20;
-    --card: #150e4a;
-    --card2: #ede8e3;
-    --card-modal: #faf8f5;
-    --border: #e01414;
-    --border2: #c5b8ad;
-    --border3: #b0a095;
-    --text: #1a1008;
-    --text2: #6b5a4a;
-    --text3: #8a6a55;
-    --text4: #aa8570;
-    --text5: #ccaa90;
-    --nav-bg: #f5f0ebee;
-    --input-bg: #ede8e3;
-    --btn-secondary: #e5ddd5;
-    --accent: #FF4D00;
-    --accent2: #FF8C00;
+    --bg: #f5f5f5;
+    --card: #ffffff;
+    --card2: #f0f0f0;
+    --card-modal: #ffffff;
+    --border: #ff3b3b;
+    --border2: #dddddd;
+    --border3: #cccccc;
+    --text: #111111;
+    --text2: #555555;
+    --text3: #777777;
+    --text4: #999999;
+    --text5: #bbbbbb;
+    --nav-bg: #ffffffee;
+    --input-bg: #f0f0f0;
+    --btn-secondary: #e5e5e5;
+    --accent: #ff3b3b;
+    --accent2: #ff7a00;
   }
   * { box-sizing: border-box; }
   input { outline: none; }
