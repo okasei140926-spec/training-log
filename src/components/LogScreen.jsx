@@ -259,11 +259,23 @@ export default function LogScreen({
   ＋ 種目を追加
 </button>
 
+<button
+  onClick={() => addSet(ex)}
+  style={{
+    width: "100%",
+    marginTop: 10,
+    padding: "12px",
+    borderRadius: 12,
+    background: "var(--card2)",
+    border: "none",
+    color: "var(--text)",
+    fontSize: 13,
+    fontWeight: 700
+  }}
+>
+  ＋ セット追加
+</button>
 
-<button onClick={() => addSet(ex.name)}
-    style={{ width: "100%", padding: "12px", borderRadius: 12, background: "var(--card2)", color: "var(--text)", fontWeight: 700, fontSize: 13, border: "none", marginTop: 8, }}>
-              ＋ セット追加
-            </button>
           </div>
           
         </React.Fragment>
@@ -298,27 +310,6 @@ export default function LogScreen({
           existingNames={exercises.map(e => e.name)}
         />
       )}
-
-<button
-      onClick={() => setShowAdd(true)}
-      style={{
-        position: "fixed",
-        bottom: "90px",
-        right: "20px",
-        width: "56px",
-        height: "56px",
-        borderRadius: "50%",
-        background: "red",
-        color: "white",
-        fontSize: "26px",
-        fontWeight: "700",
-        border: "none",
-        zIndex: 9999
-      }}
-    >
-      ＋
-    </button>
-
 
 
     </div>
