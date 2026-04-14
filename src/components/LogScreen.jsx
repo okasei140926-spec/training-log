@@ -326,9 +326,10 @@ return (
             </div>
 
 
-let setIndex = 1;
 {sets.map((set, idx) => {
-  const canCopy = idx > 0;
+    let setIndex = 1;
+
+    const canCopy = idx > 0;
   
   return (
     <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
