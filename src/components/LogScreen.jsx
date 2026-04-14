@@ -60,7 +60,6 @@ export default function LogScreen({
   const [editingName, setEditingName] = useState("");
   const [activeExIdx, setActiveExIdx] = useState(0);
   const editRef = useRef(null);
-  const inputRefs = useRef({});
 
   const accentColor = dayColor || "var(--text)";
   const accentText  = dayColor ? "#000" : "var(--bg)";
@@ -354,9 +353,6 @@ return (
   }}
   onChange={e => {
     setField(ex, idx, "weight", e.target.value);
-    setTimeout(() => {
-      inputRefs.current[ex.name]?.[`${idx}-r`]?.focus();
-    }, 0);
   }}
   placeholder="0"
   style={{
@@ -375,7 +371,7 @@ return (
 
 {canCopy && set.weight !== "BW" && onCopyDown ? (
   <button onClick={() => onCopyDown(ex, idx - 1)}
-    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "#fff", fontSize: 11, fontWeight: 700 }}>
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(---text2)", fontSize: 11, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
@@ -390,9 +386,6 @@ return (
   }}
   onChange={e => {
     setField(ex, idx, "reps", e.target.value);
-    setTimeout(() => {
-      inputRefs.current[ex.name]?.[`${idx + 1}-w`]?.focus();
-    }, 0);
   }}
   placeholder="0"
   style={{
