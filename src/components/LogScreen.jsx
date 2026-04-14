@@ -114,6 +114,9 @@ const handleDragEnd = (event) => {
         <div style={{ fontSize: 11, color: "var(--text4)" }}></div>
       </div>
 
+      <div style={{ fontSize: 11, color: "var(--text4)", marginTop: -10, marginBottom: 16 }}>
+  {exCount}種目 ・ {setCount}セット
+</div>
 
 
       {/* 部位チップ */}
