@@ -52,8 +52,6 @@ export default function LogScreen({
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
   getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession,
 }) {
-   
-  let setIndex = 1; 
 
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
@@ -156,6 +154,8 @@ const handleDragEnd = (event) => {
 
     
       {exercises.map((ex, i) => {
+        let setIndex = 1;
+
         const sets      = logData[ex.id] || getExSets(ex);
         const isEditing = editingId === ex.id;
         const prev      = getPrev ? getPrev(ex.name) : null;
@@ -351,7 +351,7 @@ return (
 
 {canCopy && set.weight !== "BW" && onCopyDown ? (
   <button onClick={() => onCopyDown(ex, idx - 1)}
-    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "#fff", fontSize: 11, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
@@ -362,7 +362,7 @@ return (
 
 {canCopy && onCopyDownReps ? (
   <button onClick={() => onCopyDownReps(ex, idx - 1)}
-    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "var(--text3)", fontSize: 11, fontWeight: 700 }}>
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--border)", border: "none", color: "#fff", fontSize: 11, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
