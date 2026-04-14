@@ -10,38 +10,42 @@ export const S = {
 
 export const css = `
   :root {
-    --bg: #0a0a0a;
-    --card: #161616;
-    --card2: #202020;
-    --card-modal: #1a1a1a;
-    --border: #2e2e2e;
-    --border2: #3c3c3c;
-    --border3: #4a4a4a;
+    --bg: #0f0f0f;
+    --card: #1a1a1a;
+    --card2: #242424;
+    --card-modal: #1e1e1e;
+    --border: #333333;
+    --border2: #444444;
+    --border3: #555555;
     --text: #ffffff;
-    --text2: #999999;
-    --text3: #7a7a7a;
-    --text4: #5a5a5a;
-    --text5: #3e3e3e;
-    --nav-bg: #0a0a0aee;
-    --input-bg: #202020;
+    --text2: #aaaaaa;
+    --text3: #888888;
+    --text4: #666666;
+    --text5: #444444;
+    --nav-bg: #0f0f0fee;
+    --input-bg: #242424;
     --btn-secondary: #2a2a2a;
+    --accent: #FF4D00;
+    --accent: #FF8C00;
   }
   .theme-light {
-    --bg: #f2f2f2;
+    --bg: #f5f0eb;
     --card: #ffffff;
-    --card2: #e8e8e8;
-    --card-modal: #fafafa;
-    --border: #d0d0d0;
-    --border2: #b8b8b8;
-    --border3: #a0a0a0;
-    --text: #111111;
-    --text2: #555555;
-    --text3: #444444;
-    --text4: #333333;
-    --text5: #888888;
-    --nav-bg: #f2f2f2ee;
-    --input-bg: #e8e8e8;
-    --btn-secondary: #e0e0e0;
+    --card2: #ede8e3;
+    --card-modal: #faf8f5;
+    --border: #d9d0c7;
+    --border2: #c5b8ad;
+    --border3: #b0a095;
+    --text: #1a1008;
+    --text2: #6b5a4a;
+    --text3: #8a6a55;
+    --text4: #aa8570;
+    --text5: #ccaa90;
+    --nav-bg: #f5f0ebee;
+    --input-bg: #ede8e3;
+    --btn-secondary: #e5ddd5;
+    --accent: #FF4D00;
+    --accent2: #FF8C00;
   }
   * { box-sizing: border-box; }
   input { outline: none; }
