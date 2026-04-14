@@ -290,26 +290,33 @@ export default function GymApp() {
   };
 
   const renameEx = (id, newName) => {
-    const trimmed = newName.trim();
-    if (!trimmed) return;
-    const oldEx = exercises.find(e => e.id === id);
-    if (!oldEx || oldEx.name === trimmed) return;
-    setSessionEx(p => (p !== null ? p : [...baseExercises]).map(e => e.id === id ? { ...e, name: trimmed } : e));
-    setLogData(p => {
-      if (!p[oldEx.name]) return p;
-      const n = { ...p };
-      n[trimmed] = n[oldEx.name];
-      delete n[oldEx.name];
-      return n;
-    });
-    setExerciseUnits(p => {
-      if (!p[oldEx.name]) return p;
-      const n = { ...p };
-      n[trimmed] = n[oldEx.name];
-      delete n[oldEx.name];
-      return n;
-    });
-  };
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+
+  const oldEx = exercises.find((e) => e.id === id);
+  if (!oldEx || oldEx.name === trimmed) return;
+
+  setSessionEx((p) =>
+    (p !== null ? p : [...baseExercises]).map((e) =>
+      e.id === id ? { ...e, name: trimmed } : e
+    )
+  );
+
+  setLogData((p) => {
+    // logData は id ベースで持つ
+    if (!p[id]) return p;
+    return { ...p, [id]: p[id] };
+  });
+
+  setExerciseUnits((p) => {
+    // ここはまだ name ベースなので移し替える
+    if (!p[oldEx.name]) return p;
+    const n = { ...p };
+    n[trimmed] = n[oldEx.name];
+    delete n[oldEx.name];
+    return n;
+  });
+};
 
   const quickAddToSession = (name, remove) => {
     if (remove) {
@@ -596,6 +603,11 @@ export default function GymApp() {
           setTodayLabels={setTodayLabels}
           history={history}
           logDate={logDate}
+          resetSession={() => {
+    setSessionEx(null);
+    setLogData({});
+    setExerciseUnits({});
+  }}
         />
       )}
 

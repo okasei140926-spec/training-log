@@ -43,7 +43,7 @@ export default function LogScreen({
   todayLabels, dayColor,
   exercises, logData, getExSets, setField, addSet, removeEx,
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-  getExUnit, onToggleExUnit, onSetInsertIndex, setTodayLabels, history, logDate,
+  getExUnit, onToggleExUnit, onSetInsertIndex, setTodayLabels, history, logDate, resetSession,
 }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
@@ -114,19 +114,22 @@ const handleDragEnd = (event) => {
     const isSelected = todayLabels.includes(lbl);
     const col = LABEL_COLORS[lbl];
     return (
-      <button key={lbl} onClick={() => {
-        if (isSelected) {
-          (SUGGESTIONS[lbl] || []).forEach(e => removeEx(e));
-          setTodayLabels(p => p.filter(l => l !== lbl));
-        } else {
-            // historyから前回この部位でやった種目を取得
-          const suggestions = SUGGESTIONS[lbl] || [];
-          const prevExercises = suggestions.filter(name => history[name]?.length > 0);
-          const toAdd = prevExercises.length > 0 ? prevExercises : suggestions.slice(0, 3);
-          toAdd.forEach(name => onAddEx(name));
-          setTodayLabels(p => [...p, lbl]);
-        }
-      }}
+      <button
+  key={lbl}
+  onClick={() => {
+    resetSession && resetSession();
+
+    if (isSelected) {
+      setTodayLabels((p) => p.filter((l) => l !== lbl));
+    } else {
+      const suggestions = SUGGESTIONS[lbl] || [];
+      const prevExercises = suggestions.filter((name) => history[name]?.length > 0);
+      const toAdd = prevExercises.length > 0 ? prevExercises : suggestions.slice(0, 3);
+
+      toAdd.forEach((name) => onAddEx(name));
+      setTodayLabels([lbl]);
+    }
+  }}
         style={{ padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",
           background: isSelected ? col : "var(--card2)",
           color: isSelected ? "#000" : "var(--text2)" }}>
