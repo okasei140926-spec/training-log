@@ -114,7 +114,7 @@ export default function LogScreen({
         </div>
         <div style={{ fontSize: 13, color: "var(--text3)" }}>▼</div>
       </div>
-        <button onClick={() => { onSetInsertIndex && onSetInsertIndex(i); setShowAdd(true); }}
+        <button onClick={() => setShowAdd(true) }
           style={{ width: "100%", marginBottom: 4, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
           ＋ 種目を追加
         </button>
@@ -241,18 +241,32 @@ export default function LogScreen({
 );
 })}
 
+<button
+  onClick={() => {
+    setShowAdd(true);
+  }}
+  style={{
+    width: "100%",
+    padding: "14px",
+    marginTop: 8,
+    borderRadius: 14,
+    border: "1px dashed var(--border)",
+    background: "transparent",
+    color: "var(--text2)",
+    fontWeight: 700,
+    fontSize: 13
+  }}
+>
+  ＋ 種目を追加
+</button>
+
 
                         <button onClick={() => addSet(ex)}
               style={{ width: "100%", marginTop: 4, padding: "8px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text3)", fontSize: 13 }}>
               ＋ セット追加
             </button>
           </div>
-          {i < exercises.length - 1 && (
-            <button onClick={() => { onSetInsertIndex && onSetInsertIndex(i); setShowAdd(true); }}
-              style={{ width: "100%", marginBottom: 8, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
-              ＋ 種目を追加
-            </button>
-          )}
+          
         </React.Fragment>
         );
       })}
@@ -273,6 +287,30 @@ export default function LogScreen({
           existingNames={exercises.map(e => e.name)}
         />
       )}
+
+<button
+      onClick={() => setShowAdd(true)}
+      style={{
+        position: "fixed",
+        bottom: 90,
+        right: 20,
+        width: 60,
+        height: 60,
+        borderRadius: "50%",
+        background: "var(--text)",
+        color: "var(--bg)",
+        fontSize: 28,
+        fontWeight: 700,
+        border: "none",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
+        zIndex: 100
+      }}
+    >
+      ＋
+    </button>
+
+
+
     </div>
   );
 }
