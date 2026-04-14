@@ -416,11 +416,6 @@ const addExToSession = (name) => {
     setScreen("log");
   };
 
-  const handleLogForDate = (dateStr) => {
-  setLogDate(dateStr);
-  setTodayLabels([]);
-  setExerciseUnits({});
-
   const toDateStr = (d) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -430,62 +425,50 @@ const addExToSession = (name) => {
 
 const todayStr = toDateStr(new Date());
 
-const handleCalendarDayOpen = (dateStr) => {
-  if (dateStr === todayStr) {
-    setLogDate(dateStr);   // ← 今日をセット
-    setScreen("log");      // ← Logに飛ぶ
-    return;
-  }
 
-  // 他の日は今の既存機能を使う
-  handleLogForDate(dateStr);
-};
-  
-  
+// ① 過去日の処理（元からあるやつ）
+const handleLogForDate = (dateStr) => {
+  setLogDate(dateStr);
+  setTodayLabels([]);
+  setExerciseUnits({});
+
+  const dayExercises = Object.entries(history)
+    .filter(([, recs]) => recs.some(r => r.date === dateStr))
+    .map(([name]) => ({
+      id: name,
+      name,
+    }));
+
   if (dayExercises.length > 0) {
     const dayLogData = {};
     dayExercises.forEach(({ name }) => {
       const rec = history[name]?.find(r => r.date === dateStr);
-      if (rec?.sets) dayLogData[name] = rec.sets.map(s => ({ ...s, done: true }));
+      if (rec?.sets) {
+        dayLogData[name] = rec.sets.map(s => ({ ...s, done: true }));
+      }
     });
+
     setSessionEx(dayExercises);
     setLogData(dayLogData);
   } else {
     setSessionEx(null);
     setLogData({});
   }
-  
+
   setScreen("log");
 };
 
 
-  const handleEditHistory = (exName, updatedRecord, historyIdx) => {
-    setHistory(prev => {
-      const recs = [...(prev[exName] || [])];
-      const idx = historyIdx !== undefined
-        ? historyIdx
-        : recs.findIndex(r => r.date === updatedRecord.date);
-      if (idx >= 0 && idx < recs.length) recs[idx] = updatedRecord;
-      return { ...prev, [exName]: recs };
-    });
-  };
+// ② カレンダークリック用（分岐だけ）
+const handleCalendarDayOpen = (dateStr) => {
+  if (dateStr === todayStr) {
+    setLogDate(dateStr);
+    setScreen("log");
+    return;
+  }
 
-  const handleDeleteHistory = (exName, historyIdx, recordDate) => {
-    setHistory(prev => {
-      const recs = [...(prev[exName] || [])];
-      const idx = historyIdx !== undefined
-        ? historyIdx
-        : recs.findIndex(r => r.date === recordDate);
-      if (idx < 0 || idx >= recs.length) return prev;
-      recs.splice(idx, 1);
-      if (!recs.length) {
-        const n = { ...prev };
-        delete n[exName];
-        return n;
-      }
-      return { ...prev, [exName]: recs };
-    });
-  };
+  handleLogForDate(dateStr);
+};
 
   // ─── AI Coach ─────────────────────────────────────
   const sendAI = async (overrideMsg) => {
