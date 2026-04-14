@@ -14,7 +14,6 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
   const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
-  const [selectedDate, setSelectedDate] = useState(today.toISOString().split("T")[0]);
 
   // Build date → Set<label> map for colored dots
   const dateLabelColors = {};
@@ -109,7 +108,6 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
           const ds       = toStr(d);
           const worked   = trainedDates.has(ds);
           const isToday  = ds === todayStr;
-          const isSelected = ds === selectedDate;
           const dow      = (firstDow + d - 1) % 7;
           const colors   = dateLabelColors[ds] || [];
           return (
