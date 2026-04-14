@@ -10,7 +10,7 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
   names.forEach(n => { EX_TO_LABEL[n] = label; });
 });
 
-export default function CalendarView({ history, logData, unit = "kg", onEditRecord, onLogForDate }) {
+export default function CalendarView({ history, logData, unit = "kg", onEditRecord, onLogForDate, onDayOpen }) {
   const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -123,15 +123,15 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
           const colors   = dateLabelColors[ds] || [];
           return (
             <div key={ds}
-              onClick={() => handleDayClick(ds)}
+              onClick={() => onDayOpen(ds)}
               style={{
                 padding: "8px 2px", borderRadius: 10, cursor: "pointer",
-                background: isSelected ? "#4ade8022" : isToday ? "var(--border2)" : "transparent",
-                border: `2px solid ${isSelected || isToday ? "4ade80" : "transparent"}`,
+                background: isToday ? "#111" : isSelected ? "#4ade8022" : "transparent",
+                border: `2px solid ${isSelected ? "4ade80" : "transparent"}`,
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
               }}>
               <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 400,
-                color: dow === 0 ? "#FF4D4D" : dow === 6 ? "#4D9FFF" : "var(--text)" }}>
+                color: isToday ? "#fff" : dow === 0 ? "#FF4D4D" : dow === 6 ? "4D9FFF" : "var(--text)" }}>
                 {d}
               </div>
               {worked ? (

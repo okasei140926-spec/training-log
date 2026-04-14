@@ -21,7 +21,7 @@ export default function GymApp() {
   console.log("historyの中身", history);
 }, [history]);
 
-  const [screen, setScreen] = useState("log");
+  const [screen, setScreen] = useState("history");
 
 const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
 const [logData, setLogData] = useState(() => load("draft_logData", {}));
@@ -420,14 +420,27 @@ const addExToSession = (name) => {
   setLogDate(dateStr);
   setTodayLabels([]);
   setExerciseUnits({});
+
+  const toDateStr = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const todayStr = toDateStr(new Date());
+
+const handleCalendarDayOpen = (dateStr) => {
+  if (dateStr === todayStr) {
+    setLogDate(dateStr);   // ← 今日をセット
+    setScreen("log");      // ← Logに飛ぶ
+    return;
+  }
+
+  // 他の日は今の既存機能を使う
+  handleLogForDate(dateStr);
+};
   
-  // その日の記録があればプリロード
-  const dayExercises = Object.entries(history)
-    .filter(([, recs]) => recs.some(r => r.date === dateStr))
-    .map(([name]) => ({ 
-        id: name,
-    name
- }));
   
   if (dayExercises.length > 0) {
     const dayLogData = {};
@@ -684,7 +697,7 @@ const addExToSession = (name) => {
         />
       )}
 
-      {screen === "history" && <HistoryScreen history={history} logData={logData} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleLogForDate} />}
+      {screen === "history" && ( <HistoryScreen history={history} logData={logData} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
 
       {screen === "ai" && (
         <AIScreen
@@ -699,9 +712,9 @@ const addExToSession = (name) => {
 
       <div style={S.bottomNav}>
         {[
+          { id: "history", icon: "📊", label: "記録" },
           { id: "log",     icon: "✏️", label: "Log" },
           { id: "friends", icon: "👥", label: "Friends" },
-          { id: "history", icon: "📊", label: "記録" },
           { id: "ai",      icon: "🤖", label: "AI" },
         ].map(tab => (
           <button key={tab.id} onClick={() => setScreen(tab.id)}
