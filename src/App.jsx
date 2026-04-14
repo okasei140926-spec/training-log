@@ -470,6 +470,42 @@ const handleCalendarDayOpen = (dateStr) => {
   handleLogForDate(dateStr);
 };
 
+const handleEditHistory = (exName, updatedRecord, historyIdx) => {
+  setHistory(prev => {
+    const recs = [...(prev[exName] || [])];
+    const idx = historyIdx !== undefined
+      ? historyIdx
+      : recs.findIndex(r => r.date === updatedRecord.date);
+
+    if (idx >= 0 && idx < recs.length) {
+      recs[idx] = updatedRecord;
+    }
+
+    return { ...prev, [exName]: recs };
+  });
+};
+
+const handleDeleteHistory = (exName, historyIdx, recordDate) => {
+  setHistory(prev => {
+    const recs = [...(prev[exName] || [])];
+    const idx = historyIdx !== undefined
+      ? historyIdx
+      : recs.findIndex(r => r.date === recordDate);
+
+    if (idx < 0 || idx >= recs.length) return prev;
+
+    recs.splice(idx, 1);
+
+    if (!recs.length) {
+      const next = { ...prev };
+      delete next[exName];
+      return next;
+    }
+
+    return { ...prev, [exName]: recs };
+  });
+};
+
   // ─── AI Coach ─────────────────────────────────────
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
