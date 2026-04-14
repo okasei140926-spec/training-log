@@ -63,14 +63,20 @@ export default function LogScreen({
 
   const accentColor = dayColor || "var(--text)";
   const accentText  = dayColor ? "#000" : "var(--bg)";
+  const exCount = exercises.length;
 
-
+   
 
   const startEdit = (ex) => {
     setEditingId(ex.id);
     setEditingName(ex.name);
     setTimeout(() => editRef.current?.focus(), 30);
   };
+
+  const setCount = exercises.reduce((acc, ex) => {
+    const sets = logData[ex.name] || getExSets(ex);
+    return acc + sets.filter(s => s.done).length;
+  }, 0);
 
   const confirmEdit = (ex) => {
     const trimmed = editingName.trim();
