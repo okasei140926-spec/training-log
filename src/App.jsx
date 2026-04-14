@@ -70,12 +70,12 @@ export default function GymApp() {
     const CYCLE = { kg: "lbs", lbs: "BW", BW: "kg" };
     const newUnit = CYCLE[currentUnit] || "kg";
 
-    const baseSets = [
+    const makeBaseSets = () => ([
       { weight: "", reps: "", done: false },
       { weight: "", reps: "", done: false },
       { weight: "", reps: "", done: false },
-    ];
-    const currentSets = logData[name] || baseSets;
+    ]);
+    const currentSets = logData[name] || makeBaseSets;
 
     if (newUnit === "BW") {
       setLogData(p => ({
