@@ -66,7 +66,7 @@ export default function FriendsScreen({ history, onCopyMenu }) {
   return (
     <div className="fade-in" style={{ padding: "20px" }}>
 
-      <div style={S.sLabel}>最近のアクティビティ（3日間）</div>
+      <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
 
       {/* 自分のカード */}
       <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
@@ -84,7 +84,7 @@ export default function FriendsScreen({ history, onCopyMenu }) {
               )}
             </div>
             <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
-              {activeRecently ? `直近3日 ${myRecentExercises.length}種目` : "直近3日の記録なし"}
+              {activeRecently ? `直近7日 ${myRecentExercises.length}種目` : "直近7日の記録なし"}
             </div>
           </div>
         </div>
