@@ -136,62 +136,6 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
           );
         })}
       </div>
-
-{/* 👇ここに追加 */}
-{selectedDate && onLogForDate && (
-  <button
-    onClick={() => onLogForDate(selectedDate)}
-    style={{
-      width: "100%",
-      marginTop: 12,
-      padding: "11px",
-      borderRadius: 10,
-      background: "var(--text)",
-      color: "var(--bg)",
-      fontSize: 13,
-      fontWeight: 800,
-      border: "none"
-    }}
-  >
-
-    {selectedDate === todayStr ? "今日のワークアウトを追加" : "この日に記録する"}
-  </button>
-)}
-    
-
-      {selectedDate && (
-        <div style={{ marginTop: 14, marginBottom: 24, background: "var(--card2)", borderRadius: 12, padding: "14px 16px", border: "1px solid var(--border2)" }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
-            {selectedDate}{selectedDate === todayStr ? " (今日)" : ""}
-          </div>
-          {getDateExercises(selectedDate).length === 0 ? (
-            <div style={{ fontSize: 13, color: "var(--text4)", textAlign: "center", padding: "8px 0 4px" }}>記録なし</div>
-          ) : getDateExercises(selectedDate).map(({ name, record }) => {
-            const sets = record.sets || [{ weight: record.weight, reps: record.reps }];
-            const labelColor = LABEL_COLORS[EX_TO_LABEL[name]];
-            const recs = history[name] || [];
-            const historyIdx = recs.findIndex(r => r === record || r.date === record.date);
-            return (
-              <div key={name}
-                onClick={() => onEditRecord?.(name, record, historyIdx >= 0 ? historyIdx : undefined)}
-                style={{ marginBottom: 8, padding: "6px 8px", borderBottom: "1px solid var(--border)", cursor: onEditRecord ? "pointer" : "default", borderRadius: 6 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  {labelColor && <div style={{ width: 6, height: 6, borderRadius: "50%", background: labelColor, flexShrink: 0 }} />}
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{name}</div>
-                  {onEditRecord && <div style={{ marginLeft: "auto", fontSize: 11, color: "var(--text3)" }}>編集 →</div>}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                  {sets.map((s, i) => {
-                    const w = s.weight === "BW" ? "自重" : `${dispW(s.weight, unit)}${unit}`;
-                    return (i > 0 ? " / " : "") + `${w}×${s.reps}`;
-                  })}
-                </div>
-              </div>
-            );
-          })}
-          
-        </div>
-      )}
     </div>
   );
 }
