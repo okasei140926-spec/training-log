@@ -194,7 +194,7 @@ const handleDragEnd = (event) => {
             transition: "transform 0.1s ease"
           }}
           onTouchStart={(e) => {
-            e.currentTarget.style.transform = "scale(0.97)";
+            e.currentTarget.style.transform = "scale(0.9)";
           }}
           onTouchEnd={(e) => {
             e.currentTarget.style.transform = "scale(1)"
@@ -367,7 +367,7 @@ return (
 
 {canCopy && set.weight !== "BW" && onCopyDown ? (
   <button onClick={() => onCopyDown(ex.name, idx - 1)}
-    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text2)", fontSize: 12, fontWeight: 700 }}>
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--accent)", border: "none", color: "#fff", fontSize: 12, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
@@ -395,7 +395,7 @@ return (
 
 {canCopy && onCopyDownReps ? (
   <button onClick={() => onCopyDownReps(ex.name, idx - 1)}
-    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text2)", fontSize: 12, fontWeight: 700 }}>
+    style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--accent)", border: "none", color: "#fff", fontSize: 12, fontWeight: 700 }}>
     ↓
   </button>
 ) : <div />}
