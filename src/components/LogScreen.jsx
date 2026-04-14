@@ -340,7 +340,7 @@ return (
 
       <button onClick={saveLog}
         style={{ position: "fixed",
-        bottom: 20,
+        bottom: 90,
         left: 20,
         right: 20,
         padding: 16, 
