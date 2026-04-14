@@ -606,7 +606,6 @@ const addExToSession = (name) => {
           stopTimer={stopTimer}
           saveLog={saveLog}
           onAddEx={addExToSession}
-          onSetInsertIndex={setInsertIndex}
           onQuickAddEx={quickAddToSession}
           onReorderEx={reorderEx}
           onRenameEx={renameEx}
