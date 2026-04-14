@@ -43,7 +43,7 @@ export default function LogScreen({
   todayLabels, dayColor,
   exercises, logData, getExSets, setField, addSet, removeEx,
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-  getExUnit, onToggleExUnit, onSetInsertIndex, setTodayLabels, history, logDate, resetSession,
+  getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession,
 }) {
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
