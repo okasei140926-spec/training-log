@@ -78,15 +78,6 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
   return merged;
 };
 
-  const handleDayClick = (ds) => {
-  const hasLog = trainedDates.has(ds);
-
-  if (hasLog) {
-    setSelectedDate(prev => prev === ds ? null : ds);
-  } else {
-    onLogForDate(ds);
-  }
-};
 
   const cells = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
