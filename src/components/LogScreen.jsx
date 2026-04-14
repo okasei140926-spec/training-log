@@ -116,7 +116,6 @@ export default function LogScreen({
       </div>
         <button onClick={() => setShowAdd(true) }
           style={{ width: "100%", marginBottom: 4, padding: "6px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text4)", fontSize: 11 }}>
-          ＋ 種目を追加
         </button>
       )
     </React.Fragment>
@@ -261,8 +260,8 @@ export default function LogScreen({
 </button>
 
 
-                        <button onClick={() => addSet(ex)}
-              style={{ width: "100%", marginTop: 4, padding: "8px", borderRadius: 10, background: "transparent", border: "1px dashed var(--border2)", color: "var(--text3)", fontSize: 13 }}>
+<button onClick={() => addSet(ex.name)}
+    style={{ width: "100%", padding: "12px", borderRadius: 12, background: "var(--card2)", color: "var(--text)", fontWeight: 700, fontSize: 13, border: "none", marginTop: 8, }}>
               ＋ セット追加
             </button>
           </div>
