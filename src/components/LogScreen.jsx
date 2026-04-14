@@ -45,6 +45,9 @@ export default function LogScreen({
   saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
   getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession,
 }) {
+   
+  let setIndex = 1; 
+
   const [showAdd, setShowAdd]         = useState(false);
   const [addName, setAddName]         = useState("");
 
@@ -150,7 +153,7 @@ const handleDragEnd = (event) => {
     strategy={verticalListSortingStrategy}
   >
 
-    let setIndex = 1;
+    
       {exercises.map((ex, i) => {
         const sets      = logData[ex.id] || getExSets(ex);
         const isEditing = editingId === ex.id;
