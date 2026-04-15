@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 
-export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [] }) {
+export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [], muscleEx = {}, }) {
     const inputRef = useRef(null);
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
@@ -27,7 +27,14 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
         .map(t => ({ label: t, items: suggestions.filter(s => s.label === t) }))
         .filter(g => g.items.length);
 
-    const freeItems = isFree && activeTab ? (SUGGESTIONS[activeTab] || []) : [];
+    const freeItems = (() => {
+        if (!isFree || !activeTab) return [];
+
+        const fixed = SUGGESTIONS[activeTab] || [];
+        const custom = (muscleEx[activeTab] || []).map(ex => ex.name);
+
+        return [...new Set([...fixed, ...custom])];
+    })();
 
     const handleQuick = (s) => {
         if (added.has(s)) {

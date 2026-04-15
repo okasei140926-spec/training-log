@@ -50,7 +50,7 @@ export default function LogScreen({
     todayLabels, dayColor,
     exercises, logData, getExSets, setField, addSet, removeEx,
     saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
-    getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession,
+    getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
 }) {
 
     const [showAdd, setShowAdd] = useState(false);
@@ -442,6 +442,7 @@ export default function LogScreen({
                     target={null}
                     onQuickAdd={onQuickAddEx}
                     existingNames={exercises.map(e => e.name)}
+                    muscleEx={muscleEx}
                 />
             )}
 
