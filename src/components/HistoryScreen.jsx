@@ -5,7 +5,7 @@ import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
 
 
-export default function HistoryScreen({ history, logData, onEditHistory, onDeleteHistory, unit = "kg", onLogForDate }) {
+export default function HistoryScreen({ history, onEditHistory, onDeleteHistory, unit = "kg", onLogForDate }) {
   const [editTarget, setEditTarget] = useState(null);
   const [graphTarget, setGraphTarget] = useState(null);
 
