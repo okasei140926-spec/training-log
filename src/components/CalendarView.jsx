@@ -3,10 +3,11 @@ import { LABEL_COLORS, SUGGESTIONS } from "../constants/suggestions";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
-// reverse map: exercise name → muscle label
 const EX_TO_LABEL = {};
 Object.entries(SUGGESTIONS).forEach(([label, names]) => {
-  names.forEach(n => { EX_TO_LABEL[n] = label; });
+  names.forEach((n) => {
+    EX_TO_LABEL[n] = label;
+  });
 });
 
 export default function CalendarView({ history, onDayOpen }) {
@@ -14,10 +15,13 @@ export default function CalendarView({ history, onDayOpen }) {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
+  const safeHistory = history || {};
+
   const dateLabelColors = {};
-  Object.entries(history).forEach(([exName, recs]) => {
+  Object.entries(safeHistory).forEach(([exName, recs]) => {
     const label = EX_TO_LABEL[exName];
-    recs.forEach(r => {
+    (recs || []).forEach((r) => {
+      if (!r?.date) return;
       if (!dateLabelColors[r.date]) dateLabelColors[r.date] = [];
       const color = label ? LABEL_COLORS[label] : "#4ade80";
       if (!dateLabelColors[r.date].includes(color)) dateLabelColors[r.date].push(color);
@@ -25,7 +29,7 @@ export default function CalendarView({ history, onDayOpen }) {
   });
 
   const trainedDates = new Set(
-    Object.values(history).flatMap(recs => recs.map(r => r.date))
+    Object.values(safeHistory).flatMap((recs) => (recs || []).map((r) => r.date).filter(Boolean))
   );
 
   const firstDow = new Date(year, month, 1).getDay();
@@ -34,28 +38,27 @@ export default function CalendarView({ history, onDayOpen }) {
 
   const prevMonth = () => {
     if (month === 0) {
-      setYear(y => y - 1);
+      setYear((y) => y - 1);
       setMonth(11);
     } else {
-      setMonth(m => m - 1);
+      setMonth((m) => m - 1);
     }
   };
 
   const nextMonth = () => {
     if (month === 11) {
-      setYear(y => y + 1);
+      setYear((y) => y + 1);
       setMonth(0);
     } else {
-      setMonth(m => m + 1);
+      setMonth((m) => m + 1);
     }
   };
 
   const toStr = (d) =>
     `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
-  const monthWorkouts = [...trainedDates].filter(d =>
-    d.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)
-  ).length;
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const monthWorkouts = [...trainedDates].filter((d) => d.startsWith(monthPrefix)).length;
 
   const cells = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
@@ -101,7 +104,7 @@ export default function CalendarView({ history, onDayOpen }) {
           return (
             <div
               key={ds}
-              onClick={() => onDayOpen(ds)}
+              onClick={() => onDayOpen?.(ds)}
               style={{
                 padding: "8px 2px",
                 borderRadius: 10,
