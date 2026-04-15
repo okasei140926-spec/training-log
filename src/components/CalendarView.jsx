@@ -60,40 +60,6 @@ export default function CalendarView({ history, onDayOpen }) {
   const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
   const monthWorkouts = [...trainedDates].filter((d) => d.startsWith(monthPrefix)).length;
 
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay()); // 日曜スタート
-
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-  const toDateKey = (d) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-  const weekStartStr = toDateKey(startOfWeek);
-  const weekEndStr = toDateKey(endOfWeek);
-
-  const weekStats = {};
-
-  Object.entries(safeHistory).forEach(([exName, recs]) => {
-    const label = EX_TO_LABEL[exName];
-    if (!label) return;
-
-    (recs || []).forEach((r) => {
-      if (!r?.date) return;
-
-      if (r.date < weekStartStr || r.date > weekEndStr) return;
-
-      const setCount = (r.sets || []).filter(s => s.weight && s.reps).length;
-      if (!setCount) return;
-
-      weekStats[label] = (weekStats[label] || 0) + setCount;
-    });
-  });
-
-  const sortedWeekStats = Object.entries(weekStats)
-    .sort((a, b) => b[1] - a[1]);
-
-
   const cells = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
