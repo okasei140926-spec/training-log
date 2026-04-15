@@ -18,7 +18,7 @@ export default function HistoryScreen({ history, logData, onEditHistory, onDelet
 
       {/* カレンダービュー */}
       <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", border: "1px solid var(--border)" }}>
-  <CalendarView history={history} logData={logData} unit={unit} onEditRecord={(exName, record, historyIdx) => setEditTarget({ exName, record, historyIdx })} onLogForDate={onLogForDate} />
+  <CalendarView history={history}  onDayOpen={onLogForDate} />
 </div>
 
 
