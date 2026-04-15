@@ -89,6 +89,10 @@ export default function GymApp() {
     useEffect(() => { aiEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
+    useEffect(() => {
+        save("routineEx", {});
+    }, []);
+
 
     // ─── Per-exercise unit ────────────────────────────
     const getExUnit = (name) => exerciseUnits[name] ?? unit;
