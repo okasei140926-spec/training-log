@@ -8,17 +8,17 @@ export default function PrepScreen({
   initialExercises, history, lastWorkoutExercises,
   onStart, onBack, unit = "kg",
 }) {
-  const [exercises, setExercises]     = useState(initialExercises);
-  const [showAdd, setShowAdd]         = useState(false);
-  const [newExName, setNewExName]     = useState("");
-  const [editingId, setEditingId]     = useState(null);
+  const [exercises, setExercises] = useState(initialExercises);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newExName, setNewExName] = useState("");
+  const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
   const editRef = useRef(null);
 
   const getPrev = (name) => { const r = history[name]; return r ? r[r.length - 1] : null; };
 
-  const removeEx   = (name) => setExercises(p => p.filter(e => e.name !== name));
-  const addEx      = (name) => {
+  const removeEx = (name) => setExercises(p => p.filter(e => e.name !== name));
+  const addEx = (name) => {
     const trimmed = name.trim();
     if (!trimmed || exercises.find(e => e.name === trimmed)) return;
     setExercises(p => [...p, { id: Date.now() + (Math.random() * 1000 | 0), name: trimmed }]);
@@ -38,20 +38,20 @@ export default function PrepScreen({
   const moveEx = (idx, dir) => {
     const target = idx + dir;
     if (target < 0 || target >= exercises.length) return;
-    setExercises(p => { const a = [...p]; [a[idx], a[target]] = [a[target], a[idx]]; return a; });
+    setExercises(p => { const a = [...p];[a[idx], a[target]] = [a[target], a[idx]]; return a; });
   };
 
   const canStart = exercises.length > 0;
   const btnColor = dayColor || "var(--text)";
-  const btnText  = dayColor ? "#000" : "var(--bg)";
-  const title    = todayLabels.length ? todayLabels.join(" + ") : "フリーワークアウト";
+  const btnText = dayColor ? "#000" : "var(--bg)";
+  const title = todayLabels.length ? todayLabels.join(" + ") : "フリーワークアウト";
 
   // 部位ごとにグループ化（todayLabels が複数の場合はセクション表示）
   const useGroups = todayLabels.length > 1;
   const groups = useGroups
     ? todayLabels
-        .map(lbl => ({ lbl, col: LABEL_COLORS[lbl], exs: exercises.filter(ex => ex.label === lbl) }))
-        .filter(g => g.exs.length > 0)
+      .map(lbl => ({ lbl, col: LABEL_COLORS[lbl], exs: exercises.filter(ex => ex.label === lbl) }))
+      .filter(g => g.exs.length > 0)
     : null;
   const ungrouped = useGroups ? exercises.filter(ex => !ex.label) : exercises;
 
@@ -63,10 +63,10 @@ export default function PrepScreen({
   };
 
   const ExCard = ({ ex }) => {
-    const i         = exercises.indexOf(ex);
+    const i = exercises.indexOf(ex);
     const isEditing = editingId === ex.id;
-    const pText     = prevText(ex.name);
-    const hasPrev   = !!getPrev(ex.name);
+    const pText = prevText(ex.name);
+    const hasPrev = !!getPrev(ex.name);
     return (
       <div style={{ background: "var(--card)", borderRadius: 14, padding: "12px 14px", marginBottom: 8, border: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
