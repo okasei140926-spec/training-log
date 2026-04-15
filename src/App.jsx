@@ -75,15 +75,6 @@ export default function GymApp() {
     useEffect(() => { save("isDark", isDark); }, [isDark]);
     useEffect(() => { save("unit", unit); }, [unit]);
 
-    // 初回だけdraftリセット（1回だけ使う）
-    useEffect(() => {
-        save("draft_todayLabels", []);
-        save("draft_logData", {});
-        save("draft_sessionEx", null);
-        save("draft_exerciseUnits", {});
-        save("draft_logDate", "");
-    }, []);
-
 
 
     useEffect(() => {
