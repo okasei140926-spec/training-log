@@ -499,6 +499,10 @@ export default function GymApp() {
     const handleCalendarDayOpen = (dateStr) => {
         if (dateStr === todayStr) {
             setLogDate(dateStr);
+            setTodayLabels(load("draft_todayLabels", []));
+            setLogData(load("draft_logData", {}));
+            setSessionEx(load("draft_sessionEx", null));
+            setExerciseUnits(load("draft_exerciseUnits", {}));
             setScreen("log");
             return;
         }
