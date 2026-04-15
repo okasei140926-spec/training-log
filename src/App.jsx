@@ -375,7 +375,11 @@ const addExToSession = (name) => {
     }
   };
 
-  // 種目の順番をmuscleExに保存
+
+
+
+  const saveLog = () => {
+      // 種目の順番をmuscleExに保存
 if (sessionEx !== null && todayLabels.length > 0) {
   setMuscleEx(p => {
     const n = { ...p };
@@ -394,7 +398,6 @@ if (sessionEx !== null && todayLabels.length > 0) {
 setSessionEx(null);
 
 
-  const saveLog = () => {
     const nh = { ...history };
     let exCount = 0, setCount = 0, prs = [];
     exercises.forEach((ex, index) => {
