@@ -29,10 +29,6 @@ export default function HistoryScreen({ history, onEditHistory, onDeleteHistory,
     const toDateKey = (d) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-    const weekStartStr = toDateKey(startOfWeek);
-    const weekEndStr = toDateKey(endOfWeek);
-
-
 
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
