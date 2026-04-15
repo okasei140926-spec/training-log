@@ -94,15 +94,6 @@ export default function GymApp() {
         if (logDate === todayStr) save("draft_logDate", logDate);
     }, [logDate, todayStr]);
 
-    useEffect(() => {
-        if (logDate !== todayStr) {
-            save("draft_todayLabels", []);
-            save("draft_logData", {});
-            save("draft_sessionEx", null);
-            save("draft_exerciseUnits", {});
-            save("draft_logDate", todayStr);
-        }
-    }, [logDate, todayStr]);
     useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
     useEffect(() => { aiEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
@@ -484,9 +475,9 @@ export default function GymApp() {
         setSessionEx(null);
         setLogData({});
         setExerciseUnits({});
-        setLogDate(dateStr);
         setTodayLabels([]);
-        setExerciseUnits({});
+
+        setLogDate(dateStr);
 
         const dayExercises = Object.entries(history)
             .map(([name, recs]) => {
@@ -526,21 +517,15 @@ export default function GymApp() {
         if (dateStr === todayStr) {
             setLogDate(dateStr);
 
-            // まず完全リセット
-            setSessionEx(null);
-            setLogData({});
-            setExerciseUnits({});
-
-            // その後、今日のdraftを復元（あれば）
             const draftSession = load("draft_sessionEx", null);
             const draftLog = load("draft_logData", {});
             const draftUnits = load("draft_exerciseUnits", {});
             const draftLabels = load("draft_todayLabels", []);
 
-            if (draftSession) setSessionEx(draftSession);
-            if (Object.keys(draftLog).length) setLogData(draftLog);
-            if (Object.keys(draftUnits).length) setExerciseUnits(draftUnits);
-            if (draftLabels.length) setTodayLabels(draftLabels);
+            setSessionEx(draftSession);
+            setLogData(draftLog);
+            setExerciseUnits(draftUnits);
+            setTodayLabels(draftLabels);
 
             setScreen("log");
             return;
