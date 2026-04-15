@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { load, save, calc1RM, storeW, KG_TO_LBS } from "./utils/helpers";
-import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
+import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 
 import LogScreen from "./components/LogScreen";
@@ -11,6 +11,13 @@ import AIScreen from "./components/AIScreen";
 import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
 import OnboardingOverlay from "./components/OnboardingOverlay";
+
+const EX_TO_LABEL = {};
+Object.entries(SUGGESTIONS).forEach(([label, names]) => {
+    names.forEach((n) => {
+        EX_TO_LABEL[n] = label;
+    });
+});
 
 export default function GymApp() {
     // ─── State ────────────────────────────────────────
@@ -409,12 +416,14 @@ export default function GymApp() {
 
     const saveLog = () => {
         // 種目の順番をmuscleExに保存
-        if (sessionEx !== null && todayLabels.length > 0) {
+        if (sessionEx && sessionEx.length > 0) {
             const key = getRoutineKey(todayLabels);
-            setRoutineOrder(prev => ({
-                ...prev,
-                [key]: sessionEx.map(ex => ex.name),
-            }));
+            if (key) {
+                setRoutineOrder(prev => ({
+                    ...prev,
+                    [key]: sessionEx.map(ex => ex.name),
+                }));
+            }
         }
 
 
@@ -462,7 +471,6 @@ export default function GymApp() {
         setSessionEx(null);
         setLogData({});
         setExerciseUnits({});
-        setTodayLabels([]);
 
         setLogDate(dateStr);
 
@@ -480,6 +488,12 @@ export default function GymApp() {
             .filter(Boolean)
             .sort((a, b) => a.order - b.order);
 
+        const inferredLabels = [...new Set(
+            dayExercises
+                .map(({ name }) => EX_TO_LABEL[name])
+                .filter(Boolean)
+        )];
+
         if (dayExercises.length > 0) {
             const dayLogData = {};
             dayExercises.forEach(({ name, rec }) => {
@@ -488,9 +502,11 @@ export default function GymApp() {
                 }
             });
 
+            setTodayLabels(inferredLabels);
             setSessionEx(dayExercises.map(({ id, name }) => ({ id, name })));
             setLogData(dayLogData);
         } else {
+            setTodayLabels([]);
             setSessionEx(null);
             setLogData({});
         }
@@ -502,17 +518,33 @@ export default function GymApp() {
     // ② カレンダークリック用（分岐だけ）
     const handleCalendarDayOpen = (dateStr) => {
         if (dateStr === todayStr) {
-            setLogDate(dateStr);
-
             const draftDate = load("draft_logDate", "");
-            const isTodayDraft = draftDate === todayStr;
+            const draftSession = load("draft_sessionEx", null);
+            const draftLog = load("draft_logData", {});
+            const draftUnits = load("draft_exerciseUnits", {});
+            const draftLabels = load("draft_todayLabels", []);
 
-            setSessionEx(isTodayDraft ? load("draft_sessionEx", null) : null);
-            setLogData(isTodayDraft ? load("draft_logData", {}) : {});
-            setExerciseUnits(isTodayDraft ? load("draft_exerciseUnits", {}) : {});
-            setTodayLabels(isTodayDraft ? load("draft_todayLabels", []) : []);
+            const hasDraft =
+                draftDate === todayStr &&
+                (
+                    draftSession !== null ||
+                    Object.keys(draftLog).length > 0 ||
+                    Object.keys(draftUnits).length > 0 ||
+                    draftLabels.length > 0
+                );
 
-            setScreen("log");
+            if (hasDraft) {
+                setLogDate(dateStr);
+                setSessionEx(draftSession);
+                setLogData(draftLog);
+                setExerciseUnits(draftUnits);
+                setTodayLabels(draftLabels);
+                setScreen("log");
+                return;
+            }
+
+            // draftなければ保存済み表示
+            handleLogForDate(dateStr);
             return;
         }
 
