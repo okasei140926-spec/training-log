@@ -53,6 +53,15 @@ export default function GymApp() {
         })())
     );
 
+    const toDateStr = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    };
+
+    const todayStr = toDateStr(new Date());
+
     // ─── AI Coach ─────────────────────────────────────
     const [aiMsgs, setAiMsgs] = useState([{ role: "assistant", content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪" }]);
     const [aiInput, setAiInput] = useState("");
@@ -65,11 +74,35 @@ export default function GymApp() {
     useEffect(() => { save("intervalSec", intervalSec); }, [intervalSec]);
     useEffect(() => { save("isDark", isDark); }, [isDark]);
     useEffect(() => { save("unit", unit); }, [unit]);
-    useEffect(() => { save("draft_todayLabels", todayLabels); }, [todayLabels]);
-    useEffect(() => { save("draft_logData", logData); }, [logData]);
-    useEffect(() => { save("draft_sessionEx", sessionEx); }, [sessionEx]);
-    useEffect(() => { save("draft_exerciseUnits", exerciseUnits); }, [exerciseUnits]);
-    useEffect(() => { save("draft_logDate", logDate); }, [logDate]);
+    useEffect(() => {
+        if (logDate === todayStr) save("draft_todayLabels", todayLabels);
+    }, [todayLabels, logDate, todayStr]);
+
+    useEffect(() => {
+        if (logDate === todayStr) save("draft_logData", logData);
+    }, [logData, logDate, todayStr]);
+
+    useEffect(() => {
+        if (logDate === todayStr) save("draft_sessionEx", sessionEx);
+    }, [sessionEx, logDate, todayStr]);
+
+    useEffect(() => {
+        if (logDate === todayStr) save("draft_exerciseUnits", exerciseUnits);
+    }, [exerciseUnits, logDate, todayStr]);
+
+    useEffect(() => {
+        if (logDate === todayStr) save("draft_logDate", logDate);
+    }, [logDate, todayStr]);
+
+    useEffect(() => {
+        if (logDate !== todayStr) {
+            save("draft_todayLabels", []);
+            save("draft_logData", {});
+            save("draft_sessionEx", null);
+            save("draft_exerciseUnits", {});
+            save("draft_logDate", todayStr);
+        }
+    }, [logDate, todayStr]);
     useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
     useEffect(() => { aiEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
@@ -447,17 +480,10 @@ export default function GymApp() {
         setScreen("log");
     };
 
-    const toDateStr = (d) => {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return `${y}-${m}-${day}`;
-    };
-
-    const todayStr = toDateStr(new Date());
-
-
     const handleLogForDate = (dateStr) => {
+        setSessionEx(null);
+        setLogData({});
+        setExerciseUnits({});
         setLogDate(dateStr);
         setTodayLabels([]);
         setExerciseUnits({});
@@ -499,10 +525,23 @@ export default function GymApp() {
     const handleCalendarDayOpen = (dateStr) => {
         if (dateStr === todayStr) {
             setLogDate(dateStr);
-            setTodayLabels(load("draft_todayLabels", []));
-            setLogData(load("draft_logData", {}));
-            setSessionEx(load("draft_sessionEx", null));
-            setExerciseUnits(load("draft_exerciseUnits", {}));
+
+            // まず完全リセット
+            setSessionEx(null);
+            setLogData({});
+            setExerciseUnits({});
+
+            // その後、今日のdraftを復元（あれば）
+            const draftSession = load("draft_sessionEx", null);
+            const draftLog = load("draft_logData", {});
+            const draftUnits = load("draft_exerciseUnits", {});
+            const draftLabels = load("draft_todayLabels", []);
+
+            if (draftSession) setSessionEx(draftSession);
+            if (Object.keys(draftLog).length) setLogData(draftLog);
+            if (Object.keys(draftUnits).length) setExerciseUnits(draftUnits);
+            if (draftLabels.length) setTodayLabels(draftLabels);
+
             setScreen("log");
             return;
         }
