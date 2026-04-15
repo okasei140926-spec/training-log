@@ -21,7 +21,7 @@ export default function GymApp() {
   console.log("historyの中身", history);
 }, [history]);
 
-  const [screen, setScreen] = useState("log");
+  const [screen, setScreen] = useState("history");
 
 const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
 const [logData, setLogData] = useState(() => load("draft_logData", {}));
@@ -738,7 +738,7 @@ const handleDeleteHistory = (exName, historyIdx, recordDate) => {
         />
       )}
 
-      {screen === "history" && ( <HistoryScreen history={history} logData={logData} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
+      {screen === "history" && ( <HistoryScreen history={history} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
 
       {screen === "ai" && (
         <AIScreen
