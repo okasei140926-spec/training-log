@@ -21,7 +21,7 @@ export default function GymApp() {
   console.log("historyの中身", history);
 }, [history]);
 
-  const [screen, setScreen] = useState("history");
+  const [screen, setScreen] = useState("log");
 
 const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
 const [logData, setLogData] = useState(() => load("draft_logData", {}));
