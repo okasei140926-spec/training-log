@@ -126,21 +126,22 @@ export default function GymApp() {
     const dayColor = LABEL_COLORS[todayLabels[0]] || null;
     const routineKey = getRoutineKey(todayLabels);
 
-    const baseExercisesRaw = todayLabels.flatMap(l =>
-        (muscleEx[l] || []).map(ex => ({ ...ex, label: l }))
+    const baseExercisesRaw = todayLabels.flatMap(label =>
+        (muscleEx[label] || []).map(ex => ({ ...ex, label }))
     );
+
     const baseExercises = (() => {
         const savedOrder = routineOrder[routineKey] || [];
         if (!savedOrder.length) return baseExercisesRaw;
 
-        const orderMap = new Map(savedOrder.map((name, idx) => [name, idx]));
-
-        return [...baseExercisesRaw].sort((a, b) => {
-            const ai = orderMap.has(a.name) ? orderMap.get(a.name) : 999;
-            const bi = orderMap.has(b.name) ? orderMap.get(b.name) : 999;
-            return ai - bi;
-        });
+        return savedOrder
+            .map(name => baseExercisesRaw.find(ex => ex.name === name))
+            .filter(Boolean)
+            .concat(
+                baseExercisesRaw.filter(ex => !savedOrder.includes(ex.name))
+            );
     })();
+
     const exercises = sessionEx !== null ? sessionEx : baseExercises;
 
     // eslint-disable-next-line no-unused-vars
