@@ -90,9 +90,8 @@ export default function GymApp() {
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
     useEffect(() => {
-        save("routineEx", {});
+        setMuscleEx({});
     }, []);
-
 
     // ─── Per-exercise unit ────────────────────────────
     const getExUnit = (name) => exerciseUnits[name] ?? unit;
