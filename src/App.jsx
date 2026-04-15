@@ -375,6 +375,25 @@ const addExToSession = (name) => {
     }
   };
 
+  // 種目の順番をmuscleExに保存
+if (sessionEx !== null && todayLabels.length > 0) {
+  setMuscleEx(p => {
+    const n = { ...p };
+    todayLabels.forEach(lbl => {
+      if (n[lbl]) {
+        n[lbl] = [...n[lbl]].sort((a, b) => {
+          const ai = sessionEx.findIndex(e => e.name === a.name);
+          const bi = sessionEx.findIndex(e => e.name === b.name);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
+      }
+    });
+    return n;
+  });
+}
+setSessionEx(null);
+
+
   const saveLog = () => {
     const nh = { ...history };
     let exCount = 0, setCount = 0, prs = [];
