@@ -75,6 +75,16 @@ export default function GymApp() {
     useEffect(() => { save("isDark", isDark); }, [isDark]);
     useEffect(() => { save("unit", unit); }, [unit]);
 
+    // 初回だけdraftリセット（1回だけ使う）
+    useEffect(() => {
+        save("draft_todayLabels", []);
+        save("draft_logData", {});
+        save("draft_sessionEx", null);
+        save("draft_exerciseUnits", {});
+        save("draft_logDate", "");
+    }, []);
+
+
 
     useEffect(() => {
         if (logDate === todayStr) save("draft_logDate", logDate);
@@ -503,15 +513,13 @@ export default function GymApp() {
         if (dateStr === todayStr) {
             setLogDate(dateStr);
 
-            const draftSession = load("draft_sessionEx", null);
-            const draftLog = load("draft_logData", {});
-            const draftUnits = load("draft_exerciseUnits", {});
-            const draftLabels = load("draft_todayLabels", []);
+            const draftDate = load("draft_logDate", "");
+            const isTodayDraft = draftDate === todayStr;
 
-            setSessionEx(draftSession);
-            setLogData(draftLog);
-            setExerciseUnits(draftUnits);
-            setTodayLabels(draftLabels);
+            setSessionEx(isTodayDraft ? load("draft_sessionEx", null) : null);
+            setLogData(isTodayDraft ? load("draft_logData", {}) : {});
+            setExerciseUnits(isTodayDraft ? load("draft_exerciseUnits", {}) : {});
+            setTodayLabels(isTodayDraft ? load("draft_todayLabels", []) : []);
 
             setScreen("log");
             return;
