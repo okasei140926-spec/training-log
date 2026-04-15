@@ -89,10 +89,6 @@ export default function GymApp() {
     useEffect(() => { aiEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
-    useEffect(() => {
-        setMuscleEx({});
-    }, []);
-
     // ─── Per-exercise unit ────────────────────────────
     const getExUnit = (name) => exerciseUnits[name] ?? unit;
 
@@ -453,6 +449,12 @@ export default function GymApp() {
 
 
         const nh = { ...history };
+        Object.keys(nh).forEach((name) => {
+            nh[name] = (nh[name] || []).filter((r) => r.date !== logDate);
+            if (nh[name].length === 0) {
+                delete nh[name];
+            }
+        });
         let exCount = 0, setCount = 0, prs = [];
         exercises.forEach((ex, index) => {
             const sets = logData[ex.name] || getExSets(ex);
