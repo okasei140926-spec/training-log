@@ -61,25 +61,49 @@ export default function HistoryScreen({ history, onEditHistory, onDeleteHistory,
 
             {sortedWeekStats.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--text3)", marginBottom: 8 }}>
-                        WEEKLY SPLIT
+                    <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 24 }}>
+                        週のセット数
                     </div>
 
                     <div
                         style={{
-                            fontSize: 17,
-                            fontWeight: 800,
-                            lineHeight: 1.8,
-                            color: "var(--text)",
                             display: "flex",
                             flexWrap: "wrap",
-                            gap: "4px 16px",
+                            gap: 10,
                         }}
                     >
-                        {sortedWeekStats.map(([label, count]) => (
-                            <span key={label}>
-                                {label} {count}
-                            </span>
+                        {sortedWeekStats.map(([label, count], i) => (
+                            <div
+                                key={label}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    padding: "10px 14px",
+                                    borderRadius: 999,
+                                    background: i < 3 ? "var(--card)" : "var(--card2)",
+                                    border: "1px solid var(--border)",
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        color: "var(--text2)",
+                                    }}
+                                >
+                                    {label}
+                                </span>
+                                <span
+                                    style={{
+                                        fontSize: 18,
+                                        fontWeight: 800,
+                                        color: "var(--text)",
+                                    }}
+                                >
+                                    {count}
+                                </span>
+                            </div>
                         ))}
                     </div>
                 </div>
