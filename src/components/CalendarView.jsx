@@ -115,12 +115,12 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
               onClick={() => onDayOpen(ds)}
               style={{
                 padding: "8px 2px", borderRadius: 10, cursor: "pointer",
-                background: isToday ? "#111" : isSelected ? "#4ade8022" : "transparent",
-                border: `2px solid ${isSelected ? "4ade80" : "transparent"}`,
+                background: isToday ? "#111" : "transparent",
+                border: "2px solid transparent",
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
               }}>
               <div style={{ fontSize: 13, fontWeight: isToday ? 800 : 400,
-                color: isToday ? "#fff" : dow === 0 ? "#FF4D4D" : dow === 6 ? "4D9FFF" : "var(--text)" }}>
+                color: isToday ? "#fff" : dow === 0 ? "#FF4D4D" : dow === 6 ? "#4D9FFF" : "var(--text)" }}>
                 {d}
               </div>
               {worked ? (
