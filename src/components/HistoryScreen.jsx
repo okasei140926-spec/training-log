@@ -29,6 +29,27 @@ export default function HistoryScreen({ history, onEditHistory, onDeleteHistory,
     const toDateKey = (d) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+    const weekStartStr = toDateKey(startOfWeek);
+    const weekEndStr = toDateKey(endOfWeek);
+
+    const weekStats = {};
+    Object.entries(history || {}).forEach(([exName, recs]) => {
+        const label = EX_TO_LABEL[exName];
+        if (!label) return;
+
+        (recs || []).forEach((r) => {
+            if (!r?.date) return;
+            if (r.date < weekStartStr || r.date > weekEndStr) return;
+
+            const setCount = (r.sets || []).filter((s) => s.weight && s.reps).length;
+            if (!setCount) return;
+
+            weekStats[label] = (weekStats[label] || 0) + setCount;
+        });
+    });
+
+    const sortedWeekStats = Object.entries(weekStats)
+        .sort((a, b) => b[1] - a[1]);
 
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
