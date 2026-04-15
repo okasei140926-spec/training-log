@@ -457,29 +457,34 @@ export default function GymApp() {
     const todayStr = toDateStr(new Date());
 
 
-    // ① 過去日の処理（元からあるやつ）
     const handleLogForDate = (dateStr) => {
         setLogDate(dateStr);
         setTodayLabels([]);
         setExerciseUnits({});
 
         const dayExercises = Object.entries(history)
-            .filter(([, recs]) => recs.some(r => r.date === dateStr))
-            .map(([name]) => ({
-                id: name,
-                name,
-            }));
+            .map(([name, recs]) => {
+                const rec = recs.find(r => r.date === dateStr);
+                if (!rec) return null;
+                return {
+                    id: name,
+                    name,
+                    order: typeof rec.order === "number" ? rec.order : 999,
+                    rec,
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.order - b.order);
 
         if (dayExercises.length > 0) {
             const dayLogData = {};
-            dayExercises.forEach(({ name }) => {
-                const rec = history[name]?.find(r => r.date === dateStr);
+            dayExercises.forEach(({ name, rec }) => {
                 if (rec?.sets) {
                     dayLogData[name] = rec.sets.map(s => ({ ...s, done: true }));
                 }
             });
 
-            setSessionEx(dayExercises);
+            setSessionEx(dayExercises.map(({ id, name }) => ({ id, name })));
             setLogData(dayLogData);
         } else {
             setSessionEx(null);
