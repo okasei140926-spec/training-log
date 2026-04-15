@@ -38,10 +38,10 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
 
     const handleQuick = (s) => {
         if (added.has(s)) {
-            onQuickAdd(s, true);
+            onQuickAdd(s, true, activeTab);
             setAdded(p => { const n = new Set(p); n.delete(s); return n; });
         } else {
-            onQuickAdd(s, false);
+            onQuickAdd(s, false, activeTab);
             setAdded(p => new Set([...p, s]));
         }
     };

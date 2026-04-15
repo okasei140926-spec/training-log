@@ -325,7 +325,7 @@ export default function GymApp() {
     };
 
 
-    const addExToSession = (name) => {
+    const addExToSession = (name, labelOverride) => {
         const trimmed = name.trim();
         if (!trimmed) return;
 
@@ -334,29 +334,26 @@ export default function GymApp() {
             name: trimmed
         };
 
-        // ① 今のセッションに追加
         setSessionEx((p) => {
             const current = p !== null ? p : [...baseExercises];
             if (current.find((e) => e.name === trimmed)) return current;
             return [...current, ex];
         });
 
-        // ② 選ばれてる全部位に保存
-        if (!todayLabels.length) return;
+        // 👇 ここに入れる
+        const label = labelOverride || todayLabels[0];
+        if (!label) return;
 
         setMuscleEx((prev) => {
             const next = { ...prev };
+            const list = next[label] || [];
 
-            todayLabels.forEach((label) => {
-                const list = next[label] || [];
-
-                if (!list.find((e) => e.name === trimmed)) {
-                    next[label] = [
-                        ...list,
-                        { id: Date.now() + (Math.random() * 1000 | 0), name: trimmed }
-                    ];
-                }
-            });
+            if (!list.find((e) => e.name === trimmed)) {
+                next[label] = [
+                    ...list,
+                    { id: Date.now(), name: trimmed }
+                ];
+            }
 
             return next;
         });
