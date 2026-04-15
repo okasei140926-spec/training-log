@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { dispW } from "../utils/helpers";
 import { LABEL_COLORS, SUGGESTIONS } from "../constants/suggestions";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
@@ -39,43 +38,6 @@ export default function CalendarView({ history, logData, unit = "kg", onEditReco
 
   const toStr = (d) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   const monthWorkouts = [...trainedDates].filter(d => d.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)).length;
-
-  const getDateExercises = (dateStr) => {
-  // 保存済み
-  const saved = Object.entries(history)
-    .filter(([, recs]) => recs.some(r => r.date === dateStr))
-    .map(([name, recs]) => ({
-      name,
-      record: recs.find(r => r.date === dateStr)
-    }));
-
-  // 今日の編集中（logData）
-  const todayStr = new Date().toISOString().split("T")[0];
-
-  if (dateStr !== todayStr) return saved;
-
-  const draft = Object.entries(logData || {})
-    .map(([name, sets]) => {
-      const valid = sets.filter(s => s.weight && s.reps);
-      if (!valid.length) return null;
-      return {
-        name,
-        record: { sets: valid, date: todayStr }
-      };
-    })
-    .filter(Boolean);
-
-  // 重複防止（draft優先）
-  const merged = [...saved];
-
-  draft.forEach(s => {
-    if (!merged.find(d => d.name === s.name)) {
-      merged.push(s);
-    }
-  });
-
-  return merged;
-};
 
 
   const cells = [];
