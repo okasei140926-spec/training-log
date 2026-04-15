@@ -60,24 +60,39 @@ export default function CalendarView({ history, onDayOpen }) {
   const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
   const monthWorkouts = [...trainedDates].filter((d) => d.startsWith(monthPrefix)).length;
 
-  const monthStats = {};
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay()); // 日曜スタート
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+  const toDateKey = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const weekStartStr = toDateKey(startOfWeek);
+  const weekEndStr = toDateKey(endOfWeek);
+
+  const weekStats = {};
+
   Object.entries(safeHistory).forEach(([exName, recs]) => {
     const label = EX_TO_LABEL[exName];
     if (!label) return;
 
     (recs || []).forEach((r) => {
-      if (!r?.date || !r.date.startsWith(monthPrefix)) return;
+      if (!r?.date) return;
+
+      if (r.date < weekStartStr || r.date > weekEndStr) return;
 
       const setCount = (r.sets || []).filter(s => s.weight && s.reps).length;
       if (!setCount) return;
 
-      monthStats[label] = (monthStats[label] || 0) + setCount;
+      weekStats[label] = (weekStats[label] || 0) + setCount;
     });
   });
 
-
-  const sortedMonthStats = Object.entries(monthStats)
+  const sortedWeekStats = Object.entries(weekStats)
     .sort((a, b) => b[1] - a[1]);
+
 
   const cells = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
@@ -85,9 +100,10 @@ export default function CalendarView({ history, onDayOpen }) {
 
   return (
     <div>
-      {sortedMonthStats.length > 0 && (
+      {sortedWeekStats.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 6 }}>
+            今週の部位別セット数
           </div>
 
           <div
@@ -101,7 +117,7 @@ export default function CalendarView({ history, onDayOpen }) {
               gap: "6px 14px",
             }}
           >
-            {sortedMonthStats.map(([label, count]) => (
+            {sortedWeekStats.map(([label, count]) => (
               <span key={label}>
                 {label} {count}
               </span>
