@@ -100,31 +100,6 @@ export default function CalendarView({ history, onDayOpen }) {
 
   return (
     <div>
-      {sortedWeekStats.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, letterSpacing: 2, color: "var(--text3)", marginBottom: 8 }}>
-            WEEKLY SPLIT
-          </div>
-
-          <div
-            style={{
-              fontSize: 17,
-              fontWeight: 800,
-              lineHeight: 1.8,
-              color: "var(--text)",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "4px 16px",
-            }}
-          >
-            {sortedWeekStats.map(([label, count]) => (
-              <span key={label}>
-                {label} {count}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <button onClick={prevMonth} style={{ background: "none", color: "var(--text2)", fontSize: 24, padding: "4px 10px" }}>‹</button>
