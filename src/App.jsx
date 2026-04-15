@@ -648,9 +648,8 @@ export default function GymApp() {
     const confirmAdd = () => {
         const name = newExName.trim();
         if (!name) return;
-        quickAdd(name, false);
+        quickAdd(name, false, Array.isArray(addTarget) ? addTarget[0] : addTarget);
         setNewExName("");
-        // modal stays open so user can add multiple exercises in a row
     };
 
     // ─── 設定画面 ──────────────────────────────────────
