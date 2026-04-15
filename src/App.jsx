@@ -38,6 +38,9 @@ export default function GymApp() {
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
 
+    const touchStartX = useRef(null);
+    const touchStartY = useRef(null);
+
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
     const [addTarget, setAddTarget] = useState(null);
@@ -751,46 +754,73 @@ export default function GymApp() {
 
 
             {screen === "log" && (
-                <LogScreen
-                    todayLabels={todayLabels}
-                    dayColor={dayColor}
-                    exercises={exercises}
-                    logData={logData}
-                    getExSets={getExSets}
-                    setField={setField}
-                    addSet={addSet}
-                    removeSet={removeSet}
-                    removeEx={removeEx}
-                    timerLeft={timerLeft}
-                    intervalSec={intervalSec}
-                    setIntervalSec={setIntervalSec}
-                    startTimer={startTimer}
-                    stopTimer={stopTimer}
-                    saveLog={saveLog}
-                    onAddEx={addExToSession}
-                    onQuickAddEx={quickAddToSession}
-                    onReorderEx={reorderEx}
-                    onRenameEx={renameEx}
-                    getPrev={getPrev}
-                    getPR={getPR}
-                    onCopyDown={copySetDown}
-                    onCopyDownReps={copyRepDown}
-                    unit={unit}
-                    getExUnit={getExUnit}
-                    onToggleExUnit={toggleExUnit}
-                    muscleEx={muscleEx}
-                    setTodayLabels={setTodayLabels}
-                    history={history}
-                    logDate={logDate}
-                    resetSession={() => {
-                        setSessionEx(null);
-                        setLogData({});
-                        setExerciseUnits({});
-                        save("draft_sessionEx", null);
-                        save("draft_logData", {});
-                        save("draft_exerciseUnits", {});
+                <div
+                    onTouchStart={(e) => {
+                        touchStartX.current = e.touches[0].clientX;
+                        touchStartY.current = e.touches[0].clientY;
                     }}
-                />
+                    onTouchEnd={(e) => {
+                        if (touchStartX.current == null || touchStartY.current == null) return;
+
+                        const endX = e.changedTouches[0].clientX;
+                        const endY = e.changedTouches[0].clientY;
+
+                        const dx = endX - touchStartX.current;
+                        const dy = Math.abs(endY - touchStartY.current);
+
+                        const startedFromLeftEdge = touchStartX.current <= 24;
+                        const isRightSwipe = dx >= 80;
+                        const isHorizontal = dy < 40;
+
+                        if (startedFromLeftEdge && isRightSwipe && isHorizontal) {
+                            setScreen("history");
+                        }
+
+                        touchStartX.current = null;
+                        touchStartY.current = null;
+                    }}
+                >
+                    <LogScreen
+                        todayLabels={todayLabels}
+                        dayColor={dayColor}
+                        exercises={exercises}
+                        logData={logData}
+                        getExSets={getExSets}
+                        setField={setField}
+                        addSet={addSet}
+                        removeSet={removeSet}
+                        removeEx={removeEx}
+                        timerLeft={timerLeft}
+                        intervalSec={intervalSec}
+                        setIntervalSec={setIntervalSec}
+                        startTimer={startTimer}
+                        stopTimer={stopTimer}
+                        saveLog={saveLog}
+                        onAddEx={addExToSession}
+                        onQuickAddEx={quickAddToSession}
+                        onReorderEx={reorderEx}
+                        onRenameEx={renameEx}
+                        getPrev={getPrev}
+                        getPR={getPR}
+                        onCopyDown={copySetDown}
+                        onCopyDownReps={copyRepDown}
+                        unit={unit}
+                        getExUnit={getExUnit}
+                        onToggleExUnit={toggleExUnit}
+                        muscleEx={muscleEx}
+                        setTodayLabels={setTodayLabels}
+                        history={history}
+                        logDate={logDate}
+                        resetSession={() => {
+                            setSessionEx(null);
+                            setLogData({});
+                            setExerciseUnits({});
+                            save("draft_sessionEx", null);
+                            save("draft_logData", {});
+                            save("draft_exerciseUnits", {});
+                        }}
+                    />
+                </div>
             )}
 
             {screen === "friends" && (
