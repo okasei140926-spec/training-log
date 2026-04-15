@@ -89,7 +89,8 @@ export default function LogScreen({
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 8,
+                delay: 0,
+                distance: 0,
             },
         })
     );
@@ -221,20 +222,20 @@ export default function LogScreen({
                                             </div>
 
                                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                <button
+                                                <div
                                                     {...dragHandleProps}
                                                     onClick={(e) => e.stopPropagation()}
                                                     style={{
-                                                        background: "none",
-                                                        border: "none",
+                                                        cursor: "grab",
+                                                        padding: "6px 8px",
                                                         color: "var(--text3)",
                                                         fontSize: 18,
-                                                        padding: "4px 6px",
-                                                        cursor: "grab"
+                                                        touchAction: "none",
+                                                        userSelect: "none",
                                                     }}
                                                 >
-                                                    ⋮⋮
-                                                </button>
+                                                    ≡
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -266,20 +267,20 @@ export default function LogScreen({
                                             </div>
 
                                             <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
-                                                <button
+                                                <div
                                                     {...dragHandleProps}
                                                     onClick={(e) => e.stopPropagation()}
                                                     style={{
-                                                        background: "none",
-                                                        border: "none",
+                                                        cursor: "grab",
+                                                        padding: "6px 8px",
                                                         color: "var(--text3)",
                                                         fontSize: 18,
-                                                        padding: "4px 6px",
-                                                        cursor: "grab"
+                                                        touchAction: "none",
+                                                        userSelect: "none",
                                                     }}
                                                 >
-                                                    ⋮⋮
-                                                </button>
+                                                    ≡
+                                                </div>
 
                                                 {onToggleExUnit && (
                                                     <button
