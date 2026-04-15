@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { calc1RM, dispW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
-import { LABEL_COLORS, QUICK_LABELS, SUGGESTIONS } from "../constants/suggestions";
+
 
 import {
     DndContext,
@@ -119,39 +119,6 @@ export default function LogScreen({
                 {exCount}種目 ・ {setCount}セット
             </div>
 
-
-            {/* 部位チップ */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-                {QUICK_LABELS.map(lbl => {
-                    const isSelected = todayLabels.includes(lbl);
-                    const col = LABEL_COLORS[lbl];
-                    return (
-                        <button
-                            key={lbl}
-                            onClick={() => {
-                                if (isSelected) {
-                                    const suggestions = SUGGESTIONS[lbl] || [];
-                                    suggestions.forEach(name => removeEx(exercises.find(e => e.name === name)?.id, name));
-                                    setTodayLabels((p) => p.filter((l) => l !== lbl));
-                                } else {
-                                    const suggestions = SUGGESTIONS[lbl] || [];
-                                    const prevExercises = suggestions.filter((name) => history[name]?.length > 0);
-                                    const toAdd = prevExercises.length > 0 ? prevExercises : suggestions.slice(0, 3);
-
-                                    toAdd.forEach((name) => onAddEx(name));
-                                    setTodayLabels((p) => [...p, lbl]);
-                                }
-                            }}
-                            style={{
-                                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",
-                                background: isSelected ? col : "var(--card2)",
-                                color: isSelected ? "#000" : "var(--text2)"
-                            }}>
-                            {lbl}
-                        </button>
-                    );
-                })}
-            </div>
 
             {/* 種目カード */}
             <DndContext
@@ -472,7 +439,7 @@ export default function LogScreen({
                     name={addName} setName={setAddName}
                     onConfirm={() => { onAddEx(addName); setAddName(""); }}
                     onClose={() => { setShowAdd(false); setAddName(""); }}
-                    target={todayLabels.length ? todayLabels : null}
+                    target={null}
                     onQuickAdd={onQuickAddEx}
                     existingNames={exercises.map(e => e.name)}
                 />

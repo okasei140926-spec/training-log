@@ -403,11 +403,34 @@ export default function GymApp() {
         });
     };
 
-    const quickAddToSession = (name, remove) => {
-        if (remove) {
-            setSessionEx(p => (p !== null ? p : [...baseExercises]).filter(e => e.name !== name));
-        } else {
-            addExToSession(name);
+    const quickAdd = (name, remove, labelOverride) => {
+        const tgts = labelOverride
+            ? [labelOverride]
+            : Array.isArray(addTarget)
+                ? addTarget
+                : (addTarget ? [addTarget] : []);
+
+        setMuscleEx((prev) => {
+            const next = { ...prev };
+
+            tgts.forEach((label) => {
+                const list = next[label] || [];
+
+                if (remove) {
+                    next[label] = list.filter((e) => e.name !== name);
+                } else {
+                    if (!list.find((e) => e.name === name)) {
+                        next[label] = [...list, { id: Date.now(), name }];
+                    }
+                }
+            });
+
+            return next;
+        });
+
+        // 今のワークアウトにも追加
+        if (!remove) {
+            onAddEx(name);
         }
     };
 
@@ -451,6 +474,7 @@ export default function GymApp() {
             }
         });
         setHistory(nh);
+        setTodayLabels([]);
         setLogData({});
         setSessionEx(null);
         setExerciseUnits({});
@@ -627,23 +651,6 @@ export default function GymApp() {
         quickAdd(name, false);
         setNewExName("");
         // modal stays open so user can add multiple exercises in a row
-    };
-
-    const quickAdd = (name, remove) => {
-        const tgts = Array.isArray(addTarget) ? addTarget : (addTarget ? [addTarget] : []);
-        setMuscleEx(p => {
-            const n = { ...p };
-            tgts.forEach(t => {
-                if (remove) {
-                    if (n[t]) n[t] = n[t].filter(e => e.name !== name);
-                } else {
-                    const ex = { id: Date.now() + (Math.random() * 1000 | 0), name };
-                    if (!n[t]) n[t] = [];
-                    if (!n[t].find(e => e.name === name)) n[t] = [...n[t], ex];
-                }
-            });
-            return n;
-        });
     };
 
     // ─── 設定画面 ──────────────────────────────────────
@@ -829,7 +836,13 @@ export default function GymApp() {
             </div>
 
             {showOnboarding && <OnboardingOverlay onDone={() => setShowOnboarding(false)} />}
-            <SummaryModal summary={summary} onClose={() => setSummary(null)} />
+            <SummaryModal
+                summary={summary}
+                onClose={() => {
+                    setSummary(null);
+                    setScreen("history");
+                }}
+            />
         </div>
     );
 }

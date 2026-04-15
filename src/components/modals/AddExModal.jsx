@@ -42,9 +42,11 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
     const handleManual = () => {
         if (!name.trim()) return;
         const trimmed = name.trim();
-        onConfirm();
+
+        onQuickAdd(trimmed, false, activeTab); // ←部位付きで保存
+
         setAdded(p => new Set([...p, trimmed]));
-        setTimeout(() => inputRef.current?.focus(), 30);
+        setName("");
     };
 
     const SuggestionList = ({ items }) => (
