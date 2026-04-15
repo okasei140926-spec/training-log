@@ -75,6 +75,7 @@ export default function CalendarView({ history, onDayOpen }) {
     });
   });
 
+
   const sortedMonthStats = Object.entries(monthStats)
     .sort((a, b) => b[1] - a[1]);
 
@@ -84,6 +85,31 @@ export default function CalendarView({ history, onDayOpen }) {
 
   return (
     <div>
+      {sortedMonthStats.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 6 }}>
+          </div>
+
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 800,
+              lineHeight: 1.6,
+              color: "var(--text)",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "6px 14px",
+            }}
+          >
+            {sortedMonthStats.map(([label, count]) => (
+              <span key={label}>
+                {label} {count}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <button onClick={prevMonth} style={{ background: "none", color: "var(--text2)", fontSize: 24, padding: "4px 10px" }}>‹</button>
         <div style={{ textAlign: "center" }}>
@@ -161,30 +187,6 @@ export default function CalendarView({ history, onDayOpen }) {
           );
         })}
       </div>
-      {sortedMonthStats.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 6 }}>
-            今月の部位別セット数
-          </div>
-
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 700,
-              color: "var(--text)",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "6px 14px",
-            }}
-          >
-            {sortedMonthStats.map(([label, count]) => (
-              <span key={label}>
-                {label} {count}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
