@@ -430,11 +430,13 @@ export default function GymApp() {
 
         // 今のワークアウトにも追加
         if (!remove) {
-            onAddEx(name);
+            addExToSession(name);
         }
     };
 
-
+    const quickAddToSession = (name, remove, labelOverride) => {
+        quickAdd(name, remove, labelOverride);
+    };
 
 
     const saveLog = () => {
