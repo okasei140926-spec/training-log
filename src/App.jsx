@@ -24,9 +24,6 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
 
-    useEffect(() => {
-        console.log("historyの中身", history);
-    }, [history]);
 
     const [screen, setScreen] = useState("history");
 
@@ -404,11 +401,15 @@ export default function GymApp() {
     };
 
     const quickAdd = (name, remove, labelOverride) => {
+        console.log("保存先ラベル", labelOverride);
+
         const tgts = labelOverride
             ? [labelOverride]
             : Array.isArray(addTarget)
                 ? addTarget
                 : (addTarget ? [addTarget] : []);
+
+        console.log("最終ターゲット", tgts);
 
         setMuscleEx((prev) => {
             const next = { ...prev };
@@ -428,7 +429,6 @@ export default function GymApp() {
             return next;
         });
 
-        // 今のワークアウトにも追加
         if (!remove) {
             addExToSession(name);
         }

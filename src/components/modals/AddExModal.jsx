@@ -4,7 +4,7 @@ import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/sugge
 export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [] }) {
     const inputRef = useRef(null);
     const [added, setAdded] = useState(() => new Set(existingNames));
-    const [activeTab, setActiveTab] = useState(null);
+    const [activeTab, setActiveTab] = useState("胸");
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
 
