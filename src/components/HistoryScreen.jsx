@@ -17,18 +17,23 @@ const normalizeName = (name) =>
 const resolveLabel = (exName, muscleEx = {}) => {
     const normalized = normalizeName(exName);
 
+    // まず SUGGESTIONS の完全一致
     if (EX_TO_LABEL[exName]) return EX_TO_LABEL[exName];
 
-    const suggestionMatch = Object.entries(EX_TO_LABEL).find(
-        ([name]) => normalizeName(name).includes(normalized) ||
-            normalized.includes(normalizeName(name))
-    );
+    // SUGGESTIONS のあいまい一致
+    const suggestionMatch = Object.entries(EX_TO_LABEL).find(([name]) => {
+        const base = normalizeName(name);
+        return base === normalized || base.includes(normalized) || normalized.includes(base);
+    });
     if (suggestionMatch) return suggestionMatch[1];
 
+    // 手入力で追加した種目から探す
     const customMatch = Object.entries(muscleEx || {}).find(([label, list]) =>
-        (list || []).some((ex) =>
-            normalizeName(typeof ex === "string" ? ex : ex.name) === normalized
-        )
+        (list || []).some((ex) => {
+            const name = typeof ex === "string" ? ex : ex.name;
+            const base = normalizeName(name);
+            return base === normalized || base.includes(normalized) || normalized.includes(base);
+        })
     );
 
     return customMatch ? customMatch[0] : null;
@@ -95,11 +100,6 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
     const daySummary = {};
 
-    const workedLabels = [...new Set(
-        Object.keys(daySummary).map((exName) => resolveLabel(exName, muscleEx))
-            .filter(Boolean)
-    )];
-
     console.log("daySummary", daySummary);
     console.log("workedLabels", workedLabels);
 
@@ -113,6 +113,12 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             daySummary[exName] = (daySummary[exName] || 0) + sets;
         });
     });
+
+    const workedLabels = [...new Set(
+        Object.keys(daySummary)
+            .map((exName) => resolveLabel(exName, muscleEx))
+            .filter(Boolean)
+    )];
 
 
 
