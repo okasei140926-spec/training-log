@@ -441,7 +441,8 @@ export default function LogScreen({
                 disabled={!canSaveWorkout}
                 style={{
 
-                    position: "fixed", bottom: 20, right: 20, width: "60%",
+                    position: "fixed", bottom: 96, right: 20, width: "48%",
+
                     background: canSaveWorkout ? "#000" : "#d9d9d9",
                     color: canSaveWorkout ? "#fff" : "#888",
                     cursor: canSaveWorkout ? "pointer" : "not-allowed",
