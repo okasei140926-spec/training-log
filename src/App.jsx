@@ -110,6 +110,32 @@ export default function GymApp() {
 
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
+    useEffect(() => {
+        const draftDate = load("draft_logDate", "");
+        const draftSession = load("draft_sessionEx", null);
+        const draftLog = load("draft_logData", {});
+        const draftUnits = load("draft_exerciseUnits", {});
+        const draftLabels = load("draft_todayLabels", []);
+
+        const hasDraft =
+            draftDate &&
+            (
+                draftSession !== null ||
+                Object.keys(draftLog).length > 0 ||
+                Object.keys(draftUnits).length > 0 ||
+                draftLabels.length > 0
+            );
+
+        if (!hasDraft) return;
+
+        setLogDate(draftDate);
+        setSessionEx(draftSession);
+        setLogData(draftLog);
+        setExerciseUnits(draftUnits);
+        setTodayLabels(draftLabels);
+        setScreen("log");
+    }, []);
+
     // ─── Per-exercise unit ────────────────────────────
     const getExUnit = (name) => exerciseUnits[name] ?? unit;
 
@@ -581,34 +607,28 @@ export default function GymApp() {
 
     // ② カレンダークリック用（分岐だけ）
     const handleCalendarDayOpen = (dateStr) => {
-        if (dateStr === todayStr) {
-            const draftDate = load("draft_logDate", "");
-            const draftSession = load("draft_sessionEx", null);
-            const draftLog = load("draft_logData", {});
-            const draftUnits = load("draft_exerciseUnits", {});
-            const draftLabels = load("draft_todayLabels", []);
+        const draftDate = load("draft_logDate", "");
+        const draftSession = load("draft_sessionEx", null);
+        const draftLog = load("draft_logData", {});
+        const draftUnits = load("draft_exerciseUnits", {});
+        const draftLabels = load("draft_todayLabels", []);
 
-            const hasDraft =
-                draftDate === todayStr &&
-                (
-                    draftSession !== null ||
-                    Object.keys(draftLog).length > 0 ||
-                    Object.keys(draftUnits).length > 0 ||
-                    draftLabels.length > 0
-                );
+        const hasDraftForDate =
+            draftDate === dateStr &&
+            (
+                draftSession !== null ||
+                Object.keys(draftLog).length > 0 ||
+                Object.keys(draftUnits).length > 0 ||
+                draftLabels.length > 0
+            );
 
-            if (hasDraft) {
-                setLogDate(dateStr);
-                setSessionEx(draftSession);
-                setLogData(draftLog);
-                setExerciseUnits(draftUnits);
-                setTodayLabels(draftLabels);
-                setScreen("log");
-                return;
-            }
-
-            // draftなければ保存済み表示
-            handleLogForDate(dateStr);
+        if (hasDraftForDate) {
+            setLogDate(dateStr);
+            setSessionEx(draftSession);
+            setLogData(draftLog);
+            setExerciseUnits(draftUnits);
+            setTodayLabels(draftLabels);
+            setScreen("log");
             return;
         }
 
