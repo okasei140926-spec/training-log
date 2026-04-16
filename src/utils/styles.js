@@ -1,8 +1,8 @@
 export const S = {
   root: { minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'Helvetica Neue', sans-serif", maxWidth: 430, margin: "0 auto", paddingBottom: 0 },
-  header: { padding: "24px 20px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, background: "var(--bg)" },
-  appLabel: { fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase", marginBottom: 4 },
-  headerTitle: { fontSize: 22, fontWeight: 700 },
+  header: { padding: "12px 20px 8px", borderBottom: "1px solid var(--border2)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, background: "var(--bg)" },
+  appLabel: { fontSize: 8, color: "var(--text3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },
+  headerTitle: { fontSize: 20, fontWeight: 700, lineHeight: 1.1 },
   pillBtn: { background: "var(--card2)", color: "var(--text)", padding: "6px 14px", borderRadius: 20, fontSize: 12, border: "1px solid var(--border2)", cursor: "pointer" },
   sLabel: { fontSize: 11, color: "var(--text2)", letterSpacing: 3, marginBottom: 12, textTransform: "uppercase" },
   bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "var(--nav-bg)", backdropFilter: "blur(20px)", borderTop: "1px solid var(--border)", display: "flex", padding: "12px 0 20px" },

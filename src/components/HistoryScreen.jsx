@@ -136,7 +136,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 {activeLabel} の内訳
                             </div>
 
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 180, overflowY: "auto", paddingRight: "4", }}>
                                 {Object.entries(detailMap[activeLabel])
                                     .sort((a, b) => b[1] - a[1])
                                     .map(([name, count]) => (
@@ -145,12 +145,14 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                             style={{
                                                 display: "flex",
                                                 justifyContent: "space-between",
-                                                fontSize: 14,
+                                                alignItems: "center",
+                                                fontSize: 13,
                                                 fontWeight: 600,
                                                 color: "var(--text)",
-                                                padding: "6px 10px",
+                                                padding: "8px 10px",
                                                 background: "var(--card)",
-                                                borderRadius: 8,
+                                                borderRadius: 10,
+                                                border: "1px solid var(--border2)",
                                             }}
                                         >
                                             <span>{name}</span>
