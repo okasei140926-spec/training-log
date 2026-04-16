@@ -84,7 +84,7 @@ export default function LogScreen({
         setEditingId(null);
     };
 
-    const title = todayLabels.length ? todayLabels.join(" + ") : "ワークアウト";
+    const title = todayLabels.length ? todayLabels.join(" + ") : "ワーク";
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
