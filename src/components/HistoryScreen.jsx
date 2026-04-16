@@ -83,6 +83,17 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
     const daySummary = {};
 
+    const workedLabels = [...new Set(
+        Object.keys(daySummary)
+            .map((exName) =>
+                EX_TO_LABEL[exName] ||
+                Object.keys(muscleEx || {}).find((l) =>
+                    (muscleEx[l] || []).some((ex) => ex.name === exName)
+                )
+            )
+            .filter(Boolean)
+    )];
+
     Object.entries(history || {}).forEach(([exName, recs]) => {
         (recs || []).forEach((r) => {
             if (r.date !== selectedDate) return;
@@ -311,6 +322,33 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             合計 {totalSets} セット
                         </div>
 
+                        {workedLabels.length > 0 && (
+                            <div style={{ marginBottom: 12 }}>
+                                <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 6 }}>
+                                    やった部位
+                                </div>
+
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                    {workedLabels.map((label) => (
+                                        <div
+                                            key={label}
+                                            style={{
+                                                padding: "6px 10px",
+                                                borderRadius: 999,
+                                                background: "var(--card2)",
+                                                border: "1px solid var(--border2)",
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                color: "var(--text)",
+                                            }}
+                                        >
+                                            {label}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             {Object.entries(daySummary)
                                 .sort((a, b) => b[1] - a[1])
@@ -343,7 +381,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 padding: "12px",
                                 borderRadius: 12,
                                 background: "var(--text)",
-                                color: "#000",
+                                color: "var(--bg)",
                                 fontWeight: 700,
                             }}
                         >
