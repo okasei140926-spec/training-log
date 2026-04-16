@@ -59,9 +59,15 @@ export default function LogScreen({
         )
     );
 
+    const hasSavedRecordForDate = Object.values(history || {}).some((recs) =>
+        (recs || []).some((r) => r.date === logDate)
+    );
+
+    const canSaveWorkout = hasValidSet || hasSavedRecordForDate;
+
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
-    const [isSaved, setIsSaved] = useState(false);
+
 
     const [editingId, setEditingId] = useState(null);
     const [editingName, setEditingName] = useState("");
@@ -429,38 +435,23 @@ export default function LogScreen({
 
             <button
                 onClick={() => {
-                    if (!hasValidSet) return;
-
+                    if (!canSaveWorkout) return;
                     saveLog();
-                    setIsSaved(true);
-
-                    setTimeout(() => {
-                        setIsSaved(false);
-                    }, 1500);
                 }}
-                disabled={!hasValidSet}
+                disabled={!canSaveWorkout}
                 style={{
-                    position: "fixed",
-                    bottom: 20,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    width: "calc(100% - 40px)",
-                    maxWidth: 430,
-
-                    background: isSaved ? "#22c55e" : hasValidSet ? "#000" : "#d9d9d9",
-                    color: "#fff",
-                    cursor: hasValidSet ? "pointer" : "not-allowed",
-
+                    background: canSaveWorkout ? "#000" : "#d9d9d9",
+                    color: canSaveWorkout ? "#fff" : "#888",
+                    cursor: canSaveWorkout ? "pointer" : "not-allowed",
                     border: "none",
                     borderRadius: 18,
                     padding: "22px 16px",
                     fontSize: 16,
                     fontWeight: 800,
                     zIndex: 100,
-                    transition: "all 0.2s ease",
                 }}
             >
-                {isSaved ? "✔ Saved!" : "SAVE WORKOUT ✓"}
+                SAVE WORKOUT ✓
             </button>
 
             {showAdd && (
