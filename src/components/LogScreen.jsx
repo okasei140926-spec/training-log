@@ -53,6 +53,12 @@ export default function LogScreen({
     getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
 }) {
 
+    const hasValidSet = Object.values(logData).some((sets) =>
+        (sets || []).some((s) =>
+            (s.weight || s.weight === "BW") && s.reps
+        )
+    );
+
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
 
@@ -420,21 +426,24 @@ export default function LogScreen({
                 ＋
             </button>
 
-            <button onClick={saveLog}
+            <button
+                onClick={() => {
+                    if (!hasValidSet) return;
+                    saveLog();
+                }}
+                disabled={!hasValidSet}
                 style={{
-                    position: "fixed",
-                    bottom: 90,
-                    left: 20,
-                    right: 20,
-                    padding: 16,
-                    borderRadius: 14,
-                    background: accentColor,
-                    color: accentText,
-                    fontWeight: 800,
-                    fontSize: 16,
+                    background: hasValidSet ? "#000" : "#d9d9d9",
+                    color: hasValidSet ? "#fff" : "#888",
+                    cursor: hasValidSet ? "pointer" : "not-allowed",
+                    width: "100%",
                     border: "none",
-                    zIndex: 100
-                }}>
+                    borderRadius: 18,
+                    padding: "22px 16px",
+                    fontSize: 16,
+                    fontWeight: 800,
+                }}
+            >
                 SAVE WORKOUT ✓
             </button>
 
