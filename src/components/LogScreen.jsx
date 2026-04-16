@@ -440,8 +440,9 @@ export default function LogScreen({
                 }}
                 disabled={!canSaveWorkout}
                 style={{
-
-                    position: "fixed", bottom: 96, right: 20, width: "48%",
+                    marginTop: 28,
+                    marginLeft: "auto",
+                    width: "60%",
 
                     background: canSaveWorkout ? "#000" : "#d9d9d9",
                     color: canSaveWorkout ? "#fff" : "#888",
@@ -451,7 +452,6 @@ export default function LogScreen({
                     padding: "22px 16px",
                     fontSize: 16,
                     fontWeight: 800,
-                    zIndex: 100,
                 }}
             >
                 SAVE WORKOUT ✓
