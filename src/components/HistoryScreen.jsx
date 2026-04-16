@@ -246,12 +246,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             }}
                         >
                             <div style={{ fontSize: 18, fontWeight: 800 }}>
-                                {activeLabel} の内訳
+                                {activeLabel}
                             </div>
-
-                            <button onClick={() => setActiveLabel(null)}>
-                                ×
-                            </button>
                         </div>
 
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
