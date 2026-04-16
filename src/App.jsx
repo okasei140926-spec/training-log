@@ -28,6 +28,18 @@ export default function GymApp() {
     const [screen, setScreen] = useState("history");
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
+    const updateTodayLabels = (nextOrUpdater) => {
+        setTodayLabels((prev) => {
+            const next =
+                typeof nextOrUpdater === "function"
+                    ? nextOrUpdater(prev)
+                    : nextOrUpdater;
+
+            save("draft_todayLabels", next);
+            save("draft_logDate", logDate);
+            return next;
+        });
+    };
     const [logData, setLogData] = useState(() => load("draft_logData", {}));
     const [sessionEx, setSessionEx] = useState(() => load("draft_sessionEx", null));
 
@@ -141,7 +153,12 @@ export default function GymApp() {
             }));
         }
 
-        setExerciseUnits(p => ({ ...p, [name]: newUnit }));
+        setExerciseUnits((p) => {
+            const next = { ...p, [name]: newUnit };
+            save("draft_exerciseUnits", next);
+            save("draft_logDate", logDate);
+            return next;
+        });
     };
 
     // ─── Derived ──────────────────────────────────────
@@ -824,7 +841,7 @@ export default function GymApp() {
                         getExUnit={getExUnit}
                         onToggleExUnit={toggleExUnit}
                         muscleEx={muscleEx}
-                        setTodayLabels={setTodayLabels}
+                        setTodayLabels={updateTodayLabels}
                         history={history}
                         logDate={logDate}
                         resetSession={() => {
