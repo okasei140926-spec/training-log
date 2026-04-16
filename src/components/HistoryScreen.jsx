@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { SUGGESTIONS } from "../constants/suggestions";
-import { S } from "../utils/styles";
 import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
