@@ -81,6 +81,11 @@ export default function GymApp() {
     useEffect(() => { save("intervalSec", intervalSec); }, [intervalSec]);
     useEffect(() => { save("isDark", isDark); }, [isDark]);
     useEffect(() => { save("unit", unit); }, [unit]);
+    useEffect(() => { save("draft_todayLabels", todayLabels); }, [todayLabels]);
+    useEffect(() => { save("draft_logData", logData); }, [logData]);
+    useEffect(() => { save("draft_sessionEx", sessionEx); }, [sessionEx]);
+    useEffect(() => { save("draft_exerciseUnits", exerciseUnits); }, [exerciseUnits]);
+    useEffect(() => { save("draft_logDate", logDate); }, [logDate]);
 
 
 
