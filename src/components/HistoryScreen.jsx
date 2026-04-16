@@ -20,6 +20,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     const today = new Date();
 
     const [activeLabel, setActiveLabel] = useState(null);
+    const [selectedDate, setSelectedDate] = useState(null);
 
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay());
@@ -79,6 +80,21 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
     const sortedWeekStats = Object.entries(weekStats)
         .sort((a, b) => b[1] - a[1]);
+
+    const daySummary = {};
+
+    Object.entries(history || {}).forEach(([exName, recs]) => {
+        (recs || []).forEach((r) => {
+            if (r.date !== selectedDate) return;
+
+            const sets = (r.sets || []).filter(s => s.weight && s.reps).length;
+            if (!sets) return;
+
+            daySummary[exName] = (daySummary[exName] || 0) + sets;
+        });
+    });
+
+    const totalSets = Object.values(daySummary).reduce((a, b) => a + b, 0);
 
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
@@ -141,7 +157,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                 padding: "16px",
                 border: "1px solid var(--border)"
             }}>
-                <CalendarView history={history} onDayOpen={onLogForDate} />
+                <CalendarView history={history} onDayOpen={(date) => setSelectedDate(date)} />
             </div>
 
             {/* モーダル */}
@@ -244,6 +260,108 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                     </div>
                                 ))}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {selectedDate && (
+                <div
+                    onClick={() => setSelectedDate(null)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.35)",
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        zIndex: 999,
+                        padding: "16px",
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "100%",
+                            maxWidth: 430,
+                            background: "var(--card)",
+                            borderRadius: 20,
+                            padding: "18px 16px 20px",
+                            border: "1px solid var(--border2)",
+                            maxHeight: "60vh",
+                            overflowY: "auto",
+                        }}
+                    >
+                        {/* ハンドル */}
+                        <div style={{
+                            width: 44,
+                            height: 5,
+                            borderRadius: 999,
+                            background: "var(--border2)",
+                            margin: "0 auto 14px",
+                        }} />
+
+                        {/* タイトル */}
+                        <div style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: 12,
+                        }}>
+                            <div style={{ fontSize: 18, fontWeight: 800 }}>
+                                {selectedDate}
+                            </div>
+
+                            <button onClick={() => setSelectedDate(null)}>×</button>
+                        </div>
+
+                        {/* 合計 */}
+                        <div style={{
+                            fontSize: 13,
+                            color: "var(--text2)",
+                            marginBottom: 10
+                        }}>
+                            合計 {totalSets} セット
+                        </div>
+
+                        {/* 種目一覧 */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(daySummary)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([name, count]) => (
+                                    <div
+                                        key={name}
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            padding: "10px 12px",
+                                            background: "var(--card2)",
+                                            borderRadius: 12,
+                                        }}
+                                    >
+                                        <span>{name}</span>
+                                        <span>{count}</span>
+                                    </div>
+                                ))}
+                        </div>
+
+                        {/* ボタン */}
+                        <button
+                            onClick={() => {
+                                setSelectedDate(null);
+                                onLogForDate(selectedDate);
+                            }}
+                            style={{
+                                marginTop: 14,
+                                width: "100%",
+                                padding: "12px",
+                                borderRadius: 12,
+                                background: "var(--text)",
+                                color: "#000",
+                                fontWeight: 700,
+                            }}
+                        >
+                            詳細を見る
+                        </button>
                     </div>
                 </div>
             )}
