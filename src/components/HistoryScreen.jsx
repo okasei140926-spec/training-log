@@ -84,19 +84,18 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     const daySummary = {};
 
     const workedLabels = [...new Set(
-        Object.keys(daySummary)
-            .map((exName) => {
-                const label =
-                    EX_TO_LABEL[exName] ||
-                    Object.keys(muscleEx || {}).find((l) =>
-                        (muscleEx[l] || []).some((ex) =>
-                            typeof ex === "string" ? ex === exName : ex.name === exName
-                        )
-                    );
-
-                return label;
-            })
-            .filter(Boolean)
+        Object.keys(daySummary).map((exName) => {
+            return (
+                EX_TO_LABEL[exName] ||
+                Object.keys(muscleEx || {}).find((l) =>
+                    (muscleEx[l] || []).some((ex) =>
+                        typeof ex === "string"
+                            ? ex === exName
+                            : ex.name === exName
+                    )
+                )
+            );
+        }).filter(Boolean)
     )];
 
     console.log("daySummary", daySummary);
