@@ -94,6 +94,18 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
         });
     });
 
+
+    const workedLabels = [...new Set(
+        Object.keys(daySummary)
+            .map((exName) =>
+                EX_TO_LABEL[exName] ||
+                Object.keys(muscleEx || {}).find((l) =>
+                    (muscleEx[l] || []).some((ex) => ex.name === exName)
+                )
+            )
+            .filter(Boolean)
+    )];
+
     const totalSets = Object.values(daySummary).reduce((a, b) => a + b, 0);
 
     return (
@@ -302,69 +314,93 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
                         {/* タイトル */}
                         <div style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
                             marginBottom: 12,
                         }}>
                             <div style={{ fontSize: 18, fontWeight: 800 }}>
                                 {selectedDate}
                             </div>
 
-                            <button onClick={() => setSelectedDate(null)}>×</button>
+
                         </div>
 
                         {/* 合計 */}
-                        <div style={{
-                            fontSize: 13,
-                            color: "var(--text2)",
-                            marginBottom: 10
-                        }}>
+                        <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 10 }}>
                             合計 {totalSets} セット
                         </div>
 
-                        {/* 種目一覧 */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {Object.entries(daySummary)
-                                .sort((a, b) => b[1] - a[1])
-                                .map(([name, count]) => (
-                                    <div
-                                        key={name}
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            padding: "10px 12px",
-                                            background: "var(--card2)",
-                                            borderRadius: 12,
-                                        }}
-                                    >
-                                        <span>{name}</span>
-                                        <span>{count}</span>
-                                    </div>
-                                ))}
-                        </div>
+                        {workedLabels.length > 0 && (
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 6 }}>
+                                    やった部位
+                                </div>
 
-                        {/* ボタン */}
-                        <button
-                            onClick={() => {
-                                setSelectedDate(null);
-                                onLogForDate(selectedDate);
-                            }}
-                            style={{
-                                marginTop: 14,
-                                width: "100%",
-                                padding: "12px",
-                                borderRadius: 12,
-                                background: "var(--text)",
-                                color: "#000",
-                                fontWeight: 700,
-                            }}
-                        >
-                            詳細を見る
-                        </button>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                    {workedLabels.map((label) => (
+                                        <div
+                                            key={label}
+                                            style={{
+                                                padding: "6px 10px",
+                                                borderRadius: 999,
+                                                background: "var(--card2)",
+                                                border: "1px solid var(--border2)",
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                                color: "var(--text)",
+                                            }}
+                                        >
+                                            {label}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
+
+
+                    {/* 種目一覧 */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+
+                        {Object.entries(daySummary)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([name, count]) => (
+                                <div
+                                    key={name}
+                                    style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        padding: "10px 12px",
+                                        background: "var(--card2)",
+                                        borderRadius: 12,
+                                    }}
+                                >
+                                    <span>{name}</span>
+                                    <span>{count}</span>
+                                </div>
+                            ))}
+                    </div>
+
+                    {/* ボタン */}
+                    <button
+                        onClick={() => {
+                            setSelectedDate(null);
+                            onLogForDate(selectedDate);
+                        }}
+                        style={{
+                            marginTop: 14,
+                            width: "100%",
+                            padding: "12px",
+                            borderRadius: 12,
+                            background: "var(--text)",
+                            color: "#000",
+                            fontWeight: 700,
+                        }}
+                    >
+                        詳細を見る
+                    </button>
                 </div>
-            )}
-        </div>
+
+            )
+            }
+        </div >
     );
 }
