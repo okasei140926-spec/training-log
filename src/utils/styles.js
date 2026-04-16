@@ -1,5 +1,5 @@
 export const S = {
-  root: { minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'Helvetica Neue', sans-serif", maxWidth: 430, margin: "0 auto", paddingBottom: 0 },
+  root: { minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'Helvetica Neue', sans-serif", maxWidth: 430, margin: "0 auto", paddingBottom: 110 },
   header: { padding: "12px 20px 8px", borderBottom: "1px solid var(--border2)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, background: "var(--bg)" },
   appLabel: { fontSize: 8, color: "var(--text3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 },
   headerTitle: { fontSize: 20, fontWeight: 700, lineHeight: 1.1 },
