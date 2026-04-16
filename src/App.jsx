@@ -117,6 +117,10 @@ export default function GymApp() {
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
     useEffect(() => {
+        const d = new Date();
+        const today =
+            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
         const draftDate = load("draft_logDate", "");
         const draftSession = load("draft_sessionEx", null);
         const draftLog = load("draft_logData", {});
@@ -133,6 +137,23 @@ export default function GymApp() {
             );
 
         if (!hasDraft) return;
+
+        // 日をまたいでたら古い下書きは復元しない
+        if (draftDate !== today) {
+            save("draft_todayLabels", []);
+            save("draft_logData", {});
+            save("draft_sessionEx", null);
+            save("draft_exerciseUnits", {});
+            save("draft_logDate", today);
+
+            setTodayLabels([]);
+            setLogData({});
+            setSessionEx(null);
+            setExerciseUnits({});
+            setLogDate(today);
+            setScreen("history");
+            return;
+        }
 
         setLogDate(draftDate);
         setSessionEx(draftSession);
