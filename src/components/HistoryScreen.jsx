@@ -326,6 +326,10 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             合計 {totalSets} セット
                         </div>
 
+                        <div style={{ fontSize: 13, color: "var(--text3)", marginBottom: 12 }}>
+                            {workedLabels.join(" / ")}
+                        </div>
+
                         {workedLabels.length > 0 && (
                             <div style={{ marginBottom: 12 }}>
                                 <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 6 }}>
