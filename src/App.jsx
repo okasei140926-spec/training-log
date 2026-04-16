@@ -128,11 +128,9 @@ export default function GymApp() {
         const draftLabels = load("draft_todayLabels", []);
 
         // ★ここ重要：中身があるかチェック
-        const hasRealDraft =
-            (draftSession && draftSession.length > 0) ||
-            Object.keys(draftLog).length > 0 ||
-            Object.keys(draftUnits).length > 0 ||
-            draftLabels.length > 0;
+        const hasRealDraft = Object.values(draftLog).some((sets) =>
+            (sets || []).some((s) => s.weight || s.reps)
+        );
 
         if (!hasRealDraft) {
             // 空のドラフトは無視して今日にする
