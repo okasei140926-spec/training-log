@@ -286,7 +286,13 @@ export default function GymApp() {
             }
 
             s[idx] = updated;
-            return { ...p, [key]: s };
+
+            const next = { ...p, [key]: s };
+
+            save("draft_logData", next);
+            save("draft_logDate", logDate);
+
+            return next;
         });
     };
 
@@ -345,7 +351,11 @@ export default function GymApp() {
         setSessionEx((p) => {
             const current = p !== null ? p : [...baseExercises];
             if (current.find((e) => e.name === trimmed)) return current;
-            return [...current, ex];
+
+            const next = [...current, ex];
+            save("draft_sessionEx", next);
+            save("draft_logDate", logDate);
+            return next;
         });
 
         // 👇 ここに入れる
