@@ -637,16 +637,13 @@ export default function GymApp() {
         const draftUnits = load("draft_exerciseUnits", {});
         const draftLabels = load("draft_todayLabels", []);
 
-        const hasDraftForDate =
+        const hasRealDraftForDate =
             draftDate === dateStr &&
-            (
-                draftSession !== null ||
-                Object.keys(draftLog).length > 0 ||
-                Object.keys(draftUnits).length > 0 ||
-                draftLabels.length > 0
+            Object.values(draftLog).some((sets) =>
+                (sets || []).some((s) => s.weight || s.reps)
             );
 
-        if (hasDraftForDate) {
+        if (hasRealDraftForDate) {
             setLogDate(dateStr);
             setSessionEx(draftSession);
             setLogData(draftLog);
