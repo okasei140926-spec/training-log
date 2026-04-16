@@ -130,8 +130,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                     </div>
 
                 </div>
-            )};
-
+            )}
 
 
 
