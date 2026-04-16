@@ -129,41 +129,11 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                         })}
                     </div>
 
-                    {/* 詳細 */}
-                    {activeLabel && detailMap[activeLabel] && (
-                        <div style={{ marginTop: 16 }}>
-                            <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 6 }}>
-                                {activeLabel} の内訳
-                            </div>
-
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6, }}>
-                                {Object.entries(detailMap[activeLabel])
-                                    .sort((a, b) => b[1] - a[1])
-                                    .map(([name, count]) => (
-                                        <div
-                                            key={name}
-                                            style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                color: "var(--text)",
-                                                padding: "8px 10px",
-                                                background: "var(--card)",
-                                                borderRadius: 10,
-                                                border: "1px solid var(--border2)",
-                                            }}
-                                        >
-                                            <span>{name}</span>
-                                            <span>{count}</span>
-                                        </div>
-                                    ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
-            )}
+            )};
+
+
+
 
             {/* カレンダー（←ここ外に出すのが超重要） */}
             <div style={{
@@ -199,6 +169,84 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                     unit={unit}
                     onClose={() => setGraphTarget(null)}
                 />
+            )}
+
+            {activeLabel && detailMap[activeLabel] && (
+                <div
+                    onClick={() => setActiveLabel(null)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.35)",
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        zIndex: 999, // ←上げる
+                        padding: "16px",
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "100%",
+                            maxWidth: 430,
+                            background: "var(--card)",
+                            borderRadius: 20,
+                            padding: "18px 16px 20px",
+                            border: "1px solid var(--border2)",
+                            maxHeight: "60vh",
+                            overflowY: "auto",
+                            boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+                        }}
+                    >
+                        <div
+                            style={{
+                                width: 44,
+                                height: 5,
+                                borderRadius: 999,
+                                background: "var(--border2)",
+                                margin: "0 auto 14px",
+                            }}
+                        />
+
+                        <div
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 12,
+                            }}
+                        >
+                            <div style={{ fontSize: 18, fontWeight: 800 }}>
+                                {activeLabel} の内訳
+                            </div>
+
+                            <button onClick={() => setActiveLabel(null)}>
+                                ×
+                            </button>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {Object.entries(detailMap[activeLabel])
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([name, count]) => (
+                                    <div
+                                        key={name}
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            padding: "10px 12px",
+                                            background: "var(--card2)",
+                                            borderRadius: 12,
+                                        }}
+                                    >
+                                        <span>{name}</span>
+                                        <span>{count}</span>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
