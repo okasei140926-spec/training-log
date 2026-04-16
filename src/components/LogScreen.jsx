@@ -328,12 +328,7 @@ export default function LogScreen({
                                             const canCopy = idx > 0;
 
                                             return (
-                                                <div key={idx} style={{
-                                                    display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch",
-                                                    padding: 6, borderRadius: 12, background: set.done ? "#22c55e14" : "transparent",
-                                                    border: `1px solid ${set.done ? "#22c55e55" : "transparent"}`,
-                                                    transition: "all 0.15s ease",
-                                                }}>
+                                                <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
                                                     <button onClick={() => setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")}
                                                         style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.done ? "var(--accent)" : "var(--border)", color: set.done ? "#fff" : "var(--text2)", fontSize: 12, fontWeight: 800, alignSelf: "center", border: "none" }}>
                                                         {idx + 1}
