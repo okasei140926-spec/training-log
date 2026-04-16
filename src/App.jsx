@@ -127,29 +127,15 @@ export default function GymApp() {
         const draftUnits = load("draft_exerciseUnits", {});
         const draftLabels = load("draft_todayLabels", []);
 
-        const hasDraft =
-            draftDate &&
-            (
-                draftSession !== null ||
-                Object.keys(draftLog).length > 0 ||
-                Object.keys(draftUnits).length > 0 ||
-                draftLabels.length > 0
-            );
+        // ★ここ重要：中身があるかチェック
+        const hasRealDraft =
+            (draftSession && draftSession.length > 0) ||
+            Object.keys(draftLog).length > 0 ||
+            Object.keys(draftUnits).length > 0 ||
+            draftLabels.length > 0;
 
-        if (!hasDraft) return;
-
-        // 日をまたいでたら古い下書きは復元しない
-        if (draftDate !== today) {
-            save("draft_todayLabels", []);
-            save("draft_logData", {});
-            save("draft_sessionEx", null);
-            save("draft_exerciseUnits", {});
-            save("draft_logDate", today);
-
-            setTodayLabels([]);
-            setLogData({});
-            setSessionEx(null);
-            setExerciseUnits({});
+        if (!hasRealDraft) {
+            // 空のドラフトは無視して今日にする
             setLogDate(today);
             setScreen("history");
             return;
