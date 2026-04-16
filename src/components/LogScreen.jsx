@@ -83,8 +83,12 @@ export default function LogScreen({
         if (trimmed && trimmed !== ex) onRenameEx(ex.id, trimmed);
         setEditingId(null);
     };
+    const formatDate = (d) =>
+        `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
-    const title = todayLabels.length ? todayLabels.join(" + ") : "ワーク";
+    const title = todayLabels.length
+        ? todayLabels.join(" + ")
+        : formatDate(logDate);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
