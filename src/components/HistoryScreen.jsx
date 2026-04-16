@@ -183,7 +183,20 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                 padding: "16px",
                 border: "1px solid var(--border)"
             }}>
-                <CalendarView history={history} onDayOpen={(date) => setSelectedDate(date)} />
+                <CalendarView
+                    history={history}
+                    onDayOpen={(date) => {
+                        const hasData = Object.values(history || {}).some((recs) =>
+                            (recs || []).some((r) => r.date === date)
+                        );
+
+                        if (hasData) {
+                            setSelectedDate(date);
+                        } else {
+                            onLogForDate(date);
+                        }
+                    }}
+                />
             </div>
 
             {/* モーダル */}
