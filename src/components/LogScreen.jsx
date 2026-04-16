@@ -61,6 +61,7 @@ export default function LogScreen({
 
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
+    const [isSaved, setIsSaved] = useState(false);
 
     const [editingId, setEditingId] = useState(null);
     const [editingName, setEditingName] = useState("");
@@ -429,22 +430,37 @@ export default function LogScreen({
             <button
                 onClick={() => {
                     if (!hasValidSet) return;
+
                     saveLog();
+                    setIsSaved(true);
+
+                    setTimeout(() => {
+                        setIsSaved(false);
+                    }, 1500);
                 }}
                 disabled={!hasValidSet}
                 style={{
-                    background: hasValidSet ? "#000" : "#d9d9d9",
-                    color: hasValidSet ? "#fff" : "#888",
+                    position: "fixed",
+                    bottom: 20,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: "calc(100% - 40px)",
+                    maxWidth: 430,
+
+                    background: isSaved ? "#22c55e" : hasValidSet ? "#000" : "#d9d9d9",
+                    color: "#fff",
                     cursor: hasValidSet ? "pointer" : "not-allowed",
-                    width: "100%",
+
                     border: "none",
                     borderRadius: 18,
                     padding: "22px 16px",
                     fontSize: 16,
                     fontWeight: 800,
+                    zIndex: 100,
+                    transition: "all 0.2s ease",
                 }}
             >
-                SAVE WORKOUT ✓
+                {isSaved ? "✔ Saved!" : "SAVE WORKOUT ✓"}
             </button>
 
             {showAdd && (
