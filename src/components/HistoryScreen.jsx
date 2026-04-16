@@ -95,16 +95,6 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     });
 
 
-    const workedLabels = [...new Set(
-        Object.keys(daySummary)
-            .map((exName) =>
-                EX_TO_LABEL[exName] ||
-                Object.keys(muscleEx || {}).find((l) =>
-                    (muscleEx[l] || []).some((ex) => ex.name === exName)
-                )
-            )
-            .filter(Boolean)
-    )];
 
     const totalSets = Object.values(daySummary).reduce((a, b) => a + b, 0);
 
