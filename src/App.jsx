@@ -81,20 +81,21 @@ export default function GymApp() {
     useEffect(() => { save("intervalSec", intervalSec); }, [intervalSec]);
     useEffect(() => { save("isDark", isDark); }, [isDark]);
     useEffect(() => { save("unit", unit); }, [unit]);
+
     useEffect(() => { save("draft_todayLabels", todayLabels); }, [todayLabels]);
     useEffect(() => { save("draft_logData", logData); }, [logData]);
     useEffect(() => { save("draft_sessionEx", sessionEx); }, [sessionEx]);
     useEffect(() => { save("draft_exerciseUnits", exerciseUnits); }, [exerciseUnits]);
     useEffect(() => { save("draft_logDate", logDate); }, [logDate]);
 
-
+    useEffect(() => () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+    }, []);
 
     useEffect(() => {
-        if (logDate === todayStr) save("draft_logDate", logDate);
-    }, [logDate, todayStr]);
+        aiEnd.current?.scrollIntoView({ behavior: "smooth" });
+    }, [aiMsgs]);
 
-    useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
-    useEffect(() => { aiEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
     // ─── Per-exercise unit ────────────────────────────
