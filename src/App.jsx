@@ -841,7 +841,7 @@ export default function GymApp() {
                 />
             )}
 
-            {screen === "history" && (<HistoryScreen history={history} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
+            {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
 
             {screen === "ai" && (
                 <AIScreen
