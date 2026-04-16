@@ -124,7 +124,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             {sortedWeekStats.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
                     <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 16 }}>
-                        週のセット数
+                        今週のセット数
                     </div>
 
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
@@ -363,7 +363,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                             display: "flex",
                                             justifyContent: "space-between",
                                             alignItems: "center",
-                                            padding: "10px 12px",
+                                            padding: "8px 12px",
                                             background: "var(--card2)",
                                             borderRadius: 12,
                                         }}
@@ -389,7 +389,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 fontWeight: 700,
                             }}
                         >
-                            この日の記録を開く
+                            記録を開く
                         </button>
                     </div>
                 </div>
