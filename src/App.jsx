@@ -79,7 +79,6 @@ export default function GymApp() {
         return `${y}-${m}-${day}`;
     };
 
-    const todayStr = toDateStr(new Date());
 
     // ─── AI Coach ─────────────────────────────────────
     const [aiMsgs, setAiMsgs] = useState([{ role: "assistant", content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪" }]);
