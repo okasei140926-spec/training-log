@@ -264,7 +264,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                 </div>
             )}
 
-            {selectedDate && (
+            {selectedDate && Object.keys(daySummary).length > 0 && (
                 <div
                     onClick={() => setSelectedDate(null)}
                     style={{
