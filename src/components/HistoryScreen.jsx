@@ -100,9 +100,6 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
     const daySummary = {};
 
-    console.log("daySummary", daySummary);
-    console.log("workedLabels", workedLabels);
-
     Object.entries(history || {}).forEach(([exName, recs]) => {
         (recs || []).forEach((r) => {
             if (r.date !== selectedDate) return;
@@ -120,7 +117,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             .filter(Boolean)
     )];
 
-
+    console.log("daySummary", daySummary);
+    console.log("workedLabels", workedLabels);
 
     const totalSets = Object.values(daySummary).reduce((a, b) => a + b, 0);
 
