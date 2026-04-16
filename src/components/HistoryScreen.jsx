@@ -85,7 +85,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
     const workedLabels = [...new Set(
         Object.keys(daySummary).map((exName) => {
-            return (
+            const label =
                 EX_TO_LABEL[exName] ||
                 Object.keys(muscleEx || {}).find((l) =>
                     (muscleEx[l] || []).some((ex) =>
@@ -93,8 +93,10 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             ? ex === exName
                             : ex.name === exName
                     )
-                )
-            );
+                );
+
+            console.log("exName -> label", exName, label);
+            return label;
         }).filter(Boolean)
     )];
 
