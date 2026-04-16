@@ -442,7 +442,7 @@ export default function LogScreen({
                 style={{
                     marginTop: 28,
                     marginLeft: "auto",
-                    width: "60%",
+                    width: "55%",
 
                     background: canSaveWorkout ? "#000" : "#d9d9d9",
                     color: canSaveWorkout ? "#fff" : "#888",
