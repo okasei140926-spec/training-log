@@ -20,7 +20,8 @@ const resolveLabel = (exName, muscleEx = {}) => {
     if (EX_TO_LABEL[exName]) return EX_TO_LABEL[exName];
 
     const suggestionMatch = Object.entries(EX_TO_LABEL).find(
-        ([name]) => normalizeName(name) === normalized
+        ([name]) => normalizeName(name).includes(normalized) ||
+            normalized.includes(normalizeName(name))
     );
     if (suggestionMatch) return suggestionMatch[1];
 
