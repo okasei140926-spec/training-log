@@ -11,6 +11,27 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
     });
 });
 
+const normalizeName = (name) =>
+    String(name || "").replace(/\s+/g, "").trim();
+
+const resolveLabel = (exName, muscleEx = {}) => {
+    const normalized = normalizeName(exName);
+
+    if (EX_TO_LABEL[exName]) return EX_TO_LABEL[exName];
+
+    const suggestionMatch = Object.entries(EX_TO_LABEL).find(
+        ([name]) => normalizeName(name) === normalized
+    );
+    if (suggestionMatch) return suggestionMatch[1];
+
+    const customMatch = Object.entries(muscleEx || {}).find(([label, list]) =>
+        (list || []).some((ex) =>
+            normalizeName(typeof ex === "string" ? ex : ex.name) === normalized
+        )
+    );
+
+    return customMatch ? customMatch[0] : null;
+};
 
 export default function HistoryScreen({ history, muscleEx, onEditHistory, onDeleteHistory, unit = "kg", onLogForDate }) {
     const [editTarget, setEditTarget] = useState(null);
@@ -36,11 +57,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
     const weekStats = {};
     Object.entries(history || {}).forEach(([exName, recs]) => {
-        const label =
-            EX_TO_LABEL[exName] ||
-            Object.keys(muscleEx || {}).find((l) =>
-                (muscleEx[l] || []).some((ex) => ex.name === exName)
-            );
+        const label = resolveLabel(exName, muscleEx);
 
         if (!label) return;
 
@@ -56,14 +73,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     });
 
     const detailMap = {};
-
     Object.entries(history || {}).forEach(([exName, recs]) => {
-        const label =
-            EX_TO_LABEL[exName] ||
-            Object.keys(muscleEx || {}).find((l) =>
-                (muscleEx[l] || []).some((ex) => ex.name === exName)
-            );
-
+        const label = resolveLabel(exName, muscleEx);
         if (!label) return;
 
         (recs || []).forEach((r) => {
@@ -84,20 +95,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     const daySummary = {};
 
     const workedLabels = [...new Set(
-        Object.keys(daySummary).map((exName) => {
-            const label =
-                EX_TO_LABEL[exName] ||
-                Object.keys(muscleEx || {}).find((l) =>
-                    (muscleEx[l] || []).some((ex) =>
-                        typeof ex === "string"
-                            ? ex === exName
-                            : ex.name === exName
-                    )
-                );
-
-            console.log("exName -> label", exName, label);
-            return label;
-        }).filter(Boolean)
+        Object.keys(daySummary).map((exName) => resolveLabel(exName, muscleEx))
+            .filter(Boolean)
     )];
 
     console.log("daySummary", daySummary);
