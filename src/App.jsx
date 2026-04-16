@@ -88,11 +88,23 @@ export default function GymApp() {
     useEffect(() => { save("isDark", isDark); }, [isDark]);
     useEffect(() => { save("unit", unit); }, [unit]);
 
-    useEffect(() => { save("draft_todayLabels", todayLabels); }, [todayLabels]);
-    useEffect(() => { save("draft_logData", logData); }, [logData]);
-    useEffect(() => { save("draft_sessionEx", sessionEx); }, [sessionEx]);
-    useEffect(() => { save("draft_exerciseUnits", exerciseUnits); }, [exerciseUnits]);
-    useEffect(() => { save("draft_logDate", logDate); }, [logDate]);
+    useEffect(() => {
+        if (screen !== "log") return;
+
+        const hasDraft =
+            sessionEx !== null ||
+            Object.keys(logData).length > 0 ||
+            Object.keys(exerciseUnits).length > 0 ||
+            todayLabels.length > 0;
+
+        if (!hasDraft) return;
+
+        save("draft_todayLabels", todayLabels);
+        save("draft_logData", logData);
+        save("draft_sessionEx", sessionEx);
+        save("draft_exerciseUnits", exerciseUnits);
+        save("draft_logDate", logDate);
+    }, [screen, todayLabels, logData, sessionEx, exerciseUnits, logDate]);
 
     useEffect(() => () => {
         if (timerRef.current) clearInterval(timerRef.current);
@@ -552,6 +564,19 @@ export default function GymApp() {
     };
 
     const handleLogForDate = (dateStr) => {
+        const hasCurrentDraft =
+            sessionEx !== null ||
+            Object.keys(logData).length > 0 ||
+            Object.keys(exerciseUnits).length > 0 ||
+            todayLabels.length > 0;
+
+        if (hasCurrentDraft) {
+            save("draft_todayLabels", todayLabels);
+            save("draft_logData", logData);
+            save("draft_sessionEx", sessionEx);
+            save("draft_exerciseUnits", exerciseUnits);
+            save("draft_logDate", logDate);
+        }
         setSessionEx(null);
         setLogData({});
         setExerciseUnits({});
