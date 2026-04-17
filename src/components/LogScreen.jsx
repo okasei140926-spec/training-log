@@ -138,6 +138,26 @@ export default function LogScreen({
                 {exCount}種目 ・ {setCount}セット
             </div>
 
+            {/* Empty State */}
+            {!hasExercises && (
+                <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingTop: 80,
+                    gap: 12
+                }}>
+                    <div style={{ fontSize: 40 }}>💪</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>
+                        今日のトレーニングを始めよう
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--text3)" }}>
+                        ＋ボタンから種目を追加してください
+                    </div>
+                </div>
+            )}
+
 
             {/* 種目カード */}
             <DndContext
