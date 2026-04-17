@@ -39,7 +39,7 @@ const resolveLabel = (exName, muscleEx = {}) => {
     return customMatch ? customMatch[0] : null;
 };
 
-export default function HistoryScreen({ history, muscleEx, onEditHistory, onDeleteHistory, unit = "kg", onLogForDate }) {
+export default function HistoryScreen({ history, muscleEx, onEditHistory, onDeleteHistory, onDeleteDate, unit = "kg", onLogForDate }) {
     const [editTarget, setEditTarget] = useState(null);
     const [graphTarget, setGraphTarget] = useState(null);
 
