@@ -430,7 +430,6 @@ export default function GymApp() {
             return n;
         });
 
-        // この日付の正式記録も消す
         setHistory(prev => {
             if (!prev[targetName]) return prev;
 
@@ -445,9 +444,27 @@ export default function GymApp() {
 
             return next;
         });
+    };
 
+    const addExToSession = (name, labelOverride) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
 
-        // 👇 ここに入れる
+        const ex = {
+            id: Date.now() + (Math.random() * 1000 | 0),
+            name: trimmed
+        };
+
+        setSessionEx((p) => {
+            const current = p !== null ? p : [...baseExercises];
+            if (current.find((e) => e.name === trimmed)) return current;
+
+            const next = [...current, ex];
+            save("draft_sessionEx", next);
+            save("draft_logDate", logDate);
+            return next;
+        });
+
         const label = labelOverride || todayLabels[0];
         if (!label) return;
 
@@ -456,10 +473,7 @@ export default function GymApp() {
             const list = next[label] || [];
 
             if (!list.find((e) => e.name === trimmed)) {
-                next[label] = [
-                    ...list,
-                    { id: Date.now(), name: trimmed }
-                ];
+                next[label] = [...list, { id: Date.now(), name: trimmed }];
             }
 
             return next;
@@ -534,7 +548,7 @@ export default function GymApp() {
         });
 
         if (!remove) {
-            addExToSession(name);
+            addExToSession(name, labelOverride);
         }
     };
 
