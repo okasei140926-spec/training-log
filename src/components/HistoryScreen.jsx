@@ -48,6 +48,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
     const [activeLabel, setActiveLabel] = useState(null);
     const [selectedDate, setSelectedDate] = useState(null);
+    const [openExercises, setOpenExercises] = useState({});
+
 
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay());
@@ -110,6 +112,25 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             daySummary[exName] = (daySummary[exName] || 0) + sets;
         });
     });
+
+    const dayDetails = Object.entries(history || {})
+        .map(([exName, recs]) => {
+            const rec = (recs || []).find(r => r.date === selectedDate);
+            if (!rec || !rec.sets) return null;
+
+            const validSets = rec.sets.filter(s => s.weight && s.reps);
+            if (!validSets.length) return null;
+
+            return {
+                name: exName,
+                count: validSets.length,
+                sets: validSets,
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.count - a.count);
+
+
 
     const workedLabels = [...new Set(
         Object.keys(daySummary)
@@ -351,24 +372,73 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                         </div>
 
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {Object.entries(daySummary)
-                                .sort((a, b) => b[1] - a[1])
-                                .map(([name, count]) => (
+                            {dayDetails.map(({ name, count, sets }) => {
+                                const isOpen = !!openExercises[name];
+
+                                return (
                                     <div
                                         key={name}
                                         style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            padding: "8px 12px",
                                             background: "var(--card2)",
                                             borderRadius: 12,
+                                            padding: "8px 12px",
                                         }}
                                     >
-                                        <span>{name}</span>
-                                        <span>{count}</span>
+                                        <div
+                                            onClick={() =>
+                                                setOpenExercises((p) => ({
+                                                    ...p,
+                                                    [name]: !p[name],
+                                                }))
+                                            }
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            <span>{name}</span>
+                                            <span>{count}</span>
+                                        </div>
+
+                                        {isOpen && (
+                                            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                                                {sets.map((s, i) => (
+                                                    <div
+                                                        key={i}
+                                                        style={{
+                                                            display: "flex",
+                                                            justifyContent: "space-between",
+                                                            alignItems: "center",
+                                                            paddingTop: 6,
+                                                            borderTop: "1px solid var(--border2)",
+                                                        }}
+                                                    >
+                                                        <span>
+                                                            {i + 1}　{s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}
+                                                        </span>
+
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                            }}
+                                                            style={{
+                                                                background: "none",
+                                                                border: "none",
+                                                                color: "var(--text3)",
+                                                                fontSize: 18,
+                                                            }}
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                ))}
+                                );
+                            })}
                         </div>
 
                         <div
