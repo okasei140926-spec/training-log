@@ -422,8 +422,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-
-                                                                console.log("delete", i);
+                                                                onDeleteHistory?.(name, undefined, selectedDate, i);
 
                                                                 // ↓ ここで削除（あとで実装）
                                                             }}

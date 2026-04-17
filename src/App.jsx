@@ -722,7 +722,7 @@ export default function GymApp() {
         });
     };
 
-    const handleDeleteHistory = (exName, historyIdx, recordDate) => {
+    const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
         setHistory(prev => {
             const recs = [...(prev[exName] || [])];
             const idx = historyIdx !== undefined
@@ -731,6 +731,34 @@ export default function GymApp() {
 
             if (idx < 0 || idx >= recs.length) return prev;
 
+            // セット単位削除
+            if (setIdx !== undefined) {
+                const target = recs[idx];
+                const nextSets = (target.sets || []).filter((_, i) => i !== setIdx);
+
+                if (nextSets.length > 0) {
+                    recs[idx] = {
+                        ...target,
+                        sets: nextSets,
+                        weight: Number(nextSets[0]?.weight || 0),
+                        reps: Number(nextSets[0]?.reps || 0),
+                    };
+                    return { ...prev, [exName]: recs };
+                }
+
+                // セット全部消えたらその種目のその日記録ごと削除
+                recs.splice(idx, 1);
+
+                if (!recs.length) {
+                    const next = { ...prev };
+                    delete next[exName];
+                    return next;
+                }
+
+                return { ...prev, [exName]: recs };
+            }
+
+            // もともとの「記録単位削除」
             recs.splice(idx, 1);
 
             if (!recs.length) {
