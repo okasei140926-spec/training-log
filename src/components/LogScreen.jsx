@@ -65,8 +65,6 @@ export default function LogScreen({
         (recs || []).some((r) => r.date === logDate)
     );
 
-    const canSaveWorkout = hasValidSet || hasSavedRecordForDate;
-
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
 
