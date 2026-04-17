@@ -416,18 +416,23 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                                         }}
                                                     >
                                                         <span>
-                                                            {i + 1}　{s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}
+                                                            {i + 1} {s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}
                                                         </span>
 
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
+
+                                                                console.log("delete", i);
+
+                                                                // ↓ ここで削除（あとで実装）
                                                             }}
                                                             style={{
                                                                 background: "none",
                                                                 border: "none",
                                                                 color: "var(--text3)",
                                                                 fontSize: 18,
+                                                                cursor: "pointer"
                                                             }}
                                                         >
                                                             ×
