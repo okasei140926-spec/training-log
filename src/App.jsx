@@ -118,22 +118,6 @@ export default function GymApp() {
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
     useEffect(() => {
-        if (screen !== "log") return;
-
-        const hasAnyValidSet = exercises.some((ex) =>
-            (logData[ex.name] || []).some((s) => s.weight && s.reps)
-        );
-
-        if (!hasAnyValidSet) return;
-
-        const t = setTimeout(() => {
-            persistCurrentLog();
-        }, 400);
-
-        return () => clearTimeout(t);
-    }, [screen, logData, exercises, logDate, exerciseUnits]);
-
-    useEffect(() => {
         const d = new Date();
         const today =
             `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -215,6 +199,23 @@ export default function GymApp() {
     })();
 
     const exercises = sessionEx !== null ? sessionEx : baseExercises;
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (screen !== "log") return;
+
+        const hasAnyValidSet = exercises.some((ex) =>
+            (logData[ex.name] || []).some((s) => s.weight && s.reps)
+        );
+
+        if (!hasAnyValidSet) return;
+
+        const t = setTimeout(() => {
+            persistCurrentLog();
+        }, 400);
+
+        return () => clearTimeout(t);
+    }, [screen, logData, exercises, logDate, exerciseUnits]);
 
     // eslint-disable-next-line no-unused-vars
     const lastWorkoutExercises = (() => {
