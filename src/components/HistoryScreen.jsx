@@ -406,6 +406,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 background: "#000",
                                 color: "#fff",
                                 marginTop: 16,
+                                marginBottom: 4,
                             }}
                         >
                             記録を開く
