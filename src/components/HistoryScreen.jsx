@@ -372,6 +372,27 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
                         <button
                             onClick={() => {
+                                if (!selectedDate) return;
+                                onDeleteDate?.(selectedDate);
+                                setSelectedDate(null);
+                            }}
+                            style={{
+                                width: "100%",
+                                border: "none",
+                                borderRadius: 18,
+                                padding: "18px 16px",
+                                fontSize: 15,
+                                fontWeight: 800,
+                                background: "#ef4444",
+                                color: "#fff",
+                                marginBottom: 10,
+                            }}
+                        >
+                            この日の記録をすべて削除
+                        </button>
+
+                        <button
+                            onClick={() => {
                                 setSelectedDate(null);
                                 onLogForDate(selectedDate);
                             }}

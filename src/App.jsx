@@ -671,6 +671,21 @@ export default function GymApp() {
         });
     };
 
+    const deleteAllHistoryForDate = (targetDate) => {
+        setHistory((prev) => {
+            const next = {};
+
+            Object.entries(prev).forEach(([exName, recs]) => {
+                const filtered = (recs || []).filter((r) => r.date !== targetDate);
+                if (filtered.length > 0) {
+                    next[exName] = filtered;
+                }
+            });
+
+            return next;
+        });
+    };
+
     // ─── AI Coach ─────────────────────────────────────
     const sendAI = async (overrideMsg) => {
         const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
@@ -894,7 +909,7 @@ export default function GymApp() {
                 />
             )}
 
-            {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
+            {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} onDeleteDate={deleteAllHistoryForDate} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
 
             {screen === "ai" && (
                 <AIScreen
