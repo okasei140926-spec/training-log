@@ -127,7 +127,9 @@ export default function GymApp() {
     }, []);
 
     // ─── Per-exercise unit ────────────────────────────
-    const getExUnit = (name) => exerciseUnits[name] ?? unit;
+    const getExUnit = useCallback((name) => {
+        return exerciseUnits[name] ?? unit;
+    }, [exerciseUnits, unti]);
 
     const toggleExUnit = (name) => {
         const currentUnit = getExUnit(name);
@@ -199,6 +201,43 @@ export default function GymApp() {
     })();
 
     const exercises = sessionEx !== null ? sessionEx : baseExercises;
+
+    // useEffectより前に定義
+    const persistCurrentLog = useCallback(() => {
+        setHistory((prev) => {
+            const nh = { ...prev };
+
+            Object.keys(nh).forEach((name) => {
+                nh[name] = (nh[name] || []).filter((r) => r.date !== logDate);
+                if (nh[name].length === 0) delete nh[name];
+            });
+
+            exercises.forEach((ex, index) => {
+                const sets = logData[ex.name] || [];
+                const valid = sets.filter((s) => s.weight && s.reps);
+
+                if (!valid.length) return;
+
+                if (!nh[ex.name]) nh[ex.name] = [];
+
+                const exUnit = getExUnit(ex.name);
+                const stored = valid.map((s) => ({
+                    ...s,
+                    weight: storeW(s.weight, exUnit),
+                }));
+
+                nh[ex.name].push({
+                    sets: stored,
+                    weight: Number(stored[0].weight),
+                    reps: Number(valid[0].reps),
+                    date: logDate,
+                    order: index,
+                });
+            });
+
+            return nh;
+        });
+    }, [exercises, logData, logDate, getExUnit]); // ← 依存配列
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
@@ -503,42 +542,7 @@ export default function GymApp() {
         quickAdd(name, remove, labelOverride);
     };
 
-    // useEffectより前に定義
-    const persistCurrentLog = useCallback(() => {
-        setHistory((prev) => {
-            const nh = { ...prev };
 
-            Object.keys(nh).forEach((name) => {
-                nh[name] = (nh[name] || []).filter((r) => r.date !== logDate);
-                if (nh[name].length === 0) delete nh[name];
-            });
-
-            exercises.forEach((ex, index) => {
-                const sets = logData[ex.name] || [];
-                const valid = sets.filter((s) => s.weight && s.reps);
-
-                if (!valid.length) return;
-
-                if (!nh[ex.name]) nh[ex.name] = [];
-
-                const exUnit = getExUnit(ex.name);
-                const stored = valid.map((s) => ({
-                    ...s,
-                    weight: storeW(s.weight, exUnit),
-                }));
-
-                nh[ex.name].push({
-                    sets: stored,
-                    weight: Number(stored[0].weight),
-                    reps: Number(valid[0].reps),
-                    date: logDate,
-                    order: index,
-                });
-            });
-
-            return nh;
-        });
-    }, [exercises, logData, logDate, getExUnit]); // ← 依存配列
 
 
     const saveLog = () => {
