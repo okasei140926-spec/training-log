@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { load, save, calc1RM, storeW, KG_TO_LBS } from "./utils/helpers";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
+import { Analytics } from "@vercel/analytics/react";
 
 import LogScreen from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
@@ -950,6 +951,9 @@ export default function GymApp() {
                     setScreen("history");
                 }}
             />
+
+            <Analytics />
         </div>
     );
 }
+
