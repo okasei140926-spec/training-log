@@ -742,6 +742,24 @@ export default function GymApp() {
 
             return next;
         });
+
+        // その日が今の編集中なら画面上の状態も消す
+        if (logDate === targetDate) {
+            setTodayLabels([]);
+            setLogData({});
+            setSessionEx(null);
+            setExerciseUnits({});
+        }
+
+        // その日のdraftも消す
+        const draftDate = load("draft_logDate", "");
+        if (draftDate === targetDate) {
+            save("draft_todayLabels", []);
+            save("draft_logData", {});
+            save("draft_sessionEx", null);
+            save("draft_exerciseUnits", {});
+            save("draft_logDate", "");
+        }
     };
 
     // ─── AI Coach ─────────────────────────────────────
