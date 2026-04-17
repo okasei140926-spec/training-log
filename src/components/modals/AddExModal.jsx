@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants / suggestions";
+import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 
 export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [], muscleEx = {}, }) {
     const inputRef = useRef(null);
