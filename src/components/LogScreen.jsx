@@ -454,30 +454,6 @@ export default function LogScreen({
                 style={{ position: "fixed", bottom: 154, left: 20, width: 52, height: 52, borderRadius: 26, background: accentColor, color: accentText, fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none", zIndex: 101 }}>
                 ＋
             </button>
-            {hasExercises && (
-                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 28 }}>
-                    <button
-                        onClick={() => {
-                            if (!canSaveWorkout) return;
-                            saveLog();
-                        }}
-                        disabled={!canSaveWorkout}
-                        style={{
-                            width: "55%",
-                            background: canSaveWorkout ? "#000" : "#d9d9d9",
-                            color: canSaveWorkout ? "#fff" : "#888",
-                            cursor: canSaveWorkout ? "pointer" : "not-allowed",
-                            border: "none",
-                            borderRadius: 18,
-                            padding: "22px 16px",
-                            fontSize: 16,
-                            fontWeight: 800,
-                        }}
-                    >
-                        SAVE WORKOUT ✓
-                    </button>
-                </div>
-            )}
 
             {showAdd && (
                 <AddExModal
