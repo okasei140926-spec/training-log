@@ -118,6 +118,22 @@ export default function GymApp() {
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
     useEffect(() => {
+        if (screen !== "log") return;
+
+        const hasAnyValidSet = exercises.some((ex) =>
+            (logData[ex.name] || []).some((s) => s.weight && s.reps)
+        );
+
+        if (!hasAnyValidSet) return;
+
+        const t = setTimeout(() => {
+            persistCurrentLog();
+        }, 400);
+
+        return () => clearTimeout(t);
+    }, [screen, logData, exercises, logDate, exerciseUnits]);
+
+    useEffect(() => {
         const d = new Date();
         const today =
             `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -486,6 +502,43 @@ export default function GymApp() {
         quickAdd(name, remove, labelOverride);
     };
 
+    const persistCurrentLog = () => {
+        setHistory((prev) => {
+            const nh = { ...prev };
+
+            // まずこの日の既存記録を全部外す
+            Object.keys(nh).forEach((name) => {
+                nh[name] = (nh[name] || []).filter((r) => r.date !== logDate);
+                if (nh[name].length === 0) delete nh[name];
+            });
+
+            // 今の入力から、完了済みセットだけ再登録
+            exercises.forEach((ex, index) => {
+                const sets = logData[ex.name] || [];
+                const valid = sets.filter((s) => s.weight && s.reps);
+
+                if (!valid.length) return;
+
+                if (!nh[ex.name]) nh[ex.name] = [];
+
+                const exUnit = getExUnit(ex.name);
+                const stored = valid.map((s) => ({
+                    ...s,
+                    weight: storeW(s.weight, exUnit),
+                }));
+
+                nh[ex.name].push({
+                    sets: stored,
+                    weight: Number(stored[0].weight),
+                    reps: Number(valid[0].reps),
+                    date: logDate,
+                    order: index,
+                });
+            });
+
+            return nh;
+        });
+    };
 
     const saveLog = () => {
         // 種目の順番をmuscleExに保存
