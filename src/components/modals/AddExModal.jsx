@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
+import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants / suggestions";
 
 export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [], muscleEx = {}, }) {
     const inputRef = useRef(null);
@@ -29,10 +29,8 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
 
     const freeItems = (() => {
         if (!isFree || !activeTab) return [];
-
         const fixed = SUGGESTIONS[activeTab] || [];
         const custom = (muscleEx[activeTab] || []).map(ex => ex.name);
-
         return [...new Set([...fixed, ...custom])];
     })();
 
@@ -49,9 +47,7 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
     const handleManual = () => {
         if (!name.trim()) return;
         const trimmed = name.trim();
-
-        onQuickAdd(trimmed, false, activeTab); // ←部位付きで保存
-
+        onQuickAdd(trimmed, false, activeTab);
         setAdded(p => new Set([...p, trimmed]));
         setName("");
     };
@@ -78,14 +74,24 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
     return (
         <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 9999, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
             onClick={onClose}>
-            <div style={{ width: "100%", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px 16px", maxHeight: "75vh", overflowY: "auto", paddingBottom: "40vh" }}
+            <div style={{
+                width: "100%",
+                background: "var(--card-modal)",
+                borderRadius: "20px 20px 0 0",
+                padding: "24px 20px 0 20px",
+                maxHeight: "75vh",
+                display: "flex",
+                flexDirection: "column"
+            }}
                 onClick={e => e.stopPropagation()}>
 
-                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: "var(--text)" }}>種目を追加</div>
+                {/* タイトル（固定） */}
+                <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: "var(--text)", flexShrink: 0 }}>種目を追加</div>
 
+                {/* タブ（固定） */}
                 {isFree && (
-                    <div style={{ marginBottom: 16 }}>
-                        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 12, msOverflowStyle: "none", scrollbarWidth: "none" }}>
+                    <div style={{ flexShrink: 0, marginBottom: 12 }}>
+                        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, msOverflowStyle: "none", scrollbarWidth: "none" }}>
                             {QUICK_LABELS.map(label => (
                                 <button key={label} onClick={() => setActiveTab(label)}
                                     style={{
@@ -97,36 +103,44 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
                                 </button>
                             ))}
                         </div>
-                        <SuggestionList items={freeItems} />
                     </div>
                 )}
 
-                {!isFree && grouped.map(group => (
-                    <div key={group.label} style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 8, textTransform: "uppercase" }}>{group.label}</div>
-                        <SuggestionList items={group.items.map(s => s.name)} />
-                    </div>
-                ))}
+                {/* 種目リスト（スクロール） */}
+                <div style={{ overflowY: "auto", flex: 1, paddingBottom: 8 }}>
+                    {isFree && <SuggestionList items={freeItems} />}
 
-                <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 10, marginTop: 8, textTransform: "uppercase" }}>
-                    リストにない種目
+                    {!isFree && grouped.map(group => (
+                        <div key={group.label} style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 8, textTransform: "uppercase" }}>{group.label}</div>
+                            <SuggestionList items={group.items.map(s => s.name)} />
+                        </div>
+                    ))}
                 </div>
-                <input ref={inputRef} value={name} onChange={e => setName(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleManual()}
-                    placeholder="種目名を入力..."
-                    style={{ width: "100%", padding: "14px 16px", borderRadius: 12, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 16, marginBottom: 12 }} />
-                <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={onClose} style={{ flex: 1, padding: "13px", borderRadius: 12, background: "var(--card2)", color: "var(--text2)", fontSize: 15 }}>閉じる</button>
-                    <button onClick={handleManual}
-                        style={{
-                            flex: 2, padding: "13px", borderRadius: 12, fontSize: 15, fontWeight: 800,
-                            background: name.trim() ? "var(--text)" : "var(--border2)",
-                            color: name.trim() ? "var(--bg)" : "var(--text3)"
-                        }}>
-                        追加
-                    </button>
+
+                {/* 入力欄＋ボタン（固定） */}
+                <div style={{ flexShrink: 0, paddingBottom: 32, paddingTop: 8 }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 10, textTransform: "uppercase" }}>
+                        リストにない種目
+                    </div>
+                    <input ref={inputRef} value={name} onChange={e => setName(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleManual()}
+                        placeholder="種目名を入力..."
+                        style={{ width: "100%", padding: "14px 16px", borderRadius: 12, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 16, marginBottom: 12, boxSizing: "border-box" }} />
+                    <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={onClose} style={{ flex: 1, padding: "13px", borderRadius: 12, background: "var(--card2)", color: "var(--text2)", fontSize: 15, border: "none" }}>閉じる</button>
+                        <button onClick={handleManual}
+                            style={{
+                                flex: 2, padding: "13px", borderRadius: 12, fontSize: 15, fontWeight: 800, border: "none",
+                                background: name.trim() ? "var(--text)" : "var(--border2)",
+                                color: name.trim() ? "var(--bg)" : "var(--text3)"
+                            }}>
+                            追加
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     );
+
 }
