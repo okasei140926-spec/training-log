@@ -758,7 +758,7 @@ export default function GymApp() {
                 return { ...prev, [exName]: recs };
             }
 
-            // もともとの「記録単位削除」
+            // 記録単位削除
             recs.splice(idx, 1);
 
             if (!recs.length) {
@@ -769,6 +769,57 @@ export default function GymApp() {
 
             return { ...prev, [exName]: recs };
         });
+
+        // ===== draft側も更新する =====
+        const draftDate = load("draft_logDate", "");
+        if (draftDate !== recordDate) return;
+
+        const draftLog = load("draft_logData", {});
+        const draftSession = load("draft_sessionEx", null);
+        const draftUnits = load("draft_exerciseUnits", {});
+
+        // その種目のdraftが無ければ終了
+        if (!draftLog[exName]) return;
+
+        let nextDraftLog = { ...draftLog };
+
+        if (setIdx !== undefined) {
+            const nextSets = (nextDraftLog[exName] || []).filter((_, i) => i !== setIdx);
+
+            if (nextSets.length > 0) {
+                nextDraftLog[exName] = nextSets;
+            } else {
+                delete nextDraftLog[exName];
+            }
+        } else {
+            delete nextDraftLog[exName];
+        }
+
+        let nextDraftSession = draftSession;
+        let nextDraftUnits = draftUnits;
+
+        // その種目のセットが0になったら sessionEx / units からも消す
+        if (!nextDraftLog[exName]) {
+            if (Array.isArray(draftSession)) {
+                nextDraftSession = draftSession.filter((ex) => ex.name !== exName);
+            }
+
+            if (draftUnits[exName] !== undefined) {
+                nextDraftUnits = { ...draftUnits };
+                delete nextDraftUnits[exName];
+            }
+        }
+
+        save("draft_logData", nextDraftLog);
+        save("draft_sessionEx", nextDraftSession);
+        save("draft_exerciseUnits", nextDraftUnits);
+
+        // 今まさにその日を編集中なら画面状態にも反映
+        if (logDate === recordDate) {
+            setLogData(nextDraftLog);
+            setSessionEx(nextDraftSession);
+            setExerciseUnits(nextDraftUnits);
+        }
     };
 
     const deleteAllHistoryForDate = (targetDate) => {
