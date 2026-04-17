@@ -55,16 +55,6 @@ export default function LogScreen({
 
     const hasExercises = exercises.length > 0;
 
-    const hasValidSet = Object.values(logData).some((sets) =>
-        (sets || []).some((s) =>
-            (s.weight || s.weight === "BW") && s.reps
-        )
-    );
-
-    const hasSavedRecordForDate = Object.values(history || {}).some((recs) =>
-        (recs || []).some((r) => r.date === logDate)
-    );
-
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
 
