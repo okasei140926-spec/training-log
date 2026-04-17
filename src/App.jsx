@@ -215,7 +215,7 @@ export default function GymApp() {
         }, 400);
 
         return () => clearTimeout(t);
-    }, [screen, logData, exercises, logDate, exerciseUnits]);
+    }, [screen, logData, exercises, logDate, exerciseUnits, persistCurrentLog]);
 
     // eslint-disable-next-line no-unused-vars
     const lastWorkoutExercises = (() => {
