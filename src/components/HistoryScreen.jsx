@@ -326,13 +326,15 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             overflowY: "auto",
                         }}
                     >
-                        <div style={{
-                            width: 44,
-                            height: 5,
-                            borderRadius: 999,
-                            background: "var(--border2)",
-                            margin: "0 auto 14px",
-                        }} />
+                        <div
+                            style={{
+                                width: 44,
+                                height: 5,
+                                borderRadius: 999,
+                                background: "var(--border2)",
+                                margin: "0 auto 14px",
+                            }}
+                        />
 
                         <div style={{ marginBottom: 12 }}>
                             <div style={{ fontSize: 18, fontWeight: 800 }}>
@@ -347,7 +349,6 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                         <div style={{ fontSize: 13, color: "var(--text3)", marginBottom: 12 }}>
                             {workedLabels.join(" / ")}
                         </div>
-
 
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             {Object.entries(daySummary)
@@ -370,50 +371,54 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 ))}
                         </div>
 
-                        <button
-                            onClick={() => {
-                                if (!selectedDate) return;
-                                onDeleteDate?.(selectedDate);
-                                setSelectedDate(null);
-                            }}
+                        <div
                             style={{
-                                width: "100%",
-                                border: "1px solid var(--border2)",
-                                borderRadius: 18,
-                                padding: "16px",
-                                fontSize: 14,
-                                fontWeight: 700,
-                                background: "var(--card2)",
-                                color: "#ef4444",
-                                marginBottom: 12,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 14,
+                                marginTop: 20,
+                                paddingTop: 6,
                             }}
                         >
-                            この日の記録を削除
-                        </button>
+                            <button
+                                onClick={() => {
+                                    if (!selectedDate) return;
+                                    onDeleteDate?.(selectedDate);
+                                    setSelectedDate(null);
+                                }}
+                                style={{
+                                    width: "100%",
+                                    border: "1px solid var(--border2)",
+                                    borderRadius: 18,
+                                    padding: "16px",
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    background: "var(--card2)",
+                                    color: "var(--text2)",
+                                }}
+                            >
+                                この日の記録を削除
+                            </button>
 
-                        <button
-                            onClick={() => {
-                                setSelectedDate(null);
-                                onLogForDate(selectedDate);
-                            }}
-                            style={{
-                                width: "100%",
-                                border: "none",
-                                borderRadius: 18,
-                                padding: "18px 16px",
-                                fontSize: 15,
-                                fontWeight: 800,
-                                background: "#000",
-                                color: "#fff",
-                                marginTop: 16,
-                                marginBottom: 4,
-                            }}
-                        >
-                            記録を開く
-                        </button>
+                            <button
+                                onClick={() => onLogForDate(selectedDate)}
+                                style={{
+                                    width: "100%",
+                                    border: "none",
+                                    borderRadius: 18,
+                                    padding: "18px 16px",
+                                    fontSize: 15,
+                                    fontWeight: 800,
+                                    background: "#000",
+                                    color: "#fff",
+                                }}
+                            >
+                                記録を開く
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
-        </div >
+        </div>
     );
 }
