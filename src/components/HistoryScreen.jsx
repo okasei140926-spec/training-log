@@ -397,13 +397,15 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 onLogForDate(selectedDate);
                             }}
                             style={{
-                                marginTop: 14,
                                 width: "100%",
-                                padding: "12px",
-                                borderRadius: 12,
-                                background: "var(--text)",
-                                color: "var(--bg)",
-                                fontWeight: 700,
+                                border: "none",
+                                borderRadius: 18,
+                                padding: "18px 16px",
+                                fontSize: 15,
+                                fontWeight: 800,
+                                background: "#000",
+                                color: "#fff",
+                                marginTop: 16,
                             }}
                         >
                             記録を開く
