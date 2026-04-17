@@ -417,35 +417,35 @@ export default function GymApp() {
         setLogData(p => {
             const n = { ...p };
             delete n[targetName];
+            save("draft_logData", n);
+            save("draft_logDate", logDate);
             return n;
         });
 
         setExerciseUnits(p => {
             const n = { ...p };
             delete n[targetName];
+            save("draft_exerciseUnits", n);
+            save("draft_logDate", logDate);
             return n;
         });
-    };
 
+        // この日付の正式記録も消す
+        setHistory(prev => {
+            if (!prev[targetName]) return prev;
 
-    const addExToSession = (name, labelOverride) => {
-        const trimmed = name.trim();
-        if (!trimmed) return;
+            const next = { ...prev };
+            const filtered = (next[targetName] || []).filter(r => r.date !== logDate);
 
-        const ex = {
-            id: Date.now() + (Math.random() * 1000 | 0),
-            name: trimmed
-        };
+            if (filtered.length > 0) {
+                next[targetName] = filtered;
+            } else {
+                delete next[targetName];
+            }
 
-        setSessionEx((p) => {
-            const current = p !== null ? p : [...baseExercises];
-            if (current.find((e) => e.name === trimmed)) return current;
-
-            const next = [...current, ex];
-            save("draft_sessionEx", next);
-            save("draft_logDate", logDate);
             return next;
         });
+
 
         // 👇 ここに入れる
         const label = labelOverride || todayLabels[0];
