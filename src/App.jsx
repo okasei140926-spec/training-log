@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { load, save, calc1RM, storeW, KG_TO_LBS } from "./utils/helpers";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
@@ -503,17 +503,16 @@ export default function GymApp() {
         quickAdd(name, remove, labelOverride);
     };
 
-    const persistCurrentLog = () => {
+    // useEffectより前に定義
+    const persistCurrentLog = useCallback(() => {
         setHistory((prev) => {
             const nh = { ...prev };
 
-            // まずこの日の既存記録を全部外す
             Object.keys(nh).forEach((name) => {
                 nh[name] = (nh[name] || []).filter((r) => r.date !== logDate);
                 if (nh[name].length === 0) delete nh[name];
             });
 
-            // 今の入力から、完了済みセットだけ再登録
             exercises.forEach((ex, index) => {
                 const sets = logData[ex.name] || [];
                 const valid = sets.filter((s) => s.weight && s.reps);
@@ -539,7 +538,8 @@ export default function GymApp() {
 
             return nh;
         });
-    };
+    }, [exercises, logData, logDate, getExUnit]); // ← 依存配列
+
 
     const saveLog = () => {
         // 種目の順番をmuscleExに保存
