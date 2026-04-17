@@ -49,7 +49,7 @@ function SortableExerciseItem({ id, children }) {
 export default function LogScreen({
     todayLabels, dayColor,
     exercises, logData, getExSets, setField, addSet, removeEx,
-    saveLog, onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
+    onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
     getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
 }) {
 
