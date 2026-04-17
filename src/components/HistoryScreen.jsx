@@ -378,17 +378,17 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             }}
                             style={{
                                 width: "100%",
-                                border: "none",
+                                border: "1px solid var(--border2)",
                                 borderRadius: 18,
-                                padding: "18px 16px",
-                                fontSize: 15,
-                                fontWeight: 800,
-                                background: "#ef4444",
-                                color: "#fff",
-                                marginBottom: 10,
+                                padding: "16px",
+                                fontSize: 14,
+                                fontWeight: 700,
+                                background: "var(--card2)",
+                                color: "#ef4444",
+                                marginBottom: 12,
                             }}
                         >
-                            この日の記録をすべて削除
+                            この日の記録を削除
                         </button>
 
                         <button
