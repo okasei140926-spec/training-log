@@ -336,7 +336,7 @@ export default function LogScreen({
                                             const canCopy = idx > 0;
 
                                             return (
-                                                <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
+                                                <div key={idx} style={{ display: "grid", gridTemplateColumns: "24px 1fr 32px 1fr 32px", gap: 6, marginBottom: 8, alignItems: "stretch" }}>
                                                     <button onClick={() => setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")}
                                                         style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 40, borderRadius: 8, background: set.done ? "var(--accent)" : "var(--border)", color: set.done ? "#fff" : "var(--text2)", fontSize: 12, fontWeight: 800, alignSelf: "center", border: "none" }}>
                                                         {idx + 1}
@@ -373,8 +373,8 @@ export default function LogScreen({
 
                                                     {canCopy && set.weight !== "BW" && onCopyDown ? (
                                                         <button onClick={() => onCopyDown(ex.name, idx - 1)}
-                                                            style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--accent)", border: "none", color: "#fff", fontSize: 12, fontWeight: 700 }}>
-                                                            ↓
+                                                            style={{ width: "100%", height: "100%", borderRadius: 8, background: "transparent", border: "1px solid var(--border2)", color: "var(--text3)", fontSize: 15, fontWeight: 700 }}>
+                                                            ⎘
                                                         </button>
                                                     ) : <div />}
 
@@ -401,8 +401,8 @@ export default function LogScreen({
 
                                                     {canCopy && onCopyDownReps ? (
                                                         <button onClick={() => onCopyDownReps(ex.name, idx - 1)}
-                                                            style={{ width: "100%", height: "100%", borderRadius: 7, background: "var(--accent)", border: "none", color: "#fff", fontSize: 12, fontWeight: 700 }}>
-                                                            ↓
+                                                            style={{ width: "100%", height: "100%", borderRadius: 8, background: "transparent", border: "1px solid var(--border2)", color: "var(--text3)", fontSize: 15, fontWeight: 700 }}>
+                                                            ⎘
                                                         </button>
                                                     ) : <div />}
                                                 </div>
