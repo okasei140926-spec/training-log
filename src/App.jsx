@@ -129,7 +129,7 @@ export default function GymApp() {
     // ─── Per-exercise unit ────────────────────────────
     const getExUnit = useCallback((name) => {
         return exerciseUnits[name] ?? unit;
-    }, [exerciseUnits, unti]);
+    }, [exerciseUnits, unit]);
 
     const toggleExUnit = (name) => {
         const currentUnit = getExUnit(name);
