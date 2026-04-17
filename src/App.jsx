@@ -122,30 +122,8 @@ export default function GymApp() {
         const today =
             `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-        const draftDate = load("draft_logDate", "");
-        const draftSession = load("draft_sessionEx", null);
-        const draftLog = load("draft_logData", {});
-        const draftUnits = load("draft_exerciseUnits", {});
-        const draftLabels = load("draft_todayLabels", []);
-
-        // ★ここ重要：中身があるかチェック
-        const hasRealDraft = Object.values(draftLog).some((sets) =>
-            (sets || []).some((s) => s.weight || s.reps)
-        );
-
-        if (!hasRealDraft) {
-            // 空のドラフトは無視して今日にする
-            setLogDate(today);
-            setScreen("history");
-            return;
-        }
-
-        setLogDate(draftDate);
-        setSessionEx(draftSession);
-        setLogData(draftLog);
-        setExerciseUnits(draftUnits);
-        setTodayLabels(draftLabels);
-        setScreen("log");
+        setLogDate(today);
+        setScreen("history");
     }, []);
 
     // ─── Per-exercise unit ────────────────────────────
