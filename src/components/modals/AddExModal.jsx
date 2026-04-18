@@ -11,7 +11,14 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 50);
         if (isFree) setActiveTab(QUICK_LABELS[0]);
+
+        // ここを追加
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = '';
+        };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
     useEffect(() => {
         setAdded(prev => {
