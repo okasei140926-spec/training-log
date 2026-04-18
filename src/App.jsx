@@ -901,6 +901,10 @@ export default function GymApp() {
                         history={history}
                         user={user}
                         onLogin={() => setShowAuth(true)}
+                        onLogout={async () => {
+                            await supabase.auth.signOut();
+                        }}
+
                         onCopyMenu={(exs) => {
                             setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
                             setLogData(exs.reduce((acc, ex) => ({

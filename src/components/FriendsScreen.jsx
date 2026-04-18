@@ -6,7 +6,7 @@ import FriendDetailModal from "./modals/FriendDetailModal";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 
-export default function FriendsScreen({ history, onCopyMenu, user, onLogin }) {
+export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLogout }) {
 
     const [cheers, setCheers] = useState({});
     const [selectedFriend, setSelectedFriend] = useState(null);
@@ -79,6 +79,13 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin }) {
 
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
+            {user && (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                    <button onClick={onLogout} style={{ background: "none", border: "1px solid var(--border2)", borderRadius: 8, padding: "6px 12px", fontSize: 13, color: "var(--text2)", cursor: "pointer" }}>
+                        ログアウト
+                    </button>
+                </div>
+            )}
 
             <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
 
