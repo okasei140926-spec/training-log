@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SUGGESTIONS } from "../constants/suggestions";
 import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
@@ -50,6 +50,17 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     const [activeLabel, setActiveLabel] = useState(null);
     const [selectedDate, setSelectedDate] = useState(null);
     const [openExercises, setOpenExercises] = useState({});
+
+    useEffect(() => {
+        if (selectedDate) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [selectedDate]);
 
 
     const startOfWeek = new Date(today);
@@ -447,7 +458,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                     fontWeight: 600,
                                     background: "transprent",
                                     color: "var(--text3)",
-                                    marginTop: 8,
+                                    marginTop: 8
                                 }}
                             >
                                 この日の記録を削除
