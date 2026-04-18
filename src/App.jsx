@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { load, save, calc1RM, storeW, KG_TO_LBS } from "./utils/helpers";
+import { load, save, storeW, KG_TO_LBS } from "./utils/helpers";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
@@ -13,7 +13,6 @@ import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
 import OnboardingOverlay from "./components/OnboardingOverlay";
 import {
-    getRoutineKey,
     buildBaseExercises,
     getExSetsHelper,
 } from "./utils/workoutHelpers";
@@ -35,17 +34,6 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
 
-    const {
-        addSet,
-        removeSet,
-        setField,
-        saveLog,
-    } = useLogLogic({
-        logData,
-        setLogData,
-        history,
-        setHistory,
-    });
 
     const [screen, setScreen] = useState("history");
 
@@ -65,6 +53,22 @@ export default function GymApp() {
     const [logData, setLogData] = useState(() => load("draft_logData", {}));
     const [sessionHistory, setSessionHistory] = useState(null);
     const [sessionEx, setSessionEx] = useState(() => load("draft_sessionEx", null));
+
+    const {
+        addSet,
+        removeSet,
+        setField,
+        saveLog,
+    } = useLogLogic({
+        logData,
+        setLogData,
+        history,
+        setHistory,
+        routineOrder,
+        setRoutineOrder,
+        todayLabels,
+        sessionEx,
+    });
 
     const [intervalSec, setIntervalSec] = useState(() => load("intervalSec", 90));
     const [timerLeft, setTimerLeft] = useState(null);
