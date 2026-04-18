@@ -15,8 +15,6 @@ import OnboardingOverlay from "./components/OnboardingOverlay";
 import {
     getRoutineKey,
     buildBaseExercises,
-    copySetDownHelper,
-    copyRepDownHelper,
     getExSetsHelper,
 } from "./utils/workoutHelpers";
 
@@ -36,11 +34,6 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
 
-    const { getPrev, getPR, copySetDown, copyRepDown } = useWorkout({
-        history,
-        setLogData,
-        getExSets,
-    });
     const [screen, setScreen] = useState("history");
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
@@ -303,6 +296,12 @@ export default function GymApp() {
             logDate,
         });
     };
+
+    const { getPrev, getPR, copySetDown, copyRepDown } = useWorkout({
+        history,
+        setLogData,
+        getExSets,
+    });
 
     const setField = (ex, idx, field, val) => {
         const key = ex.name;
