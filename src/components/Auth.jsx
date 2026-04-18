@@ -110,7 +110,7 @@ export default function Auth({ onClose, isDark }) {
         {loading ? "処理中..." : mode === "login" ? "ログイン" : "登録する"}
       </button>
       {mode === "login" && (
-        <button onClick={() => { setMode("reset"); setError(""); }} style={{ width: "100%", padding: 14, borderRadius: 12, background: "none", border: "none", fontSize: 14, cursor: "pointer", color: sub, marginBottom: 4 }}>
+        <button onClick={() => { setMode("reset"); setError(""); }} style={{ width: "100%", padding: 14, borderRadius: 12, background: "none", border: `1px solid ${border}`, fontSize: 15, cursor: "pointer", color: sub, marginBottom: 8 }}>
           パスワードをお忘れの方はこちら
         </button>
       )}
