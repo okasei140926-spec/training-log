@@ -4,6 +4,7 @@ import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
 import { useAI } from "./hooks/useAI";
+import { useSettings } from "./hooks/useSettings";
 
 import LogScreen from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
@@ -99,6 +100,8 @@ export default function GymApp() {
         startTimer, stopTimer,
     } = useTimer();
 
+    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
+
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
 
@@ -109,13 +112,7 @@ export default function GymApp() {
     const [showAddEx, setShowAddEx] = useState(false);
     const [addTarget, setAddTarget] = useState(null);
     const [newExName, setNewExName] = useState("");
-
-
     const [summary, setSummary] = useState(null);
-    const [isDark, setIsDark] = useState(() => load("isDark", true));
-    // eslint-disable-next-line no-unused-vars
-    const [unit, setUnit] = useState(() => load("unit", "kg"));
-    const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
 
 
     // ─── AI Coach ─────────────────────────────────────
@@ -124,8 +121,6 @@ export default function GymApp() {
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => { save("history", history); }, [history]);
-    useEffect(() => { save("isDark", isDark); }, [isDark]);
-    useEffect(() => { save("unit", unit); }, [unit]);
 
     useEffect(() => {
         if (screen !== "log") return;
@@ -926,7 +921,7 @@ export default function GymApp() {
                 ))}
             </div>
 
-            {showOnboarding && <OnboardingOverlay onDone={() => setShowOnboarding(false)} />}
+            {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
             <SummaryModal
                 summary={summary}
                 onClose={() => {
