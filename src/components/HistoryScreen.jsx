@@ -434,7 +434,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                                         }}
                                                     >
                                                         <span>
-                                                            {i + 1} {s.weight === "BW" ? `自重 × ${s.reps}reps` : `${s.weight}kg × {s.reps}reps`}
+                                                            {i + 1}{" "}
+                                                            {s.weight === "BW" ? `自重 × ${s.reps}reps` : `${s.weight}kg × ${s.reps}reps`}
                                                         </span>
 
                                                         <button
