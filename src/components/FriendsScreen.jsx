@@ -15,6 +15,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
+    // eslint-disable-next-line no-unused-vars
     const [friends, setFriends] = useState([]);
 
 

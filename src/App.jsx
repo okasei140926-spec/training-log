@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { supabase } from "./utils/supabase";
 import { load, save, storeW, KG_TO_LBS } from "./utils/helpers";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
-import { supabase } from "./utils/supabase";
+
 // eslint-disable-next-line no-unused-vars
 import Auth from "./components/Auth";
 
@@ -149,6 +150,19 @@ export default function GymApp() {
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => { save("history", history); }, [history]);
+    useEffect(() => {
+        if (!user) return;
+        const saveToSupabase = async () => {
+            await supabase.from("workouts").upsert({
+                user_id: user.id,
+                date: new Date().toISOString().split("T")[0],
+                data: history,
+            }, { onConflict: "user_id,date" });
+        };
+        saveToSupabase();
+    }, [history, user]);
+
+
 
     useEffect(() => {
         if (screen !== "log") return;
