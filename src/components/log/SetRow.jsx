@@ -12,25 +12,28 @@ export default function SetRow({
         <div
             style={{
                 display: "grid",
-                gridTemplateColumns: "48px 1fr 44px 1fr 44px",
-                gap: 8,
-                marginBottom: 10,
-                alignItems: "center",
+                gridTemplateColumns: "24px 1fr 32px 1fr 32px",
+                gap: 6,
+                marginBottom: 8,
+                alignItems: "stretch",
             }}
         >
             <button
-                onClick={() => setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")}
+                onClick={() =>
+                    setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")
+                }
                 style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    width: 48,
-                    height: 48,
-                    borderRadius: 14,
+                    width: 24,
+                    height: 40,
+                    borderRadius: 8,
                     background: set.done ? "var(--accent)" : "var(--border)",
                     color: set.done ? "#fff" : "var(--text2)",
-                    fontSize: 16,
+                    fontSize: 12,
                     fontWeight: 800,
+                    alignSelf: "center",
                     border: "none",
                 }}
             >
@@ -42,35 +45,38 @@ export default function SetRow({
                     onClick={() => setField(ex, idx, "weight", "")}
                     style={{
                         width: "100%",
-                        height: 48,
                         background: "var(--card2)",
-                        border: "1px solid var(--border2)",
-                        borderRadius: 14,
+                        border: "2px solid var(--border2)",
+                        borderRadius: 10,
                         padding: "10px 8px",
                         color: "var(--text2)",
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: 700,
                         textAlign: "center",
                     }}
                 >
-                    自重
+                    自重{" "}
+                    <span style={{ fontSize: 10, color: "var(--text4)" }}>
+                        タップでkg
+                    </span>
                 </button>
             ) : (
                 <input
                     type="text"
                     inputMode="decimal"
                     value={set.weight}
-                    onChange={(e) => setField(ex, idx, "weight", e.target.value)}
+                    onChange={(e) => {
+                        setField(ex, idx, "weight", e.target.value);
+                    }}
                     placeholder="0"
                     style={{
                         width: "100%",
-                        height: 48,
                         background: "var(--card2)",
                         border: "1px solid var(--border2)",
-                        borderRadius: 14,
+                        borderRadius: 10,
                         padding: "10px 8px",
                         color: "var(--text)",
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: 700,
                         textAlign: "center",
                     }}
@@ -81,13 +87,13 @@ export default function SetRow({
                 <button
                     onClick={() => onCopyDown(ex.name, idx - 1)}
                     style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 8,
                         background: "transparent",
                         border: "1px solid var(--border2)",
                         color: "var(--text3)",
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: 700,
                     }}
                 >
@@ -101,17 +107,18 @@ export default function SetRow({
                 type="text"
                 inputMode="numeric"
                 value={set.reps}
-                onChange={(e) => setField(ex, idx, "reps", e.target.value)}
+                onChange={(e) => {
+                    setField(ex, idx, "reps", e.target.value);
+                }}
                 placeholder="0"
                 style={{
                     width: "100%",
-                    height: 48,
                     background: "var(--card2)",
                     border: "1px solid var(--border2)",
-                    borderRadius: 14,
+                    borderRadius: 10,
                     padding: "10px 8px",
                     color: "var(--text)",
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: 700,
                     textAlign: "center",
                 }}
@@ -121,13 +128,13 @@ export default function SetRow({
                 <button
                     onClick={() => onCopyDownReps(ex.name, idx - 1)}
                     style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 8,
                         background: "transparent",
                         border: "1px solid var(--border2)",
                         color: "var(--text3)",
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: 700,
                     }}
                 >
