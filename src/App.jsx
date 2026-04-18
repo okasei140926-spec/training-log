@@ -17,6 +17,7 @@ import {
     buildBaseExercises,
     copySetDownHelper,
     copyRepDownHelper,
+    getExSetsHelper,
 } from "./utils/workoutHelpers";
 
 const EX_TO_LABEL = {};
@@ -320,32 +321,13 @@ export default function GymApp() {
         });
     };
 
-    const getExistingSets = (name) => {
-        const records = history[name];
-        if (!records) return null;
-        const existing = records.find(r => r.date === logDate);
-        if (!existing || !existing.sets)
-            return null;
-        return existing.sets.map(s => ({ ...s, done: true }));
-    };
-
-    const makeBaseSets = () => ([
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-        { weight: "", reps: "", done: false },
-    ]);
-
     const getExSets = (ex) => {
-        if (logData[ex.name]) {
-            return logData[ex.name].map(s => ({ ...s }));
-        }
-
-        const existing = getExistingSets(ex.name);
-        if (existing && existing.length > 0) {
-            return existing.map(s => ({ ...s }));
-        }
-
-        return makeBaseSets();
+        return getExSetsHelper({
+            logData,
+            history,
+            name: ex.name,
+            logDate,
+        });
     };
 
     const setField = (ex, idx, field, val) => {

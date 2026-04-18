@@ -43,3 +43,37 @@ export const copyRepDownHelper = ({ currentSets, idx }) => {
     };
     return next;
 };
+
+export const makeBaseSets = () => ([
+    { weight: "", reps: "", done: false },
+    { weight: "", reps: "", done: false },
+    { weight: "", reps: "", done: false },
+]);
+
+export const getExistingSets = ({ history, name, logDate }) => {
+    const records = history[name];
+    if (!records) return null;
+
+    const existing = records.find((r) => r.date === logDate);
+    if (!existing || !existing.sets) return null;
+
+    return existing.sets.map((s) => ({ ...s, done: true }));
+};
+
+export const getExSetsHelper = ({
+    logData,
+    history,
+    name,
+    logDate,
+}) => {
+    if (logData[name]) {
+        return logData[name].map((s) => ({ ...s }));
+    }
+
+    const existing = getExistingSets({ history, name, logDate });
+    if (existing && existing.length > 0) {
+        return existing.map((s) => ({ ...s }));
+    }
+
+    return makeBaseSets();
+};
