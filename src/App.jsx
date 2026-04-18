@@ -12,6 +12,12 @@ import AIScreen from "./components/AIScreen";
 import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
 import OnboardingOverlay from "./components/OnboardingOverlay";
+import {
+    getRoutineKey,
+    buildBaseExercises,
+    copySetDownHelper,
+    copyRepDownHelper,
+} from "./utils/workoutHelpers";
 
 const EX_TO_LABEL = {};
 Object.entries(SUGGESTIONS).forEach(([label, names]) => {
@@ -180,25 +186,15 @@ export default function GymApp() {
     };
 
     // ─── Derived ──────────────────────────────────────
-    const getRoutineKey = (labels) => [...labels].sort().join("|");
     const dayColor = LABEL_COLORS[todayLabels[0]] || null;
+
     const routineKey = getRoutineKey(todayLabels);
 
-    const baseExercisesRaw = todayLabels.flatMap(label =>
-        (muscleEx[label] || []).map(ex => ({ ...ex, label }))
-    );
-
-    const baseExercises = (() => {
-        const savedOrder = routineOrder[routineKey] || [];
-        if (!savedOrder.length) return baseExercisesRaw;
-
-        return savedOrder
-            .map(name => baseExercisesRaw.find(ex => ex.name === name))
-            .filter(Boolean)
-            .concat(
-                baseExercisesRaw.filter(ex => !savedOrder.includes(ex.name))
-            );
-    })();
+    const baseExercises = buildBaseExercises({
+        todayLabels,
+        muscleEx,
+        routineOrder,
+    });
 
     const exercises = sessionEx !== null ? sessionEx : baseExercises;
 
@@ -303,34 +299,26 @@ export default function GymApp() {
     };
 
     const copySetDown = (name, idx) => {
-        setLogData(p => {
-            const base = getExSets({ name }); // ←ここ重要
+        setLogData((p) => {
+            const base = getExSets({ name });
             const current = [...(p[name] || base)];
 
-            if (idx >= current.length - 1) return p;
-
-            current[idx + 1] = {
-                ...current[idx + 1],
-                weight: current[idx].weight
+            return {
+                ...p,
+                [name]: copySetDownHelper({ currentSets: current, idx }),
             };
-
-            return { ...p, [name]: current };
         });
     };
 
     const copyRepDown = (name, idx) => {
-        setLogData(p => {
-            const base = getExSets({ name }); // ←ここ重要
+        setLogData((p) => {
+            const base = getExSets({ name });
             const current = [...(p[name] || base)];
 
-            if (idx >= current.length - 1) return p;
-
-            current[idx + 1] = {
-                ...current[idx + 1],
-                reps: current[idx].reps
+            return {
+                ...p,
+                [name]: copyRepDownHelper({ currentSets: current, idx }),
             };
-
-            return { ...p, [name]: current };
         });
     };
 
