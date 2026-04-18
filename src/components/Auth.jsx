@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../utils/supabase";
 
-export default function Auth() {
+export default function Auth({ onClose }) {
   const [mode, setMode] = useState("login"); // "login" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,6 +33,7 @@ export default function Auth() {
 
   return (
     <div style={{ padding: 32, maxWidth: 400, margin: "0 auto" }}>
+      <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", marginTop: 16 }}>✕</button>
       <h2 style={{ marginBottom: 24 }}>
         {mode === "login" ? "ログイン" : "新規登録"}
       </h2>

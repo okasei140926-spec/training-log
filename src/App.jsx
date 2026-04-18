@@ -55,6 +55,7 @@ export default function GymApp() {
 
 
     const [screen, setScreen] = useState("history");
+    const [showAuth, setShowAuth] = useState(false);
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
     const updateTodayLabels = (nextOrUpdater) => {
@@ -899,7 +900,7 @@ export default function GymApp() {
                     <FriendsScreen
                         history={history}
                         user={user}
-                        onLogin={() => setScreen("login")}
+                        onLogin={() => setShowAuth(true)}
                         onCopyMenu={(exs) => {
                             setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
                             setLogData(exs.reduce((acc, ex) => ({
@@ -950,6 +951,11 @@ export default function GymApp() {
                         setScreen("history");
                     }}
                 />
+                {showAuth && (
+                    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
+                        <Auth onClose={() => setShowAuth(false)} />
+                    </div>
+                )}
 
                 <Analytics />
             </div>
