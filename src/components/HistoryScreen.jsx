@@ -442,11 +442,12 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                     width: "100%",
                                     border: "1px solid var(--border2)",
                                     borderRadius: 18,
-                                    padding: "16px",
-                                    fontSize: 14,
-                                    fontWeight: 700,
-                                    background: "var(--card2)",
-                                    color: "var(--text2)",
+                                    padding: "14px",
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    background: "transprent",
+                                    color: "var(--text3)",
+                                    marginTop: 8,
                                 }}
                             >
                                 この日の記録を削除
