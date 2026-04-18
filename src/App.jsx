@@ -953,7 +953,7 @@ export default function GymApp() {
                 />
                 {showAuth && (
                     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
-                        <Auth onClose={() => setShowAuth(false)} />
+                        <Auth onClose={() => setShowAuth(false)} isDark={isDark} />
                     </div>
                 )}
 
