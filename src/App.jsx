@@ -56,6 +56,15 @@ export default function GymApp() {
 
     const [routineOrder, setRoutineOrder] = useState(() => load("routineOrder", {}));
 
+    const getExSets = (ex) => {
+        return getExSetsHelper({
+            logData,
+            history,
+            name: ex.name,
+            logDate,
+        });
+    };
+
     const {
         addSet,
         removeSet,
@@ -324,14 +333,7 @@ export default function GymApp() {
 
 
 
-    const getExSets = (ex) => {
-        return getExSetsHelper({
-            logData,
-            history,
-            name: ex.name,
-            logDate,
-        });
-    };
+
 
     const { getPrev, getPR, copySetDown, copyRepDown } = useWorkout({
         history,
