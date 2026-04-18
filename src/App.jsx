@@ -65,6 +65,13 @@ export default function GymApp() {
         });
     };
 
+    const [logDate, setLogDate] = useState(() =>
+        load("draft_logDate", (() => {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        })())
+    );
+
     const {
         addSet,
         removeSet,
@@ -104,13 +111,6 @@ export default function GymApp() {
     // eslint-disable-next-line no-unused-vars
     const [unit, setUnit] = useState(() => load("unit", "kg"));
     const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
-
-    const [logDate, setLogDate] = useState(() =>
-        load("draft_logDate", (() => {
-            const d = new Date();
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        })())
-    );
 
 
     // ─── AI Coach ─────────────────────────────────────
