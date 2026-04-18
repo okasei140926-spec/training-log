@@ -397,10 +397,10 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                                 justifyContent: "space-between",
                                                 alignItems: "center",
                                                 cursor: "pointer",
-                                                border: "1px solid var(--border)",
                                                 borderRadius: 12,
                                                 padding: "12px 16px",
                                                 transition: "all 0.15s",
+                                                background: "var(--card2)",
                                             }}
                                             onTouchStart={(e) => {
                                                 e.currentTarget.style.opacity = 0.6;
