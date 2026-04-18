@@ -4,6 +4,7 @@ import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
 import { supabase } from "./utils/supabase";
+// eslint-disable-next-line no-unused-vars
 import Auth from "./components/Auth";
 
 import { useAI } from "./hooks/useAI";
@@ -36,6 +37,7 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 
 export default function GymApp() {
     // ─── State ────────────────────────────────────────
+    // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
 
     useEffect(() => {
