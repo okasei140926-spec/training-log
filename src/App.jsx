@@ -20,6 +20,7 @@ import {
 
 import { useWorkout } from "./hooks/useWorkout";
 
+import { useLogLogic } from "./hooks/useLogLogic";
 
 
 const EX_TO_LABEL = {};
@@ -33,6 +34,18 @@ export default function GymApp() {
     // ─── State ────────────────────────────────────────
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
+
+    const {
+        addSet,
+        removeSet,
+        setField,
+        saveLog,
+    } = useLogLogic({
+        logData,
+        setLogData,
+        history,
+        setHistory,
+    });
 
     const [screen, setScreen] = useState("history");
 
@@ -320,45 +333,6 @@ export default function GymApp() {
         getExSets,
     });
 
-    const setField = (ex, idx, field, val) => {
-        const key = ex.name;
-
-        setLogData(p => {
-            const s = [...(p[key] || getExSets(ex))];
-            const updated = { ...s[idx], [field]: val };
-
-            if (field !== "done") {
-                const isDone = (updated.weight || updated.weight === "BW") && updated.reps;
-                updated.done = isDone;
-            }
-
-            s[idx] = updated;
-
-            const next = { ...p, [key]: s };
-
-            save("draft_logData", next);
-            save("draft_logDate", logDate);
-
-            return next;
-        });
-    };
-
-
-    const addSet = (ex) => {
-        setLogData(p => {
-            const key = ex.name;
-            const s = [...(p[key] || getExSets(ex))];
-            return { ...p, [key]: [...s, { weight: "", reps: "", done: false }] };
-        });
-    };
-
-    const removeSet = (ex, idx) => {
-        setLogData(p => {
-            const key = ex.name
-            const s = (p[key] || getExSets(ex)).filter((_, i) => i !== idx);
-            return { ...p, [key]: s };
-        });
-    };
 
     const removeEx = (idOrName, maybeName) => {
         const isNameOnly = maybeName === undefined;
@@ -512,69 +486,6 @@ export default function GymApp() {
 
     const quickAddToSession = (name, remove, labelOverride) => {
         quickAdd(name, remove, labelOverride);
-    };
-
-
-
-
-    const saveLog = () => {
-        // 種目の順番をmuscleExに保存
-        if (sessionEx && sessionEx.length > 0) {
-            const key = getRoutineKey(todayLabels);
-            if (key) {
-                setRoutineOrder(prev => ({
-                    ...prev,
-                    [key]: sessionEx.map(ex => ex.name),
-                }));
-            }
-        }
-
-
-        const nh = { ...history };
-        Object.keys(nh).forEach((name) => {
-            nh[name] = (nh[name] || []).filter((r) => r.date !== logDate);
-            if (nh[name].length === 0) {
-                delete nh[name];
-            }
-        });
-        let exCount = 0, setCount = 0, prs = [];
-        exercises.forEach((ex, index) => {
-            const sets = logData[ex.name] || getExSets(ex);
-            const valid = sets.filter(s => s.weight && s.reps);
-            if (!valid.length) return;
-            exCount++;
-            setCount += valid.length;
-            if (!nh[ex.name]) nh[ex.name] = [];
-            const prev = nh[ex.name].length ? nh[ex.name][nh[ex.name].length - 1] : null;
-            // lbs 入力の場合は kg に変換して保存
-            const exUnit = getExUnit(ex.name);
-            const stored = valid.map(s => ({ ...s, weight: storeW(s.weight, exUnit) }));
-            const new1RM = calc1RM(stored);
-            const old1RM = prev ? calc1RM(prev.sets) : 0;
-            if (new1RM > old1RM) prs.push({ name: ex.name, diff: Math.round((new1RM - old1RM) * (exUnit === "lbs" ? KG_TO_LBS : 1)) });
-            const existingIdx = nh[ex.name].findIndex(r => r.date === logDate);
-            if (existingIdx >= 0) {
-                nh[ex.name][existingIdx] = { sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate, order: index };
-            } else {
-                nh[ex.name].push({ sets: stored, weight: Number(stored[0].weight), reps: Number(valid[0].reps), date: logDate, order: index });
-            }
-        });
-        setHistory(nh);
-        setTodayLabels([]);
-        setLogData({});
-        setSessionEx(null);
-        setExerciseUnits({});
-        save("draft_todayLabels", []);
-        save("draft_logData", {});
-        save("draft_sessionEx", null);
-        save("draft_exerciseUnits", {});
-        save("draft_logDate", "");
-        const d = new Date();
-        setLogDate(
-            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-        stopTimer();
-        setSummary({ exCount, setCount, prs });
-        setScreen("log");
     };
 
     const handleLogForDate = (dateStr) => {
