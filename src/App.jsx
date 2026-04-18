@@ -54,6 +54,8 @@ export default function GymApp() {
     const [sessionHistory, setSessionHistory] = useState(null);
     const [sessionEx, setSessionEx] = useState(() => load("draft_sessionEx", null));
 
+    const [routineOrder, setRoutineOrder] = useState(() => load("routineOrder", {}));
+
     const {
         addSet,
         removeSet,
@@ -84,7 +86,7 @@ export default function GymApp() {
     const [showAddEx, setShowAddEx] = useState(false);
     const [addTarget, setAddTarget] = useState(null);
     const [newExName, setNewExName] = useState("");
-    const [routineOrder, setRoutineOrder] = useState(() => load("routineOrder", {}));
+
 
     const [summary, setSummary] = useState(null);
     const [isDark, setIsDark] = useState(() => load("isDark", true));
