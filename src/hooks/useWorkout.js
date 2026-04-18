@@ -1,6 +1,10 @@
 import { calc1RM } from "../utils/helpers";
+import {
+    copySetDownHelper,
+    copyRepDownHelper,
+} from "../utils/workoutHelpers";
 
-export const useWorkout = (history) => {
+export const useWorkout = ({ history, setLogData, getExSets }) => {
     const getPrev = (name) => {
         const r = history[name];
         return r ? r[r.length - 1] : null;
@@ -24,8 +28,34 @@ export const useWorkout = (history) => {
         return best;
     };
 
+    const copySetDown = (name, idx) => {
+        setLogData((p) => {
+            const base = getExSets({ name });
+            const current = [...(p[name] || base)];
+
+            return {
+                ...p,
+                [name]: copySetDownHelper({ currentSets: current, idx }),
+            };
+        });
+    };
+
+    const copyRepDown = (name, idx) => {
+        setLogData((p) => {
+            const base = getExSets({ name });
+            const current = [...(p[name] || base)];
+
+            return {
+                ...p,
+                [name]: copyRepDownHelper({ currentSets: current, idx }),
+            };
+        });
+    };
+
     return {
         getPrev,
         getPR,
+        copySetDown,
+        copyRepDown,
     };
 };

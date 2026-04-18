@@ -36,7 +36,11 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
 
-    const { getPrev, getPR } = useWorkout(history);
+    const { getPrev, getPR, copySetDown, copyRepDown } = useWorkout({
+        history,
+        setLogData,
+        getExSets,
+    });
     const [screen, setScreen] = useState("history");
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
@@ -289,29 +293,7 @@ export default function GymApp() {
 
     // ─── Log data ─────────────────────────────────────
 
-    const copySetDown = (name, idx) => {
-        setLogData((p) => {
-            const base = getExSets({ name });
-            const current = [...(p[name] || base)];
 
-            return {
-                ...p,
-                [name]: copySetDownHelper({ currentSets: current, idx }),
-            };
-        });
-    };
-
-    const copyRepDown = (name, idx) => {
-        setLogData((p) => {
-            const base = getExSets({ name });
-            const current = [...(p[name] || base)];
-
-            return {
-                ...p,
-                [name]: copyRepDownHelper({ currentSets: current, idx }),
-            };
-        });
-    };
 
     const getExSets = (ex) => {
         return getExSetsHelper({
