@@ -50,6 +50,7 @@ export default function GymApp() {
         });
     };
     const [logData, setLogData] = useState(() => load("draft_logData", {}));
+    const [sessionHistory, setSessionHistory] = useState(null);
     const [sessionEx, setSessionEx] = useState(() => load("draft_sessionEx", null));
 
     const [intervalSec, setIntervalSec] = useState(() => load("intervalSec", 90));
@@ -80,8 +81,6 @@ export default function GymApp() {
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         })())
     );
-
-
 
 
     // ─── AI Coach ─────────────────────────────────────
@@ -133,6 +132,21 @@ export default function GymApp() {
         setLogDate(today);
         setScreen("history");
     }, []);
+
+    useEffect(() => {
+        if (screen === "log" && sessionHistory === null) {
+            const snapshot = {};
+            Object.entries(history).forEach(([name, recs]) => {
+                const filtered = recs.filter(r => r.date !== logDate);
+                if (filtered.length) snapshot[name] = filtered;
+            });
+            setSessionHistory(snapshot);
+        }
+        if (screen !== "log") setSessionHistory(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [screen]);
+
+
 
     // ─── Per-exercise unit ────────────────────────────
     const getExUnit = useCallback((name) => {
@@ -299,6 +313,7 @@ export default function GymApp() {
 
     const { getPrev, getPR, copySetDown, copyRepDown } = useWorkout({
         history,
+        sessionHistory,
         setLogData,
         getExSets,
     });

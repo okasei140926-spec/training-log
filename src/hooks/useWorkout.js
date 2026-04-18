@@ -4,14 +4,14 @@ import {
     copyRepDownHelper,
 } from "../utils/workoutHelpers";
 
-export const useWorkout = ({ history, setLogData, getExSets }) => {
+export const useWorkout = ({ history, sessionHistory, setLogData, getExSets }) => {
     const getPrev = (name) => {
-        const r = history[name];
+        const r = (sessionHistory || history)[name];
         return r ? r[r.length - 1] : null;
     };
 
     const getPR = (name) => {
-        const recs = history[name];
+        const recs = (sessionHistory || history)[name];
         if (!recs || !recs.length) return null;
 
         let best = null;
