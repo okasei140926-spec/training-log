@@ -296,7 +296,7 @@ export default function LogScreen({
                                                     <>
                                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                                                             <div style={{ fontSize: 11, color: "var(--text2)" }}>前回 <span style={{ color: "var(--text3)" }}>{prev.date}</span></div>
-                                                            {isPRPace && <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700 }}>↑ PR更新ペース！</div>}
+                                                            {isPRPace && <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700 }}>PR更新！</div>}
                                                         </div>
                                                         <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 3, lineHeight: 1.6 }}>
                                                             {prev.sets?.map((s, i) => (
