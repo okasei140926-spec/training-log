@@ -134,17 +134,19 @@ export default function GymApp() {
     }, []);
 
     useEffect(() => {
-        if (screen === "log" && sessionHistory === null) {
-            const snapshot = {};
-            Object.entries(history).forEach(([name, recs]) => {
-                const filtered = recs.filter(r => r.date !== logDate);
-                if (filtered.length) snapshot[name] = filtered;
-            });
-            setSessionHistory(snapshot);
+        if (screen !== "log") {
+            setSessionHistory(null);
+            return;
         }
-        if (screen !== "log") setSessionHistory(null);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [screen]);
+
+        const snapshot = {};
+        Object.entries(history).forEach(([name, recs]) => {
+            const filtered = recs.filter((r) => r.date !== logDate);
+            if (filtered.length) snapshot[name] = filtered;
+        });
+
+        setSessionHistory(snapshot);
+    }, [screen, logDate, history]);
 
 
 
