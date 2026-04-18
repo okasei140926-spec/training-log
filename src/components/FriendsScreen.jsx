@@ -56,11 +56,29 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     ? f["profiles!friendships_receiver_id_fkey"]
                     : f["profiles!friendships_requester_id_fkey"];
                 return friend;
-            });
-            setFriends(friendList);
+            }).filter(Boolean);
+
+            // 友達のworkoutsを取得
+            const friendIds = friendList.map(f => f.id);
+            let friendsWithHistory = friendList.map(f => ({ ...f, history: {} }));
+
+            if (friendIds.length > 0) {
+                const { data: workouts } = await supabase
+                    .from("workouts")
+                    .select("user_id, data")
+                    .in("user_id", friendIds);
+
+                friendsWithHistory = friendList.map(f => ({
+                    ...f,
+                    history: workouts?.find(w => w.user_id === f.id)?.data || {},
+                }));
+            }
+
+            setFriends(friendsWithHistory);
         };
         fetchFriends();
     }, [user]);
+
 
 
     if (!user) {
