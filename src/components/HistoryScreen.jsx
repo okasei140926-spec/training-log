@@ -122,7 +122,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             return {
                 name,
                 count: record.sets.length,
-                sets: typeof record.order === "number" ? record.order : 999,
+                sets: record.sets,
+                order: typeof record.order === "number" ? record.order : 999,
             };
         })
         .filter(Boolean)
