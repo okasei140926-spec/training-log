@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../utils/supabase";
-import { DEMO_FRIENDS } from "../constants/demoData";
 import { S } from "../utils/styles";
 import { calc1RM } from "../utils/helpers";
 import FriendDetailModal from "./modals/FriendDetailModal";
@@ -11,7 +10,6 @@ const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワッ
 
 export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLogout }) {
 
-    const [cheers, setCheers] = useState({});
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
@@ -121,7 +119,6 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         return acc;
     }, {});
 
-    const cheer = (id) => setCheers(p => ({ ...p, [id]: (p[id] || 0) + 1 }));
     const activeToday = myTodayExercises.length > 0;
 
     return (
@@ -187,54 +184,27 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 })()}
             </div>
 
-            {DEMO_FRIENDS.filter(f => f.today).map(f => (
-                <div key={f.id} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${f.color}33` }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                        <button onClick={() => setSelectedFriend(f)} style={{ background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", gap: 12, flex: 1, textAlign: "left" }}>
-                            <div style={{ width: 44, height: 44, borderRadius: 22, background: f.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "#000", flexShrink: 0 }}>
-                                {f.name[0]}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{f.name}</div>
-                                    <div style={{ padding: "2px 8px", borderRadius: 10, background: "#4ade8022", border: "1px solid #4ade8044", fontSize: 10, color: "#4ade80", fontWeight: 700 }}>LIVE</div>
-                                </div>
-                                <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>{f.today.label} · {f.today.time} · 詳細を見る →</div>
-                            </div>
-                        </button>
-                        <CheerButton id={f.id} color={f.color} count={cheers[f.id] || 0} onCheer={cheer} />
+            {friends.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 32, color: "var(--text2)", fontSize: 14 }}>
+                    まだ友達がいません。招待リンクを送ろう！
+                </div>
+            ) : (
+                friends.map(f => (
+                    <div key={f.id} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border)" }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
+                        <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                            {Object.keys(f.history || {}).length > 0 ? `${Object.keys(f.history).length}種目記録あり` : "まだ記録なし"}
+                        </div>
                     </div>
-                    {f.today.exercises.map((ex, i) => (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "var(--card2)", borderRadius: 10, marginBottom: 6 }}>
-                            <div style={{ fontSize: 13, color: "var(--text3)" }}>{ex.name}</div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: f.color }}>
-                                {ex.weight > 0 ? `${ex.weight}kg` : "BW"} <span style={{ color: "var(--text2)", fontWeight: 400 }}>×</span> {ex.reps}rep
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ))}
+                ))
+            )}
 
-            {DEMO_FRIENDS.filter(f => !f.today).map(f => (
-                <div key={f.id} style={{ background: "var(--card)", borderRadius: 16, padding: "14px 16px", marginBottom: 12, border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
-                    <button onClick={() => setSelectedFriend(f)} style={{ background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", gap: 12, flex: 1, textAlign: "left" }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 20, background: "var(--card2)", border: `2px solid ${f.color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, color: f.color }}>
-                            {f.name[0]}
-                        </div>
-                        <div>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{f.name}</div>
-                            <div style={{ fontSize: 11, color: "var(--text3)" }}>今日はお休み · 詳細を見る →</div>
-                        </div>
-                    </button>
-                    <CheerButton id={f.id} color={f.color} count={cheers[f.id] || 0} onCheer={cheer} />
-                </div>
-            ))}
 
             <div style={{ ...S.sLabel, marginTop: 20 }}>強さ比較（推定1RM）</div>
             {KEY_EXERCISES.map(ex => {
                 const entries = [
                     { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
-                    ...DEMO_FRIENDS.map(f => ({ name: f.name, color: f.color, value: f.bests[ex] || 0 })),
+                    ...friends.map(f => ({ name: f.name, color: f.color, value: f.bests[ex] || 0 })),
                 ].filter(e => e.value > 0);
                 if (!entries.length) return null;
                 const maxVal = Math.max(...entries.map(e => e.value));
@@ -274,19 +244,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     );
 }
 
-function CheerButton({ id, color, count, onCheer }) {
-    return (
-        <button onClick={() => onCheer(id)}
-            style={{
-                padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0,
-                background: count ? color + "22" : "var(--card2)",
-                border: `1px solid ${count ? color + "66" : "var(--border2)"}`,
-                color: count ? color : "var(--text2)"
-            }}>
-            🔥 {count || "応援"}
-        </button>
-    );
-}
+
 
 function CompareBar({ rank, name, value, max, color }) {
     const pct = Math.round((value / max) * 100);
