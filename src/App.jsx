@@ -70,6 +70,7 @@ export default function GymApp() {
         setRoutineOrder,
         todayLabels,
         sessionEx,
+        getExSets,
     });
 
     const [intervalSec, setIntervalSec] = useState(() => load("intervalSec", 90));

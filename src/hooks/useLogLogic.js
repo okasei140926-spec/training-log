@@ -1,4 +1,5 @@
 import { getRoutineKey } from "../utils/workoutHelpers";
+import { save } from "../utils/helpers";
 
 export function useLogLogic({
     logData,
@@ -9,6 +10,7 @@ export function useLogLogic({
     setRoutineOrder,
     todayLabels,
     sessionEx,
+    getExSets,
 }) {
 
     const addSet = (ex) => {
@@ -20,7 +22,28 @@ export function useLogLogic({
     };
 
     const setField = (ex, idx, field, value) => {
-        // そのまま
+        const key = ex.name;
+
+        setLogData((p) => {
+            const current = p[key]
+                ? p[key].map((s) => ({ ...s }))
+                : getExSets(ex);
+
+            const updated = { ...current[idx], [field]: value };
+
+            if (field !== "done") {
+                const isDone =
+                    (updated.weight || updated.weight === "BW") && updated.reps;
+                updated.done = isDone;
+            }
+
+            current[idx] = updated;
+
+            const next = { ...p, [key]: current };
+
+            save("draft_logData", next);
+            return next;
+        });
     };
 
     const saveLog = () => {
