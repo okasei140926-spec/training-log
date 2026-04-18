@@ -20,6 +20,10 @@ import {
     getExSetsHelper,
 } from "./utils/workoutHelpers";
 
+import { useWorkout } from "./hooks/useWorkout";
+
+
+
 const EX_TO_LABEL = {};
 Object.entries(SUGGESTIONS).forEach(([label, names]) => {
     names.forEach((n) => {
@@ -32,7 +36,7 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
 
-
+    const { getPrev, getPR } = useWorkout(history);
     const [screen, setScreen] = useState("history");
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
@@ -284,18 +288,6 @@ export default function GymApp() {
     };
 
     // ─── Log data ─────────────────────────────────────
-    const getPrev = (name) => { const r = history[name]; return r ? r[r.length - 1] : null; };
-
-    const getPR = (name) => {
-        const recs = history[name];
-        if (!recs || !recs.length) return null;
-        let best = null, bestRM = 0;
-        recs.forEach(r => {
-            const rm = calc1RM(r.sets);
-            if (rm > bestRM) { bestRM = rm; best = { ...r, rm: Math.round(rm) }; }
-        });
-        return best;
-    };
 
     const copySetDown = (name, idx) => {
         setLogData((p) => {
