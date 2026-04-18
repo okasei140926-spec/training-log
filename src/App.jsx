@@ -147,10 +147,6 @@ export default function GymApp() {
         save("draft_logDate", logDate);
     }, [screen, todayLabels, logData, sessionEx, exerciseUnits, logDate]);
 
-    useEffect(() => () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-    }, []);
-
     useEffect(() => {
         aiEnd.current?.scrollIntoView({ behavior: "smooth" });
     }, [aiMsgs]);
