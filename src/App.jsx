@@ -18,7 +18,7 @@ import {
 } from "./utils/workoutHelpers";
 
 import { useWorkout } from "./hooks/useWorkout";
-
+import { useTimer } from "./hooks/useTimer";
 import { useLogLogic } from "./hooks/useLogLogic";
 
 
@@ -90,10 +90,14 @@ export default function GymApp() {
         logDate,
     });
 
-    const [intervalSec, setIntervalSec] = useState(() => load("intervalSec", 90));
-    const [timerLeft, setTimerLeft] = useState(null);
-    const timerRef = useRef(null);
-    const [showTimerMenu, setShowTimerMenu] = useState(false);
+    // GymApp()の中に追加
+    const {
+        intervalSec, setIntervalSec,
+        timerLeft,
+        showTimerMenu, setShowTimerMenu,
+        startTimer, stopTimer,
+    } = useTimer();
+
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
 
@@ -122,7 +126,6 @@ export default function GymApp() {
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => { save("history", history); }, [history]);
-    useEffect(() => { save("intervalSec", intervalSec); }, [intervalSec]);
     useEffect(() => { save("isDark", isDark); }, [isDark]);
     useEffect(() => { save("unit", unit); }, [unit]);
 
@@ -308,27 +311,7 @@ export default function GymApp() {
             .map(([name], i) => ({ id: Date.now() + i, name }));
     })();
 
-    // ─── Timer ────────────────────────────────────────
-    const startTimer = (sec) => {
-        const s = sec || intervalSec;
-        if (!s) return;
-        if (timerRef.current) clearInterval(timerRef.current);
-        setTimerLeft(s);
-        timerRef.current = setInterval(() => {
-            setTimerLeft(p => {
-                if (p <= 1) {
-                    clearInterval(timerRef.current);
-                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-                    return 0;
-                }
-                return p - 1;
-            });
-        }, 1000);
-    };
-    const stopTimer = () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-        setTimerLeft(null);
-    };
+
 
     // ─── Log data ─────────────────────────────────────
 

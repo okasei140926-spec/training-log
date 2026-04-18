@@ -109,7 +109,7 @@ export default function FriendsScreen({ history, onCopyMenu }) {
                                         <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "var(--card2)", borderRadius: 10, marginBottom: 4 }}>
                                             <div style={{ fontSize: 13, color: "var(--text3)" }}>{ex.name}</div>
                                             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
-                                                {ex.weight}kg × {ex.reps}rep
+                                                {ex.weight === "BW" ? "自重" : `${ex.weight}kg`} × {ex.reps}rep
                                             </div>
                                         </div>
                                     ))}
