@@ -27,7 +27,7 @@ export default function SummaryModal({ summary, onClose }) {
                     </div>
                     <div style={{ flex: 1, background: "var(--card2)", borderRadius: 14, padding: "16px 8px" }}>
                         <div style={{ fontSize: 28, fontWeight: 900, color: "var(--text)" }}>{summary.setCount}</div>
-                        <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>{count}セット</div>
+                        <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>セット</div>
                     </div>
                 </div>
 
