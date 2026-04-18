@@ -23,6 +23,7 @@ export default function Auth({ onClose }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        onClose();
       }
     } catch (e) {
       setError(e.message);
