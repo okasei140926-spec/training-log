@@ -3,6 +3,7 @@ import { SUGGESTIONS } from "../constants/suggestions";
 import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
+import HistoryExerciseItem from "./history/HistoryExerciseItem";
 
 const EX_TO_LABEL = {};
 Object.entries(SUGGESTIONS).forEach(([label, names]) => {
@@ -404,90 +405,22 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 const isOpen = !!openExercises[name];
 
                                 return (
-                                    <div
+                                    <HistoryExerciseItem
                                         key={name}
-                                        style={{
-                                            background: "var(--card2)",
-                                            borderRadius: 12,
-                                            padding: "8px 12px",
-                                        }}
-                                    >
-
-                                        <div
-                                            onClick={() =>
-                                                setOpenExercises((p) => ({
-                                                    ...p,
-                                                    [name]: !p[name],
-                                                }))
-                                            }
-                                            style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                cursor: "pointer",
-                                                borderRadius: 12,
-                                                padding: "12px 16px",
-                                                transition: "all 0.15s",
-                                                background: "var(--card2)",
-                                            }}
-                                            onTouchStart={(e) => {
-                                                e.currentTarget.style.opacity = 0.6;
-                                            }}
-                                            onTouchEnd={(e) => {
-                                                e.currentTarget.style.opacity = 1;
-                                            }}
-                                        >
-                                            <span>{name}</span>
-
-                                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                                                <span>{count}セット</span>
-                                                <span style={{ opacity: 0.4 }}>
-                                                    {isOpen ? "▼" : "›"}
-                                                </span>
-                                            </div>
-                                        </div>
-
-
-                                        {isOpen && (
-                                            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                                                {sets.map((s, i) => (
-                                                    <div
-                                                        key={i}
-                                                        style={{
-                                                            display: "flex",
-                                                            justifyContent: "space-between",
-                                                            alignItems: "center",
-                                                            paddingTop: 6,
-                                                            borderTop: "1px solid var(--border2)",
-                                                        }}
-                                                    >
-                                                        <span>
-                                                            {i + 1}{" "}
-                                                            {s.weight === "BW" ? `自重 × ${s.reps}reps` : `${s.weight}kg × ${s.reps}reps`}
-                                                        </span>
-
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onDeleteHistory?.(name, undefined, selectedDate, i);
-
-                                                                // ↓ ここで削除（あとで実装）
-                                                            }}
-                                                            style={{
-                                                                background: "none",
-                                                                border: "none",
-                                                                color: "var(--text3)",
-                                                                fontSize: 18,
-                                                                cursor: "pointer"
-                                                            }}
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
+                                        name={name}
+                                        count={count}
+                                        sets={sets}
+                                        isOpen={isOpen}
+                                        onToggle={() =>
+                                            setOpenExercises((p) => ({
+                                                ...p,
+                                                [name]: !p[name],
+                                            }))
+                                        }
+                                        onDeleteSet={(setIdx) =>
+                                            onDeleteHistory?.(name, undefined, selectedDate, setIdx)
+                                        }
+                                    />
                                 );
                             })}
                         </div>
