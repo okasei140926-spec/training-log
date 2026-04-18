@@ -6,11 +6,25 @@ import FriendDetailModal from "./modals/FriendDetailModal";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 
-export default function FriendsScreen({ history, onCopyMenu }) {
+export default function FriendsScreen({ history, onCopyMenu, user, onLogin }) {
+
     const [cheers, setCheers] = useState({});
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [copied, setCopied] = useState(false);
     const [openDates, setOpenDates] = useState({});
+    if (!user) {
+        return (
+            <div style={{ padding: 32, textAlign: "center" }}>
+                <p style={{ marginBottom: 24 }}>Friends機能を使うにはログインが必要です</p>
+                <button
+                    onClick={onLogin}
+                    style={{ padding: "12px 32px", borderRadius: 8, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 16 }}
+                >
+                    ログイン / 新規登録
+                </button>
+            </div>
+        );
+    }
 
     const handleCopyInvite = async () => {
         const url = window.location.href;

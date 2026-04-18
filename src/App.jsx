@@ -768,191 +768,189 @@ export default function GymApp() {
     // ─── Main render ──────────────────────────────────
     return (
         <>
-            {!user ? (
-                <Auth />
-            ) : (
-                <div className={isDark ? "" : "theme-light"} style={S.root}>
-                    <style>{css}</style>
+            <div className={isDark ? "" : "theme-light"} style={S.root}>
+                <style>{css}</style>
 
-                    <div style={S.header}>
-                        <div>
-                            <div style={S.appLabel}>IRON LOG</div>
-                            <div style={S.headerTitle}>
-                                {screen === "home" ? "Today"
-                                    : screen === "prep" ? "Menu"
-                                        : screen === "log" ? "Log"
-                                            : screen === "friends" ? "Friends"
-                                                : screen === "ai" ? "AI Coach"
-                                                    : "記録"}
-                            </div>
+                <div style={S.header}>
+                    <div>
+                        <div style={S.appLabel}>IRON LOG</div>
+                        <div style={S.headerTitle}>
+                            {screen === "home" ? "Today"
+                                : screen === "prep" ? "Menu"
+                                    : screen === "log" ? "Log"
+                                        : screen === "friends" ? "Friends"
+                                            : screen === "ai" ? "AI Coach"
+                                                : "記録"}
                         </div>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            {screen === "log" && (
-                                <button onClick={() => {
-                                    if (timerLeft !== null) {
-                                        stopTimer();
-                                    } else {
-                                        setShowTimerMenu(p => !p);
-                                    }
-                                }}
-                                    style={{
-                                        padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "none",
-                                        background: timerLeft !== null ? (timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)") : "var(--card2)",
-                                        color: timerLeft !== null ? (timerLeft === 0 ? "#000" : "var(--bg)") : "var(--text2)"
-                                    }}>
-                                    {timerLeft !== null ? (timerLeft === 0 ? "GO!💪" : `⏱ ${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`) : "⏱"}
-                                </button>
-                            )}
-                            <button onClick={() => setIsDark(p => !p)} style={S.pillBtn}>{isDark ? "☀️" : "🌙"}</button>
-                        </div>
-
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {screen === "log" && (
+                            <button onClick={() => {
+                                if (timerLeft !== null) {
+                                    stopTimer();
+                                } else {
+                                    setShowTimerMenu(p => !p);
+                                }
+                            }}
+                                style={{
+                                    padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "none",
+                                    background: timerLeft !== null ? (timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)") : "var(--card2)",
+                                    color: timerLeft !== null ? (timerLeft === 0 ? "#000" : "var(--bg)") : "var(--text2)"
+                                }}>
+                                {timerLeft !== null ? (timerLeft === 0 ? "GO!💪" : `⏱ ${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`) : "⏱"}
+                            </button>
+                        )}
+                        <button onClick={() => setIsDark(p => !p)} style={S.pillBtn}>{isDark ? "☀️" : "🌙"}</button>
                     </div>
 
-
-                    {showTimerMenu && screen === "log" && (
-                        <div style={{ position: "fixed", top: 70, right: 20, zIndex: 200, background: "var(--card)", borderRadius: 12, padding: 12, border: "1px solid var(--border2)", display: "flex", gap: 6 }}>
-                            {[30, 60, 90, 120].map(s => (
-                                <button key={s} onClick={() => { setIntervalSec(s); setShowTimerMenu(false); startTimer(s); }}
-                                    style={{
-                                        padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: "none",
-                                        background: intervalSec === s ? "var(--text)" : "var(--card2)",
-                                        color: intervalSec === s ? "var(--bg)" : "var(--text2)"
-                                    }}>
-                                    {s < 60 ? `${s}s` : `${s / 60}m`}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                </div>
 
 
-
-                    {screen === "log" && (
-                        <div
-                            onTouchStart={(e) => {
-                                touchStartX.current = e.touches[0].clientX;
-                                touchStartY.current = e.touches[0].clientY;
-                            }}
-                            onTouchEnd={(e) => {
-                                if (touchStartX.current == null || touchStartY.current == null) return;
-
-                                const endX = e.changedTouches[0].clientX;
-                                const endY = e.changedTouches[0].clientY;
-
-                                const dx = endX - touchStartX.current;
-                                const dy = Math.abs(endY - touchStartY.current);
-
-                                const startedFromLeftEdge = touchStartX.current <= 24;
-                                const isRightSwipe = dx >= 80;
-                                const isHorizontal = dy < 40;
-
-                                if (startedFromLeftEdge && isRightSwipe && isHorizontal) {
-                                    setScreen("history");
-                                }
-
-                                touchStartX.current = null;
-                                touchStartY.current = null;
-                            }}
-                        >
-                            <LogScreen
-                                todayLabels={todayLabels}
-                                dayColor={dayColor}
-                                exercises={exercises}
-                                logData={logData}
-                                getExSets={getExSets}
-                                setField={setField}
-                                addSet={addSet}
-                                removeSet={removeSet}
-                                removeEx={removeEx}
-                                timerLeft={timerLeft}
-                                intervalSec={intervalSec}
-                                setIntervalSec={setIntervalSec}
-                                startTimer={startTimer}
-                                stopTimer={stopTimer}
-                                saveLog={saveLog}
-                                onAddEx={addExToSession}
-                                onQuickAddEx={quickAddToSession}
-                                onReorderEx={reorderEx}
-                                onRenameEx={renameEx}
-                                getPrev={getPrev}
-                                getPR={getPR}
-                                onCopyDown={copySetDown}
-                                onCopyDownReps={copyRepDown}
-                                unit={unit}
-                                getExUnit={getExUnit}
-                                onToggleExUnit={toggleExUnit}
-                                muscleEx={muscleEx}
-                                setTodayLabels={updateTodayLabels}
-                                history={history}
-                                logDate={logDate}
-                                resetSession={() => {
-                                    setSessionEx(null);
-                                    setLogData({});
-                                    setExerciseUnits({});
-                                    save("draft_sessionEx", null);
-                                    save("draft_logData", {});
-                                    save("draft_exerciseUnits", {});
-                                }}
-                            />
-                        </div>
-                    )}
-
-                    {screen === "friends" && (
-                        <FriendsScreen
-                            history={history}
-                            onCopyMenu={(exs) => {
-                                setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
-                                setLogData(exs.reduce((acc, ex) => ({
-                                    ...acc,
-                                    [ex.name]: [
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                    ],
-                                }), {}));
-                                setScreen("log");
-                            }}
-                        />
-                    )}
-
-                    {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} onDeleteDate={deleteAllHistoryForDate} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
-
-                    {screen === "ai" && (
-                        <AIScreen
-                            aiMsgs={aiMsgs}
-                            aiInput={aiInput}
-                            setAiInput={setAiInput}
-                            sendAI={sendAI}
-                            aiLoad={aiLoad}
-                            aiEnd={aiEnd}
-                        />
-                    )}
-
-                    <div style={S.bottomNav}>
-                        {[
-                            { id: "history", icon: "📊", label: "記録" },
-                            { id: "friends", icon: "👥", label: "Friends" },
-                            { id: "ai", icon: "🤖", label: "AI" },
-                        ].map(tab => (
-                            <button key={tab.id} onClick={() => setScreen(tab.id)}
-                                style={{ flex: 1, background: "none", color: screen === tab.id ? "var(--text)" : "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "4px 0" }}>
-                                <div style={{ fontSize: 20 }}>{tab.icon}</div>
-                                <div style={{ fontSize: 9, fontWeight: screen === tab.id ? 700 : 400 }}>{tab.label}</div>
+                {showTimerMenu && screen === "log" && (
+                    <div style={{ position: "fixed", top: 70, right: 20, zIndex: 200, background: "var(--card)", borderRadius: 12, padding: 12, border: "1px solid var(--border2)", display: "flex", gap: 6 }}>
+                        {[30, 60, 90, 120].map(s => (
+                            <button key={s} onClick={() => { setIntervalSec(s); setShowTimerMenu(false); startTimer(s); }}
+                                style={{
+                                    padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: "none",
+                                    background: intervalSec === s ? "var(--text)" : "var(--card2)",
+                                    color: intervalSec === s ? "var(--bg)" : "var(--text2)"
+                                }}>
+                                {s < 60 ? `${s}s` : `${s / 60}m`}
                             </button>
                         ))}
                     </div>
+                )}
 
-                    {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
-                    <SummaryModal
-                        summary={summary}
-                        onClose={() => {
-                            setSummary(null);
-                            setScreen("history");
+
+
+                {screen === "log" && (
+                    <div
+                        onTouchStart={(e) => {
+                            touchStartX.current = e.touches[0].clientX;
+                            touchStartY.current = e.touches[0].clientY;
+                        }}
+                        onTouchEnd={(e) => {
+                            if (touchStartX.current == null || touchStartY.current == null) return;
+
+                            const endX = e.changedTouches[0].clientX;
+                            const endY = e.changedTouches[0].clientY;
+
+                            const dx = endX - touchStartX.current;
+                            const dy = Math.abs(endY - touchStartY.current);
+
+                            const startedFromLeftEdge = touchStartX.current <= 24;
+                            const isRightSwipe = dx >= 80;
+                            const isHorizontal = dy < 40;
+
+                            if (startedFromLeftEdge && isRightSwipe && isHorizontal) {
+                                setScreen("history");
+                            }
+
+                            touchStartX.current = null;
+                            touchStartY.current = null;
+                        }}
+                    >
+                        <LogScreen
+                            todayLabels={todayLabels}
+                            dayColor={dayColor}
+                            exercises={exercises}
+                            logData={logData}
+                            getExSets={getExSets}
+                            setField={setField}
+                            addSet={addSet}
+                            removeSet={removeSet}
+                            removeEx={removeEx}
+                            timerLeft={timerLeft}
+                            intervalSec={intervalSec}
+                            setIntervalSec={setIntervalSec}
+                            startTimer={startTimer}
+                            stopTimer={stopTimer}
+                            saveLog={saveLog}
+                            onAddEx={addExToSession}
+                            onQuickAddEx={quickAddToSession}
+                            onReorderEx={reorderEx}
+                            onRenameEx={renameEx}
+                            getPrev={getPrev}
+                            getPR={getPR}
+                            onCopyDown={copySetDown}
+                            onCopyDownReps={copyRepDown}
+                            unit={unit}
+                            getExUnit={getExUnit}
+                            onToggleExUnit={toggleExUnit}
+                            muscleEx={muscleEx}
+                            setTodayLabels={updateTodayLabels}
+                            history={history}
+                            logDate={logDate}
+                            resetSession={() => {
+                                setSessionEx(null);
+                                setLogData({});
+                                setExerciseUnits({});
+                                save("draft_sessionEx", null);
+                                save("draft_logData", {});
+                                save("draft_exerciseUnits", {});
+                            }}
+                        />
+                    </div>
+                )}
+
+                {screen === "friends" && (
+                    <FriendsScreen
+                        history={history}
+                        user={user}
+                        onLogin={() => setScreen("login")}
+                        onCopyMenu={(exs) => {
+                            setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
+                            setLogData(exs.reduce((acc, ex) => ({
+                                ...acc,
+                                [ex.name]: [
+                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                ],
+                            }), {}));
+                            setScreen("log");
                         }}
                     />
+                )}
 
-                    <Analytics />
+                {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} onDeleteDate={deleteAllHistoryForDate} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
+
+                {screen === "ai" && (
+                    <AIScreen
+                        aiMsgs={aiMsgs}
+                        aiInput={aiInput}
+                        setAiInput={setAiInput}
+                        sendAI={sendAI}
+                        aiLoad={aiLoad}
+                        aiEnd={aiEnd}
+                    />
+                )}
+
+                <div style={S.bottomNav}>
+                    {[
+                        { id: "history", icon: "📊", label: "記録" },
+                        { id: "friends", icon: "👥", label: "Friends" },
+                        { id: "ai", icon: "🤖", label: "AI" },
+                    ].map(tab => (
+                        <button key={tab.id} onClick={() => setScreen(tab.id)}
+                            style={{ flex: 1, background: "none", color: screen === tab.id ? "var(--text)" : "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "4px 0" }}>
+                            <div style={{ fontSize: 20 }}>{tab.icon}</div>
+                            <div style={{ fontSize: 9, fontWeight: screen === tab.id ? 700 : 400 }}>{tab.label}</div>
+                        </button>
+                    ))}
                 </div>
-            )}
+
+                {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
+                <SummaryModal
+                    summary={summary}
+                    onClose={() => {
+                        setSummary(null);
+                        setScreen("history");
+                    }}
+                />
+
+                <Analytics />
+            </div>
         </>
     );
 }
