@@ -100,6 +100,7 @@ export default function GymApp() {
         startTimer, stopTimer,
     } = useTimer();
 
+    // eslint-disable-next-line no-unused-vars
     const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
 
 
