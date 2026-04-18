@@ -50,6 +50,15 @@ export default function GymApp() {
         return () => subscription.unsubscribe();
     }, []);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const ref = params.get("ref");
+        if (ref) {
+            localStorage.setItem("pendingFriendId", ref);
+        }
+    }, []);
+
+
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
 

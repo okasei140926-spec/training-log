@@ -14,7 +14,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [copied, setCopied] = useState(false);
 
     const handleCopyInvite = async () => {
-        const url = window.location.href;
+        const url = `${window.location.orgin}?ref=${user.id}`;
         const text = "一緒にトレーニングを記録しよう！ IRON LOG";
         if (navigator.share) {
             try {

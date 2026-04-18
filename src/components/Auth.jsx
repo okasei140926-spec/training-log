@@ -25,6 +25,15 @@ export default function Auth({ onClose, isDark }) {
         if (error) throw error;
         if (data.user) {
           await supabase.from("profiles").insert({ id: data.user.id, username });
+          const pending = localStorage.getItem("pendingFriendId");
+          if (pending && pending !== data.user.id) {
+            await supabase.from("friendships").upsert({
+              requester_id: data.user.id,
+              receiver_id: pending,
+              status: "accepted",
+            });
+            localStorage.removeItem("pendingFriendId");
+          }
         }
         setSent(true);
       } else if (mode === "reset") {
@@ -34,6 +43,16 @@ export default function Auth({ onClose, isDark }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        const { data: { user } } = await supabase.auth.getUser();
+        const pending = localStorage.getItem("pendingFriendId");
+        if (pending && user && pending !== user.id) {
+          await supabase.from("friendships").upsert({
+            requester_id: user.id,
+            receiver_id: pending,
+            status: "accepted",
+          });
+          localStorage.removeItem("pendingFriendId");
+        }
         onClose();
       }
     } catch (e) {
@@ -42,6 +61,7 @@ export default function Auth({ onClose, isDark }) {
       setLoading(false);
     }
   };
+
 
   const inputStyle = {
     display: "block", width: "100%", marginBottom: 12,
