@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../utils/supabase";
 import { DEMO_FRIENDS } from "../constants/demoData";
 import { S } from "../utils/styles";
 import { calc1RM } from "../utils/helpers";
 import FriendDetailModal from "./modals/FriendDetailModal";
+
+
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 
@@ -12,9 +15,11 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
+    const [friends, setFriends] = useState([]);
+
 
     const handleCopyInvite = async () => {
-        const url = `${window.location.orgin}?ref=${user.id}`;
+        const url = `${window.location.origin}?ref=${user.id}`;
         const text = "一緒にトレーニングを記録しよう！ IRON LOG";
         if (navigator.share) {
             try {
@@ -35,6 +40,26 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchFriends = async () => {
+            const { data } = await supabase
+                .from("friendships")
+                .select("requester_id, receiver_id, profiles!friendships_requester_id_fkey(id, username), profiles!friendships_receiver_id_fkey(id, username)")
+                .eq("status", "accepted")
+                .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+            const friendList = (data || []).map(f => {
+                const friend = f.requester_id === user.id
+                    ? f["profiles!friendships_receiver_id_fkey"]
+                    : f["profiles!friendships_requester_id_fkey"];
+                return friend;
+            });
+            setFriends(friendList);
+        };
+        fetchFriends();
+    }, [user]);
 
 
     if (!user) {
