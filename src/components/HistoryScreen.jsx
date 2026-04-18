@@ -363,6 +363,33 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             </div>
                         </div>
 
+                        <div
+                            style={{
+                                position: "sticky",
+                                top: 0,
+                                zIndex: 10,
+                                background: "var(--card)",
+                                paddingBottom: 12,
+                                marginBottom: 4,
+                            }}
+                        >
+                            <button
+                                onClick={() => onLogForDate(selectedDate)}
+                                style={{
+                                    width: "100%",
+                                    border: "none",
+                                    borderRadius: 18,
+                                    padding: "18px 16px",
+                                    fontSize: 15,
+                                    fontWeight: 800,
+                                    background: "#000",
+                                    color: "#fff",
+                                }}
+                            >
+                                記録を開く
+                            </button>
+                        </div>
+
                         <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>
                             合計 {totalSets} セット
                         </div>
@@ -493,21 +520,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 この日の記録を削除
                             </button>
 
-                            <button
-                                onClick={() => onLogForDate(selectedDate)}
-                                style={{
-                                    width: "100%",
-                                    border: "none",
-                                    borderRadius: 18,
-                                    padding: "18px 16px",
-                                    fontSize: 15,
-                                    fontWeight: 800,
-                                    background: "#000",
-                                    color: "#fff",
-                                }}
-                            >
-                                記録を開く
-                            </button>
+
                         </div>
                     </div>
                 </div>
