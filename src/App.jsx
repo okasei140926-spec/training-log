@@ -188,8 +188,6 @@ export default function GymApp() {
     // ─── Derived ──────────────────────────────────────
     const dayColor = LABEL_COLORS[todayLabels[0]] || null;
 
-    const routineKey = getRoutineKey(todayLabels);
-
     const baseExercises = buildBaseExercises({
         todayLabels,
         muscleEx,
