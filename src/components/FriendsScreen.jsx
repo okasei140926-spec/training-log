@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { supabase } from "../utils/supabase";
 import { DEMO_FRIENDS } from "../constants/demoData";
 import { S } from "../utils/styles";
 import { calc1RM } from "../utils/helpers";
@@ -12,10 +11,31 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [cheers, setCheers] = useState({});
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [openDates, setOpenDates] = useState({});
-    const [searchName, setSearchName] = useState("");
-    const [searchResults, setSearchResults] = useState([]);
-    const [searchLoading, setSearchLoading] = useState(false);
-    const [requestSent, setRequestSent] = useState({});
+    const [copied, setCopied] = useState(false);
+
+    const handleCopyInvite = async () => {
+        const url = window.location.href;
+        const text = "一緒にトレーニングを記録しよう！ IRON LOG";
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: "IRON LOG", text, url });
+                return;
+            } catch { }
+        }
+        try {
+            await navigator.clipboard.writeText(url);
+        } catch {
+            const el = document.createElement("textarea");
+            el.value = url;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand("copy");
+            document.body.removeChild(el);
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
 
     if (!user) {
         return (
@@ -31,28 +51,6 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         );
     }
 
-
-    const searchUsers = async () => {
-        if (!searchName.trim()) return;
-        setSearchLoading(true);
-        const { data } = await supabase
-            .from("profiles")
-            .select("id, username")
-            .ilike("username", `%${searchName}%`)
-            .neq("id", user?.id)
-            .limit(10);
-        setSearchResults(data || []);
-        setSearchLoading(false);
-    };
-
-    const sendRequest = async (receiverId) => {
-        await supabase.from("friendships").insert({
-            requester_id: user.id,
-            receiver_id: receiverId,
-            status: "pending",
-        });
-        setRequestSent(p => ({ ...p, [receiverId]: true }));
-    };
 
 
     const today = new Date().toISOString().split("T")[0];
@@ -209,33 +207,16 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 );
             })}
 
-            <div style={{ background: "var(--card)", borderRadius: 16, padding: "20px", border: "1px dashed var(--border2)", marginTop: 8 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "var(--text)" }}>友達を追加</div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                    <input
-                        placeholder="ユーザー名で検索"
-                        value={searchName}
-                        onChange={e => setSearchName(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && searchUsers()}
-                        style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1px solid var(--border2)", background: "var(--card2)", color: "var(--text)", fontSize: 14 }}
-                    />
-                    <button onClick={searchUsers} style={{ padding: "10px 16px", borderRadius: 10, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                        {searchLoading ? "..." : "検索"}
-                    </button>
-                </div>
-                {searchResults.map(u => (
-                    <div key={u.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--border2)" }}>
-                        <div style={{ color: "var(--text)", fontSize: 14 }}>@{u.username}</div>
-                        <button
-                            onClick={() => sendRequest(u.id)}
-                            disabled={requestSent[u.id]}
-                            style={{ padding: "6px 14px", borderRadius: 8, background: requestSent[u.id] ? "var(--card2)" : "#4ade80", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", color: requestSent[u.id] ? "var(--text2)" : "#000" }}
-                        >
-                            {requestSent[u.id] ? "申請済み" : "申請する"}
-                        </button>
-                    </div>
-                ))}
+            <div style={{ background: "var(--card)", borderRadius: 16, padding: "20px", border: "1px dashed var(--border2)", textAlign: "center", marginTop: 8 }}>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>👥</div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: "var(--text)" }}>友達を招待</div>
+                <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>一緒にトレーニングを記録しよう</div>
+                <button onClick={handleCopyInvite}
+                    style={{ padding: "10px 28px", borderRadius: 20, background: copied ? "#4ade80" : "var(--text)", color: copied ? "#000" : "var(--bg)", fontWeight: 700, fontSize: 13, border: "none", transition: "background 0.2s" }}>
+                    {copied ? "コピーしました ✓" : "招待リンクをコピー 🔗"}
+                </button>
             </div>
+
 
 
             {selectedFriend && (
