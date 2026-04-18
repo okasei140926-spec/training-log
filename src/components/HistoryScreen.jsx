@@ -115,21 +115,18 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     });
 
     const dayDetails = Object.entries(history || {})
-        .map(([exName, recs]) => {
-            const rec = (recs || []).find(r => r.date === selectedDate);
-            if (!rec || !rec.sets) return null;
-
-            const validSets = rec.sets.filter(s => s.weight && s.reps);
-            if (!validSets.length) return null;
+        .map(([name, recs]) => {
+            const record = recs.find((r) => r.date === selectedDate);
+            if (!record) return null;
 
             return {
-                name: exName,
-                count: validSets.length,
-                sets: validSets,
+                name,
+                count: record.sets.length,
+                sets: typeof record.order === "number" ? record.order : 999,
             };
         })
         .filter(Boolean)
-        .sort((a, b) => b.count - a.count);
+        .sort((a, b) => a.order - b.order);
 
 
 

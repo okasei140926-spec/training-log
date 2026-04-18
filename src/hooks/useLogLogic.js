@@ -11,10 +11,22 @@ export function useLogLogic({
     todayLabels,
     sessionEx,
     getExSets,
+    logDate,
 }) {
 
     const addSet = (ex) => {
-        // 今のコードそのまま移動
+        setLogData((p) => {
+            const key = ex.name;
+            const current = [...addSet(p[key] || getExSets(ex))];
+            const next = {
+                ...p,
+                [key]: [...current, { weight: "", reps: "", done: false }],
+            };
+
+            save("draft_logData", next);
+            save("draft_logDate", logDate);
+            return next;
+        })
     };
 
     const removeSet = (ex, idx) => {
