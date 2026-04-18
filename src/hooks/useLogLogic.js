@@ -17,7 +17,10 @@ export function useLogLogic({
     const addSet = (ex) => {
         setLogData((p) => {
             const key = ex.name;
-            const current = [...addSet(p[key] || getExSets(ex))];
+            const current = p[key]
+                ? p[key].map((s) => ({ ...s }))
+                : getExSets(ex);
+
             const next = {
                 ...p,
                 [key]: [...current, { weight: "", reps: "", done: false }],
@@ -26,7 +29,7 @@ export function useLogLogic({
             save("draft_logData", next);
             save("draft_logDate", logDate);
             return next;
-        })
+        });
     };
 
     const removeSet = (ex, idx) => {
