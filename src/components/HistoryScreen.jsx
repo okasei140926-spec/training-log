@@ -384,6 +384,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                             padding: "8px 12px",
                                         }}
                                     >
+
                                         <div
                                             onClick={() =>
                                                 setOpenExercises((p) => ({
@@ -396,11 +397,28 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                                 justifyContent: "space-between",
                                                 alignItems: "center",
                                                 cursor: "pointer",
+                                                border: "1px solid var(--border)",
+                                                borderRadius: 12,
+                                                padding: "12px 16px",
+                                                transition: "all 0.15s",
+                                            }}
+                                            onTouchStart={(e) => {
+                                                e.currentTarget.style.opacity = 0.6;
+                                            }}
+                                            onTouchEnd={(e) => {
+                                                e.currentTarget.style.opacity = 1;
                                             }}
                                         >
                                             <span>{name}</span>
-                                            <span>{count}</span>
+
+                                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                                <span>{count}セット</span>
+                                                <span style={{ opacity: 0.4 }}>
+                                                    {isOpen ? "▼" : "›"}
+                                                </span>
+                                            </div>
                                         </div>
+
 
                                         {isOpen && (
                                             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
