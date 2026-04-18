@@ -80,6 +80,7 @@ export default function GymApp() {
         todayLabels,
         sessionEx,
         getExSets,
+        logDate,
     });
 
     const [intervalSec, setIntervalSec] = useState(() => load("intervalSec", 90));
