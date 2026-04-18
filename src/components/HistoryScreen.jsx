@@ -377,14 +377,14 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                 onClick={() => onLogForDate(selectedDate)}
                                 style={{
                                     width: "100%",
+                                    border: "none",
                                     borderRadius: 18,
-                                    padding: "18px 16px",
+                                    padding: "16px",
                                     fontSize: 15,
-                                    fontWeight: 800,
-
+                                    fontWeight: 700,
                                     background: "var(--card2)",
                                     color: "var(--text)",
-                                    border: "1px solid var(--border)",
+
                                 }}
                             >
                                 記録を開く
