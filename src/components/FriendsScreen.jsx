@@ -189,37 +189,87 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     まだ友達がいません。招待リンクを送ろう！
                 </div>
             ) : (
-                friends.map(f => (
-                    <div key={f.id} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border)" }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
-                        <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-                            {Object.keys(f.history || {}).length > 0 ? `${Object.keys(f.history).length}種目記録あり` : "まだ記録なし"}
+                friends.map(f => {
+                    const friendHistory = f.history || {};
+                    const today = new Date().toISOString().split("T")[0];
+                    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+                    // 直近7日の日付リスト
+                    const recentDates = Object.entries(friendHistory)
+                        .flatMap(([exName, recs]) => recs.map(r => ({ date: r.date, exName, ...r })))
+                        .filter(r => r.date >= sevenDaysAgo)
+                        .reduce((acc, r) => {
+                            if (!acc[r.date]) acc[r.date] = [];
+                            acc[r.date].push(r);
+                            return acc;
+                        }, {});
+
+                    const sortedDates = Object.keys(recentDates).sort((a, b) => b.localeCompare(a));
+                    const totalExercises = Object.values(recentDates).flat().length;
+
+                    return (
+                        <div key={f.id} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: sortedDates.length ? 14 : 0 }}>
+                                <div style={{ width: 44, height: 44, borderRadius: 22, background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#000", flexShrink: 0 }}>
+                                    {f.username?.[0]?.toUpperCase()}
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
+                                    <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>直近7日 {totalExercises}種目</div>
+                                </div>
+                            </div>
+                            {sortedDates.map(date => {
+                                const isOpen = openDates[`${f.id}-${date}`] === true;
+                                const exs = recentDates[date];
+                                return (
+                                    <div key={date} style={{ marginBottom: 6 }}>
+                                        <button onClick={() => setOpenDates(p => ({ ...p, [`${f.id}-${date}`]: !isOpen }))}
+                                            style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "6px 8px", background: "var(--border)", borderRadius: 8, border: "none", marginBottom: 4 }}>
+                                            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)" }}>{date === today ? "今日" : date}</div>
+                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>{isOpen ? "▲" : "▼"}</div>
+                                        </button>
+                                        {isOpen && exs.map((ex, i) => (
+                                            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "var(--card2)", borderRadius: 10, marginBottom: 4 }}>
+                                                <div style={{ fontSize: 13, color: "var(--text3)" }}>{ex.exName}</div>
+                                                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
+                                                    {ex.weight === "BW" ? "自重" : `${ex.weight}kg`} × {ex.reps}rep
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                            {sortedDates.length === 0 && (
+                                <div style={{ fontSize: 12, color: "var(--text3)" }}>直近7日間の記録なし</div>
+                            )}
                         </div>
-                    </div>
-                ))
+                    );
+                })
+
             )}
 
-
-            <div style={{ ...S.sLabel, marginTop: 20 }}>強さ比較（推定1RM）</div>
-            {KEY_EXERCISES.map(ex => {
-                const entries = [
-                    { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
-                    ...friends.map(f => ({ name: f.name, color: f.color, value: f.bests[ex] || 0 })),
-                ].filter(e => e.value > 0);
-                if (!entries.length) return null;
-                const maxVal = Math.max(...entries.map(e => e.value));
-                return (
-                    <div key={ex} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 10, border: "1px solid var(--border)" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, color: "var(--text)" }}>{ex}</div>
-                        {entries.sort((a, b) => b.value - a.value).map((e, i) => (
-                            <CompareBar key={e.name} rank={i + 1} name={e.name} value={e.value} max={maxVal} color={e.color} />
-                        ))}
-                        {!myBests[ex] && (
-                            <div style={{ fontSize: 11, color: "var(--text4)", marginTop: 8 }}>この種目を記録すると比較できます</div>
-                        )}
-                    </div>
-                );
-            })}
+            < div style={{ ...S.sLabel, marginTop: 20 }}>強さ比較（推定1RM）</div>
+            {
+                KEY_EXERCISES.map(ex => {
+                    const entries = [
+                        { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
+                        ...friends.map(f => ({ name: f.name, color: f.color, value: f.bests[ex] || 0 })),
+                    ].filter(e => e.value > 0);
+                    if (!entries.length) return null;
+                    const maxVal = Math.max(...entries.map(e => e.value));
+                    return (
+                        <div key={ex} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 10, border: "1px solid var(--border)" }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, color: "var(--text)" }}>{ex}</div>
+                            {entries.sort((a, b) => b.value - a.value).map((e, i) => (
+                                <CompareBar key={e.name} rank={i + 1} name={e.name} value={e.value} max={maxVal} color={e.color} />
+                            ))}
+                            {!myBests[ex] && (
+                                <div style={{ fontSize: 11, color: "var(--text4)", marginTop: 8 }}>この種目を記録すると比較できます</div>
+                            )}
+                        </div>
+                    );
+                })
+            }
 
             <div style={{ background: "var(--card)", borderRadius: 16, padding: "20px", border: "1px dashed var(--border2)", textAlign: "center", marginTop: 8 }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>👥</div>
@@ -233,14 +283,16 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
 
 
-            {selectedFriend && (
-                <FriendDetailModal
-                    friend={selectedFriend}
-                    onClose={() => setSelectedFriend(null)}
-                    onCopyMenu={(exercises) => { onCopyMenu(exercises); setSelectedFriend(null); }}
-                />
-            )}
-        </div>
+            {
+                selectedFriend && (
+                    <FriendDetailModal
+                        friend={selectedFriend}
+                        onClose={() => setSelectedFriend(null)}
+                        onCopyMenu={(exercises) => { onCopyMenu(exercises); setSelectedFriend(null); }}
+                    />
+                )
+            }
+        </div >
     );
 }
 
