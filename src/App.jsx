@@ -961,6 +961,7 @@ export default function GymApp() {
                 <div style={S.bottomNav}>
                     {[
                         { id: "history", icon: "📊", label: "記録" },
+                        { id: "analytics", icon: "📈", label: "分析" },
                         { id: "friends", icon: "👥", label: "Friends" },
                         { id: "ai", icon: "🤖", label: "AI" },
                     ].map(tab => (
