@@ -921,6 +921,16 @@ export default function GymApp() {
                     </div>
                 )}
 
+                {screen === "analytics" && (
+                    <div style={{ padding: 20 }}>
+                        <div style={{ fontSize: 14, color: "var(--text2)", marginBottom: 16 }}>種目を選択</div>
+                        <div style={{ fontSize: 13, color: "var(--text3)", textAlign: "center", marginTop: 40 }}>
+                            🚧 準備中
+                        </div>
+                    </div>
+                )}
+
+
                 {screen === "friends" && (
                     <FriendsScreen
                         history={history}
