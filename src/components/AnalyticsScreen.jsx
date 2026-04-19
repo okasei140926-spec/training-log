@@ -25,7 +25,7 @@ export default function AnalyticsScreen({ history }) {
       .sort((a, b) => a.date.localeCompare(b.date))
       .map(r => ({
         date: r.date.slice(5),
-        weight: Number(r.weight),
+        weight: Math.round(Number(r.weight) * (1 + Number(r.reps) / 30)),
       }));
   };
 
@@ -76,6 +76,7 @@ export default function AnalyticsScreen({ history }) {
                 <Tooltip
                   contentStyle={{ background: "var(--card2)", border: "none", borderRadius: 8, fontSize: 12 }}
                   labelStyle={{ color: "var(--text)" }}
+                  formatter={(value) => [`${value}kg`, "1RM"]}
                 />
                 <Line type="monotone" dataKey="weight" stroke="#4ade80" strokeWidth={2} dot={{ fill: "#4ade80", r: 3 }} />
               </LineChart>
