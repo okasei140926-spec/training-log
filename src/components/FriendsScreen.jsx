@@ -13,6 +13,8 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [friends, setFriends] = useState([]);
     const [showEditName, setShowEditName] = useState(false);
     const [newUsername, setNewUsername] = useState("");
+    const [avatarUrl, setAvatarUrl] = useState(null);
+
 
     const handleCopyInvite = async () => {
         const url = `${window.location.origin}?ref=${user.id}`;
@@ -148,7 +150,25 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     </svg>
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: activeRecently ? 14 : 0 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 22, background: "var(--text)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "var(--bg)", flexShrink: 0 }}>YOU</div>
+                    <div style={{ width: 44, height: 44, borderRadius: 22, background: "var(--text)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "var(--bg)", flexShrink: 0, overflow: "hidden", cursor: "pointer", position: "relative" }}
+                        onClick={() => document.getElementById("avatar-input").click()}>
+                        {avatarUrl
+                            ? <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            : "YOU"
+                        }
+                        <input id="avatar-input" type="file" accept="image/*" style={{ display: "none" }}
+                            onChange={async (e) => {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                const ext = file.name.split(".").pop();
+                                const path = `${user.id}.${ext}`;
+                                await supabase.storage.from("avatar1").upload(path, file, { upsert: true });
+                                const { data } = supabase.storage.from("avatar1").getPublicUrl(path);
+                                await supabase.from("profiles").update({ avatar_url: data.publicUrl }).eq("id", user.id);
+                                setAvatarUrl(data.publicUrl);
+                            }}
+                        />
+                    </div>
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>自分</div>
@@ -212,7 +232,6 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                         return { name: f.username, color: "#4ade80", value };
                     }),
                 ].filter(e => e.value > 0);
-
                 if (!entries.length) return null;
                 const maxVal = Math.max(...entries.map(e => e.value));
                 return (
