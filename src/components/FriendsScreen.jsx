@@ -45,37 +45,38 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     useEffect(() => {
         if (!user) return;
         const fetchFriends = async () => {
-            const { data } = await supabase
+            const { data: friendships } = await supabase
                 .from("friendships")
-                .select("requester_id, receiver_id, profiles!friendships_requester_id_fkey(id, username), profiles!friendships_receiver_id_fkey(id, username)")
+                .select("requester_id, receiver_id")
                 .eq("status", "accepted")
                 .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
 
-            const friendList = (data || []).map(f => {
-                const friend = f.requester_id === user.id
-                    ? f["profiles!friendships_receiver_id_fkey"]
-                    : f["profiles!friendships_requester_id_fkey"];
-                return friend;
-            }).filter(Boolean);
+            if (!friendships || friendships.length === 0) {
+                setFriends([]);
+                return;
+            }
 
-            // 友達のworkoutsを取得
-            const friendIds = friendList.map(f => f.id);
-            let friendsWithHistory = friendList.map(f => ({ ...f, history: {} }));
+            const friendIds = friendships.map(f =>
+                f.requester_id === user.id ? f.receiver_id : f.requester_id
+            );
 
-            if (friendIds.length > 0) {
+            const { data: profiles } = await supabase
+                .from("profiles")
+                .select("id, username")
+                .in("id", friendIds);
+
+            const friendsWithHistory = await Promise.all((profiles || []).map(async p => {
                 const { data: workouts } = await supabase
                     .from("workouts")
-                    .select("user_id, data")
-                    .in("user_id", friendIds);
-
-                friendsWithHistory = friendList.map(f => ({
-                    ...f,
-                    history: workouts?.find(w => w.user_id === f.id)?.data || {},
-                }));
-            }
+                    .select("data")
+                    .eq("user_id", p.id)
+                    .single();
+                return { ...p, history: workouts?.data || {} };
+            }));
 
             setFriends(friendsWithHistory);
         };
+
         fetchFriends();
     }, [user]);
 
