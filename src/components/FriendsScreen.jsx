@@ -206,8 +206,13 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             {KEY_EXERCISES.map(ex => {
                 const entries = [
                     { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
-                    ...friends.map(f => ({ name: f.username, color: "#4ade80", value: 0 })),
+                    ...friends.map(f => {
+                        const recs = f.history?.[ex];
+                        const value = recs?.length ? Math.round(calc1RM(recs[recs.length - 1].sets)) : 0;
+                        return { name: f.username, color: "#4ade80", value };
+                    }),
                 ].filter(e => e.value > 0);
+
                 if (!entries.length) return null;
                 const maxVal = Math.max(...entries.map(e => e.value));
                 return (
