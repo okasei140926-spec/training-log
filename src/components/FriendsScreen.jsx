@@ -45,37 +45,47 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     useEffect(() => {
         if (!user) return;
         const fetchFriends = async () => {
-            const { data: friendships } = await supabase
-                .from("friendships")
-                .select("requester_id, receiver_id")
-                .eq("status", "accepted")
-                .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
+            try {
+                const { data: friendships, error: e1 } = await supabase
+                    .from("friendships")
+                    .select("requester_id, receiver_id")
+                    .eq("status", "accepted")
+                    .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
 
-            if (!friendships || friendships.length === 0) {
+                console.log("friendships:", friendships, e1);
+
+                if (!friendships || friendships.length === 0) {
+                    setFriends([]);
+                    return;
+                }
+
+                const friendIds = friendships.map(f =>
+                    f.requester_id === user.id ? f.receiver_id : f.requester_id
+                );
+
+                const { data: profiles, error: e2 } = await supabase
+                    .from("profiles")
+                    .select("id, username")
+                    .in("id", friendIds);
+
+                console.log("profiles:", profiles, e2);
+
+                const friendsWithHistory = await Promise.all((profiles || []).map(async p => {
+                    const { data: workouts } = await supabase
+                        .from("workouts")
+                        .select("data")
+                        .eq("user_id", p.id)
+                        .maybeSingle();
+                    return { ...p, history: workouts?.data || {} };
+                }));
+
+                setFriends(friendsWithHistory);
+            } catch (err) {
+                console.error("fetchFriends error:", err);
                 setFriends([]);
-                return;
             }
-
-            const friendIds = friendships.map(f =>
-                f.requester_id === user.id ? f.receiver_id : f.requester_id
-            );
-
-            const { data: profiles } = await supabase
-                .from("profiles")
-                .select("id, username")
-                .in("id", friendIds);
-
-            const friendsWithHistory = await Promise.all((profiles || []).map(async p => {
-                const { data: workouts } = await supabase
-                    .from("workouts")
-                    .select("data")
-                    .eq("user_id", p.id)
-                    .maybeSingle();
-                return { ...p, history: workouts?.data || {} };
-            }));
-
-            setFriends(friendsWithHistory);
         };
+
 
         fetchFriends();
     }, [user]);
