@@ -165,6 +165,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                 await supabase.storage.from("avatar1").upload(path, file, { upsert: true });
                                 const { data: { publicUrl } } = supabase.storage.from("avatar1").getPublicUrl(path);
                                 await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
+                                console.log(publicUrl)
                                 setAvatarUrl(publicUrl);
                             }}
                         />
