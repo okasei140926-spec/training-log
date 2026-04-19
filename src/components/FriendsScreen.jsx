@@ -162,9 +162,9 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                 if (!file) return;
                                 const ext = file.name.split(".").pop();
                                 const path = `${user.id}.${ext}`;
-                                const { error: uploadError } = await supabase.storage.from("avatar1").upload(path, file, { upsert: true });
+                                const { error: uploadError } = await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
                                 console.log("upload error:", uploadError);
-                                const { data: { publicUrl } } = supabase.storage.from("avatar1").getPublicUrl(path);
+                                const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(path);
                                 console.log("publicUrl:", publicUrl);
                                 await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", user.id);
                                 setAvatarUrl(publicUrl);
