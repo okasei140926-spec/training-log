@@ -56,6 +56,8 @@ export default function GymApp() {
         const ref = params.get("ref");
         if (ref) {
             localStorage.setItem("pendingFriendId", ref);
+            setScreen("friends");
+            setShowAuth(true);
         }
     }, []);
 
