@@ -15,6 +15,8 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [copied, setCopied] = useState(false);
     // eslint-disable-next-line no-unused-vars
     const [friends, setFriends] = useState([]);
+    const [showEditName, setShowEditName] = useState(false);
+    const [newUsername, setNewUsername] = useState("");
 
 
     const handleCopyInvite = async () => {
@@ -134,7 +136,8 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
 
             {/* 自分のカード */}
-            <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
+            <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", position: "relative" }}>
+                <button onClick={() => setShowEditName(true)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "var(--text3)" }}>✏️</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: activeRecently ? 14 : 0 }}>
                     <div style={{ width: 44, height: 44, borderRadius: 22, background: "var(--text)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "var(--bg)", flexShrink: 0 }}>
                         YOU
@@ -282,6 +285,31 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             </div>
 
 
+            {showEditName && (
+                <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#00000066", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+                    <div style={{ background: "var(--card)", borderRadius: 16, padding: 24, width: "100%" }}>
+                        <h3 style={{ marginBottom: 16, color: "var(--text)" }}>ユーザー名を変更</h3>
+                        <input
+                            placeholder="新しいユーザー名"
+                            value={newUsername}
+                            onChange={e => setNewUsername(e.target.value)}
+                            style={{ display: "block", width: "100%", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border2)", background: "var(--card2)", color: "var(--text)", fontSize: 15, boxSizing: "border-box", marginBottom: 12 }}
+                        />
+                        <button onClick={async () => {
+                            if (!newUsername.trim()) return;
+                            await supabase.from("profiles").update({ username: newUsername }).eq("id", user.id);
+                            setShowEditName(false);
+                            setNewUsername("");
+                        }} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 8 }}>
+                            保存
+                        </button>
+                        <button onClick={() => { setShowEditName(false); setNewUsername(""); }} style={{ width: "100%", padding: 14, borderRadius: 10, background: "none", border: "1px solid var(--border2)", fontSize: 15, cursor: "pointer", color: "var(--text2)" }}>
+                            キャンセル
+                        </button>
+                    </div>
+                </div>
+            )}
+
 
             {
                 selectedFriend && (
@@ -292,6 +320,8 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     />
                 )
             }
+
+
         </div >
     );
 }
