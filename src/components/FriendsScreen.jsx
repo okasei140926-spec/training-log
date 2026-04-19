@@ -65,6 +65,20 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         fetchFriends();
     }, [user]);
 
+    useEffect(() => {
+        if (!user) return;
+        const fetchProfile = async () => {
+            const { data } = await supabase
+                .from("profiles")
+                .select("avatar1_url")
+                .eq("id", user.id)
+                .single();
+            if (data?.avatar1_url) setAvatarUrl(data.avatar1_url);
+        };
+        fetchProfile();
+    }, [user]);
+
+
     if (!user) {
         return (
             <div style={{ padding: 32, textAlign: "center" }}>
