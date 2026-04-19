@@ -4,6 +4,7 @@ import { load, save, storeW, KG_TO_LBS } from "./utils/helpers";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
+import AnalyticsScreen from "./components/AnalyticsScreen";
 
 // eslint-disable-next-line no-unused-vars
 import Auth from "./components/Auth";
@@ -922,12 +923,8 @@ export default function GymApp() {
                 )}
 
                 {screen === "analytics" && (
-                    <div style={{ padding: 20 }}>
-                        <div style={{ fontSize: 14, color: "var(--text2)", marginBottom: 16 }}>種目を選択</div>
-                        <div style={{ fontSize: 13, color: "var(--text3)", textAlign: "center", marginTop: 40 }}>
-                            🚧 準備中
-                        </div>
-                    </div>
+                    <AnalyticsScreen history={history} />
+
                 )}
 
 
