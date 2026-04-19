@@ -70,7 +70,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     .from("workouts")
                     .select("data")
                     .eq("user_id", p.id)
-                    .single();
+                    .maybeSingle();
                 return { ...p, history: workouts?.data || {} };
             }));
 
