@@ -36,32 +36,58 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
     useEffect(() => {
         if (!user) return;
+
         const fetchFriends = async () => {
             try {
-                const { data: friendships } = await supabase
+                const { data: friendships, error: friendshipsError } = await supabase
                     .from("friendships")
                     .select("requester_id, receiver_id")
                     .eq("status", "accepted")
                     .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
 
-                if (!friendships || friendships.length === 0) { setFriends([]); return; }
+                if (friendshipsError) throw friendshipsError;
 
-                const friendIds = friendships.map(f =>
-                    f.requester_id === user.id ? f.receiver_id : f.requester_id
+                if (!friendships || friendships.length === 0) {
+                    setFriends([]);
+                    return;
+                }
+
+                const friendIds = [...new Set(
+                    friendships.map(f =>
+                        f.requester_id === user.id ? f.receiver_id : f.requester_id
+                    )
+                )];
+
+                const { data: profiles, error: profilesError } = await supabase
+                    .from("profiles")
+                    .select("id, username, avatar1_url")
+                    .in("id", friendIds);
+
+                if (profilesError) throw profilesError;
+
+                const { data: workouts, error: workoutsError } = await supabase
+                    .from("workouts")
+                    .select("user_id, data")
+                    .in("user_id", friendIds);
+
+                if (workoutsError) throw workoutsError;
+
+                const historyMap = new Map(
+                    (workouts || []).map(w => [w.user_id, w.data || {}])
                 );
 
-                const { data: profiles } = await supabase
-                    .from("profiles").select("id, username, avatar1_url").in("id", friendIds);
-
-                const friendsWithHistory = await Promise.all((profiles || []).map(async p => {
-                    const { data: workouts } = await supabase
-                        .from("workouts").select("data").eq("user_id", p.id).maybeSingle();
-                    return { ...p, history: workouts?.data || {} };
+                const friendsWithHistory = (profiles || []).map(p => ({
+                    ...p,
+                    history: historyMap.get(p.id) || {}
                 }));
 
                 setFriends(friendsWithHistory);
-            } catch (err) { setFriends([]); }
+            } catch (err) {
+                console.error(err);
+                setFriends([]);
+            }
         };
+
         fetchFriends();
     }, [user]);
 
