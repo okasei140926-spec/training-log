@@ -471,6 +471,18 @@ export default function GymApp() {
             delete n[oldEx.name];
             return n;
         });
+
+        // muscleExも更新
+        setMuscleEx((p) => {
+            const next = { ...p };
+            Object.keys(next).forEach((label) => {
+                next[label] = next[label].map((e) =>
+                    e.name === oldEx.name ? { ...e, name: trimmed } : e
+                );
+            });
+            return next;
+        });
+
     };
 
     const quickAdd = (name, remove, labelOverride) => {
