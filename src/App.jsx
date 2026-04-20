@@ -504,7 +504,11 @@ export default function GymApp() {
 
         if (!remove) {
             addExToSession(name, labelOverride);
+        } else {
+            // sessionExからも削除
+            setSessionEx(prev => prev ? prev.filter(ex => ex.name !== name) : prev);
         }
+
     };
 
     const quickAddToSession = (name, remove, labelOverride) => {
