@@ -58,18 +58,22 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     )
                 )];
 
-                const { data: profiles, error: profilesError } = await supabase
-                    .from("profiles")
-                    .select("id, username, avatar1_url")
-                    .in("id", friendIds);
+                const [profilesRes, workoutsRes] = await Promise.all([
+                    supabase
+                        .from("profiles")
+                        .select("id, username, avatar1_url")
+                        .in("id", friendIds),
+
+                    supabase
+                        .from("workouts")
+                        .select("user_id, data")
+                        .in("user_id", friendIds),
+                ]);
+
+                const { data: profiles, error: profilesError } = profilesRes;
+                const { data: workouts, error: workoutsError } = workoutsRes;
 
                 if (profilesError) throw profilesError;
-
-                const { data: workouts, error: workoutsError } = await supabase
-                    .from("workouts")
-                    .select("user_id, data")
-                    .in("user_id", friendIds);
-
                 if (workoutsError) throw workoutsError;
 
                 const historyMap = new Map(
@@ -164,7 +168,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{name}</div>
                         {sets.map((s, i) => (
                             <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>
-                                {i + 1} {s.weight}kg × {s.reps}rep
+                                {i + 1} {s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}rep
                             </div>
                         ))}
                     </div>
