@@ -115,9 +115,13 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
     const myBests = KEY_EXERCISES.reduce((acc, ex) => {
         const recs = history[ex];
-        if (recs?.length) acc[ex] = Math.round(calc1RM(recs[recs.length - 1].sets));
+        if (recs?.length) {
+            const best = Math.max(...recs.map(r => Math.round(calc1RM(r.sets))));
+            acc[ex] = best;
+        }
         return acc;
     }, {});
+
 
     const renderDateAccordion = (id, date, exMap) => {
         const dateKey = `${id}-${date}`;
@@ -248,7 +252,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
                     ...friends.map(f => {
                         const recs = f.history?.[ex];
-                        const value = recs?.length ? Math.round(calc1RM(recs[recs.length - 1].sets)) : 0;
+                        const value = recs?.length ? Math.max(...recs.map(r => Math.round(calc1RM(r.sets)))) : 0;
                         return { name: f.username, color: "#4ade80", value };
                     }),
                 ].filter(e => e.value > 0);
