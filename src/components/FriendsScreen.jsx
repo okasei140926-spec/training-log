@@ -51,7 +51,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 );
 
                 const { data: profiles } = await supabase
-                    .from("profiles").select("id, username").in("id", friendIds);
+                    .from("profiles").select("id, username, avatar1_url").in("id", friendIds);
 
                 const friendsWithHistory = await Promise.all((profiles || []).map(async p => {
                     const { data: workouts } = await supabase
@@ -222,8 +222,11 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     return (
                         <div key={f.id} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: friendDates.length ? 14 : 0 }}>
-                                <div style={{ width: 44, height: 44, borderRadius: 22, background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#000", flexShrink: 0 }}>
-                                    {f.username?.[0]?.toUpperCase()}
+                                <div style={{ width: 44, height: 44, borderRadius: 22, background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#000", flexShrink: 0, overflow: "hidden" }}>
+                                    {f.avatar1_url
+                                        ? <img src={f.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        : f.username?.[0]?.toUpperCase()
+                                    }
                                 </div>
                                 <div>
                                     <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
