@@ -34,16 +34,16 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
         .map(t => ({ label: t, items: suggestions.filter(s => s.label === t) }))
         .filter(g => g.items.length);
 
+    const getFrequency = (exName) => {
+        return history[exName]?.length || 0;
+    };
+
     const freeItems = (() => {
         if (!isFree || !activeTab) return [];
         const fixed = SUGGESTIONS[activeTab] || [];
         const custom = (muscleEx[activeTab] || []).map(ex => ex.name);
         return [...new Set([...fixed, ...custom])].sort((a, b) => getFrequency(b) - getFrequency(a));
     })();
-
-    const getFrequency = (exName) => {
-        return history[exName]?.length || 0;
-    };
 
     const handleQuick = (s) => {
         if (added.has(s)) {
