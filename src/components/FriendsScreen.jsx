@@ -170,19 +170,23 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 </button>
                 {isOpen && Object.entries(exMap)
                     .sort(([, a], [, b]) => (a.order ?? 999) - (b.order ?? 999))
-                    .map(([name, { sets }]) => (
-                        <div key={name} style={{ background: "var(--card2)", borderRadius: 10, padding: "8px 12px", marginBottom: 4 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{name}</div>
-                            {sets.map((s, i) => (
-                                <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>
-                                    {i + 1} {s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}rep
-                                </div>
-                            ))}
-                        </div>
-                    ))}
+                    .map(([name, val]) => {
+                        const sets = Array.isArray(val) ? val : (val.sets || []);
+                        return (
+                            <div key={name} style={{ background: "var(--card2)", borderRadius: 10, padding: "8px 12px", marginBottom: 4 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{name}</div>
+                                {sets.map((s, i) => (
+                                    <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>
+                                        {i + 1} {s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}rep
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
             </div>
         );
     };
+
 
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
