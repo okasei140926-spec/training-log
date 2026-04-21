@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 
-export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [], muscleEx = {}, }) {
+export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [], muscleEx = {}, history = {} }) {
     const inputRef = useRef(null);
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
@@ -38,8 +38,12 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
         if (!isFree || !activeTab) return [];
         const fixed = SUGGESTIONS[activeTab] || [];
         const custom = (muscleEx[activeTab] || []).map(ex => ex.name);
-        return [...new Set([...fixed, ...custom])];
+        return [...new Set([...fixed, ...custom])].sort((a, b) => getFrequency(b) - getFrequency(a));
     })();
+
+    const getFrequency = (exName) => {
+        return history[exName]?.length || 0;
+    };
 
     const handleQuick = (s) => {
         if (added.has(s)) {
@@ -120,7 +124,7 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
                     {!isFree && grouped.map(group => (
                         <div key={group.label} style={{ marginBottom: 16 }}>
                             <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 8, textTransform: "uppercase" }}>{group.label}</div>
-                            <SuggestionList items={group.items.map(s => s.name)} />
+                            <SuggestionList items={group.items.map(s => s.name).sort((a, b) => getFrequency(b) - getFrequency(a))} />
                         </div>
                     ))}
                 </div>
