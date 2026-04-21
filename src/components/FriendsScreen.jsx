@@ -132,12 +132,12 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
     // 自分の直近データ
     const myRecentGrouped = Object.entries(history || {})
-        .flatMap(([name, recs]) => recs.map(r => ({ name, date: r.date, sets: r.sets })))
+        .flatMap(([name, recs]) => recs.map(r => ({ name, date: r.date, sets: r.sets, order: r.order ?? 999 })))
         .filter(r => r.date >= thresholdStr)
         .reduce((acc, r) => {
             if (!acc[r.date]) acc[r.date] = {};
-            if (!acc[r.date][r.name]) acc[r.date][r.name] = [];
-            acc[r.date][r.name].push(...(r.sets || []));
+            if (!acc[r.date][r.name]) acc[r.date][r.name] = { sets: [], order: r.order ?? 999 };
+            acc[r.date][r.name].sets.push(...(r.sets || []));
             return acc;
         }, {});
 
@@ -168,16 +168,18 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)" }}>{date === today ? "今日" : date}</div>
                     <div style={{ fontSize: 11, color: "var(--text3)" }}>{isOpen ? "▲" : "▼"}</div>
                 </button>
-                {isOpen && Object.entries(exMap).map(([name, sets]) => (
-                    <div key={name} style={{ background: "var(--card2)", borderRadius: 10, padding: "8px 12px", marginBottom: 4 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{name}</div>
-                        {sets.map((s, i) => (
-                            <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>
-                                {i + 1} {s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}rep
-                            </div>
-                        ))}
-                    </div>
-                ))}
+                {isOpen && Object.entries(exMap)
+                    .sort(([, a], [, b]) => (a.order ?? 999) - (b.order ?? 999))
+                    .map(([name, { sets }]) => (
+                        <div key={name} style={{ background: "var(--card2)", borderRadius: 10, padding: "8px 12px", marginBottom: 4 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{name}</div>
+                            {sets.map((s, i) => (
+                                <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>
+                                    {i + 1} {s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}rep
+                                </div>
+                            ))}
+                        </div>
+                    ))}
             </div>
         );
     };
