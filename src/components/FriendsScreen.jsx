@@ -14,6 +14,8 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [showEditName, setShowEditName] = useState(false);
     const [newUsername, setNewUsername] = useState("");
     const [avatarUrl, setAvatarUrl] = useState(null);
+    const [loading, setLoading] = useState(true);
+
 
 
     const handleCopyInvite = async () => {
@@ -38,6 +40,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         if (!user) return;
 
         const fetchFriends = async () => {
+            setLoading(true);
             try {
                 const { data: friendships, error: friendshipsError } = await supabase
                     .from("friendships")
@@ -86,9 +89,11 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 }));
 
                 setFriends(friendsWithHistory);
+                setLoading(false);
             } catch (err) {
                 console.error(err);
                 setFriends([]);
+                setLoading(false);
             }
         };
 
@@ -234,7 +239,9 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             </div>
 
             {/* 友達カード */}
-            {friends.length === 0 ? (
+            {loading ? (
+                <div style={{ textAlign: "center", padding: 32, color: "var(--text2)", fontSize: 14 }}>読み込み中...</div>
+            ) : friends.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 32, color: "var(--text2)", fontSize: 14 }}>
                     まだ友達がいません。招待リンクを送ろう！
                 </div>
@@ -276,27 +283,29 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 })
             )}
 
-            <div style={{ ...S.sLabel, marginTop: 20 }}>強さ比較（推定1RM）</div>
-            {KEY_EXERCISES.map(ex => {
-                const entries = [
-                    { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
-                    ...friends.map(f => {
-                        const recs = f.history?.[ex];
-                        const value = recs?.length ? Math.max(...recs.map(r => Math.round(calc1RM(r.sets)))) : 0;
-                        return { name: f.username, color: "#4ade80", value };
-                    }),
-                ].filter(e => e.value > 0);
-                if (!entries.length) return null;
-                const maxVal = Math.max(...entries.map(e => e.value));
-                return (
-                    <div key={ex} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 10, border: "1px solid var(--border)" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, color: "var(--text)" }}>{ex}</div>
-                        {entries.sort((a, b) => b.value - a.value).map((e, i) => (
-                            <CompareBar key={e.name} rank={i + 1} name={e.name} value={e.value} max={maxVal} color={e.color} />
-                        ))}
-                    </div>
-                );
-            })}
+            < div style={{ ...S.sLabel, marginTop: 20 }}>強さ比較（推定1RM）</div>
+            {
+                KEY_EXERCISES.map(ex => {
+                    const entries = [
+                        { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
+                        ...friends.map(f => {
+                            const recs = f.history?.[ex];
+                            const value = recs?.length ? Math.max(...recs.map(r => Math.round(calc1RM(r.sets)))) : 0;
+                            return { name: f.username, color: "#4ade80", value };
+                        }),
+                    ].filter(e => e.value > 0);
+                    if (!entries.length) return null;
+                    const maxVal = Math.max(...entries.map(e => e.value));
+                    return (
+                        <div key={ex} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 10, border: "1px solid var(--border)" }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, color: "var(--text)" }}>{ex}</div>
+                            {entries.sort((a, b) => b.value - a.value).map((e, i) => (
+                                <CompareBar key={e.name} rank={i + 1} name={e.name} value={e.value} max={maxVal} color={e.color} />
+                            ))}
+                        </div>
+                    );
+                })
+            }
 
             <div style={{ background: "var(--card)", borderRadius: 16, padding: "20px", border: "1px dashed var(--border2)", textAlign: "center", marginTop: 8 }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>👥</div>
@@ -308,31 +317,35 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 </button>
             </div>
 
-            {showEditName && (
-                <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#00000066", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
-                    <div style={{ background: "var(--card)", borderRadius: 16, padding: 24, width: "100%" }}>
-                        <h3 style={{ marginBottom: 16, color: "var(--text)" }}>ユーザー名を変更</h3>
-                        <input placeholder="新しいユーザー名" value={newUsername} onChange={e => setNewUsername(e.target.value)}
-                            style={{ display: "block", width: "100%", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border2)", background: "var(--card2)", color: "var(--text)", fontSize: 15, boxSizing: "border-box", marginBottom: 12 }} />
-                        <button onClick={async () => {
-                            if (!newUsername.trim()) return;
-                            await supabase.from("profiles").update({ username: newUsername }).eq("id", user.id);
-                            setShowEditName(false); setNewUsername("");
-                        }} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 8 }}>保存</button>
-                        <button onClick={() => { setShowEditName(false); setNewUsername(""); }}
-                            style={{ width: "100%", padding: 14, borderRadius: 10, background: "none", border: "1px solid var(--border2)", fontSize: 15, cursor: "pointer", color: "var(--text2)" }}>キャンセル</button>
+            {
+                showEditName && (
+                    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#00000066", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+                        <div style={{ background: "var(--card)", borderRadius: 16, padding: 24, width: "100%" }}>
+                            <h3 style={{ marginBottom: 16, color: "var(--text)" }}>ユーザー名を変更</h3>
+                            <input placeholder="新しいユーザー名" value={newUsername} onChange={e => setNewUsername(e.target.value)}
+                                style={{ display: "block", width: "100%", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border2)", background: "var(--card2)", color: "var(--text)", fontSize: 15, boxSizing: "border-box", marginBottom: 12 }} />
+                            <button onClick={async () => {
+                                if (!newUsername.trim()) return;
+                                await supabase.from("profiles").update({ username: newUsername }).eq("id", user.id);
+                                setShowEditName(false); setNewUsername("");
+                            }} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 8 }}>保存</button>
+                            <button onClick={() => { setShowEditName(false); setNewUsername(""); }}
+                                style={{ width: "100%", padding: 14, borderRadius: 10, background: "none", border: "1px solid var(--border2)", fontSize: 15, cursor: "pointer", color: "var(--text2)" }}>キャンセル</button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-            {selectedFriend && (
-                <FriendDetailModal
-                    friend={selectedFriend}
-                    onClose={() => setSelectedFriend(null)}
-                    onCopyMenu={(exercises) => { onCopyMenu(exercises); setSelectedFriend(null); }}
-                />
-            )}
-        </div>
+            {
+                selectedFriend && (
+                    <FriendDetailModal
+                        friend={selectedFriend}
+                        onClose={() => setSelectedFriend(null)}
+                        onCopyMenu={(exercises) => { onCopyMenu(exercises); setSelectedFriend(null); }}
+                    />
+                )
+            }
+        </div >
     );
 }
 
