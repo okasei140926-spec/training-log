@@ -171,8 +171,8 @@ export default function LogScreen({
 
                         const doneSets = sets.filter(s => s.done && s.weight && s.reps);
                         const cur1RM = calc1RM(doneSets);
-                        const prev1RM = prev ? calc1RM(prev.sets) : 0;
-                        const isPRPace = doneSets.length > 0 && prev1RM > 0 && cur1RM > prev1RM * 1.001;
+                        const pr1RM = pr ? calc1RM(pr.sets) : 0;
+                        const isPR = doneSets.length > 0 && pr1RM > 0 && pr && cur1RM > pr1RM * 1.001;
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = pr?.sets?.reduce((best, s) => {
@@ -241,7 +241,7 @@ export default function LogScreen({
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
                                 {(dragHandleProps) => (
-                                    <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPRPace ? "#4ade8055" : "var(--border)"}` }}>
+                                    <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "#4ade8055" : "var(--border)"}` }}>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                             <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
@@ -296,7 +296,7 @@ export default function LogScreen({
                                                     <>
                                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                                                             <div style={{ fontSize: 11, color: "var(--text2)" }}>前回 <span style={{ color: "var(--text3)" }}>{prev.date}</span></div>
-                                                            {isPRPace && <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700 }}>PR更新！</div>}
+                                                            {isPR && <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700 }}>PR更新！</div>}
                                                         </div>
                                                         <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 3, lineHeight: 1.6 }}>
                                                             {prev.sets?.map((s, i) => (
