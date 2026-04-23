@@ -16,6 +16,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [avatarUrl, setAvatarUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [kudos, setKudos] = useState({});
+    const [receivedKudos, setReceivedKudos] = useState([]);
 
 
 
@@ -105,14 +106,25 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         if (!user) return;
         const fetchKudos = async () => {
             const today = new Date().toISOString().split("T")[0];
-            const { data } = await supabase
+
+            // 自分が送ったkudos
+            const { data: sent } = await supabase
                 .from("kudos")
                 .select("to_user_id")
                 .eq("from_user_id", user.id)
                 .eq("date", today);
-            const sent = {};
-            (data || []).forEach(k => { sent[k.to_user_id] = true; });
-            setKudos(sent);
+
+            // 自分がもらったkudos
+            const { data: received } = await supabase
+                .from("kudos")
+                .select("from_user_id, profiles(username)")
+                .eq("to_user_id", user.id)
+                .eq("date", today);
+
+            const sentMap = {};
+            (sent || []).forEach(k => { sentMap[k.to_user_id] = true; });
+            setKudos(sentMap);
+            setReceivedKudos(received || []);
         };
         fetchKudos();
     }, [user]);
@@ -217,6 +229,13 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             )}
 
             <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
+
+            {receivedKudos.length > 0 && (
+                <div style={{ background: "#4ade8022", border: "1px solid #4ade8044", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)" }}>
+                    🔥 {receivedKudos.map(k => k.profiles?.username).join("、")}から今日クドスをもらった！
+                </div>
+            )}
+
 
             {/* 自分のカード */}
             <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", position: "relative" }}>
