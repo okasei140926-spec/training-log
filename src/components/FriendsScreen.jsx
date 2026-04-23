@@ -15,6 +15,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [newUsername, setNewUsername] = useState("");
     const [avatarUrl, setAvatarUrl] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [kudos, setKudos] = useState({});
 
 
 
@@ -99,6 +100,23 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
         fetchFriends();
     }, [user]);
+
+    useEffect(() => {
+        if (!user) return;
+        const fetchKudos = async () => {
+            const today = new Date().toISOString().split("T")[0];
+            const { data } = await supabase
+                .from("kudos")
+                .select("to_user_id")
+                .eq("from_user_id", user.id)
+                .eq("date", today);
+            const sent = {};
+            (data || []).forEach(k => { sent[k.to_user_id] = true; });
+            setKudos(sent);
+        };
+        fetchKudos();
+    }, [user]);
+
 
     useEffect(() => {
         if (!user) return;
@@ -276,7 +294,21 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                     }
                                 </div>
                                 <div>
-                                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
+                                        <button onClick={async () => {
+                                            const today = new Date().toISOString().split("T")[0];
+                                            await supabase.from("kudos").upsert({
+                                                from_user_id: user.id,
+                                                to_user_id: f.id,
+                                                date: today,
+                                            });
+                                            setKudos(p => ({ ...p, [f.id]: true }));
+                                        }} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", opacity: kudos[f.id] ? 0.4 : 1 }}>
+                                            🔥
+                                        </button>
+                                    </div>
+
                                     <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>直近7日 {friendExCount}種目</div>
                                 </div>
                             </div>
