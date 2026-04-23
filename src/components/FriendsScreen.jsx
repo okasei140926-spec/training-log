@@ -384,7 +384,9 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                             <button onClick={async () => {
                                 if (!newUsername.trim()) return;
                                 await supabase.from("profiles").update({ username: newUsername }).eq("id", user.id);
-                                setShowEditName(false); setNewUsername("");
+                                setShowEditName(false);
+                                setNewUsername("");
+                                window.location.reload();
                             }} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 8 }}>保存</button>
                             <button onClick={() => { setShowEditName(false); setNewUsername(""); }}
                                 style={{ width: "100%", padding: 14, borderRadius: 10, background: "none", border: "1px solid var(--border2)", fontSize: 15, cursor: "pointer", color: "var(--text2)" }}>キャンセル</button>
