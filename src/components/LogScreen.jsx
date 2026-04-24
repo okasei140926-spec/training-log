@@ -197,6 +197,17 @@ export default function LogScreen({
                             prSets.length > 0 &&
                             cur1RM > pr1RM * 1.001;
 
+                        console.log("PR_DEBUG", {
+                            exercise: ex.name,
+                            sets,
+                            doneSets,
+                            cur1RM,
+                            pr,
+                            prSets: pr?.sets,
+                            pr1RM,
+                            isPR
+                        });
+
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = pr?.sets?.reduce((best, s) => {
                             if (s.weight === "BW" || !s.weight || !s.reps) return best;
