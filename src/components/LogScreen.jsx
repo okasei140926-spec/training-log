@@ -183,12 +183,18 @@ export default function LogScreen({
                         });
 
                         const cur1RM = calc1RM(doneSets);
-                        const pr1RM = pr ? calc1RM(pr.sets) : 0;
+
+                        const prSets = pr?.sets?.filter(s => {
+                            const w = Number(s.weight);
+                            const r = Number(s.reps);
+                            return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+                        }) || [];
+
+                        const pr1RM = calc1RM(prSets);
 
                         const isPR =
                             doneSets.length > 0 &&
-                            pr1RM > 0 &&
-                            pr &&
+                            prSets.length > 0 &&
                             cur1RM > pr1RM * 1.001;
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
