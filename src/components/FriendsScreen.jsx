@@ -17,6 +17,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [loading, setLoading] = useState(true);
     const [kudos, setKudos] = useState({});
     const [receivedKudos, setReceivedKudos] = useState([]);
+    const [myUsername, setMyUsername] = useState("");
 
 
 
@@ -135,10 +136,11 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         const fetchProfile = async () => {
             const { data } = await supabase
                 .from("profiles")
-                .select("avatar1_url")
+                .select("avatar1_url, username")
                 .eq("id", user.id)
                 .single();
             if (data?.avatar1_url) setAvatarUrl(data.avatar1_url);
+            if (data?.username) setMyUsername(data.username);
         };
         fetchProfile();
     }, [user]);
@@ -270,7 +272,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     </div>
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>自分</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{myUsername || "自分"}</div>
                             {activeToday && <div style={{ padding: "2px 8px", borderRadius: 10, background: "#4ade8022", border: "1px solid #4ade8044", fontSize: 10, color: "#4ade80", fontWeight: 700 }}>完了 ✓</div>}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
@@ -384,6 +386,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                             <button onClick={async () => {
                                 if (!newUsername.trim()) return;
                                 await supabase.from("profiles").update({ username: newUsername }).eq("id", user.id);
+                                setMyUsername(newUsername);
                                 setShowEditName(false);
                                 setNewUsername("");
                                 window.location.reload();
