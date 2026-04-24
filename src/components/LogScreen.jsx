@@ -169,10 +169,25 @@ export default function LogScreen({
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
                         const prIsAlsoPrev = pr && prev && pr.date === prev.date;
 
-                        const doneSets = sets.filter(s => s.done && s.weight && s.reps);
-                        const cur1RM = calc1RM(doneSets);
+                        const doneSets = sets.filter(s => {
+                            const w = Number(s.weight);
+                            const r = Number(s.reps);
+                            return s.done === true && Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+                        });
+
+                        const doneSetsKg = doneSets.map(s => ({
+                            ...s,
+                            weight: exUnit === "lbs" ? String(Number(s.weight) / 2.2046) : s.weight
+                        }));
+
+                        const cur1RM = calc1RM(doneSetsKg);
                         const pr1RM = pr ? calc1RM(pr.sets) : 0;
-                        const isPR = doneSets.length > 0 && pr1RM > 0 && pr && cur1RM > pr1RM * 1.001;
+
+                        const isPR =
+                            doneSets.length > 0 &&
+                            pr1RM > 0 &&
+                            pr &&
+                            cur1RM > pr1RM * 1.001;
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = pr?.sets?.reduce((best, s) => {
