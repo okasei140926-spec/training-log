@@ -172,7 +172,7 @@ export default function LogScreen({
                         const doneSets = sets.filter(s => {
                             const w = Number(s.weight);
                             const r = Number(s.reps);
-                            return s.done === true && Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+                            return s.done && Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
                         });
 
                         const cur1RM = calc1RM(doneSets);
