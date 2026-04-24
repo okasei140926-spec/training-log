@@ -11,17 +11,24 @@ export const useWorkout = ({ history, sessionHistory, setLogData, getExSets }) =
     };
 
     const getPR = (name) => {
-        const recs = (sessionHistory || history)[name];
+        const recs = history?.[name]; // sessionHistoryを使わない
         if (!recs || !recs.length) return null;
 
         let best = null;
         let bestRM = 0;
 
         recs.forEach((r) => {
-            const rm = calc1RM(r.sets);
+            const validSets = (r.sets || []).filter(s => {
+                const w = Number(s.weight);
+                const reps = Number(s.reps);
+                return Number.isFinite(w) && Number.isFinite(reps) && w > 0 && reps > 0;
+            });
+
+            const rm = calc1RM(validSets);
+
             if (rm > bestRM) {
                 bestRM = rm;
-                best = { ...r, rm: Math.round(rm) };
+                best = { ...r, sets: validSets, rm: Math.round(rm) };
             }
         });
 
