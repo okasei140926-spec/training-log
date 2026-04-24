@@ -174,7 +174,6 @@ export default function LogScreen({
                             const r = Number(s.reps);
 
                             return (
-                                s.done === true &&
                                 Number.isFinite(w) &&
                                 Number.isFinite(r) &&
                                 w > 0 &&
