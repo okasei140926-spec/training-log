@@ -175,12 +175,7 @@ export default function LogScreen({
                             return s.done === true && Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
                         });
 
-                        const doneSetsKg = doneSets.map(s => ({
-                            ...s,
-                            weight: exUnit === "lbs" ? String(Number(s.weight) / 2.2046) : s.weight
-                        }));
-
-                        const cur1RM = calc1RM(doneSetsKg);
+                        const cur1RM = calc1RM(doneSets);
                         const pr1RM = pr ? calc1RM(pr.sets) : 0;
 
                         const isPR =
