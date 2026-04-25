@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { calc1RM, dispW, KG_TO_LBS } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
+import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import SetRow from "./log/SetRow";
 
 
@@ -63,6 +64,7 @@ export default function LogScreen({
     const [editingId, setEditingId] = useState(null);
     const [editingName, setEditingName] = useState("");
     const [activeExIdx, setActiveExIdx] = useState(0);
+    const [historyTarget, setHistoryTarget] = useState(null);
     const editRef = useRef(null);
 
     const accentColor = dayColor || "var(--text)";
@@ -115,6 +117,16 @@ export default function LogScreen({
 
         onReorderEx(oldIndex, newIndex);
     };
+
+    const historyTargetRecords = historyTarget
+        ? [...(history?.[historyTarget] || [])]
+            .filter((record) => record?.date && record.date !== logDate)
+            .sort((a, b) => b.date.localeCompare(a.date))
+        : [];
+
+    const historyTargetUnit = historyTarget && getExUnit
+        ? (getExUnit(historyTarget) === "lbs" ? "lbs" : "kg")
+        : (unit === "lbs" ? "lbs" : "kg");
 
     return (
         <div className="fade-in" style={{ padding: "20px", paddingBottom: 200 }}>
@@ -315,6 +327,24 @@ export default function LogScreen({
                                                         {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
                                                     </button>
                                                 )}
+                                                <button
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setHistoryTarget(ex.name);
+                                                    }}
+                                                    style={{
+                                                        padding: "3px 9px",
+                                                        borderRadius: 10,
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        border: "1px solid var(--border2)",
+                                                        background: "var(--card2)",
+                                                        color: "var(--text2)",
+                                                    }}
+                                                >
+                                                    履歴
+                                                </button>
                                                 <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
                                             </div>
                                         </div>
@@ -414,6 +444,15 @@ export default function LogScreen({
                     onQuickAdd={onQuickAddEx}
                     existingNames={exercises.map(e => e.name)}
                     muscleEx={muscleEx}
+                />
+            )}
+
+            {historyTarget && (
+                <LogExerciseHistoryModal
+                    exName={historyTarget}
+                    records={historyTargetRecords}
+                    weightDisplayUnit={historyTargetUnit}
+                    onClose={() => setHistoryTarget(null)}
                 />
             )}
 
