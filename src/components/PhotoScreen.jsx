@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabase";
+import PhotoCompareModal from "./modals/PhotoCompareModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
@@ -15,6 +16,11 @@ export default function PhotoScreen({ user }) {
     const [selectedPhotoLoading, setSelectedPhotoLoading] = useState(false);
     const [photoDeletingId, setPhotoDeletingId] = useState(null);
     const [viewerPhoto, setViewerPhoto] = useState(null);
+    const [isCompareMode, setIsCompareMode] = useState(false);
+    const [compareSelection, setCompareSelection] = useState([]);
+    const [comparePhotos, setComparePhotos] = useState([]);
+    const [isCompareOpen, setIsCompareOpen] = useState(false);
+    const [compareLoading, setCompareLoading] = useState(false);
 
     useEffect(() => {
         let isActive = true;
@@ -108,6 +114,76 @@ export default function PhotoScreen({ user }) {
 
     const selectedDateRows = selectedDate ? (photoMap[selectedDate] || []) : [];
 
+    const resetCompareState = () => {
+        setIsCompareMode(false);
+        setCompareSelection([]);
+        setComparePhotos([]);
+        setIsCompareOpen(false);
+        setCompareLoading(false);
+    };
+
+    const handleCompareToggle = () => {
+        if (isCompareMode) {
+            resetCompareState();
+            return;
+        }
+
+        setViewerPhoto(null);
+        setIsCompareMode(true);
+        setCompareSelection([]);
+        setComparePhotos([]);
+        setIsCompareOpen(false);
+    };
+
+    const handleCompareSelect = async (row) => {
+        if (!row?.id || compareLoading) return;
+
+        let nextSelection;
+
+        if (compareSelection.some((selected) => selected.id === row.id)) {
+            nextSelection = compareSelection.filter((selected) => selected.id !== row.id);
+            setCompareSelection(nextSelection);
+            return;
+        }
+
+        if (compareSelection.length >= 2) return;
+
+        nextSelection = [...compareSelection, row];
+        setCompareSelection(nextSelection);
+
+        if (nextSelection.length !== 2) return;
+
+        setCompareLoading(true);
+
+        try {
+            const signedEntries = await Promise.all(nextSelection.map(async (photo, idx) => {
+                const { data, error } = await supabase
+                    .storage
+                    .from("progress-photos-private")
+                    .createSignedUrl(photo.storage_path, 3600);
+
+                if (error || !data?.signedUrl) return null;
+
+                return {
+                    id: photo.id,
+                    workout_date: photo.workout_date,
+                    url: data.signedUrl,
+                    title: `${photo.workout_date} の体写真 ${idx + 1}`,
+                };
+            }));
+
+            const readyPhotos = signedEntries.filter(Boolean);
+            if (readyPhotos.length === 2) {
+                setComparePhotos(readyPhotos);
+                setIsCompareOpen(true);
+            } else {
+                setCompareSelection([]);
+            }
+        } finally {
+            setCompareLoading(false);
+        }
+    };
+
     const handlePhotoDelete = async (row) => {
         if (!user?.id || !row?.id || !row?.storage_path || photoDeletingId) return;
 
@@ -138,6 +214,8 @@ export default function PhotoScreen({ user }) {
                 delete next[row.id];
                 return next;
             });
+            setCompareSelection((prev) => prev.filter((photo) => photo.id !== row.id));
+            setComparePhotos((prev) => prev.filter((photo) => photo.id !== row.id));
             if (selectedDate === row.workout_date && selectedDateRows.length === 1) {
                 setSelectedDate(null);
             }
@@ -275,23 +353,26 @@ export default function PhotoScreen({ user }) {
                     <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>写真一覧</div>
                         <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                            {selectedDate ? `${selectedDate} の写真 ${selectedDateRows.length}枚` : "日付をタップして表示"}
+                            {isCompareMode
+                                ? `比較したい写真を2枚選択してください${compareSelection.length ? ` (${compareSelection.length}/2)` : ""}`
+                                : selectedDate ? `${selectedDate} の写真 ${selectedDateRows.length}枚` : "日付をタップして表示"}
                         </div>
                     </div>
                     <button
-                        disabled
+                        onClick={handleCompareToggle}
+                        disabled={!user || !photoRows.length || compareLoading}
                         style={{
                             padding: "8px 12px",
                             borderRadius: 12,
-                            background: "var(--card2)",
+                            background: isCompareMode ? "var(--text)" : "var(--card2)",
                             border: "1px solid var(--border2)",
-                            color: "var(--text4)",
+                            color: isCompareMode ? "var(--bg)" : (!user || !photoRows.length || compareLoading ? "var(--text4)" : "var(--text)"),
                             fontSize: 12,
                             fontWeight: 700,
-                            opacity: 0.6,
+                            opacity: !user || !photoRows.length || compareLoading ? 0.6 : 1,
                         }}
                     >
-                        比較（準備中）
+                        {compareLoading ? "準備中..." : isCompareMode ? "比較をやめる" : "比較"}
                     </button>
                 </div>
 
@@ -312,12 +393,51 @@ export default function PhotoScreen({ user }) {
                         {selectedDateRows.map((row, idx) => (
                             <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
                                 {selectedPhotoUrls[row.id] ? (
-                                    <img
-                                        src={selectedPhotoUrls[row.id]}
-                                        alt={`${selectedDate} progress ${idx + 1}`}
-                                        onClick={() => setViewerPhoto({ id: row.id, url: selectedPhotoUrls[row.id], title: `${selectedDate} の体写真 ${idx + 1}` })}
-                                        style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", aspectRatio: "1 / 1", cursor: "zoom-in" }}
-                                    />
+                                    <div style={{ position: "relative" }}>
+                                        <img
+                                            src={selectedPhotoUrls[row.id]}
+                                            alt={`${selectedDate} progress ${idx + 1}`}
+                                            onClick={() => {
+                                                if (isCompareMode) {
+                                                    handleCompareSelect(row);
+                                                    return;
+                                                }
+                                                setViewerPhoto({ id: row.id, url: selectedPhotoUrls[row.id], title: `${selectedDate} の体写真 ${idx + 1}` });
+                                            }}
+                                            style={{
+                                                width: "100%",
+                                                display: "block",
+                                                borderRadius: 12,
+                                                objectFit: "cover",
+                                                aspectRatio: "1 / 1",
+                                                cursor: isCompareMode ? "pointer" : "zoom-in",
+                                                border: compareSelection.some((selected) => selected.id === row.id) ? "2px solid #ef4444" : "2px solid transparent",
+                                                boxSizing: "border-box",
+                                            }}
+                                        />
+                                        {compareSelection.some((selected) => selected.id === row.id) && (
+                                            <div
+                                                style={{
+                                                    position: "absolute",
+                                                    top: 8,
+                                                    right: 8,
+                                                    minWidth: 24,
+                                                    height: 24,
+                                                    borderRadius: 999,
+                                                    background: "#ef4444",
+                                                    color: "#fff",
+                                                    fontSize: 12,
+                                                    fontWeight: 800,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
+                                                }}
+                                            >
+                                                {compareSelection.findIndex((selected) => selected.id === row.id) + 1}
+                                            </div>
+                                        )}
+                                    </div>
                                 ) : (
                                     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12, aspectRatio: "1 / 1", color: "var(--text3)", fontSize: 12 }}>
                                         写真を表示できません
@@ -359,6 +479,13 @@ export default function PhotoScreen({ user }) {
                     imageUrl={viewerPhoto.url}
                     title={viewerPhoto.title}
                     onClose={() => setViewerPhoto(null)}
+                />
+            )}
+
+            {isCompareOpen && comparePhotos.length === 2 && (
+                <PhotoCompareModal
+                    photos={comparePhotos}
+                    onClose={resetCompareState}
                 />
             )}
         </div>
