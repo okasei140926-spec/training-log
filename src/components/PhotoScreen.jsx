@@ -11,10 +11,10 @@ export default function PhotoScreen({ user }) {
     const [photoRows, setPhotoRows] = useState([]);
     const [photoLoading, setPhotoLoading] = useState(false);
     const [selectedDate, setSelectedDate] = useState(null);
-    const [selectedPhotoUrl, setSelectedPhotoUrl] = useState(null);
+    const [selectedPhotoUrls, setSelectedPhotoUrls] = useState({});
     const [selectedPhotoLoading, setSelectedPhotoLoading] = useState(false);
-    const [photoDeleting, setPhotoDeleting] = useState(false);
-    const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+    const [photoDeletingId, setPhotoDeletingId] = useState(null);
+    const [viewerPhoto, setViewerPhoto] = useState(null);
 
     useEffect(() => {
         let isActive = true;
@@ -24,7 +24,8 @@ export default function PhotoScreen({ user }) {
                 if (!isActive) return;
                 setPhotoRows([]);
                 setSelectedDate(null);
-                setSelectedPhotoUrl(null);
+                setSelectedPhotoUrls({});
+                setViewerPhoto(null);
                 setPhotoLoading(false);
                 return;
             }
@@ -33,7 +34,7 @@ export default function PhotoScreen({ user }) {
 
             const { data, error } = await supabase
                 .from("progress_photos")
-                .select("workout_date, storage_path")
+                .select("id, workout_date, storage_path")
                 .eq("user_id", user.id)
                 .order("workout_date", { ascending: false });
 
@@ -45,7 +46,14 @@ export default function PhotoScreen({ user }) {
                 return;
             }
 
-            setPhotoRows(data);
+            setPhotoRows(
+                [...data].sort((a, b) => {
+                    if (a.workout_date !== b.workout_date) {
+                        return String(b.workout_date || "").localeCompare(String(a.workout_date || ""));
+                    }
+                    return String(a.storage_path || "").localeCompare(String(b.storage_path || ""));
+                })
+            );
             setPhotoLoading(false);
         };
 
@@ -58,8 +66,9 @@ export default function PhotoScreen({ user }) {
 
     const photoMap = useMemo(() => {
         return photoRows.reduce((acc, row) => {
-            if (row?.workout_date && row?.storage_path) {
-                acc[row.workout_date] = row.storage_path;
+            if (row?.workout_date) {
+                if (!acc[row.workout_date]) acc[row.workout_date] = [];
+                acc[row.workout_date].push(row);
             }
             return acc;
         }, {});
@@ -68,49 +77,50 @@ export default function PhotoScreen({ user }) {
     const photoDates = useMemo(() => new Set(Object.keys(photoMap)), [photoMap]);
 
     useEffect(() => {
-        if (selectedDate && !photoMap[selectedDate]) {
+        if (selectedDate && !(photoMap[selectedDate] || []).length) {
             setSelectedDate(null);
-            setSelectedPhotoUrl(null);
+            setSelectedPhotoUrls({});
+            setViewerPhoto(null);
         }
     }, [selectedDate, photoMap]);
 
     const openPhotoForDate = async (date) => {
-        const storagePath = photoMap[date];
+        const dateRows = photoMap[date] || [];
         setSelectedDate(date);
-        setSelectedPhotoUrl(null);
-        setIsPhotoViewerOpen(false);
+        setSelectedPhotoUrls({});
+        setViewerPhoto(null);
 
-        if (!storagePath) return;
+        if (!dateRows.length) return;
 
         setSelectedPhotoLoading(true);
 
-        const { data, error } = await supabase
-            .storage
-            .from("progress-photos-private")
-            .createSignedUrl(storagePath, 3600);
+        const signedEntries = await Promise.all(dateRows.map(async (row) => {
+            const { data, error } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .createSignedUrl(row.storage_path, 3600);
+            return error ? null : [row.id, data?.signedUrl || null];
+        }));
 
-        if (!error) {
-            setSelectedPhotoUrl(data?.signedUrl || null);
-        }
-
+        setSelectedPhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
         setSelectedPhotoLoading(false);
     };
 
-    const handlePhotoDelete = async () => {
-        if (!user?.id || !selectedDate || !photoMap[selectedDate] || photoDeleting) return;
+    const selectedDateRows = selectedDate ? (photoMap[selectedDate] || []) : [];
 
-        const confirmed = window.confirm("この日の体写真を削除しますか？");
+    const handlePhotoDelete = async (row) => {
+        if (!user?.id || !row?.id || !row?.storage_path || photoDeletingId) return;
+
+        const confirmed = window.confirm("この写真を削除しますか？");
         if (!confirmed) return;
 
-        setPhotoDeleting(true);
+        setPhotoDeletingId(row.id);
 
         try {
-            const storagePath = photoMap[selectedDate];
-
             const { error: storageError } = await supabase
                 .storage
                 .from("progress-photos-private")
-                .remove([storagePath]);
+                .remove([row.storage_path]);
 
             if (storageError) throw storageError;
 
@@ -118,18 +128,24 @@ export default function PhotoScreen({ user }) {
                 .from("progress_photos")
                 .delete()
                 .eq("user_id", user.id)
-                .eq("workout_date", selectedDate);
+                .eq("id", row.id);
 
             if (dbError) throw dbError;
 
-            setPhotoRows((prev) => prev.filter((row) => row.workout_date !== selectedDate));
-            setSelectedPhotoUrl(null);
-            setSelectedDate(null);
-            setIsPhotoViewerOpen(false);
+            setPhotoRows((prev) => prev.filter((photo) => photo.id !== row.id));
+            setSelectedPhotoUrls((prev) => {
+                const next = { ...prev };
+                delete next[row.id];
+                return next;
+            });
+            if (selectedDate === row.workout_date && selectedDateRows.length === 1) {
+                setSelectedDate(null);
+            }
+            setViewerPhoto((prev) => (prev?.id === row.id ? null : prev));
         } catch (error) {
             console.error("photo delete failed", error);
         } finally {
-            setPhotoDeleting(false);
+            setPhotoDeletingId(null);
         }
     };
 
@@ -257,46 +273,26 @@ export default function PhotoScreen({ user }) {
             <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
                     <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>写真プレビュー</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>写真一覧</div>
                         <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                            {selectedDate ? `${selectedDate} の写真` : "日付をタップして表示"}
+                            {selectedDate ? `${selectedDate} の写真 ${selectedDateRows.length}枚` : "日付をタップして表示"}
                         </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {selectedDate && photoMap[selectedDate] && (
-                            <button
-                                onClick={handlePhotoDelete}
-                                disabled={photoDeleting}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: 12,
-                                    background: "transparent",
-                                    border: "1px solid var(--border2)",
-                                    color: "var(--text3)",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    opacity: photoDeleting ? 0.6 : 1,
-                                }}
-                            >
-                                {photoDeleting ? "削除中..." : "削除"}
-                            </button>
-                        )}
-                        <button
-                            disabled
-                            style={{
-                                padding: "8px 12px",
-                                borderRadius: 12,
-                                background: "var(--card2)",
-                                border: "1px solid var(--border2)",
-                                color: "var(--text4)",
-                                fontSize: 12,
-                                fontWeight: 700,
-                                opacity: 0.6,
-                            }}
-                        >
-                            比較（準備中）
-                        </button>
-                    </div>
+                    <button
+                        disabled
+                        style={{
+                            padding: "8px 12px",
+                            borderRadius: 12,
+                            background: "var(--card2)",
+                            border: "1px solid var(--border2)",
+                            color: "var(--text4)",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            opacity: 0.6,
+                        }}
+                    >
+                        比較（準備中）
+                    </button>
                 </div>
 
                 {!user ? (
@@ -311,29 +307,58 @@ export default function PhotoScreen({ user }) {
                     <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
                         写真を読み込み中...
                     </div>
-                ) : selectedPhotoUrl ? (
-                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
-                        <img
-                            src={selectedPhotoUrl}
-                            alt={`${selectedDate} progress`}
-                            onClick={() => setIsPhotoViewerOpen(true)}
-                            style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", maxHeight: 520, cursor: "zoom-in" }}
-                        />
+                ) : selectedDateRows.length > 0 ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                        {selectedDateRows.map((row, idx) => (
+                            <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
+                                {selectedPhotoUrls[row.id] ? (
+                                    <img
+                                        src={selectedPhotoUrls[row.id]}
+                                        alt={`${selectedDate} progress ${idx + 1}`}
+                                        onClick={() => setViewerPhoto({ id: row.id, url: selectedPhotoUrls[row.id], title: `${selectedDate} の体写真 ${idx + 1}` })}
+                                        style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", aspectRatio: "1 / 1", cursor: "zoom-in" }}
+                                    />
+                                ) : (
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12, aspectRatio: "1 / 1", color: "var(--text3)", fontSize: 12 }}>
+                                        写真を表示できません
+                                    </div>
+                                )}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
+                                    <div style={{ fontSize: 11, color: "var(--text3)" }}>{idx + 1}枚目</div>
+                                    <button
+                                        onClick={() => handlePhotoDelete(row)}
+                                        disabled={photoDeletingId === row.id}
+                                        style={{
+                                            padding: "6px 10px",
+                                            borderRadius: 10,
+                                            background: "transparent",
+                                            border: "1px solid var(--border2)",
+                                            color: "var(--text3)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            opacity: photoDeletingId === row.id ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {photoDeletingId === row.id ? "削除中..." : "削除"}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
                         {photoRows.length > 0
-                            ? "写真がある日付を選ぶとここに表示されます"
+                            ? selectedDate ? "この日に保存されている写真はありません" : "写真がある日付を選ぶとここに表示されます"
                             : "まだ保存されている写真はありません"}
                     </div>
                 )}
             </div>
 
-            {isPhotoViewerOpen && selectedPhotoUrl && (
+            {viewerPhoto?.url && (
                 <PhotoViewerModal
-                    imageUrl={selectedPhotoUrl}
-                    title={`${selectedDate} の体写真`}
-                    onClose={() => setIsPhotoViewerOpen(false)}
+                    imageUrl={viewerPhoto.url}
+                    title={viewerPhoto.title}
+                    onClose={() => setViewerPhoto(null)}
                 />
             )}
         </div>

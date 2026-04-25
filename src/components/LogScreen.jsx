@@ -68,12 +68,12 @@ export default function LogScreen({
     const [editingName, setEditingName] = useState("");
     const [activeExIdx, setActiveExIdx] = useState(0);
     const [historyTarget, setHistoryTarget] = useState(null);
-    const [photoRow, setPhotoRow] = useState(null);
-    const [photoUrl, setPhotoUrl] = useState(null);
+    const [photoRows, setPhotoRows] = useState([]);
+    const [photoUrls, setPhotoUrls] = useState({});
     const [photoLoading, setPhotoLoading] = useState(false);
     const [photoUploading, setPhotoUploading] = useState(false);
-    const [photoDeleting, setPhotoDeleting] = useState(false);
-    const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
+    const [photoDeletingId, setPhotoDeletingId] = useState(null);
+    const [viewerPhoto, setViewerPhoto] = useState(null);
     const editRef = useRef(null);
     const photoInputRef = useRef(null);
 
@@ -137,52 +137,63 @@ export default function LogScreen({
     const historyTargetUnit = historyTarget && getExUnit
         ? (getExUnit(historyTarget) === "lbs" ? "lbs" : "kg")
         : (unit === "lbs" ? "lbs" : "kg");
+    const photoCount = photoRows.length;
+    const photoLimitReached = photoCount >= 5;
 
     useEffect(() => {
         let isActive = true;
 
-        const loadPhoto = async () => {
+        const loadPhotos = async () => {
             if (!user?.id || !logDate) {
                 if (!isActive) return;
-                setPhotoRow(null);
-                setPhotoUrl(null);
+                setPhotoRows([]);
+                setPhotoUrls({});
+                setViewerPhoto(null);
                 setPhotoLoading(false);
                 return;
             }
 
             setPhotoLoading(true);
-            setPhotoRow(null);
-            setPhotoUrl(null);
+            setPhotoRows([]);
+            setPhotoUrls({});
+            setViewerPhoto(null);
 
             const { data, error } = await supabase
                 .from("progress_photos")
-                .select("storage_path, workout_date")
+                .select("id, storage_path, workout_date")
                 .eq("user_id", user.id)
-                .eq("workout_date", logDate)
-                .maybeSingle();
+                .eq("workout_date", logDate);
 
             if (!isActive) return;
 
-            if (error || !data?.storage_path) {
-                setPhotoRow(null);
-                setPhotoUrl(null);
+            if (error || !data?.length) {
+                setPhotoRows([]);
+                setPhotoUrls({});
+                setViewerPhoto(null);
                 setPhotoLoading(false);
                 return;
             }
 
-            const { data: signedData, error: signedError } = await supabase
-                .storage
-                .from("progress-photos-private")
-                .createSignedUrl(data.storage_path, 3600);
+            const nextRows = [...data].sort((a, b) =>
+                String(a.storage_path || "").localeCompare(String(b.storage_path || ""))
+            );
+
+            const signedEntries = await Promise.all(nextRows.map(async (row) => {
+                const { data: signedData, error: signedError } = await supabase
+                    .storage
+                    .from("progress-photos-private")
+                    .createSignedUrl(row.storage_path, 3600);
+                return signedError ? null : [row.id, signedData?.signedUrl || null];
+            }));
 
             if (!isActive) return;
 
-            setPhotoRow(data);
-            setPhotoUrl(signedError ? null : (signedData?.signedUrl || null));
+            setPhotoRows(nextRows);
+            setPhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
             setPhotoLoading(false);
         };
 
-        loadPhoto();
+        loadPhotos();
 
         return () => {
             isActive = false;
@@ -190,7 +201,7 @@ export default function LogScreen({
     }, [user?.id, logDate]);
 
     const handlePhotoPick = () => {
-        if (!user?.id || photoUploading || photoDeleting) return;
+        if (!user?.id || photoUploading || photoDeletingId || photoLimitReached) return;
         photoInputRef.current?.click();
     };
 
@@ -198,30 +209,32 @@ export default function LogScreen({
         const file = e.target.files?.[0];
         e.target.value = "";
 
-        if (!file || !user?.id || !logDate) return;
+        if (!file || !user?.id || !logDate || photoLimitReached) return;
 
         setPhotoUploading(true);
 
         try {
             const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-            const storagePath = `${user.id}/${logDate}/progress-${Date.now()}.${ext}`;
+            const storagePath = `${user.id}/${logDate}/progress-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
             const { error: uploadError } = await supabase
                 .storage
                 .from("progress-photos-private")
-                .upload(storagePath, file, { upsert: true });
+                .upload(storagePath, file);
 
             if (uploadError) throw uploadError;
 
-            const { error: upsertError } = await supabase
+            const { data: insertedRow, error: insertError } = await supabase
                 .from("progress_photos")
-                .upsert({
+                .insert({
                     user_id: user.id,
                     workout_date: logDate,
                     storage_path: storagePath,
-                }, { onConflict: "user_id,workout_date" });
+                })
+                .select("id, storage_path, workout_date")
+                .single();
 
-            if (upsertError) throw upsertError;
+            if (insertError) throw insertError;
 
             const { data: signedData, error: signedError } = await supabase
                 .storage
@@ -230,11 +243,15 @@ export default function LogScreen({
 
             if (signedError) throw signedError;
 
-            setPhotoRow({
-                storage_path: storagePath,
-                workout_date: logDate,
-            });
-            setPhotoUrl(signedData?.signedUrl || null);
+            setPhotoRows((prev) =>
+                [...prev, insertedRow].sort((a, b) =>
+                    String(a.storage_path || "").localeCompare(String(b.storage_path || ""))
+                )
+            );
+            setPhotoUrls((prev) => ({
+                ...prev,
+                [insertedRow.id]: signedData?.signedUrl || null,
+            }));
         } catch (error) {
             console.error("photo upload failed", error);
         } finally {
@@ -242,19 +259,19 @@ export default function LogScreen({
         }
     };
 
-    const handlePhotoDelete = async () => {
-        if (!user?.id || !logDate || !photoRow?.storage_path || photoDeleting) return;
+    const handlePhotoDelete = async (row) => {
+        if (!user?.id || !logDate || !row?.storage_path || !row?.id || photoDeletingId) return;
 
-        const confirmed = window.confirm("この日の体写真を削除しますか？");
+        const confirmed = window.confirm("この写真を削除しますか？");
         if (!confirmed) return;
 
-        setPhotoDeleting(true);
+        setPhotoDeletingId(row.id);
 
         try {
             const { error: storageError } = await supabase
                 .storage
                 .from("progress-photos-private")
-                .remove([photoRow.storage_path]);
+                .remove([row.storage_path]);
 
             if (storageError) throw storageError;
 
@@ -262,17 +279,21 @@ export default function LogScreen({
                 .from("progress_photos")
                 .delete()
                 .eq("user_id", user.id)
-                .eq("workout_date", logDate);
+                .eq("id", row.id);
 
             if (dbError) throw dbError;
 
-            setPhotoRow(null);
-            setPhotoUrl(null);
-            setIsPhotoViewerOpen(false);
+            setPhotoRows((prev) => prev.filter((photo) => photo.id !== row.id));
+            setPhotoUrls((prev) => {
+                const next = { ...prev };
+                delete next[row.id];
+                return next;
+            });
+            setViewerPhoto((prev) => (prev?.id === row.id ? null : prev));
         } catch (error) {
             console.error("photo delete failed", error);
         } finally {
-            setPhotoDeleting(false);
+            setPhotoDeletingId(null);
         }
     };
 
@@ -302,32 +323,14 @@ export default function LogScreen({
                         accept="image/*"
                         style={{ display: "none" }}
                         onChange={handlePhotoChange}
-                        disabled={!user || photoUploading}
+                        disabled={!user || photoUploading || photoLimitReached}
                     />
 
                     {user ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {photoRow && (
-                                <button
-                                    onClick={handlePhotoDelete}
-                                    disabled={photoDeleting || photoUploading}
-                                    style={{
-                                        padding: "8px 12px",
-                                        borderRadius: 12,
-                                        background: "transparent",
-                                        border: "1px solid var(--border2)",
-                                        color: "var(--text3)",
-                                        fontSize: 12,
-                                        fontWeight: 700,
-                                        opacity: photoDeleting || photoUploading ? 0.6 : 1,
-                                    }}
-                                >
-                                    {photoDeleting ? "削除中..." : "削除"}
-                                </button>
-                            )}
                             <button
                                 onClick={handlePhotoPick}
-                                disabled={photoUploading || photoDeleting}
+                                disabled={photoUploading || !!photoDeletingId || photoLimitReached}
                                 style={{
                                     padding: "8px 12px",
                                     borderRadius: 12,
@@ -336,10 +339,10 @@ export default function LogScreen({
                                     color: "var(--text)",
                                     fontSize: 12,
                                     fontWeight: 700,
-                                    opacity: photoUploading || photoDeleting ? 0.6 : 1,
+                                    opacity: photoUploading || photoDeletingId || photoLimitReached ? 0.6 : 1,
                                 }}
                             >
-                                {photoUploading ? "保存中..." : (photoRow ? "変更" : "＋ 体写真を追加")}
+                                {photoUploading ? "保存中..." : "＋ 体写真を追加"}
                             </button>
                         </div>
                     ) : (
@@ -349,18 +352,51 @@ export default function LogScreen({
                     )}
                 </div>
 
+                <div style={{ fontSize: 11, color: photoLimitReached ? "#ef4444" : "var(--text3)", marginBottom: 10 }}>
+                    {photoCount}/5枚 {photoLimitReached ? "・最大5枚まで" : ""}
+                </div>
+
                 {photoLoading ? (
                     <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
                         写真を読み込み中...
                     </div>
-                ) : photoUrl ? (
-                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
-                        <img
-                            src={photoUrl}
-                            alt={`${logDate} progress`}
-                            onClick={() => setIsPhotoViewerOpen(true)}
-                            style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", maxHeight: 260, cursor: "zoom-in" }}
-                        />
+                ) : photoRows.length > 0 ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                        {photoRows.map((row, idx) => (
+                            <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
+                                {photoUrls[row.id] ? (
+                                    <img
+                                        src={photoUrls[row.id]}
+                                        alt={`${logDate} progress ${idx + 1}`}
+                                        onClick={() => setViewerPhoto({ id: row.id, url: photoUrls[row.id], title: `${logDate} の体写真 ${idx + 1}` })}
+                                        style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", aspectRatio: "1 / 1", cursor: "zoom-in" }}
+                                    />
+                                ) : (
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12, aspectRatio: "1 / 1", color: "var(--text3)", fontSize: 12 }}>
+                                        読み込み中...
+                                    </div>
+                                )}
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
+                                    <div style={{ fontSize: 11, color: "var(--text3)" }}>{idx + 1}枚目</div>
+                                    <button
+                                        onClick={() => handlePhotoDelete(row)}
+                                        disabled={photoDeletingId === row.id || photoUploading}
+                                        style={{
+                                            padding: "6px 10px",
+                                            borderRadius: 10,
+                                            background: "transparent",
+                                            border: "1px solid var(--border2)",
+                                            color: "var(--text3)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            opacity: photoDeletingId === row.id || photoUploading ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {photoDeletingId === row.id ? "削除中..." : "削除"}
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
@@ -686,11 +722,11 @@ export default function LogScreen({
                 />
             )}
 
-            {isPhotoViewerOpen && photoUrl && (
+            {viewerPhoto?.url && (
                 <PhotoViewerModal
-                    imageUrl={photoUrl}
-                    title={`${logDate} の体写真`}
-                    onClose={() => setIsPhotoViewerOpen(false)}
+                    imageUrl={viewerPhoto.url}
+                    title={viewerPhoto.title}
+                    onClose={() => setViewerPhoto(null)}
                 />
             )}
 
