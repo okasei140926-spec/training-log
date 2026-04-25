@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
-import { calc1RM } from "../utils/helpers";
 import FriendDetailModal from "./modals/FriendDetailModal";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
@@ -11,6 +10,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
+    const [friendIds, setFriendIds] = useState([]);
     const [todayActiveMap, setTodayActiveMap] = useState({});
     const [showEditName, setShowEditName] = useState(false);
     const [newUsername, setNewUsername] = useState("");
@@ -43,6 +43,45 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             })
         );
     }, [hasValidSet, today]);
+
+    const safeCalc1RM = useCallback((sets) => {
+        const validSets = (sets || []).filter((set) => {
+            if (!set || set.weight === "BW") return false;
+            const weightNum = Number(set.weight);
+            const repsNum = Number(set.reps);
+            if (!Number.isFinite(weightNum) || !Number.isFinite(repsNum)) return false;
+            if (weightNum <= 0 || repsNum <= 0) return false;
+            if (weightNum > 1000 || repsNum > 100) return false;
+            return true;
+        });
+
+        if (!validSets.length) return 0;
+
+        return Math.max(...validSets.map((set) => (
+            Number(set.weight) * (1 + Number(set.reps) / 30)
+        )));
+    }, []);
+
+    const fetchTodayActive = useCallback(async (ids = friendIds) => {
+        if (!user || !ids.length) {
+            setTodayActiveMap({});
+            return;
+        }
+
+        const { data: todayWorkouts, error } = await supabase
+            .from("workouts")
+            .select("user_id, date, data")
+            .eq("date", today)
+            .in("user_id", ids);
+
+        if (error) throw error;
+
+        const nextTodayActiveMap = {};
+        (todayWorkouts || []).forEach((workout) => {
+            nextTodayActiveMap[workout.user_id] = hasTodayWorkoutRecord(workout.data);
+        });
+        setTodayActiveMap(nextTodayActiveMap);
+    }, [friendIds, hasTodayWorkoutRecord, today, user]);
 
     const handleCopyInvite = async () => {
         const url = `${window.location.origin}?ref=${user.id}`;
@@ -77,6 +116,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 if (friendshipsError) throw friendshipsError;
 
                 if (!friendships || friendships.length === 0) {
+                    setFriendIds([]);
                     setFriends([]);
                     setTodayActiveMap({});
                     return;
@@ -88,7 +128,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     )
                 )];
 
-                const [profilesRes, workoutsRes, todayWorkoutsRes] = await Promise.all([
+                const [profilesRes, workoutsRes] = await Promise.all([
                     supabase
                         .from("profiles")
                         .select("id, username, avatar1_url")
@@ -98,41 +138,30 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                         .from("workouts")
                         .select("user_id, data")
                         .in("user_id", friendIds),
-
-                    supabase
-                        .from("workouts")
-                        .select("user_id, date, data")
-                        .eq("date", today)
-                        .in("user_id", friendIds),
                 ]);
 
                 const { data: profiles, error: profilesError } = profilesRes;
                 const { data: workouts, error: workoutsError } = workoutsRes;
-                const { data: todayWorkouts, error: todayWorkoutsError } = todayWorkoutsRes;
 
                 if (profilesError) throw profilesError;
                 if (workoutsError) throw workoutsError;
-                if (todayWorkoutsError) throw todayWorkoutsError;
 
                 const historyMap = new Map(
                     (workouts || []).map(w => [w.user_id, w.data || {}])
                 );
-
-                const nextTodayActiveMap = {};
-                (todayWorkouts || []).forEach((workout) => {
-                    nextTodayActiveMap[workout.user_id] = hasTodayWorkoutRecord(workout.data);
-                });
 
                 const friendsWithHistory = (profiles || []).map(p => ({
                     ...p,
                     history: historyMap.get(p.id) || {}
                 }));
 
+                setFriendIds(friendIds);
                 setFriends(friendsWithHistory);
-                setTodayActiveMap(nextTodayActiveMap);
+                await fetchTodayActive(friendIds);
                 setLoading(false);
             } catch (err) {
                 console.error(err);
+                setFriendIds([]);
                 setFriends([]);
                 setTodayActiveMap({});
                 setLoading(false);
@@ -140,7 +169,17 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         };
 
         fetchFriends();
-    }, [user, today, hasTodayWorkoutRecord]);
+    }, [user, fetchTodayActive]);
+
+    useEffect(() => {
+        if (!user || !friendIds.length) return;
+
+        const intervalId = setInterval(() => {
+            fetchTodayActive(friendIds).catch(console.error);
+        }, 60000);
+
+        return () => clearInterval(intervalId);
+    }, [user, friendIds, fetchTodayActive]);
 
     useEffect(() => {
         if (!user) return;
@@ -221,7 +260,11 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const myBests = KEY_EXERCISES.reduce((acc, ex) => {
         const recs = history[ex];
         if (recs?.length) {
-            const best = Math.max(...recs.map(r => Math.round(calc1RM(r.sets))));
+            const best = Math.max(...recs.map(r => Math.round(safeCalc1RM(
+                Array.isArray(r.sets) && r.sets.length > 0
+                    ? r.sets
+                    : [{ weight: r.weight, reps: r.reps }]
+            ))));
             acc[ex] = best;
         }
         return acc;
@@ -229,6 +272,14 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
     const todayActiveFriends = friends.filter((f) => todayActiveMap[f.id]);
     const todayActiveLabel = todayActiveFriends.map((f) => f.username).join("、");
+    const sortedFriends = [...friends]
+        .map((friend, index) => ({ friend, index }))
+        .sort((a, b) => {
+            const activeDiff = Number(Boolean(todayActiveMap[b.friend.id])) - Number(Boolean(todayActiveMap[a.friend.id]));
+            if (activeDiff !== 0) return activeDiff;
+            return a.index - b.index;
+        })
+        .map(({ friend }) => friend);
 
 
     const renderDateAccordion = (id, date, exMap) => {
@@ -348,7 +399,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     まだ友達がいません。招待リンクを送ろう！
                 </div>
             ) : (
-                friends.map(f => {
+                sortedFriends.map(f => {
                     const friendHistory = f.history || {};
                     const friendGrouped = Object.entries(friendHistory)
                         .flatMap(([name, recs]) => recs.map(r => ({ name, date: r.date, sets: r.sets })))
@@ -421,7 +472,11 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                         { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
                         ...friends.map(f => {
                             const recs = f.history?.[ex];
-                            const value = recs?.length ? Math.max(...recs.map(r => Math.round(calc1RM(r.sets)))) : 0;
+                            const value = recs?.length ? Math.max(...recs.map(r => Math.round(safeCalc1RM(
+                                Array.isArray(r.sets) && r.sets.length > 0
+                                    ? r.sets
+                                    : [{ weight: r.weight, reps: r.reps }]
+                            )))) : 0;
                             return { name: f.username, color: "#4ade80", value };
                         }),
                     ].filter(e => e.value > 0);
