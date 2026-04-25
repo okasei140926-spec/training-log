@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Cropper from "react-easy-crop";
+
+const CROP_ASPECT = 4 / 3;
 
 function createImage(url) {
     return new Promise((resolve, reject) => {
@@ -57,12 +59,17 @@ export default function PhotoCropModal({ file, onCancel, onConfirm }) {
     const [imageUrl, setImageUrl] = useState("");
     const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
+    const [minZoom, setMinZoom] = useState(1);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    const cropWrapperRef = useRef(null);
 
     useEffect(() => {
         const nextUrl = URL.createObjectURL(file);
         setImageUrl(nextUrl);
+        setCrop({ x: 0, y: 0 });
+        setZoom(1);
+        setMinZoom(1);
 
         return () => {
             URL.revokeObjectURL(nextUrl);
@@ -71,6 +78,32 @@ export default function PhotoCropModal({ file, onCancel, onConfirm }) {
 
     const handleCropComplete = useCallback((_croppedArea, nextPixels) => {
         setCroppedAreaPixels(nextPixels);
+    }, []);
+
+    const handleMediaLoaded = useCallback((mediaSize) => {
+        const wrapper = cropWrapperRef.current;
+        if (!wrapper || !mediaSize?.width || !mediaSize?.height) return;
+
+        const containerWidth = wrapper.clientWidth;
+        const containerHeight = wrapper.clientHeight;
+
+        let cropWidth = containerWidth;
+        let cropHeight = cropWidth / CROP_ASPECT;
+
+        if (cropHeight > containerHeight) {
+            cropHeight = containerHeight;
+            cropWidth = cropHeight * CROP_ASPECT;
+        }
+
+        const fitZoom = Math.min(
+            cropWidth / mediaSize.width,
+            cropHeight / mediaSize.height
+        );
+
+        const nextMinZoom = Math.max(0.1, Math.min(1, fitZoom));
+        setMinZoom(nextMinZoom);
+        setZoom(nextMinZoom);
+        setCrop({ x: 0, y: 0 });
     }, []);
 
     const handleConfirm = async () => {
@@ -151,15 +184,18 @@ export default function PhotoCropModal({ file, onCancel, onConfirm }) {
                     </button>
                 </div>
 
-                <div style={{ position: "relative", height: "56vh", minHeight: 360, background: "#111" }}>
+                <div ref={cropWrapperRef} style={{ position: "relative", height: "56vh", minHeight: 360, background: "#111" }}>
                     {imageUrl && (
                         <Cropper
                             image={imageUrl}
+                            aspect={CROP_ASPECT}
                             crop={crop}
                             zoom={zoom}
+                            minZoom={minZoom}
                             onCropChange={setCrop}
                             onCropComplete={handleCropComplete}
                             onZoomChange={setZoom}
+                            onMediaLoaded={handleMediaLoaded}
                             showGrid
                             zoomWithScroll={false}
                             objectFit="contain"
@@ -171,7 +207,7 @@ export default function PhotoCropModal({ file, onCancel, onConfirm }) {
                     <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", marginBottom: 8 }}>ズーム</div>
                     <input
                         type="range"
-                        min="1"
+                        min={String(minZoom)}
                         max="4"
                         step="0.01"
                         value={zoom}
