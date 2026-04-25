@@ -387,16 +387,16 @@ export default function LogScreen({
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <button
                                 onClick={() => setShowSharePreview(true)}
-                                disabled={!latestPhotoUrl || photoLoading || photoUploading || !!pendingPhotoFile}
+                                disabled={photoLoading || photoUploading || !!pendingPhotoFile}
                                 style={{
                                     padding: "8px 12px",
                                     borderRadius: 12,
-                                    background: latestPhotoUrl ? accentColor : "var(--card2)",
-                                    border: latestPhotoUrl ? "none" : "1px solid var(--border2)",
-                                    color: latestPhotoUrl ? accentText : "var(--text3)",
+                                    background: accentColor,
+                                    border: "none",
+                                    color: accentText,
                                     fontSize: 12,
                                     fontWeight: 700,
-                                    opacity: !latestPhotoUrl || photoLoading || photoUploading || pendingPhotoFile ? 0.6 : 1,
+                                    opacity: photoLoading || photoUploading || pendingPhotoFile ? 0.6 : 1,
                                 }}
                             >
                                 投稿プレビュー
@@ -431,7 +431,7 @@ export default function LogScreen({
 
                 {!latestPhotoUrl && !photoLoading && (
                     <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10 }}>
-                        写真を追加すると投稿プレビューできます
+                        写真がなくてもワークアウト要約をプレビューできます
                     </div>
                 )}
 

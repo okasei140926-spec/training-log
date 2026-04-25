@@ -107,6 +107,12 @@ export default function WorkoutShareModal({
     const styleSet = buildTemplateStyles(template);
     const dateLabel = formatDate(workoutDate);
     const totalVolumeLabel = `${Number(summary?.totalVolumeKg || 0).toLocaleString("ja-JP")}kg`;
+    const summaryItems = [
+        { value: `${summary?.exerciseCount || 0}種目`, label: "種目" },
+        { value: `${summary?.setCount || 0}セット`, label: "セット" },
+        { value: `PR ${summary?.prCount || 0}`, label: "PR" },
+        { value: totalVolumeLabel, label: "ボリューム" },
+    ];
 
     return (
         <div
@@ -227,10 +233,9 @@ export default function WorkoutShareModal({
                                 marginBottom: 14,
                             }}
                         >
-                            <SummaryItem value={`${summary?.exerciseCount || 0}種目`} label="エクササイズ" styleSet={styleSet} />
-                            <SummaryItem value={`${summary?.setCount || 0}セット`} label="トータルセット" styleSet={styleSet} />
-                            <SummaryItem value={`PR ${summary?.prCount || 0}`} label="更新件数" styleSet={styleSet} />
-                            <SummaryItem value={totalVolumeLabel} label="合計ボリューム" styleSet={styleSet} />
+                            {summaryItems.map((item) => (
+                                <SummaryItem key={item.label} value={item.value} label={item.label} styleSet={styleSet} />
+                            ))}
                         </div>
 
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
@@ -243,12 +248,57 @@ export default function WorkoutShareModal({
                         </div>
                     </div>
                 ) : (
-                    <div style={{ background: "var(--card2)", borderRadius: 18, padding: "32px 18px", textAlign: "center" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>
-                            写真を追加すると投稿プレビューできます
+                    <div
+                        style={{
+                            ...styleSet.shell,
+                            borderRadius: 30,
+                            padding: 20,
+                            overflow: "hidden",
+                        }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+                            <div>
+                                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
+                                    {styleSet.title}
+                                </div>
+                                <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
+                                    {dateLabel}
+                                </div>
+                            </div>
+                            <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                {template === "cute" ? "summary only" : "stats focus"}
+                            </div>
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                            今日の体写真を1枚追加すると Cute / Cool テンプレで確認できます
+
+                        <div style={{ ...styleSet.summaryCard, borderRadius: 24, padding: "18px 16px", marginBottom: 14 }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>
+                                {template === "cute" ? "今日のワークアウトまとめ" : "TODAY'S STATS"}
+                            </div>
+                            <div style={{ ...styleSet.label, fontSize: 12, lineHeight: 1.6 }}>
+                                写真がない日は、ワークアウト要約を主役にした投稿デザインで表示します
+                            </div>
+                        </div>
+
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                gap: 10,
+                                marginBottom: 14,
+                            }}
+                        >
+                            {summaryItems.map((item) => (
+                                <SummaryItem key={item.label} value={item.value} label={item.label} styleSet={styleSet} />
+                            ))}
+                        </div>
+
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                            <div style={{ ...styleSet.label, fontSize: 11 }}>
+                                写真を追加すると写真入りデザインに切り替わります
+                            </div>
+                            <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
+                                IRON LOG
+                            </div>
                         </div>
                     </div>
                 )}
