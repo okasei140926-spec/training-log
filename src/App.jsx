@@ -354,7 +354,10 @@ export default function GymApp() {
         sessionHistory,
         setLogData,
         getExSets,
+        getExUnit,
+        KG_TO_LBS,
     });
+
 
 
     const removeEx = (idOrName, maybeName) => {

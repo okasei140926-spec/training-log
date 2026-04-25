@@ -4,7 +4,7 @@ import {
     copyRepDownHelper,
 } from "../utils/workoutHelpers";
 
-export const useWorkout = ({ history, sessionHistory, setLogData, getExSets }) => {
+export const useWorkout = ({ history, sessionHistory, setLogData, getExSets, getExUnit, KG_TO_LBS }) => {
     const getPrev = (name) => {
         const r = (sessionHistory || history)[name];
         return r ? r[r.length - 1] : null;
@@ -22,7 +22,15 @@ export const useWorkout = ({ history, sessionHistory, setLogData, getExSets }) =
                 const w = Number(s.weight);
                 const reps = Number(s.reps);
                 return Number.isFinite(w) && Number.isFinite(reps) && w > 0 && reps > 0;
+            }).map(s => {
+                const exUnit = getExUnit ? getExUnit(name) : "kg";
+                const w = Number(s.weight);
+                return {
+                    ...s,
+                    weight: exUnit === "lbs" ? w / (KG_TO_LBS || 2.2046) : w
+                };
             });
+
 
             const rm = calc1RM(validSets);
 
