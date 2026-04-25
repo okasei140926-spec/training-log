@@ -94,15 +94,6 @@ function SummaryItem({ value, label, styleSet }) {
     );
 }
 
-function blobToDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
-
 function waitForImageReady(img) {
     return new Promise((resolve, reject) => {
         if (!img) {
@@ -122,6 +113,10 @@ function waitForImageReady(img) {
         const handleLoad = () => {
             img.removeEventListener("load", handleLoad);
             img.removeEventListener("error", handleError);
+            if (img.naturalWidth === 0) {
+                reject(new Error("image naturalWidth is 0"));
+                return;
+            }
             if (typeof img.decode === "function") {
                 img.decode().then(resolve).catch(resolve);
             } else {
@@ -173,6 +168,7 @@ export default function WorkoutShareModal({
 
     useEffect(() => {
         let isActive = true;
+        let nextObjectUrl = null;
 
         const preparePhotoUrl = async () => {
             if (!photoUrl) {
@@ -193,14 +189,15 @@ export default function WorkoutShareModal({
                 const res = await fetch(photoUrl);
                 if (!res.ok) throw new Error("photo fetch failed");
                 const blob = await res.blob();
+                nextObjectUrl = URL.createObjectURL(blob);
 
-                const dataUrl = await blobToDataUrl(blob);
                 const preloadImg = new Image();
-                preloadImg.src = dataUrl;
+                preloadImg.crossOrigin = "anonymous";
+                preloadImg.src = nextObjectUrl;
                 await waitForImageReady(preloadImg);
 
                 if (isActive) {
-                    setRenderPhotoUrl(dataUrl);
+                    setRenderPhotoUrl(nextObjectUrl);
                     setPhotoPreparing(false);
                     setPhotoReady(true);
                     setErrorMsg("");
@@ -220,6 +217,7 @@ export default function WorkoutShareModal({
 
         return () => {
             isActive = false;
+            if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
         };
     }, [photoUrl]);
 
@@ -250,6 +248,14 @@ export default function WorkoutShareModal({
             const cardImage = photoImgRef.current;
             if (cardImage) {
                 await waitForImageReady(cardImage);
+            }
+
+            const cardImages = Array.from(cardRef.current.querySelectorAll("img"));
+            for (const img of cardImages) {
+                await waitForImageReady(img);
+                if (!img.complete || img.naturalWidth === 0) {
+                    throw new Error("share card image is not ready");
+                }
             }
 
             await waitForAnimationFrame();
@@ -291,6 +297,8 @@ export default function WorkoutShareModal({
                 renderPhotoUrl,
                 photoReady,
                 photoPreparing,
+                imgComplete: photoImgRef.current?.complete,
+                imgNaturalWidth: photoImgRef.current?.naturalWidth,
             });
             setErrorMsg("共有画像の作成に失敗しました。もう一度お試しください。");
         } finally {
@@ -387,7 +395,7 @@ export default function WorkoutShareModal({
                             whiteSpace: "nowrap",
                         }}
                     >
-                        {sharing ? "共有中..." : photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing) ? "画像読み込み中..." : "共有"}
+                        {sharing ? "共有中..." : photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing) ? "画像準備中..." : "共有"}
                     </button>
                 </div>
 
@@ -437,6 +445,7 @@ export default function WorkoutShareModal({
                                 ref={photoImgRef}
                                 src={renderPhotoUrl}
                                 alt={`${dateLabel} workout share`}
+                                crossOrigin="anonymous"
                                 onLoad={() => {
                                     setPhotoPreparing(false);
                                     setPhotoReady(true);
