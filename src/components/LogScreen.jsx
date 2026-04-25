@@ -159,16 +159,28 @@ export default function LogScreen({
                     weight: exUnit === "lbs" ? String(Number(set.weight) / KG_TO_LBS) : String(set.weight),
                 }));
 
-            const pr = getPR ? getPR(ex.name) : null;
-            const prSets = pr?.sets?.filter((set) => {
-                const w = Number(set.weight);
-                const r = Number(set.reps);
-                return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
-            }) || [];
+            const pastRecords = (history?.[ex.name] || []).filter((record) => record?.date && record.date !== logDate);
+            let pastPr1RM = 0;
+
+            pastRecords.forEach((record) => {
+                const baseSets = Array.isArray(record.sets) && record.sets.length > 0
+                    ? record.sets
+                    : [{ weight: record.weight, reps: record.reps }];
+
+                const validPastSets = baseSets.filter((set) => {
+                    const w = Number(set.weight);
+                    const r = Number(set.reps);
+                    return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+                });
+
+                const record1RM = calc1RM(validPastSets);
+                if (record1RM > pastPr1RM) {
+                    pastPr1RM = record1RM;
+                }
+            });
 
             const cur1RM = calc1RM(comparableSets);
-            const pr1RM = calc1RM(prSets);
-            const isExercisePR = comparableSets.length > 0 && prSets.length > 0 && cur1RM > pr1RM * 1.001;
+            const isExercisePR = comparableSets.length > 0 && cur1RM > pastPr1RM * 1.001;
 
             let prSetNumber = null;
             if (isExercisePR && comparableSets.length > 0) {
