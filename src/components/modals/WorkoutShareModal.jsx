@@ -94,6 +94,56 @@ function SummaryItem({ value, label, styleSet }) {
     );
 }
 
+function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+function waitForImageReady(img) {
+    return new Promise((resolve, reject) => {
+        if (!img) {
+            resolve();
+            return;
+        }
+
+        if (img.complete && img.naturalWidth > 0) {
+            if (typeof img.decode === "function") {
+                img.decode().then(resolve).catch(resolve);
+            } else {
+                resolve();
+            }
+            return;
+        }
+
+        const handleLoad = () => {
+            img.removeEventListener("load", handleLoad);
+            img.removeEventListener("error", handleError);
+            if (typeof img.decode === "function") {
+                img.decode().then(resolve).catch(resolve);
+            } else {
+                resolve();
+            }
+        };
+
+        const handleError = (event) => {
+            img.removeEventListener("load", handleLoad);
+            img.removeEventListener("error", handleError);
+            reject(event);
+        };
+
+        img.addEventListener("load", handleLoad);
+        img.addEventListener("error", handleError);
+    });
+}
+
+function waitForAnimationFrame() {
+    return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 export default function WorkoutShareModal({
     isOpen,
     onClose,
@@ -123,7 +173,6 @@ export default function WorkoutShareModal({
 
     useEffect(() => {
         let isActive = true;
-        let objectUrl = null;
 
         const preparePhotoUrl = async () => {
             if (!photoUrl) {
@@ -144,9 +193,16 @@ export default function WorkoutShareModal({
                 const res = await fetch(photoUrl);
                 if (!res.ok) throw new Error("photo fetch failed");
                 const blob = await res.blob();
-                objectUrl = URL.createObjectURL(blob);
+
+                const dataUrl = await blobToDataUrl(blob);
+                const preloadImg = new Image();
+                preloadImg.src = dataUrl;
+                await waitForImageReady(preloadImg);
+
                 if (isActive) {
-                    setRenderPhotoUrl(objectUrl);
+                    setRenderPhotoUrl(dataUrl);
+                    setPhotoPreparing(false);
+                    setPhotoReady(true);
                     setErrorMsg("");
                 }
             } catch (error) {
@@ -164,7 +220,6 @@ export default function WorkoutShareModal({
 
         return () => {
             isActive = false;
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
         };
     }, [photoUrl]);
 
@@ -194,27 +249,11 @@ export default function WorkoutShareModal({
 
             const cardImage = photoImgRef.current;
             if (cardImage) {
-                if (!cardImage.complete) {
-                    await new Promise((resolve, reject) => {
-                        const handleLoad = () => {
-                            cardImage.removeEventListener("load", handleLoad);
-                            cardImage.removeEventListener("error", handleError);
-                            resolve();
-                        };
-                        const handleError = (event) => {
-                            cardImage.removeEventListener("load", handleLoad);
-                            cardImage.removeEventListener("error", handleError);
-                            reject(event);
-                        };
-                        cardImage.addEventListener("load", handleLoad);
-                        cardImage.addEventListener("error", handleError);
-                    });
-                }
-
-                if (typeof cardImage.decode === "function") {
-                    await cardImage.decode();
-                }
+                await waitForImageReady(cardImage);
             }
+
+            await waitForAnimationFrame();
+            await waitForAnimationFrame();
 
             const blob = await toBlob(cardRef.current, {
                 cacheBust: true,
@@ -401,6 +440,7 @@ export default function WorkoutShareModal({
                                 onLoad={() => {
                                     setPhotoPreparing(false);
                                     setPhotoReady(true);
+                                    setErrorMsg("");
                                 }}
                                 onError={(error) => {
                                     console.error("share preview image load failed", error);
