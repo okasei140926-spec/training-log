@@ -135,6 +135,62 @@ export default function LogScreen({
         };
     }, { prCount: 0, totalVolumeKg: 0 });
     const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
+    const fullRecord = exercises
+        .map((ex) => {
+            const sets = logData[ex.name] || getExSets(ex);
+            const exUnit = getExUnit ? getExUnit(ex.name) : unit;
+
+            const validSets = sets
+                .map((set, idx) => ({ ...set, setNumber: idx + 1 }))
+                .filter((set) => {
+                    const repsNum = Number(set.reps);
+                    if (!Number.isFinite(repsNum) || repsNum <= 0) return false;
+                    if (set.weight === "BW") return true;
+                    const weightNum = Number(set.weight);
+                    return Number.isFinite(weightNum) && weightNum > 0;
+                });
+
+            if (!validSets.length) return null;
+
+            const comparableSets = validSets
+                .filter((set) => set.weight !== "BW")
+                .map((set) => ({
+                    ...set,
+                    weight: exUnit === "lbs" ? String(Number(set.weight) / KG_TO_LBS) : String(set.weight),
+                }));
+
+            const pr = getPR ? getPR(ex.name) : null;
+            const prSets = pr?.sets?.filter((set) => {
+                const w = Number(set.weight);
+                const r = Number(set.reps);
+                return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+            }) || [];
+
+            const cur1RM = calc1RM(comparableSets);
+            const pr1RM = calc1RM(prSets);
+            const isExercisePR = comparableSets.length > 0 && prSets.length > 0 && cur1RM > pr1RM * 1.001;
+
+            let prSetNumber = null;
+            if (isExercisePR && comparableSets.length > 0) {
+                const topSet = comparableSets.reduce((best, set) => {
+                    const currentScore = Number(set.weight) * (1 + Number(set.reps) / 30);
+                    if (!best) return { setNumber: set.setNumber, score: currentScore };
+                    return currentScore >= best.score ? { setNumber: set.setNumber, score: currentScore } : best;
+                }, null);
+                prSetNumber = topSet?.setNumber ?? null;
+            }
+
+            return {
+                name: ex.name,
+                sets: validSets.map((set) => ({
+                    setNumber: set.setNumber,
+                    weightLabel: set.weight === "BW" ? "自重" : `${dispW(set.weight, exUnit)}${exUnit}`,
+                    repsLabel: `${set.reps}rep`,
+                    isPR: prSetNumber === set.setNumber,
+                })),
+            };
+        })
+        .filter(Boolean);
 
     const confirmEdit = (ex) => {
         const trimmed = editingName.trim();
@@ -831,6 +887,7 @@ export default function LogScreen({
                         prCount,
                         totalVolumeKg: Math.round(totalVolumeKg),
                     }}
+                    fullRecord={fullRecord}
                 />
             )}
 

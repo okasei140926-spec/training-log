@@ -6,6 +6,11 @@ const TEMPLATE_OPTIONS = [
     { id: "cool", label: "Cool" },
 ];
 
+const POST_TYPE_OPTIONS = [
+    { id: "summary", label: "サマリー" },
+    { id: "fullRecord", label: "全記録" },
+];
+
 function formatDate(dateStr) {
     if (!dateStr) return "";
     const [year, month, day] = dateStr.split("-");
@@ -326,11 +331,13 @@ export default function WorkoutShareModal({
     photoUrl,
     workoutDate,
     summary,
+    fullRecord = [],
 }) {
     const cardRef = useRef(null);
     const photoImgRef = useRef(null);
     const [sharing, setSharing] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
+    const [postType, setPostType] = useState("summary");
     const [renderPhotoUrl, setRenderPhotoUrl] = useState(photoUrl || null);
     const [photoPreparing, setPhotoPreparing] = useState(Boolean(photoUrl));
     const [photoReady, setPhotoReady] = useState(!photoUrl);
@@ -344,6 +351,12 @@ export default function WorkoutShareModal({
         { value: totalVolumeLabel, label: "ボリューム" },
     ];
     const shareTitle = useMemo(() => `${dateLabel} のワークアウト`, [dateLabel]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setPostType("summary");
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         let isActive = true;
@@ -430,7 +443,7 @@ export default function WorkoutShareModal({
             }
 
             let blob;
-            if (renderPhotoUrl) {
+            if (postType === "summary" && renderPhotoUrl) {
                 blob = await buildPhotoShareBlob({
                     template,
                     photoSrc: renderPhotoUrl,
@@ -467,7 +480,7 @@ export default function WorkoutShareModal({
             const shareData = {
                 files: [file],
                 title: shareTitle,
-                text: "IRON LOG の投稿プレビュー",
+                    text: "IRON LOG の投稿プレビュー",
             };
 
             if (navigator.canShare && navigator.canShare(shareData) && navigator.share) {
@@ -571,7 +584,7 @@ export default function WorkoutShareModal({
                     </div>
                     <button
                         onClick={handleShare}
-                        disabled={sharing || (photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))}
+                        disabled={sharing || (postType === "summary" && photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))}
                         style={{
                             padding: "10px 14px",
                             borderRadius: 14,
@@ -580,12 +593,36 @@ export default function WorkoutShareModal({
                             color: template === "cool" ? "#111214" : "#fff",
                             fontSize: 12,
                             fontWeight: 800,
-                            opacity: sharing || (photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing)) ? 0.7 : 1,
+                            opacity: sharing || (postType === "summary" && photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing)) ? 0.7 : 1,
                             whiteSpace: "nowrap",
                         }}
                     >
-                        {sharing ? "共有中..." : photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing) ? "画像準備中..." : "共有"}
+                        {sharing ? "共有中..." : postType === "summary" && photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing) ? "画像準備中..." : "共有"}
                     </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    {POST_TYPE_OPTIONS.map((option) => {
+                        const isActive = option.id === postType;
+                        return (
+                            <button
+                                key={option.id}
+                                onClick={() => setPostType(option.id)}
+                                style={{
+                                    flex: 1,
+                                    padding: "10px 12px",
+                                    borderRadius: 14,
+                                    border: `1px solid ${isActive ? styleSet.accent : "var(--border2)"}`,
+                                    background: isActive ? styleSet.accent : "var(--card2)",
+                                    color: isActive ? "#fff" : "var(--text2)",
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                }}
+                            >
+                                {option.label}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {errorMsg && (
@@ -605,7 +642,7 @@ export default function WorkoutShareModal({
                     </div>
                 )}
 
-                {renderPhotoUrl ? (
+                {postType === "summary" && renderPhotoUrl ? (
                     <div
                         ref={cardRef}
                         style={{
@@ -676,7 +713,7 @@ export default function WorkoutShareModal({
                             </div>
                         </div>
                     </div>
-                ) : (
+                ) : postType === "summary" ? (
                     <div
                         ref={cardRef}
                         style={{
@@ -720,6 +757,101 @@ export default function WorkoutShareModal({
                             {summaryItems.map((item) => (
                                 <SummaryItem key={item.label} value={item.value} label={item.label} styleSet={styleSet} />
                             ))}
+                        </div>
+
+                        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
+                            <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
+                                IRON LOG
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div
+                        ref={cardRef}
+                        style={{
+                            ...styleSet.shell,
+                            borderRadius: 30,
+                            padding: 20,
+                            overflow: "hidden",
+                        }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
+                            <div>
+                                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
+                                    {template === "cool" ? "FULL WORKOUT LOG" : "Workout Record"}
+                                </div>
+                                <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
+                                    {dateLabel}
+                                </div>
+                            </div>
+                            <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                                {template === "cool" ? "all sets" : "全セット"}
+                            </div>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+                            {fullRecord.length > 0 ? fullRecord.map((exercise) => (
+                                <div
+                                    key={exercise.name}
+                                    style={{
+                                        ...styleSet.summaryCard,
+                                        borderRadius: 22,
+                                        padding: "16px 14px",
+                                    }}
+                                >
+                                    <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>
+                                        {exercise.name}
+                                    </div>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        {exercise.sets.map((set) => (
+                                            <div
+                                                key={`${exercise.name}-${set.setNumber}`}
+                                                style={{
+                                                    display: "grid",
+                                                    gridTemplateColumns: "52px 1fr 72px auto",
+                                                    gap: 8,
+                                                    alignItems: "center",
+                                                    padding: "10px 12px",
+                                                    borderRadius: 16,
+                                                    background: template === "cool" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.72)",
+                                                    border: `1px solid ${template === "cool" ? "rgba(255,255,255,0.06)" : "rgba(232,199,210,0.75)"}`,
+                                                }}
+                                            >
+                                                <div style={{ fontSize: 12, fontWeight: 700, color: styleSet.label.color }}>
+                                                    #{set.setNumber}
+                                                </div>
+                                                <div style={{ fontSize: 14, fontWeight: 700 }}>
+                                                    {set.weightLabel}
+                                                </div>
+                                                <div style={{ fontSize: 14, fontWeight: 700, textAlign: "right" }}>
+                                                    {set.repsLabel}
+                                                </div>
+                                                {set.isPR ? (
+                                                    <div
+                                                        style={{
+                                                            justifySelf: "end",
+                                                            padding: "4px 8px",
+                                                            borderRadius: 999,
+                                                            fontSize: 10,
+                                                            fontWeight: 800,
+                                                            background: template === "cool" ? "#f5f5f5" : "#7f4653",
+                                                            color: template === "cool" ? "#111214" : "#fff",
+                                                        }}
+                                                    >
+                                                        PR
+                                                    </div>
+                                                ) : (
+                                                    <div />
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )) : (
+                                <div style={{ ...styleSet.summaryCard, borderRadius: 22, padding: "18px 16px", fontSize: 13 }}>
+                                    まだ記録されたセットがありません
+                                </div>
+                            )}
                         </div>
 
                         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
