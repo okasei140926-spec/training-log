@@ -104,9 +104,12 @@ export default function WorkoutShareModal({
     summary,
 }) {
     const cardRef = useRef(null);
+    const photoImgRef = useRef(null);
     const [sharing, setSharing] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     const [renderPhotoUrl, setRenderPhotoUrl] = useState(photoUrl || null);
+    const [photoPreparing, setPhotoPreparing] = useState(Boolean(photoUrl));
+    const [photoReady, setPhotoReady] = useState(!photoUrl);
     const styleSet = buildTemplateStyles(template);
     const dateLabel = formatDate(workoutDate);
     const totalVolumeLabel = `${Number(summary?.totalVolumeKg || 0).toLocaleString("ja-JP")}kg`;
@@ -124,8 +127,17 @@ export default function WorkoutShareModal({
 
         const preparePhotoUrl = async () => {
             if (!photoUrl) {
-                if (isActive) setRenderPhotoUrl(null);
+                if (isActive) {
+                    setRenderPhotoUrl(null);
+                    setPhotoPreparing(false);
+                    setPhotoReady(true);
+                }
                 return;
+            }
+
+            if (isActive) {
+                setPhotoPreparing(true);
+                setPhotoReady(false);
             }
 
             try {
@@ -133,9 +145,18 @@ export default function WorkoutShareModal({
                 if (!res.ok) throw new Error("photo fetch failed");
                 const blob = await res.blob();
                 objectUrl = URL.createObjectURL(blob);
-                if (isActive) setRenderPhotoUrl(objectUrl);
-            } catch {
-                if (isActive) setRenderPhotoUrl(photoUrl);
+                if (isActive) {
+                    setRenderPhotoUrl(objectUrl);
+                    setErrorMsg("");
+                }
+            } catch (error) {
+                console.error("share photo prepare failed", error);
+                if (isActive) {
+                    setRenderPhotoUrl(null);
+                    setPhotoPreparing(false);
+                    setPhotoReady(false);
+                    setErrorMsg("写真の読み込みに失敗しました。時間をおいてもう一度お試しください。");
+                }
             }
         };
 
@@ -161,12 +182,40 @@ export default function WorkoutShareModal({
     };
 
     const handleShare = async () => {
-        if (!cardRef.current || sharing) return;
+        if (!cardRef.current || sharing || (photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))) return;
 
         setSharing(true);
         setErrorMsg("");
 
         try {
+            if (document.fonts?.ready) {
+                await document.fonts.ready;
+            }
+
+            const cardImage = photoImgRef.current;
+            if (cardImage) {
+                if (!cardImage.complete) {
+                    await new Promise((resolve, reject) => {
+                        const handleLoad = () => {
+                            cardImage.removeEventListener("load", handleLoad);
+                            cardImage.removeEventListener("error", handleError);
+                            resolve();
+                        };
+                        const handleError = (event) => {
+                            cardImage.removeEventListener("load", handleLoad);
+                            cardImage.removeEventListener("error", handleError);
+                            reject(event);
+                        };
+                        cardImage.addEventListener("load", handleLoad);
+                        cardImage.addEventListener("error", handleError);
+                    });
+                }
+
+                if (typeof cardImage.decode === "function") {
+                    await cardImage.decode();
+                }
+            }
+
             const blob = await toBlob(cardRef.current, {
                 cacheBust: true,
                 pixelRatio: 2,
@@ -195,7 +244,15 @@ export default function WorkoutShareModal({
             handleDownload(blob);
         } catch (error) {
             if (error?.name === "AbortError") return;
-            console.error("share preview failed", error);
+            console.error("share preview failed", {
+                error,
+                message: error?.message,
+                name: error?.name,
+                hasPhoto: Boolean(photoUrl),
+                renderPhotoUrl,
+                photoReady,
+                photoPreparing,
+            });
             setErrorMsg("共有画像の作成に失敗しました。もう一度お試しください。");
         } finally {
             setSharing(false);
@@ -278,7 +335,7 @@ export default function WorkoutShareModal({
                     </div>
                     <button
                         onClick={handleShare}
-                        disabled={sharing}
+                        disabled={sharing || (photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))}
                         style={{
                             padding: "10px 14px",
                             borderRadius: 14,
@@ -287,11 +344,11 @@ export default function WorkoutShareModal({
                             color: template === "cool" ? "#111214" : "#fff",
                             fontSize: 12,
                             fontWeight: 800,
-                            opacity: sharing ? 0.7 : 1,
+                            opacity: sharing || (photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing)) ? 0.7 : 1,
                             whiteSpace: "nowrap",
                         }}
                     >
-                        {sharing ? "共有中..." : "共有"}
+                        {sharing ? "共有中..." : photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing) ? "画像読み込み中..." : "共有"}
                     </button>
                 </div>
 
@@ -338,8 +395,19 @@ export default function WorkoutShareModal({
 
                         <div style={{ ...styleSet.photoFrame, marginBottom: 14 }}>
                             <img
+                                ref={photoImgRef}
                                 src={renderPhotoUrl}
                                 alt={`${dateLabel} workout share`}
+                                onLoad={() => {
+                                    setPhotoPreparing(false);
+                                    setPhotoReady(true);
+                                }}
+                                onError={(error) => {
+                                    console.error("share preview image load failed", error);
+                                    setPhotoPreparing(false);
+                                    setPhotoReady(false);
+                                    setErrorMsg("写真の読み込みに失敗しました。時間をおいてもう一度お試しください。");
+                                }}
                                 style={{
                                     width: "100%",
                                     display: "block",
