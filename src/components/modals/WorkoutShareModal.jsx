@@ -809,20 +809,20 @@ export default function WorkoutShareModal({
                             </div>
                         )}
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
                             {fullRecord.length > 0 ? fullRecord.map((exercise) => (
                                 <div
                                     key={exercise.name}
                                     style={{
                                         ...styleSet.summaryCard,
-                                        borderRadius: 18,
-                                        padding: "12px 12px",
+                                        borderRadius: 16,
+                                        padding: "10px 12px",
                                     }}
                                 >
-                                    <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>
                                         {exercise.name}
                                     </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                         {exercise.sets.map((set) => (
                                             <div
                                                 key={`${exercise.name}-${set.setNumber}`}
@@ -831,10 +831,8 @@ export default function WorkoutShareModal({
                                                     alignItems: "center",
                                                     gap: 8,
                                                     flexWrap: "wrap",
-                                                    padding: "8px 10px",
-                                                    borderRadius: 14,
-                                                    background: template === "cool" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.72)",
-                                                    border: `1px solid ${template === "cool" ? "rgba(255,255,255,0.06)" : "rgba(232,199,210,0.75)"}`,
+                                                    padding: "4px 0",
+                                                    borderBottom: `1px solid ${template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(232,199,210,0.75)"}`,
                                                 }}
                                             >
                                                 <div style={{ fontSize: 12, fontWeight: 700, color: styleSet.label.color }}>
@@ -853,7 +851,7 @@ export default function WorkoutShareModal({
                                                     <div
                                                         style={{
                                                             marginLeft: "auto",
-                                                            padding: "3px 7px",
+                                                            padding: "2px 7px",
                                                             borderRadius: 999,
                                                             fontSize: 10,
                                                             fontWeight: 800,
