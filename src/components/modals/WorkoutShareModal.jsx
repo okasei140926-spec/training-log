@@ -737,21 +737,12 @@ export default function WorkoutShareModal({
                             </div>
                         </div>
 
-                        <div style={{ ...styleSet.summaryCard, borderRadius: 24, padding: "18px 16px", marginBottom: 14 }}>
-                            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>
-                                {template === "cute" ? "今日のワークアウトまとめ" : "TODAY'S STATS"}
-                            </div>
-                            <div style={{ ...styleSet.label, fontSize: 12, lineHeight: 1.6 }}>
-                                写真がない日は、ワークアウト要約を主役にした投稿デザインで表示します
-                            </div>
-                        </div>
-
                         <div
                             style={{
                                 display: "grid",
                                 gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                                 gap: 10,
-                                marginBottom: 14,
+                                marginBottom: 12,
                             }}
                         >
                             {summaryItems.map((item) => (
