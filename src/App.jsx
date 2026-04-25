@@ -16,6 +16,8 @@ import LogScreen from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
 import AIScreen from "./components/AIScreen";
+import HomeScreen from "./components/HomeScreen";
+import PrepScreen from "./components/PrepScreen";
 
 import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
@@ -67,7 +69,7 @@ export default function GymApp() {
     const [history, setHistory] = useState(() => load("history", {}));
 
 
-    const [screen, setScreen] = useState("history");
+    const [screen, setScreen] = useState("home");
     const [showAuth, setShowAuth] = useState(false);
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
@@ -193,7 +195,9 @@ export default function GymApp() {
             `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
         setLogDate(today);
-        setScreen("history");
+        if (!new URLSearchParams(window.location.search).get("ref")) {
+            setScreen("home");
+        }
     }, []);
 
     useEffect(() => {
@@ -530,6 +534,29 @@ export default function GymApp() {
         quickAdd(name, remove, labelOverride);
     };
 
+    const getTodayStr = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+
+    const handleStartWorkoutFromHome = () => {
+        setLogDate((prev) => prev || getTodayStr());
+        setScreen("prep");
+    };
+
+    const handleStartFreeFromHome = () => {
+        setTodayLabels([]);
+        setLogDate((prev) => prev || getTodayStr());
+        setSessionEx([]);
+        setScreen("prep");
+    };
+
+    const handlePrepStart = (prepExercises) => {
+        const nextExercises = Array.isArray(prepExercises) ? prepExercises : [];
+        setSessionEx(nextExercises);
+        setScreen("log");
+    };
+
     const handleLogForDate = (dateStr) => {
         const hasCurrentDraft =
             sessionEx !== null ||
@@ -782,7 +809,7 @@ export default function GymApp() {
             <div className={isDark ? "" : "theme-light"} style={S.root}><style>{css}</style>
                 <div style={S.header}>
                     <div><div style={S.appLabel}>IRON LOG</div><div style={S.headerTitle}>種目設定</div></div>
-                    <button onClick={() => setScreen("log")} style={S.pillBtn}>完了</button>
+                    <button onClick={() => setScreen("home")} style={S.pillBtn}>完了</button>
                 </div>
                 <div style={{ padding: "20px" }}>
                     <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 20, lineHeight: 1.6 }}>
@@ -870,6 +897,34 @@ export default function GymApp() {
                 )}
 
 
+
+                {screen === "home" && (
+                    <HomeScreen
+                        muscleEx={muscleEx}
+                        history={history}
+                        todayLabels={todayLabels}
+                        setTodayLabels={updateTodayLabels}
+                        onStartWorkout={handleStartWorkoutFromHome}
+                        onStartFree={handleStartFreeFromHome}
+                        onGoToSetup={() => setScreen("setup_routine")}
+                        unit={unit}
+                        logDate={logDate}
+                        setLogDate={setLogDate}
+                    />
+                )}
+
+                {screen === "prep" && (
+                    <PrepScreen
+                        todayLabels={todayLabels}
+                        dayColor={dayColor}
+                        initialExercises={sessionEx !== null ? sessionEx : baseExercises}
+                        history={history}
+                        lastWorkoutExercises={lastWorkoutExercises}
+                        onStart={handlePrepStart}
+                        onBack={() => setScreen("home")}
+                        unit={unit}
+                    />
+                )}
 
                 {screen === "log" && (
                     <div
@@ -1018,4 +1073,3 @@ export default function GymApp() {
         </>
     );
 }
-
