@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { calc1RM, dispW } from "../utils/helpers";
+import { calc1RM, dispW, KG_TO_LBS } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import SetRow from "./log/SetRow";
 
@@ -172,14 +172,11 @@ export default function LogScreen({
                         const doneSets = sets.filter(s => {
                             const w = Number(s.weight);
                             const r = Number(s.reps);
-
-                            return (
-                                Number.isFinite(w) &&
-                                Number.isFinite(r) &&
-                                w > 0 &&
-                                r > 0
-                            );
-                        });
+                            return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+                        }).map(s => ({
+                            ...s,
+                            weight: exUnit === "lbs" ? String(Number(s.weight) / KG_TO_LBS) : s.weight
+                        }));
 
                         const cur1RM = calc1RM(doneSets);
 

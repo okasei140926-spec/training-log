@@ -22,15 +22,7 @@ export const useWorkout = ({ history, sessionHistory, setLogData, getExSets, get
                 const w = Number(s.weight);
                 const reps = Number(s.reps);
                 return Number.isFinite(w) && Number.isFinite(reps) && w > 0 && reps > 0;
-            }).map(s => {
-                const exUnit = getExUnit ? getExUnit(name) : "kg";
-                const w = Number(s.weight);
-                return {
-                    ...s,
-                    weight: exUnit === "lbs" ? w / (KG_TO_LBS || 2.2046) : w
-                };
-            });
-
+            })
 
             const rm = calc1RM(validSets);
 
