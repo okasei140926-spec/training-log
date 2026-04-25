@@ -125,6 +125,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             const sentMap = {};
             (sent || []).forEach(k => { sentMap[k.to_user_id] = true; });
             setKudos(sentMap);
+            console.log("received kudos:", received);
             setReceivedKudos(received || []);
         };
         fetchKudos();
