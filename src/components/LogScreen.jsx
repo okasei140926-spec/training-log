@@ -95,6 +95,43 @@ export default function LogScreen({
         const sets = logData[ex.name] || getExSets(ex);
         return acc + sets.filter(s => s.done).length;
     }, 0);
+    const { prCount, totalVolumeKg } = exercises.reduce((acc, ex) => {
+        const sets = logData[ex.name] || getExSets(ex);
+        const exUnit = getExUnit ? getExUnit(ex.name) : unit;
+
+        const doneSets = sets.filter((s) => {
+            const w = Number(s.weight);
+            const r = Number(s.reps);
+            return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+        }).map((s) => ({
+            ...s,
+            weight: exUnit === "lbs" ? String(Number(s.weight) / KG_TO_LBS) : s.weight,
+        }));
+
+        const pr = getPR ? getPR(ex.name) : null;
+        const prSets = pr?.sets?.filter((s) => {
+            const w = Number(s.weight);
+            const r = Number(s.reps);
+            return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+        }) || [];
+
+        const cur1RM = calc1RM(doneSets);
+        const pr1RM = calc1RM(prSets);
+        const isPR = doneSets.length > 0 && prSets.length > 0 && cur1RM > pr1RM * 1.001;
+
+        const exVolumeKg = doneSets.reduce((sum, s) => {
+            const w = Number(s.weight);
+            const r = Number(s.reps);
+            if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) return sum;
+            return sum + w * r;
+        }, 0);
+
+        return {
+            prCount: acc.prCount + (isPR ? 1 : 0),
+            totalVolumeKg: acc.totalVolumeKg + exVolumeKg,
+        };
+    }, { prCount: 0, totalVolumeKg: 0 });
+    const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
 
     const confirmEdit = (ex) => {
         const trimmed = editingName.trim();
@@ -314,7 +351,11 @@ export default function LogScreen({
             </div>
 
             <div style={{ fontSize: 11, color: "var(--text4)", marginTop: -10, marginBottom: 16 }}>
-                {exCount}種目 ・ {setCount}セット
+                {exCount}種目 ・ {setCount}セット ・ PR {prCount}件
+            </div>
+
+            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: -10, marginBottom: 16 }}>
+                合計 {formattedVolumeKg}kg
             </div>
 
             <div style={{ background: "var(--card)", borderRadius: 16, padding: "14px 16px", marginBottom: 14, border: "1px solid var(--border)" }}>
