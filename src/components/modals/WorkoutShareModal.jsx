@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toBlob } from "html-to-image";
 
 const TEMPLATE_OPTIONS = [
     { id: "cute", label: "Cute" },
@@ -102,8 +103,10 @@ export default function WorkoutShareModal({
     workoutDate,
     summary,
 }) {
-    if (!isOpen) return null;
-
+    const cardRef = useRef(null);
+    const [sharing, setSharing] = useState(false);
+    const [errorMsg, setErrorMsg] = useState("");
+    const [renderPhotoUrl, setRenderPhotoUrl] = useState(photoUrl || null);
     const styleSet = buildTemplateStyles(template);
     const dateLabel = formatDate(workoutDate);
     const totalVolumeLabel = `${Number(summary?.totalVolumeKg || 0).toLocaleString("ja-JP")}kg`;
@@ -113,6 +116,91 @@ export default function WorkoutShareModal({
         { value: `PR ${summary?.prCount || 0}`, label: "PR" },
         { value: totalVolumeLabel, label: "ボリューム" },
     ];
+    const shareTitle = useMemo(() => `${dateLabel} のワークアウト`, [dateLabel]);
+
+    useEffect(() => {
+        let isActive = true;
+        let objectUrl = null;
+
+        const preparePhotoUrl = async () => {
+            if (!photoUrl) {
+                if (isActive) setRenderPhotoUrl(null);
+                return;
+            }
+
+            try {
+                const res = await fetch(photoUrl);
+                if (!res.ok) throw new Error("photo fetch failed");
+                const blob = await res.blob();
+                objectUrl = URL.createObjectURL(blob);
+                if (isActive) setRenderPhotoUrl(objectUrl);
+            } catch {
+                if (isActive) setRenderPhotoUrl(photoUrl);
+            }
+        };
+
+        preparePhotoUrl();
+
+        return () => {
+            isActive = false;
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+        };
+    }, [photoUrl]);
+
+    if (!isOpen) return null;
+
+    const handleDownload = (blob) => {
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = `iron-log-${workoutDate || "workout"}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+    };
+
+    const handleShare = async () => {
+        if (!cardRef.current || sharing) return;
+
+        setSharing(true);
+        setErrorMsg("");
+
+        try {
+            const blob = await toBlob(cardRef.current, {
+                cacheBust: true,
+                pixelRatio: 2,
+                backgroundColor: "transparent",
+            });
+
+            if (!blob) {
+                throw new Error("画像の生成に失敗しました");
+            }
+
+            const file = new File([blob], `iron-log-${workoutDate || "workout"}.png`, {
+                type: "image/png",
+            });
+
+            const shareData = {
+                files: [file],
+                title: shareTitle,
+                text: "IRON LOG の投稿プレビュー",
+            };
+
+            if (navigator.canShare && navigator.canShare(shareData) && navigator.share) {
+                await navigator.share(shareData);
+                return;
+            }
+
+            handleDownload(blob);
+        } catch (error) {
+            if (error?.name === "AbortError") return;
+            console.error("share preview failed", error);
+            setErrorMsg("共有画像の作成に失敗しました。もう一度お試しください。");
+        } finally {
+            setSharing(false);
+        }
+    };
 
     return (
         <div
@@ -165,31 +253,68 @@ export default function WorkoutShareModal({
                 </div>
 
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                    {TEMPLATE_OPTIONS.map((option) => {
-                        const isActive = option.id === template;
-                        return (
-                            <button
-                                key={option.id}
-                                onClick={() => onChangeTemplate(option.id)}
-                                style={{
-                                    flex: 1,
-                                    padding: "10px 12px",
-                                    borderRadius: 14,
-                                    border: `1px solid ${isActive ? styleSet.accent : "var(--border2)"}`,
-                                    background: isActive ? styleSet.accent : "var(--card2)",
-                                    color: isActive ? "#fff" : "var(--text2)",
-                                    fontSize: 12,
-                                    fontWeight: 800,
-                                }}
-                            >
-                                {option.label}
-                            </button>
-                        );
-                    })}
+                    <div style={{ display: "flex", gap: 8, flex: 1 }}>
+                        {TEMPLATE_OPTIONS.map((option) => {
+                            const isActive = option.id === template;
+                            return (
+                                <button
+                                    key={option.id}
+                                    onClick={() => onChangeTemplate(option.id)}
+                                    style={{
+                                        flex: 1,
+                                        padding: "10px 12px",
+                                        borderRadius: 14,
+                                        border: `1px solid ${isActive ? styleSet.accent : "var(--border2)"}`,
+                                        background: isActive ? styleSet.accent : "var(--card2)",
+                                        color: isActive ? "#fff" : "var(--text2)",
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <button
+                        onClick={handleShare}
+                        disabled={sharing}
+                        style={{
+                            padding: "10px 14px",
+                            borderRadius: 14,
+                            border: "none",
+                            background: styleSet.accent,
+                            color: template === "cool" ? "#111214" : "#fff",
+                            fontSize: 12,
+                            fontWeight: 800,
+                            opacity: sharing ? 0.7 : 1,
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        {sharing ? "共有中..." : "共有"}
+                    </button>
                 </div>
 
-                {photoUrl ? (
+                {errorMsg && (
                     <div
+                        style={{
+                            marginBottom: 14,
+                            padding: "10px 12px",
+                            borderRadius: 12,
+                            background: "#ef44441a",
+                            border: "1px solid #ef444455",
+                            color: "#ef4444",
+                            fontSize: 12,
+                            fontWeight: 600,
+                        }}
+                    >
+                        {errorMsg}
+                    </div>
+                )}
+
+                {renderPhotoUrl ? (
+                    <div
+                        ref={cardRef}
                         style={{
                             ...styleSet.shell,
                             borderRadius: 30,
@@ -213,7 +338,7 @@ export default function WorkoutShareModal({
 
                         <div style={{ ...styleSet.photoFrame, marginBottom: 14 }}>
                             <img
-                                src={photoUrl}
+                                src={renderPhotoUrl}
                                 alt={`${dateLabel} workout share`}
                                 style={{
                                     width: "100%",
@@ -249,6 +374,7 @@ export default function WorkoutShareModal({
                     </div>
                 ) : (
                     <div
+                        ref={cardRef}
                         style={{
                             ...styleSet.shell,
                             borderRadius: 30,
