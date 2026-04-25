@@ -42,10 +42,10 @@ export default function PhotoCompareModal({ photos, onClose }) {
                     </button>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: photos.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 12, padding: 16 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: 16 }}>
                     {photos.map((photo, idx) => (
                         <div key={photo.id || idx} style={{ background: "var(--card2)", borderRadius: 16, padding: 10 }}>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", marginBottom: 8 }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
                                 {photo.workout_date || photo.title || `写真 ${idx + 1}`}
                             </div>
                             <img
@@ -55,8 +55,8 @@ export default function PhotoCompareModal({ photos, onClose }) {
                                     width: "100%",
                                     display: "block",
                                     borderRadius: 12,
-                                    objectFit: "cover",
-                                    aspectRatio: "3 / 4",
+                                    objectFit: "contain",
+                                    maxHeight: "60vh",
                                     background: "#000",
                                 }}
                             />

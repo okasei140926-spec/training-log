@@ -353,28 +353,65 @@ export default function PhotoScreen({ user }) {
                     <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>写真一覧</div>
                         <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                            {isCompareMode
-                                ? `比較したい写真を2枚選択してください${compareSelection.length ? ` (${compareSelection.length}/2)` : ""}`
-                                : selectedDate ? `${selectedDate} の写真 ${selectedDateRows.length}枚` : "日付をタップして表示"}
+                            {selectedDate ? `${selectedDate} の写真 ${selectedDateRows.length}枚` : "日付をタップして表示"}
                         </div>
                     </div>
-                    <button
-                        onClick={handleCompareToggle}
-                        disabled={!user || !photoRows.length || compareLoading}
+                    {!isCompareMode && (
+                        <button
+                            onClick={handleCompareToggle}
+                            disabled={!user || !photoRows.length || compareLoading}
+                            style={{
+                                padding: "8px 12px",
+                                borderRadius: 12,
+                                background: "var(--card2)",
+                                border: "1px solid var(--border2)",
+                                color: !user || !photoRows.length || compareLoading ? "var(--text4)" : "var(--text)",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                opacity: !user || !photoRows.length || compareLoading ? 0.6 : 1,
+                            }}
+                        >
+                            {compareLoading ? "準備中..." : "比較"}
+                        </button>
+                    )}
+                </div>
+
+                {isCompareMode && (
+                    <div
                         style={{
-                            padding: "8px 12px",
-                            borderRadius: 12,
-                            background: isCompareMode ? "var(--text)" : "var(--card2)",
-                            border: "1px solid var(--border2)",
-                            color: isCompareMode ? "var(--bg)" : (!user || !photoRows.length || compareLoading ? "var(--text4)" : "var(--text)"),
-                            fontSize: 12,
-                            fontWeight: 700,
-                            opacity: !user || !photoRows.length || compareLoading ? 0.6 : 1,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: "12px 14px",
+                            borderRadius: 14,
+                            background: "#ef444418",
+                            border: "1px solid #ef444455",
+                            marginBottom: 12,
                         }}
                     >
-                        {compareLoading ? "準備中..." : isCompareMode ? "比較をやめる" : "比較"}
-                    </button>
-                </div>
+                        <div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: "#ef4444" }}>比較モード</div>
+                            <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>
+                                写真を2枚選択してください {compareSelection.length}/2
+                            </div>
+                        </div>
+                        <button
+                            onClick={resetCompareState}
+                            style={{
+                                padding: "8px 12px",
+                                borderRadius: 12,
+                                background: "var(--card)",
+                                border: "1px solid var(--border2)",
+                                color: "var(--text)",
+                                fontSize: 12,
+                                fontWeight: 700,
+                            }}
+                        >
+                            キャンセル
+                        </button>
+                    </div>
+                )}
 
                 {!user ? (
                     <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
@@ -389,7 +426,7 @@ export default function PhotoScreen({ user }) {
                         写真を読み込み中...
                     </div>
                 ) : selectedDateRows.length > 0 ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isCompareMode ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 10 }}>
                         {selectedDateRows.map((row, idx) => (
                             <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
                                 {selectedPhotoUrls[row.id] ? (
@@ -409,9 +446,9 @@ export default function PhotoScreen({ user }) {
                                                 display: "block",
                                                 borderRadius: 12,
                                                 objectFit: "cover",
-                                                aspectRatio: "1 / 1",
+                                                aspectRatio: isCompareMode ? "3 / 4" : "1 / 1",
                                                 cursor: isCompareMode ? "pointer" : "zoom-in",
-                                                border: compareSelection.some((selected) => selected.id === row.id) ? "2px solid #ef4444" : "2px solid transparent",
+                                                border: compareSelection.some((selected) => selected.id === row.id) ? "4px solid #ef4444" : "2px solid transparent",
                                                 boxSizing: "border-box",
                                             }}
                                         />
@@ -434,7 +471,7 @@ export default function PhotoScreen({ user }) {
                                                     boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
                                                 }}
                                             >
-                                                {compareSelection.findIndex((selected) => selected.id === row.id) + 1}
+                                                {`${compareSelection.findIndex((selected) => selected.id === row.id) + 1}枚目`}
                                             </div>
                                         )}
                                     </div>
