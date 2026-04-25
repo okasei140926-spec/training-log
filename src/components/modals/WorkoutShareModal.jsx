@@ -671,9 +671,7 @@ export default function WorkoutShareModal({
                         </div>
 
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                            <div style={{ ...styleSet.label, fontSize: 11 }}>
-                                まずはプレビューのみ
-                            </div>
+                            <div />
                             <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
                                 IRON LOG
                             </div>
@@ -725,10 +723,7 @@ export default function WorkoutShareModal({
                             ))}
                         </div>
 
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                            <div style={{ ...styleSet.label, fontSize: 11 }}>
-                                写真を追加すると写真入りデザインに切り替わります
-                            </div>
+                        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
                             <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
                                 IRON LOG
                             </div>
