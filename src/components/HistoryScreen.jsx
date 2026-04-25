@@ -152,6 +152,16 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
     console.log("workedLabels", workedLabels);
 
     const totalSets = Object.values(daySummary).reduce((a, b) => a + b, 0);
+    const uniqueTrainingDates = [...new Set(
+        Object.values(history || {})
+            .flatMap((recs) => (recs || []).map((r) => r?.date).filter(Boolean))
+    )].sort();
+    const totalTrainingDays = uniqueTrainingDates.length;
+    const firstTrainingDate = uniqueTrainingDates[0] || null;
+    const formatStatDate = (date) => {
+        if (!date) return "—";
+        return date.replace(/-/g, "/");
+    };
 
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
@@ -206,6 +216,32 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             )}
 
 
+
+            <div
+                style={{
+                    background: "var(--card)",
+                    borderRadius: 16,
+                    padding: "14px 16px",
+                    border: "1px solid var(--border)",
+                    marginBottom: 14,
+                }}
+            >
+                <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
+                    これまでの記録
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                    <div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                            累計 {totalTrainingDays}日
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                            開始日 {formatStatDate(firstTrainingDate)}
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* カレンダー（←ここ外に出すのが超重要） */}
             <div style={{
