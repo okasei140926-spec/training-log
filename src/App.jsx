@@ -16,6 +16,7 @@ import LogScreen from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
 import AIScreen from "./components/AIScreen";
+import PhotoScreen from "./components/PhotoScreen";
 
 import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
@@ -814,6 +815,7 @@ export default function GymApp() {
                         <div style={S.appLabel}>IRON LOG</div>
                         <div style={S.headerTitle}>
                             {screen === "log" ? "Log"
+                                : screen === "photos" ? "写真"
                                 : screen === "friends" ? "Friends"
                                     : screen === "ai" ? "AI Coach"
                                         : "記録"}
@@ -933,6 +935,10 @@ export default function GymApp() {
 
                 )}
 
+                {screen === "photos" && (
+                    <PhotoScreen user={user} />
+                )}
+
 
                 {screen === "friends" && (
                     <FriendsScreen
@@ -974,6 +980,7 @@ export default function GymApp() {
                 <div style={S.bottomNav}>
                     {[
                         { id: "history", icon: "📊", label: "記録" },
+                        { id: "photos", icon: "📷", label: "写真" },
                         { id: "analytics", icon: "📈", label: "分析" },
                         { id: "friends", icon: "👥", label: "Friends" },
                         { id: "ai", icon: "🤖", label: "AI" },
