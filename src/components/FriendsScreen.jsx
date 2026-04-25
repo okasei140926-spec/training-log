@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import FriendDetailModal from "./modals/FriendDetailModal";
@@ -16,6 +16,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [newUsername, setNewUsername] = useState("");
     const [avatarUrl, setAvatarUrl] = useState(null);
     const [loading, setLoading] = useState(true);
+    const todayActiveLoadingRef = useRef(false);
     const [kudos, setKudos] = useState({});
     const [receivedKudos, setReceivedKudos] = useState([]);
     const [myUsername, setMyUsername] = useState("");
@@ -68,19 +69,24 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             return;
         }
 
-        const { data: todayWorkouts, error } = await supabase
-            .from("workouts")
-            .select("user_id, date, data")
-            .eq("date", today)
-            .in("user_id", ids);
+        todayActiveLoadingRef.current = true;
+        try {
+            const { data: todayWorkouts, error } = await supabase
+                .from("workouts")
+                .select("user_id, date, data")
+                .eq("date", today)
+                .in("user_id", ids);
 
-        if (error) throw error;
+            if (error) throw error;
 
-        const nextTodayActiveMap = {};
-        (todayWorkouts || []).forEach((workout) => {
-            nextTodayActiveMap[workout.user_id] = hasTodayWorkoutRecord(workout.data);
-        });
-        setTodayActiveMap(nextTodayActiveMap);
+            const nextTodayActiveMap = {};
+            (todayWorkouts || []).forEach((workout) => {
+                nextTodayActiveMap[workout.user_id] = hasTodayWorkoutRecord(workout.data);
+            });
+            setTodayActiveMap(nextTodayActiveMap);
+        } finally {
+            todayActiveLoadingRef.current = false;
+        }
     }, [friendIds, hasTodayWorkoutRecord, today, user]);
 
     const handleCopyInvite = async () => {
@@ -119,6 +125,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     setFriendIds([]);
                     setFriends([]);
                     setTodayActiveMap({});
+                    setLoading(false);
                     return;
                 }
 
@@ -158,12 +165,12 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 setFriendIds(friendIds);
                 setFriends(friendsWithHistory);
                 await fetchTodayActive(friendIds);
-                setLoading(false);
             } catch (err) {
                 console.error(err);
                 setFriendIds([]);
                 setFriends([]);
                 setTodayActiveMap({});
+            } finally {
                 setLoading(false);
             }
         };
