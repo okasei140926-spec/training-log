@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabase";
+import PhotoViewerModal from "./modals/PhotoViewerModal";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -12,6 +13,8 @@ export default function PhotoScreen({ user }) {
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedPhotoUrl, setSelectedPhotoUrl] = useState(null);
     const [selectedPhotoLoading, setSelectedPhotoLoading] = useState(false);
+    const [photoDeleting, setPhotoDeleting] = useState(false);
+    const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
 
     useEffect(() => {
         let isActive = true;
@@ -75,6 +78,7 @@ export default function PhotoScreen({ user }) {
         const storagePath = photoMap[date];
         setSelectedDate(date);
         setSelectedPhotoUrl(null);
+        setIsPhotoViewerOpen(false);
 
         if (!storagePath) return;
 
@@ -90,6 +94,43 @@ export default function PhotoScreen({ user }) {
         }
 
         setSelectedPhotoLoading(false);
+    };
+
+    const handlePhotoDelete = async () => {
+        if (!user?.id || !selectedDate || !photoMap[selectedDate] || photoDeleting) return;
+
+        const confirmed = window.confirm("この日の体写真を削除しますか？");
+        if (!confirmed) return;
+
+        setPhotoDeleting(true);
+
+        try {
+            const storagePath = photoMap[selectedDate];
+
+            const { error: storageError } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .remove([storagePath]);
+
+            if (storageError) throw storageError;
+
+            const { error: dbError } = await supabase
+                .from("progress_photos")
+                .delete()
+                .eq("user_id", user.id)
+                .eq("workout_date", selectedDate);
+
+            if (dbError) throw dbError;
+
+            setPhotoRows((prev) => prev.filter((row) => row.workout_date !== selectedDate));
+            setSelectedPhotoUrl(null);
+            setSelectedDate(null);
+            setIsPhotoViewerOpen(false);
+        } catch (error) {
+            console.error("photo delete failed", error);
+        } finally {
+            setPhotoDeleting(false);
+        }
     };
 
     const firstDow = new Date(year, month, 1).getDay();
@@ -221,21 +262,41 @@ export default function PhotoScreen({ user }) {
                             {selectedDate ? `${selectedDate} の写真` : "日付をタップして表示"}
                         </div>
                     </div>
-                    <button
-                        disabled
-                        style={{
-                            padding: "8px 12px",
-                            borderRadius: 12,
-                            background: "var(--card2)",
-                            border: "1px solid var(--border2)",
-                            color: "var(--text4)",
-                            fontSize: 12,
-                            fontWeight: 700,
-                            opacity: 0.6,
-                        }}
-                    >
-                        比較（準備中）
-                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {selectedDate && photoMap[selectedDate] && (
+                            <button
+                                onClick={handlePhotoDelete}
+                                disabled={photoDeleting}
+                                style={{
+                                    padding: "8px 12px",
+                                    borderRadius: 12,
+                                    background: "transparent",
+                                    border: "1px solid var(--border2)",
+                                    color: "var(--text3)",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    opacity: photoDeleting ? 0.6 : 1,
+                                }}
+                            >
+                                {photoDeleting ? "削除中..." : "削除"}
+                            </button>
+                        )}
+                        <button
+                            disabled
+                            style={{
+                                padding: "8px 12px",
+                                borderRadius: 12,
+                                background: "var(--card2)",
+                                border: "1px solid var(--border2)",
+                                color: "var(--text4)",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                opacity: 0.6,
+                            }}
+                        >
+                            比較（準備中）
+                        </button>
+                    </div>
                 </div>
 
                 {!user ? (
@@ -255,7 +316,8 @@ export default function PhotoScreen({ user }) {
                         <img
                             src={selectedPhotoUrl}
                             alt={`${selectedDate} progress`}
-                            style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", maxHeight: 520 }}
+                            onClick={() => setIsPhotoViewerOpen(true)}
+                            style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", maxHeight: 520, cursor: "zoom-in" }}
                         />
                     </div>
                 ) : (
@@ -266,6 +328,14 @@ export default function PhotoScreen({ user }) {
                     </div>
                 )}
             </div>
+
+            {isPhotoViewerOpen && selectedPhotoUrl && (
+                <PhotoViewerModal
+                    imageUrl={selectedPhotoUrl}
+                    title={`${selectedDate} の体写真`}
+                    onClose={() => setIsPhotoViewerOpen(false)}
+                />
+            )}
         </div>
     );
 }

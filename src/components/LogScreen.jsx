@@ -3,6 +3,7 @@ import { calc1RM, dispW, KG_TO_LBS } from "../utils/helpers";
 import { supabase } from "../utils/supabase";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
+import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
 
 
@@ -71,6 +72,8 @@ export default function LogScreen({
     const [photoUrl, setPhotoUrl] = useState(null);
     const [photoLoading, setPhotoLoading] = useState(false);
     const [photoUploading, setPhotoUploading] = useState(false);
+    const [photoDeleting, setPhotoDeleting] = useState(false);
+    const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
     const editRef = useRef(null);
     const photoInputRef = useRef(null);
 
@@ -187,7 +190,7 @@ export default function LogScreen({
     }, [user?.id, logDate]);
 
     const handlePhotoPick = () => {
-        if (!user?.id || photoUploading) return;
+        if (!user?.id || photoUploading || photoDeleting) return;
         photoInputRef.current?.click();
     };
 
@@ -239,7 +242,41 @@ export default function LogScreen({
         }
     };
 
-        return (
+    const handlePhotoDelete = async () => {
+        if (!user?.id || !logDate || !photoRow?.storage_path || photoDeleting) return;
+
+        const confirmed = window.confirm("この日の体写真を削除しますか？");
+        if (!confirmed) return;
+
+        setPhotoDeleting(true);
+
+        try {
+            const { error: storageError } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .remove([photoRow.storage_path]);
+
+            if (storageError) throw storageError;
+
+            const { error: dbError } = await supabase
+                .from("progress_photos")
+                .delete()
+                .eq("user_id", user.id)
+                .eq("workout_date", logDate);
+
+            if (dbError) throw dbError;
+
+            setPhotoRow(null);
+            setPhotoUrl(null);
+            setIsPhotoViewerOpen(false);
+        } catch (error) {
+            console.error("photo delete failed", error);
+        } finally {
+            setPhotoDeleting(false);
+        }
+    };
+
+    return (
         <div className="fade-in" style={{ padding: "20px", paddingBottom: 200 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
@@ -269,22 +306,42 @@ export default function LogScreen({
                     />
 
                     {user ? (
-                        <button
-                            onClick={handlePhotoPick}
-                            disabled={photoUploading}
-                            style={{
-                                padding: "8px 12px",
-                                borderRadius: 12,
-                                background: "var(--card2)",
-                                border: "1px solid var(--border2)",
-                                color: "var(--text)",
-                                fontSize: 12,
-                                fontWeight: 700,
-                                opacity: photoUploading ? 0.6 : 1,
-                            }}
-                        >
-                            {photoUploading ? "保存中..." : (photoRow ? "変更" : "＋ 体写真を追加")}
-                        </button>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            {photoRow && (
+                                <button
+                                    onClick={handlePhotoDelete}
+                                    disabled={photoDeleting || photoUploading}
+                                    style={{
+                                        padding: "8px 12px",
+                                        borderRadius: 12,
+                                        background: "transparent",
+                                        border: "1px solid var(--border2)",
+                                        color: "var(--text3)",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        opacity: photoDeleting || photoUploading ? 0.6 : 1,
+                                    }}
+                                >
+                                    {photoDeleting ? "削除中..." : "削除"}
+                                </button>
+                            )}
+                            <button
+                                onClick={handlePhotoPick}
+                                disabled={photoUploading || photoDeleting}
+                                style={{
+                                    padding: "8px 12px",
+                                    borderRadius: 12,
+                                    background: "var(--card2)",
+                                    border: "1px solid var(--border2)",
+                                    color: "var(--text)",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    opacity: photoUploading || photoDeleting ? 0.6 : 1,
+                                }}
+                            >
+                                {photoUploading ? "保存中..." : (photoRow ? "変更" : "＋ 体写真を追加")}
+                            </button>
+                        </div>
                     ) : (
                         <div style={{ fontSize: 11, color: "var(--text4)", textAlign: "right" }}>
                             ログインすると保存できます
@@ -301,7 +358,8 @@ export default function LogScreen({
                         <img
                             src={photoUrl}
                             alt={`${logDate} progress`}
-                            style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", maxHeight: 260 }}
+                            onClick={() => setIsPhotoViewerOpen(true)}
+                            style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", maxHeight: 260, cursor: "zoom-in" }}
                         />
                     </div>
                 ) : (
@@ -628,6 +686,13 @@ export default function LogScreen({
                 />
             )}
 
+            {isPhotoViewerOpen && photoUrl && (
+                <PhotoViewerModal
+                    imageUrl={photoUrl}
+                    title={`${logDate} の体写真`}
+                    onClose={() => setIsPhotoViewerOpen(false)}
+                />
+            )}
 
         </div>
     );
