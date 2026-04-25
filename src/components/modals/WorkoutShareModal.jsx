@@ -311,7 +311,6 @@ async function buildPhotoShareBlob({
     ctx.save();
     ctx.fillStyle = labelColor;
     ctx.font = "500 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-    ctx.fillText("まずはプレビューのみ", shellX + 44, shellY + shellH - 42);
     ctx.textAlign = "right";
     ctx.fillText("IRON LOG", shellX + shellW - 44, shellY + shellH - 42);
     ctx.restore();
