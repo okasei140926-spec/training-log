@@ -68,6 +68,47 @@ export default function LogExerciseHistoryModal({
     ? `${dispW(Math.round(maxEstimated1RM * 10) / 10, weightDisplayUnit)}${weightDisplayUnit}`
     : "—";
 
+  const chartData = normalizedRecords
+    .map((record) => ({
+      date: record.date,
+      rm: calc1RM(record.sets),
+    }))
+    .filter((point) => point.rm > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const canShowChart = chartData.length >= 2;
+  const chartMax = canShowChart ? Math.max(...chartData.map((point) => point.rm)) : 0;
+  const chartMin = canShowChart ? Math.min(...chartData.map((point) => point.rm)) : 0;
+
+  const chartWidth = 320;
+  const chartHeight = 120;
+  const chartPadX = 14;
+  const chartPadTop = 22;
+  const chartPadBottom = 24;
+  const chartRange = Math.max(chartMax - chartMin, 1);
+  const chartInnerWidth = chartWidth - chartPadX * 2;
+  const chartInnerHeight = chartHeight - chartPadTop - chartPadBottom;
+
+  const chartPoints = canShowChart
+    ? chartData.map((point, idx) => {
+      const x = chartData.length === 1
+        ? chartWidth / 2
+        : chartPadX + (idx / (chartData.length - 1)) * chartInnerWidth;
+      const y = chartPadTop + ((chartMax - point.rm) / chartRange) * chartInnerHeight;
+
+      return {
+        ...point,
+        x,
+        y,
+      };
+    })
+    : [];
+
+  const chartPolyline = chartPoints.map((point) => `${point.x},${point.y}`).join(" ");
+
+  const formatChartValue = (value) =>
+    `${dispW(Math.round(value * 10) / 10, weightDisplayUnit)}${weightDisplayUnit}`;
+
   return (
     <div
       onClick={onClose}
@@ -185,6 +226,113 @@ export default function LogExerciseHistoryModal({
                 <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
                   最高推定1RM
                 </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 12, letterSpacing: 2, color: "var(--text3)", marginBottom: 10 }}>
+                推定1RM推移
+              </div>
+
+              <div
+                style={{
+                  background: "var(--card2)",
+                  borderRadius: 14,
+                  padding: "14px 12px 12px",
+                }}
+              >
+                {canShowChart ? (
+                  <svg
+                    width="100%"
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    style={{ display: "block", overflow: "visible" }}
+                  >
+                    <text
+                      x={chartPadX}
+                      y={12}
+                      fontSize="10"
+                      fill="var(--text3)"
+                    >
+                      MAX {formatChartValue(chartMax)}
+                    </text>
+
+                    <text
+                      x={chartPadX}
+                      y={chartHeight - 4}
+                      fontSize="10"
+                      fill="var(--text3)"
+                    >
+                      MIN {formatChartValue(chartMin)}
+                    </text>
+
+                    <line
+                      x1={chartPadX}
+                      y1={chartPadTop + chartInnerHeight}
+                      x2={chartWidth - chartPadX}
+                      y2={chartPadTop + chartInnerHeight}
+                      stroke="var(--border2)"
+                      strokeWidth="1"
+                    />
+
+                    <polyline
+                      points={chartPolyline}
+                      fill="none"
+                      stroke="#4ade80"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+
+                    {chartPoints.map((point, idx) => (
+                      <g key={`${point.date}-${idx}`}>
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          r="3.5"
+                          fill={idx === chartPoints.length - 1 ? "#4ade80" : "var(--card2)"}
+                          stroke="#4ade80"
+                          strokeWidth="2"
+                        />
+                        {idx === chartPoints.length - 1 && (
+                          <text
+                            x={point.x}
+                            y={point.y - 8}
+                            textAnchor="middle"
+                            fontSize="10"
+                            fill="#4ade80"
+                            fontWeight="700"
+                          >
+                            {formatChartValue(point.rm)}
+                          </text>
+                        )}
+                      </g>
+                    ))}
+
+                    {chartPoints.map((point, idx) => (
+                      <text
+                        key={`label-${point.date}-${idx}`}
+                        x={point.x}
+                        y={chartHeight - 8}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="var(--text3)"
+                      >
+                        {point.date.slice(5)}
+                      </text>
+                    ))}
+                  </svg>
+                ) : (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      color: "var(--text2)",
+                      fontSize: 13,
+                      padding: "18px 8px",
+                    }}
+                  >
+                    グラフ表示には記録が足りません
+                  </div>
+                )}
               </div>
             </div>
 
