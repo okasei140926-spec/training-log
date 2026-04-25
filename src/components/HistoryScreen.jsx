@@ -229,15 +229,21 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                 <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
                     これまでの記録
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-                    <div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-                            累計 {totalTrainingDays}日
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 }}>
+                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
+                            {totalTrainingDays}日
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
+                            累計トレーニング日数
                         </div>
                     </div>
-                    <div>
-                        <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                            開始日 {formatStatDate(firstTrainingDate)}
+                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
+                            {formatStatDate(firstTrainingDate)}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
+                            開始日
                         </div>
                     </div>
                 </div>
