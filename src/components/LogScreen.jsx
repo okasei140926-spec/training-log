@@ -4,6 +4,7 @@ import { supabase } from "../utils/supabase";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import PhotoCropModal from "./modals/PhotoCropModal";
+import WorkoutShareModal from "./modals/WorkoutShareModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
 
@@ -76,6 +77,8 @@ export default function LogScreen({
     const [photoDeletingId, setPhotoDeletingId] = useState(null);
     const [viewerPhoto, setViewerPhoto] = useState(null);
     const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
+    const [showSharePreview, setShowSharePreview] = useState(false);
+    const [shareTemplate, setShareTemplate] = useState("cute");
     const editRef = useRef(null);
     const photoInputRef = useRef(null);
 
@@ -178,6 +181,10 @@ export default function LogScreen({
         : (unit === "lbs" ? "lbs" : "kg");
     const photoCount = photoRows.length;
     const photoLimitReached = photoCount >= 5;
+    const latestPhotoRow = [...photoRows]
+        .reverse()
+        .find((row) => Boolean(photoUrls[row.id]));
+    const latestPhotoUrl = latestPhotoRow ? photoUrls[latestPhotoRow.id] : null;
 
     useEffect(() => {
         let isActive = true;
@@ -379,6 +386,22 @@ export default function LogScreen({
                     {user ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <button
+                                onClick={() => setShowSharePreview(true)}
+                                disabled={!latestPhotoUrl || photoLoading || photoUploading || !!pendingPhotoFile}
+                                style={{
+                                    padding: "8px 12px",
+                                    borderRadius: 12,
+                                    background: latestPhotoUrl ? accentColor : "var(--card2)",
+                                    border: latestPhotoUrl ? "none" : "1px solid var(--border2)",
+                                    color: latestPhotoUrl ? accentText : "var(--text3)",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    opacity: !latestPhotoUrl || photoLoading || photoUploading || pendingPhotoFile ? 0.6 : 1,
+                                }}
+                            >
+                                投稿プレビュー
+                            </button>
+                            <button
                                 onClick={handlePhotoPick}
                                 disabled={photoUploading || !!photoDeletingId || photoLimitReached || !!pendingPhotoFile}
                                 style={{
@@ -405,6 +428,12 @@ export default function LogScreen({
                 <div style={{ fontSize: 11, color: photoLimitReached ? "#ef4444" : "var(--text3)", marginBottom: 10 }}>
                     {photoCount}/5枚 {photoLimitReached ? "・最大5枚まで" : ""}
                 </div>
+
+                {!latestPhotoUrl && !photoLoading && (
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10 }}>
+                        写真を追加すると投稿プレビューできます
+                    </div>
+                )}
 
                 {photoLoading ? (
                     <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
@@ -785,6 +814,23 @@ export default function LogScreen({
                     file={pendingPhotoFile}
                     onCancel={() => setPendingPhotoFile(null)}
                     onConfirm={handlePhotoUpload}
+                />
+            )}
+
+            {showSharePreview && (
+                <WorkoutShareModal
+                    isOpen={showSharePreview}
+                    onClose={() => setShowSharePreview(false)}
+                    template={shareTemplate}
+                    onChangeTemplate={setShareTemplate}
+                    photoUrl={latestPhotoUrl}
+                    workoutDate={logDate}
+                    summary={{
+                        exerciseCount: exCount,
+                        setCount,
+                        prCount,
+                        totalVolumeKg: Math.round(totalVolumeKg),
+                    }}
                 />
             )}
 
