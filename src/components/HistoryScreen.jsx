@@ -488,6 +488,8 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                             <button
                                 onClick={() => {
                                     if (!selectedDate) return;
+                                    const confirmed = window.confirm(`${selectedDate} の記録を削除しますか？`);
+                                    if (!confirmed) return;
                                     onDeleteDate?.(selectedDate);
                                     setSelectedDate(null);
                                 }}
