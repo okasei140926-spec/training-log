@@ -771,16 +771,16 @@ export default function WorkoutShareModal({
                         style={{
                             ...styleSet.shell,
                             borderRadius: 30,
-                            padding: 20,
+                            padding: 18,
                             overflow: "hidden",
                         }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
                             <div>
                                 <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
                                     {template === "cool" ? "FULL WORKOUT LOG" : "Workout Record"}
                                 </div>
-                                <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
+                                <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
                                     {dateLabel}
                                 </div>
                             </div>
@@ -789,30 +789,59 @@ export default function WorkoutShareModal({
                             </div>
                         </div>
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+                        {renderPhotoUrl && (
+                            <div style={{ ...styleSet.photoFrame, marginBottom: 12, padding: template === "cool" ? 8 : 10 }}>
+                                <img
+                                    ref={photoImgRef}
+                                    src={renderPhotoUrl}
+                                    alt={`${dateLabel} workout full record`}
+                                    crossOrigin="anonymous"
+                                    onLoad={() => {
+                                        setPhotoPreparing(false);
+                                        setPhotoReady(true);
+                                        setErrorMsg("");
+                                    }}
+                                    onError={(error) => {
+                                        console.error("share preview image load failed", error);
+                                        setPhotoPreparing(false);
+                                        setPhotoReady(false);
+                                        setErrorMsg("写真の読み込みに失敗しました。時間をおいてもう一度お試しください。");
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        display: "block",
+                                        aspectRatio: "16 / 9",
+                                        objectFit: "cover",
+                                        borderRadius: template === "cute" ? 18 : 16,
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                             {fullRecord.length > 0 ? fullRecord.map((exercise) => (
                                 <div
                                     key={exercise.name}
                                     style={{
                                         ...styleSet.summaryCard,
-                                        borderRadius: 22,
-                                        padding: "16px 14px",
+                                        borderRadius: 18,
+                                        padding: "12px 12px",
                                     }}
                                 >
-                                    <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 10 }}>
+                                    <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>
                                         {exercise.name}
                                     </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                         {exercise.sets.map((set) => (
                                             <div
                                                 key={`${exercise.name}-${set.setNumber}`}
                                                 style={{
-                                                    display: "grid",
-                                                    gridTemplateColumns: "52px 1fr 72px auto",
-                                                    gap: 8,
+                                                    display: "flex",
                                                     alignItems: "center",
-                                                    padding: "10px 12px",
-                                                    borderRadius: 16,
+                                                    gap: 8,
+                                                    flexWrap: "wrap",
+                                                    padding: "8px 10px",
+                                                    borderRadius: 14,
                                                     background: template === "cool" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.72)",
                                                     border: `1px solid ${template === "cool" ? "rgba(255,255,255,0.06)" : "rgba(232,199,210,0.75)"}`,
                                                 }}
@@ -820,17 +849,20 @@ export default function WorkoutShareModal({
                                                 <div style={{ fontSize: 12, fontWeight: 700, color: styleSet.label.color }}>
                                                     #{set.setNumber}
                                                 </div>
-                                                <div style={{ fontSize: 14, fontWeight: 700 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700 }}>
                                                     {set.weightLabel}
                                                 </div>
-                                                <div style={{ fontSize: 14, fontWeight: 700, textAlign: "right" }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                                                    ×
+                                                </div>
+                                                <div style={{ fontSize: 13, fontWeight: 700 }}>
                                                     {set.repsLabel}
                                                 </div>
                                                 {set.isPR ? (
                                                     <div
                                                         style={{
-                                                            justifySelf: "end",
-                                                            padding: "4px 8px",
+                                                            marginLeft: "auto",
+                                                            padding: "3px 7px",
                                                             borderRadius: 999,
                                                             fontSize: 10,
                                                             fontWeight: 800,
@@ -841,7 +873,7 @@ export default function WorkoutShareModal({
                                                         PR
                                                     </div>
                                                 ) : (
-                                                    <div />
+                                                    <div style={{ marginLeft: "auto" }} />
                                                 )}
                                             </div>
                                         ))}
