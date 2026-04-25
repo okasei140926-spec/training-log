@@ -1,5 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { calc1RM, dispW, KG_TO_LBS } from "../utils/helpers";
+import { supabase } from "../utils/supabase";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import SetRow from "./log/SetRow";
@@ -49,6 +50,7 @@ function SortableExerciseItem({ id, children }) {
 
 
 export default function LogScreen({
+    user,
     todayLabels, dayColor,
     exercises, logData, getExSets, setField, addSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
@@ -65,7 +67,12 @@ export default function LogScreen({
     const [editingName, setEditingName] = useState("");
     const [activeExIdx, setActiveExIdx] = useState(0);
     const [historyTarget, setHistoryTarget] = useState(null);
+    const [photoRow, setPhotoRow] = useState(null);
+    const [photoUrl, setPhotoUrl] = useState(null);
+    const [photoLoading, setPhotoLoading] = useState(false);
+    const [photoUploading, setPhotoUploading] = useState(false);
     const editRef = useRef(null);
+    const photoInputRef = useRef(null);
 
     const accentColor = dayColor || "var(--text)";
     const accentText = dayColor ? "#000" : "var(--bg)";
@@ -128,7 +135,111 @@ export default function LogScreen({
         ? (getExUnit(historyTarget) === "lbs" ? "lbs" : "kg")
         : (unit === "lbs" ? "lbs" : "kg");
 
-    return (
+    useEffect(() => {
+        let isActive = true;
+
+        const loadPhoto = async () => {
+            if (!user?.id || !logDate) {
+                if (!isActive) return;
+                setPhotoRow(null);
+                setPhotoUrl(null);
+                setPhotoLoading(false);
+                return;
+            }
+
+            setPhotoLoading(true);
+            setPhotoRow(null);
+            setPhotoUrl(null);
+
+            const { data, error } = await supabase
+                .from("progress_photos")
+                .select("storage_path, workout_date")
+                .eq("user_id", user.id)
+                .eq("workout_date", logDate)
+                .maybeSingle();
+
+            if (!isActive) return;
+
+            if (error || !data?.storage_path) {
+                setPhotoRow(null);
+                setPhotoUrl(null);
+                setPhotoLoading(false);
+                return;
+            }
+
+            const { data: signedData, error: signedError } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .createSignedUrl(data.storage_path, 3600);
+
+            if (!isActive) return;
+
+            setPhotoRow(data);
+            setPhotoUrl(signedError ? null : (signedData?.signedUrl || null));
+            setPhotoLoading(false);
+        };
+
+        loadPhoto();
+
+        return () => {
+            isActive = false;
+        };
+    }, [user?.id, logDate]);
+
+    const handlePhotoPick = () => {
+        if (!user?.id || photoUploading) return;
+        photoInputRef.current?.click();
+    };
+
+    const handlePhotoChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+
+        if (!file || !user?.id || !logDate) return;
+
+        setPhotoUploading(true);
+
+        try {
+            const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+            const storagePath = `${user.id}/${logDate}/progress-${Date.now()}.${ext}`;
+
+            const { error: uploadError } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .upload(storagePath, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { error: upsertError } = await supabase
+                .from("progress_photos")
+                .upsert({
+                    user_id: user.id,
+                    workout_date: logDate,
+                    storage_path: storagePath,
+                }, { onConflict: "user_id,workout_date" });
+
+            if (upsertError) throw upsertError;
+
+            const { data: signedData, error: signedError } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .createSignedUrl(storagePath, 3600);
+
+            if (signedError) throw signedError;
+
+            setPhotoRow({
+                storage_path: storagePath,
+                workout_date: logDate,
+            });
+            setPhotoUrl(signedData?.signedUrl || null);
+        } catch (error) {
+            console.error("photo upload failed", error);
+        } finally {
+            setPhotoUploading(false);
+        }
+    };
+
+        return (
         <div className="fade-in" style={{ padding: "20px", paddingBottom: 200 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                 <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
@@ -137,6 +248,67 @@ export default function LogScreen({
 
             <div style={{ fontSize: 11, color: "var(--text4)", marginTop: -10, marginBottom: 16 }}>
                 {exCount}種目 ・ {setCount}セット
+            </div>
+
+            <div style={{ background: "var(--card)", borderRadius: 16, padding: "14px 16px", marginBottom: 14, border: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                    <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>体写真</div>
+                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                            {logDate} の記録に紐づく自分専用写真
+                        </div>
+                    </div>
+
+                    <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={handlePhotoChange}
+                        disabled={!user || photoUploading}
+                    />
+
+                    {user ? (
+                        <button
+                            onClick={handlePhotoPick}
+                            disabled={photoUploading}
+                            style={{
+                                padding: "8px 12px",
+                                borderRadius: 12,
+                                background: "var(--card2)",
+                                border: "1px solid var(--border2)",
+                                color: "var(--text)",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                opacity: photoUploading ? 0.6 : 1,
+                            }}
+                        >
+                            {photoUploading ? "保存中..." : (photoRow ? "変更" : "＋ 体写真を追加")}
+                        </button>
+                    ) : (
+                        <div style={{ fontSize: 11, color: "var(--text4)", textAlign: "right" }}>
+                            ログインすると保存できます
+                        </div>
+                    )}
+                </div>
+
+                {photoLoading ? (
+                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
+                        写真を読み込み中...
+                    </div>
+                ) : photoUrl ? (
+                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
+                        <img
+                            src={photoUrl}
+                            alt={`${logDate} progress`}
+                            style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", maxHeight: 260 }}
+                        />
+                    </div>
+                ) : (
+                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
+                        {user ? "まだ写真はありません" : "写真はログイン後に追加できます"}
+                    </div>
+                )}
             </div>
 
             {/* Empty State */}
