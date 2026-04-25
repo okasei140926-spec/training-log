@@ -18,6 +18,7 @@ export default function PhotoCompareModal({ photos, onClose }) {
                 style={{
                     width: "100%",
                     maxWidth: 960,
+                    maxHeight: "90vh",
                     background: "var(--card)",
                     borderRadius: 20,
                     border: "1px solid var(--border2)",
@@ -42,7 +43,7 @@ export default function PhotoCompareModal({ photos, onClose }) {
                     </button>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, padding: 16 }}>
                     {photos.map((photo, idx) => (
                         <div key={photo.id || idx} style={{ background: "var(--card2)", borderRadius: 16, padding: 10 }}>
                             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
@@ -56,7 +57,8 @@ export default function PhotoCompareModal({ photos, onClose }) {
                                     display: "block",
                                     borderRadius: 12,
                                     objectFit: "contain",
-                                    maxHeight: "60vh",
+                                    aspectRatio: "3 / 4",
+                                    maxHeight: "calc(90vh - 120px)",
                                     background: "#000",
                                 }}
                             />
