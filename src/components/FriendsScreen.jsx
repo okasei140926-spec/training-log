@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { calc1RM } from "../utils/helpers";
@@ -11,6 +11,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
+    const [todayActiveMap, setTodayActiveMap] = useState({});
     const [showEditName, setShowEditName] = useState(false);
     const [newUsername, setNewUsername] = useState("");
     const [avatarUrl, setAvatarUrl] = useState(null);
@@ -18,8 +19,30 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [kudos, setKudos] = useState({});
     const [receivedKudos, setReceivedKudos] = useState([]);
     const [myUsername, setMyUsername] = useState("");
+    const today = new Date().toISOString().split("T")[0];
 
+    const hasValidSet = useCallback((set) => {
+        if (!set) return false;
+        const repsNum = Number(set.reps);
+        const hasValidWeight =
+            set.weight === "BW" ||
+            (set.weight !== "" && set.weight !== null && set.weight !== undefined && Number.isFinite(Number(set.weight)));
+        return hasValidWeight && Number.isFinite(repsNum) && repsNum >= 1;
+    }, []);
 
+    const hasTodayWorkoutRecord = useCallback((workoutData) => {
+        return Object.values(workoutData || {}).some((records) =>
+            (records || []).some((record) => {
+                if (!record || record.date !== today) return false;
+
+                const sets = Array.isArray(record.sets) && record.sets.length > 0
+                    ? record.sets
+                    : [{ weight: record.weight, reps: record.reps }];
+
+                return sets.some(hasValidSet);
+            })
+        );
+    }, [hasValidSet, today]);
 
     const handleCopyInvite = async () => {
         const url = `${window.location.origin}?ref=${user.id}`;
@@ -55,6 +78,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
                 if (!friendships || friendships.length === 0) {
                     setFriends([]);
+                    setTodayActiveMap({});
                     return;
                 }
 
@@ -64,7 +88,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     )
                 )];
 
-                const [profilesRes, workoutsRes] = await Promise.all([
+                const [profilesRes, workoutsRes, todayWorkoutsRes] = await Promise.all([
                     supabase
                         .from("profiles")
                         .select("id, username, avatar1_url")
@@ -74,17 +98,30 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                         .from("workouts")
                         .select("user_id, data")
                         .in("user_id", friendIds),
+
+                    supabase
+                        .from("workouts")
+                        .select("user_id, date, data")
+                        .eq("date", today)
+                        .in("user_id", friendIds),
                 ]);
 
                 const { data: profiles, error: profilesError } = profilesRes;
                 const { data: workouts, error: workoutsError } = workoutsRes;
+                const { data: todayWorkouts, error: todayWorkoutsError } = todayWorkoutsRes;
 
                 if (profilesError) throw profilesError;
                 if (workoutsError) throw workoutsError;
+                if (todayWorkoutsError) throw todayWorkoutsError;
 
                 const historyMap = new Map(
                     (workouts || []).map(w => [w.user_id, w.data || {}])
                 );
+
+                const nextTodayActiveMap = {};
+                (todayWorkouts || []).forEach((workout) => {
+                    nextTodayActiveMap[workout.user_id] = hasTodayWorkoutRecord(workout.data);
+                });
 
                 const friendsWithHistory = (profiles || []).map(p => ({
                     ...p,
@@ -92,16 +129,18 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 }));
 
                 setFriends(friendsWithHistory);
+                setTodayActiveMap(nextTodayActiveMap);
                 setLoading(false);
             } catch (err) {
                 console.error(err);
                 setFriends([]);
+                setTodayActiveMap({});
                 setLoading(false);
             }
         };
 
         fetchFriends();
-    }, [user]);
+    }, [user, today, hasTodayWorkoutRecord]);
 
     useEffect(() => {
         if (!user) return;
@@ -157,8 +196,6 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             </div>
         );
     }
-
-    const today = new Date().toISOString().split("T")[0];
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - 7);
     const thresholdStr = thresholdDate.toISOString().split("T")[0];
@@ -189,6 +226,9 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         }
         return acc;
     }, {});
+
+    const todayActiveFriends = friends.filter((f) => todayActiveMap[f.id]);
+    const todayActiveLabel = todayActiveFriends.map((f) => f.username).join("、");
 
 
     const renderDateAccordion = (id, date, exMap) => {
@@ -232,6 +272,22 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             )}
 
             <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
+
+            {todayActiveFriends.length > 0 && (
+                <div
+                    style={{
+                        background: "#22c55e1a",
+                        border: "1px solid #22c55e44",
+                        borderRadius: 12,
+                        padding: "10px 14px",
+                        marginBottom: 12,
+                        fontSize: 13,
+                        color: "var(--text)",
+                    }}
+                >
+                    {todayActiveLabel}が今日トレーニングを記録しています！
+                </div>
+            )}
 
             {receivedKudos.length > 0 && (
                 <div style={{ background: "#4ade8022", border: "1px solid #4ade8044", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)" }}>
@@ -318,6 +374,21 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                 <div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                         <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
+                                        {todayActiveMap[f.id] && (
+                                            <div
+                                                style={{
+                                                    padding: "2px 8px",
+                                                    borderRadius: 10,
+                                                    background: "#22c55e1a",
+                                                    border: "1px solid #22c55e44",
+                                                    fontSize: 10,
+                                                    color: "#22c55e",
+                                                    fontWeight: 700,
+                                                }}
+                                            >
+                                                🟢 今日記録あり
+                                            </div>
+                                        )}
                                         <button onClick={async () => {
                                             const today = new Date().toISOString().split("T")[0];
                                             await supabase.from("kudos").upsert({
