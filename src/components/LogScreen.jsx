@@ -3,6 +3,7 @@ import { calc1RM, dispW, KG_TO_LBS } from "../utils/helpers";
 import { supabase } from "../utils/supabase";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
+import PhotoCropModal from "./modals/PhotoCropModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
 
@@ -74,6 +75,7 @@ export default function LogScreen({
     const [photoUploading, setPhotoUploading] = useState(false);
     const [photoDeletingId, setPhotoDeletingId] = useState(null);
     const [viewerPhoto, setViewerPhoto] = useState(null);
+    const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
     const editRef = useRef(null);
     const photoInputRef = useRef(null);
 
@@ -211,16 +213,22 @@ export default function LogScreen({
 
         if (!file || !user?.id || !logDate || photoLimitReached) return;
 
+        setPendingPhotoFile(file);
+    };
+
+    const handlePhotoUpload = async ({ blob, extension, mimeType }) => {
         setPhotoUploading(true);
 
         try {
-            const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+            const ext = extension || "jpg";
             const storagePath = `${user.id}/${logDate}/progress-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
             const { error: uploadError } = await supabase
                 .storage
                 .from("progress-photos-private")
-                .upload(storagePath, file);
+                .upload(storagePath, blob, {
+                    contentType: mimeType || "image/jpeg",
+                });
 
             if (uploadError) throw uploadError;
 
@@ -256,6 +264,7 @@ export default function LogScreen({
             console.error("photo upload failed", error);
         } finally {
             setPhotoUploading(false);
+            setPendingPhotoFile(null);
         }
     };
 
@@ -323,14 +332,14 @@ export default function LogScreen({
                         accept="image/*"
                         style={{ display: "none" }}
                         onChange={handlePhotoChange}
-                        disabled={!user || photoUploading || photoLimitReached}
+                        disabled={!user || photoUploading || photoLimitReached || !!pendingPhotoFile}
                     />
 
                     {user ? (
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <button
                                 onClick={handlePhotoPick}
-                                disabled={photoUploading || !!photoDeletingId || photoLimitReached}
+                                disabled={photoUploading || !!photoDeletingId || photoLimitReached || !!pendingPhotoFile}
                                 style={{
                                     padding: "8px 12px",
                                     borderRadius: 12,
@@ -339,7 +348,7 @@ export default function LogScreen({
                                     color: "var(--text)",
                                     fontSize: 12,
                                     fontWeight: 700,
-                                    opacity: photoUploading || photoDeletingId || photoLimitReached ? 0.6 : 1,
+                                    opacity: photoUploading || photoDeletingId || photoLimitReached || pendingPhotoFile ? 0.6 : 1,
                                 }}
                             >
                                 {photoUploading ? "保存中..." : "＋ 体写真を追加"}
@@ -727,6 +736,14 @@ export default function LogScreen({
                     imageUrl={viewerPhoto.url}
                     title={viewerPhoto.title}
                     onClose={() => setViewerPhoto(null)}
+                />
+            )}
+
+            {pendingPhotoFile && (
+                <PhotoCropModal
+                    file={pendingPhotoFile}
+                    onCancel={() => setPendingPhotoFile(null)}
+                    onConfirm={handlePhotoUpload}
                 />
             )}
 
