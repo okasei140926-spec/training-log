@@ -51,19 +51,45 @@ export default function LogExerciseHistoryModal({
   const maxWeight = numericSets.length > 0
     ? Math.max(...numericSets.map((set) => Number(set.weight)))
     : null;
-  const maxReps = allSets.length > 0
-    ? Math.max(...allSets.map((set) => Number(set.reps)))
-    : null;
   const maxEstimated1RM = normalizedRecords.length > 0
     ? Math.max(...normalizedRecords.map((record) => calc1RM(record.sets)), 0)
     : 0;
+
+  let bestSet = null;
+  let bestSetScore = -1;
+  let fallbackBodyweightSet = null;
+  let fallbackBodyweightReps = -1;
+
+  normalizedRecords.forEach((record) => {
+    record.sets.forEach((set) => {
+      if (set.weight === "BW") {
+        if (fallbackBodyweightSet === null || set.reps > fallbackBodyweightReps) {
+          fallbackBodyweightSet = set;
+          fallbackBodyweightReps = set.reps;
+        }
+        return;
+      }
+
+      const score = Number(set.weight) * (1 + Number(set.reps) / 30);
+      if (score > bestSetScore) {
+        bestSet = set;
+        bestSetScore = score;
+      }
+    });
+  });
+
+  if (!bestSet && fallbackBodyweightSet) {
+    bestSet = fallbackBodyweightSet;
+  }
 
   const maxWeightLabel = maxWeight !== null
     ? formatWeight(maxWeight, weightDisplayUnit)
     : hasBodyweightSet
       ? "自重"
       : "—";
-  const maxRepsLabel = maxReps !== null ? `${maxReps}rep` : "—";
+  const bestSetLabel = bestSet
+    ? `${formatWeight(bestSet.weight, weightDisplayUnit)} × ${bestSet.reps}rep`
+    : "—";
   const maxEstimated1RMLabel = maxEstimated1RM > 0
     ? `${dispW(Math.round(maxEstimated1RM * 10) / 10, weightDisplayUnit)}${weightDisplayUnit}`
     : "—";
@@ -212,10 +238,10 @@ export default function LogExerciseHistoryModal({
 
               <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px", textAlign: "center" }}>
                 <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)" }}>
-                  {maxRepsLabel}
+                  {bestSetLabel}
                 </div>
                 <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
-                  最高rep
+                  ベスト記録
                 </div>
               </div>
 
