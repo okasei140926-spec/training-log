@@ -241,30 +241,30 @@ export default function LogExerciseHistoryModal({
                   padding: "14px 12px 12px",
                 }}
               >
+                {canShowChart && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                      marginBottom: 10,
+                      fontSize: 10,
+                      color: "var(--text3)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    <div>MAX {formatChartValue(chartMax)}</div>
+                    <div>MIN {formatChartValue(chartMin)}</div>
+                  </div>
+                )}
+
                 {canShowChart ? (
                   <svg
                     width="100%"
                     viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                     style={{ display: "block", overflow: "visible" }}
                   >
-                    <text
-                      x={chartPadX}
-                      y={12}
-                      fontSize="10"
-                      fill="var(--text3)"
-                    >
-                      MAX {formatChartValue(chartMax)}
-                    </text>
-
-                    <text
-                      x={chartPadX}
-                      y={chartHeight - 14}
-                      fontSize="10"
-                      fill="var(--text3)"
-                    >
-                      MIN {formatChartValue(chartMin)}
-                    </text>
-
                     <line
                       x1={chartPadX}
                       y1={chartPadTop + chartInnerHeight}
