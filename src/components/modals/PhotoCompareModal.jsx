@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function diffDaysLabel(photos) {
     const dates = photos
@@ -18,12 +18,54 @@ function diffDaysLabel(photos) {
 
 export default function PhotoCompareModal({ photos, onClose }) {
     const [activeIndex, setActiveIndex] = useState(0);
+    const [photoRatios, setPhotoRatios] = useState({});
     const touchStartX = useRef(null);
     const safePhotos = useMemo(
         () => (Array.isArray(photos) ? photos.filter(Boolean) : []),
         [photos]
     );
     const activePhoto = safePhotos[activeIndex] || safePhotos[0];
+
+    useEffect(() => {
+        let isActive = true;
+
+        const loadRatios = async () => {
+            const ratioEntries = await Promise.all(
+                safePhotos.map(
+                    (photo) =>
+                        new Promise((resolve) => {
+                            if (!photo?.id || !photo?.url) {
+                                resolve(null);
+                                return;
+                            }
+
+                            const image = new Image();
+                            image.onload = () => {
+                                const ratio = image.naturalWidth > 0
+                                    ? image.naturalHeight / image.naturalWidth
+                                    : 4 / 3;
+                                resolve([photo.id, ratio]);
+                            };
+                            image.onerror = () => resolve([photo.id, 4 / 3]);
+                            image.src = photo.url;
+                        })
+                )
+            );
+
+            if (!isActive) return;
+            setPhotoRatios(Object.fromEntries(ratioEntries.filter(Boolean)));
+        };
+
+        if (safePhotos.length) {
+            loadRatios();
+        } else {
+            setPhotoRatios({});
+        }
+
+        return () => {
+            isActive = false;
+        };
+    }, [safePhotos]);
 
     const periodText = useMemo(() => {
         if (safePhotos.length < 2) return "";
@@ -38,6 +80,17 @@ export default function PhotoCompareModal({ photos, onClose }) {
     }, [safePhotos]);
 
     const daysText = useMemo(() => diffDaysLabel(safePhotos), [safePhotos]);
+    const maxPhotoRatio = useMemo(() => {
+        const ratios = safePhotos
+            .map((photo) => photoRatios[photo.id])
+            .filter(Boolean);
+
+        return ratios.length ? Math.max(...ratios) : 4 / 3;
+    }, [photoRatios, safePhotos]);
+    const frameAspectRatio = useMemo(
+        () => `${1 / maxPhotoRatio}`,
+        [maxPhotoRatio]
+    );
 
     const goPrev = () => {
         setActiveIndex((prev) => Math.max(0, prev - 1));
@@ -176,18 +229,31 @@ export default function PhotoCompareModal({ photos, onClose }) {
                             padding: 10,
                         }}
                     >
-                        <img
-                            src={activePhoto.url}
-                            alt={activePhoto.title || `compare-${activeIndex + 1}`}
+                        <div
                             style={{
                                 width: "100%",
-                                display: "block",
-                                borderRadius: 12,
-                                objectFit: "contain",
+                                aspectRatio: frameAspectRatio,
                                 maxHeight: "calc(92vh - 210px)",
                                 background: "#000",
+                                borderRadius: 12,
+                                overflow: "hidden",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
                             }}
-                        />
+                        >
+                            <img
+                                src={activePhoto.url}
+                                alt={activePhoto.title || `compare-${activeIndex + 1}`}
+                                style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    display: "block",
+                                    objectFit: "contain",
+                                    background: "#000",
+                                }}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
