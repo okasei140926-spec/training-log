@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import FriendDetailModal from "./modals/FriendDetailModal";
@@ -16,7 +16,6 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [newUsername, setNewUsername] = useState("");
     const [avatarUrl, setAvatarUrl] = useState(null);
     const [loading, setLoading] = useState(true);
-    const todayActiveLoadingRef = useRef(false);
     const [kudos, setKudos] = useState({});
     const [receivedKudos, setReceivedKudos] = useState([]);
     const [myUsername, setMyUsername] = useState("");
@@ -63,31 +62,26 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         )));
     }, []);
 
-    const fetchTodayActive = useCallback(async (ids = friendIds) => {
+    const fetchTodayActive = useCallback(async (ids) => {
         if (!user || !ids.length) {
             setTodayActiveMap({});
             return;
         }
 
-        todayActiveLoadingRef.current = true;
-        try {
-            const { data: todayWorkouts, error } = await supabase
-                .from("workouts")
-                .select("user_id, date, data")
-                .eq("date", today)
-                .in("user_id", ids);
+        const { data: todayWorkouts, error } = await supabase
+            .from("workouts")
+            .select("user_id, date, data")
+            .eq("date", today)
+            .in("user_id", ids);
 
-            if (error) throw error;
+        if (error) throw error;
 
-            const nextTodayActiveMap = {};
-            (todayWorkouts || []).forEach((workout) => {
-                nextTodayActiveMap[workout.user_id] = hasTodayWorkoutRecord(workout.data);
-            });
-            setTodayActiveMap(nextTodayActiveMap);
-        } finally {
-            todayActiveLoadingRef.current = false;
-        }
-    }, [friendIds, hasTodayWorkoutRecord, today, user]);
+        const nextTodayActiveMap = {};
+        (todayWorkouts || []).forEach((workout) => {
+            nextTodayActiveMap[workout.user_id] = hasTodayWorkoutRecord(workout.data);
+        });
+        setTodayActiveMap(nextTodayActiveMap);
+    }, [hasTodayWorkoutRecord, today, user]);
 
     const handleCopyInvite = async () => {
         const url = `${window.location.origin}?ref=${user.id}`;
