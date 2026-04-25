@@ -16,8 +16,6 @@ import LogScreen from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
 import AIScreen from "./components/AIScreen";
-import HomeScreen from "./components/HomeScreen";
-import PrepScreen from "./components/PrepScreen";
 
 import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
@@ -69,7 +67,7 @@ export default function GymApp() {
     const [history, setHistory] = useState(() => load("history", {}));
 
 
-    const [screen, setScreen] = useState("home");
+    const [screen, setScreen] = useState("history");
     const [showAuth, setShowAuth] = useState(false);
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
@@ -196,7 +194,7 @@ export default function GymApp() {
 
         setLogDate(today);
         if (!new URLSearchParams(window.location.search).get("ref")) {
-            setScreen("home");
+            setScreen("history");
         }
     }, []);
 
@@ -334,18 +332,6 @@ export default function GymApp() {
 
         return () => clearTimeout(t);
     }, [screen, logData, exercises, logDate, exerciseUnits, persistCurrentLog]);
-
-    // eslint-disable-next-line no-unused-vars
-    const lastWorkoutExercises = (() => {
-        if (!Object.keys(history).length) return [];
-        const allDates = Object.values(history).flatMap(recs => recs.map(r => r.date));
-        const lastDate = [...allDates].sort().reverse()[0];
-        return Object.entries(history)
-            .filter(([, recs]) => recs[recs.length - 1]?.date === lastDate)
-            .map(([name], i) => ({ id: Date.now() + i, name }));
-    })();
-
-
 
     // ─── Log data ─────────────────────────────────────
 
@@ -532,29 +518,6 @@ export default function GymApp() {
 
     const quickAddToSession = (name, remove, labelOverride) => {
         quickAdd(name, remove, labelOverride);
-    };
-
-    const getTodayStr = () => {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    };
-
-    const handleStartWorkoutFromHome = () => {
-        setLogDate((prev) => prev || getTodayStr());
-        setScreen("prep");
-    };
-
-    const handleStartFreeFromHome = () => {
-        setTodayLabels([]);
-        setLogDate((prev) => prev || getTodayStr());
-        setSessionEx([]);
-        setScreen("prep");
-    };
-
-    const handlePrepStart = (prepExercises) => {
-        const nextExercises = Array.isArray(prepExercises) ? prepExercises : [];
-        setSessionEx(nextExercises);
-        setScreen("log");
     };
 
     const handleLogForDate = (dateStr) => {
@@ -809,7 +772,7 @@ export default function GymApp() {
             <div className={isDark ? "" : "theme-light"} style={S.root}><style>{css}</style>
                 <div style={S.header}>
                     <div><div style={S.appLabel}>IRON LOG</div><div style={S.headerTitle}>種目設定</div></div>
-                    <button onClick={() => setScreen("home")} style={S.pillBtn}>完了</button>
+                    <button onClick={() => setScreen("history")} style={S.pillBtn}>完了</button>
                 </div>
                 <div style={{ padding: "20px" }}>
                     <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 20, lineHeight: 1.6 }}>
@@ -850,12 +813,10 @@ export default function GymApp() {
                     <div>
                         <div style={S.appLabel}>IRON LOG</div>
                         <div style={S.headerTitle}>
-                            {screen === "home" ? "Today"
-                                : screen === "prep" ? "Menu"
-                                    : screen === "log" ? "Log"
-                                        : screen === "friends" ? "Friends"
-                                            : screen === "ai" ? "AI Coach"
-                                                : "記録"}
+                            {screen === "log" ? "Log"
+                                : screen === "friends" ? "Friends"
+                                    : screen === "ai" ? "AI Coach"
+                                        : "記録"}
                         </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -894,36 +855,6 @@ export default function GymApp() {
                             </button>
                         ))}
                     </div>
-                )}
-
-
-
-                {screen === "home" && (
-                    <HomeScreen
-                        muscleEx={muscleEx}
-                        history={history}
-                        todayLabels={todayLabels}
-                        setTodayLabels={updateTodayLabels}
-                        onStartWorkout={handleStartWorkoutFromHome}
-                        onStartFree={handleStartFreeFromHome}
-                        onGoToSetup={() => setScreen("setup_routine")}
-                        unit={unit}
-                        logDate={logDate}
-                        setLogDate={setLogDate}
-                    />
-                )}
-
-                {screen === "prep" && (
-                    <PrepScreen
-                        todayLabels={todayLabels}
-                        dayColor={dayColor}
-                        initialExercises={sessionEx !== null ? sessionEx : baseExercises}
-                        history={history}
-                        lastWorkoutExercises={lastWorkoutExercises}
-                        onStart={handlePrepStart}
-                        onBack={() => setScreen("home")}
-                        unit={unit}
-                    />
                 )}
 
                 {screen === "log" && (
