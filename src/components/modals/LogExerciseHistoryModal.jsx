@@ -258,7 +258,7 @@ export default function LogExerciseHistoryModal({
 
                     <text
                       x={chartPadX}
-                      y={chartHeight - 4}
+                      y={chartHeight - 14}
                       fontSize="10"
                       fill="var(--text3)"
                     >
