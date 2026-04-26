@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 import { load, save } from "../../utils/helpers";
 import CustomBodyPartModal from "./CustomBodyPartModal";
-import BodyPartManagerModal from "./BodyPartManagerModal";
 
 const matchesActiveTab = (bodyPart, activeTab) => {
     if (!bodyPart || bodyPart === "その他") return false;
@@ -44,7 +43,6 @@ export default function AddExModal({
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
     const [showCustomBodyPartModal, setShowCustomBodyPartModal] = useState(false);
-    const [showBodyPartManagerModal, setShowBodyPartManagerModal] = useState(false);
     const [hiddenExerciseSuggestions, setHiddenExerciseSuggestions] = useState(() =>
         load("hiddenExerciseSuggestions", {})
     );
@@ -173,6 +171,18 @@ export default function AddExModal({
         }));
     };
 
+    const hideBodyPart = (bodyPart) => {
+        if (tabLabels.length <= 1) {
+            window.alert("最低1つの部位は表示したままにしてください");
+            return;
+        }
+
+        const confirmed = window.confirm(`${bodyPart}を非表示にしますか？`);
+        if (!confirmed) return;
+
+        onUpdateHiddenBodyParts?.([...hiddenBodyParts, bodyPart]);
+    };
+
     const handleQuick = (s) => {
         if (added.has(s)) {
             onQuickAdd(s, true, activeTab);
@@ -241,7 +251,7 @@ export default function AddExModal({
                                     key={label}
                                     {...buildLongPressHandlers({
                                         onTap: () => setActiveTab(label),
-                                        onLongPress: () => setShowBodyPartManagerModal(true),
+                                        onLongPress: () => hideBodyPart(label),
                                     })}
                                     style={{
                                         padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",
@@ -314,14 +324,6 @@ export default function AddExModal({
                     setActiveTab(bodyPart);
                     setShowCustomBodyPartModal(false);
                 }}
-            />
-
-            <BodyPartManagerModal
-                isOpen={showBodyPartManagerModal}
-                customBodyParts={customBodyParts}
-                hiddenBodyParts={hiddenBodyParts}
-                onClose={() => setShowBodyPartManagerModal(false)}
-                onUpdateHiddenBodyParts={onUpdateHiddenBodyParts}
             />
         </div>
     );
