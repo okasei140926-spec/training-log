@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const BODY_PART_OPTIONS = ["胸", "背中", "脚", "尻", "肩", "二頭", "三頭", "腹", "その他"];
+const FIXED_BODY_PART_OPTIONS = ["胸", "背中", "脚", "尻", "肩", "二頭", "三頭", "腹"];
 
 export default function ManualBestModal({
     isOpen,
@@ -8,6 +8,7 @@ export default function ManualBestModal({
     onSave,
     initialValue = null,
     mode = "create",
+    customBodyParts = [],
 }) {
     const [exerciseName, setExerciseName] = useState("");
     const [weight, setWeight] = useState("");
@@ -27,6 +28,14 @@ export default function ManualBestModal({
         setError("");
         setSaving(false);
     }, [isOpen, initialValue]);
+
+    const bodyPartOptions = [
+        ...FIXED_BODY_PART_OPTIONS,
+        ...customBodyParts.filter(
+            (part) => part && !FIXED_BODY_PART_OPTIONS.includes(part) && part !== "その他"
+        ),
+        "その他",
+    ];
 
     if (!isOpen) return null;
 
@@ -178,7 +187,7 @@ export default function ManualBestModal({
                         <option value="" disabled>
                             部位を選択
                         </option>
-                        {BODY_PART_OPTIONS.map((option) => (
+                        {bodyPartOptions.map((option) => (
                             <option key={option} value={option}>
                                 {option}
                             </option>

@@ -26,12 +26,14 @@ export default function AddExModal({
     muscleEx = {},
     history = {},
     manualBests = [],
+    customBodyParts = [],
 }) {
     const inputRef = useRef(null);
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
+    const tabLabels = [...new Set([...QUICK_LABELS, ...customBodyParts.filter(Boolean)])];
 
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 50);
@@ -133,7 +135,7 @@ export default function AddExModal({
                 {isFree && (
                     <div style={{ flexShrink: 0, marginBottom: 12 }}>
                         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, msOverflowStyle: "none", scrollbarWidth: "none" }}>
-                            {QUICK_LABELS.map(label => (
+                            {tabLabels.map(label => (
                                 <button key={label} onClick={() => setActiveTab(label)}
                                     style={{
                                         padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",

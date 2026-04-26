@@ -1,21 +1,30 @@
-const BODY_PART_LABELS = ["胸", "背中", "脚", "尻", "肩", "二頭", "三頭", "腹", "その他"];
-
-const resolveBodyPart = (value) => {
-    return BODY_PART_LABELS.includes(value) ? value : "その他";
-};
+const FIXED_BODY_PART_LABELS = ["胸", "背中", "脚", "尻", "肩", "二頭", "三頭", "腹"];
 
 export default function ManualBestManagerModal({
     isOpen,
     user,
     manualBests = [],
+    customBodyParts = [],
     onClose,
     onOpenRegister,
+    onOpenAddBodyPart,
     onEditBest,
     onDeleteBest,
 }) {
     if (!isOpen) return null;
 
-    const groupedManualBests = BODY_PART_LABELS.map((bodyPart) => ({
+    const bodyPartLabels = [
+        ...FIXED_BODY_PART_LABELS,
+        ...customBodyParts.filter(
+            (part) => part && !FIXED_BODY_PART_LABELS.includes(part) && part !== "その他"
+        ),
+        "その他",
+    ];
+    const resolveBodyPart = (value) => {
+        return bodyPartLabels.includes(value) ? value : "その他";
+    };
+
+    const groupedManualBests = bodyPartLabels.map((bodyPart) => ({
         bodyPart,
         items: manualBests.filter((best) => resolveBodyPart(best.body_part) === bodyPart),
     })).filter((group) => group.items.length > 0);
@@ -92,6 +101,25 @@ export default function ManualBestManagerModal({
                         過去ベスト登録
                     </button>
                 </div>
+
+                {user && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+                        <button
+                            onClick={onOpenAddBodyPart}
+                            style={{
+                                padding: "8px 12px",
+                                borderRadius: 12,
+                                background: "transparent",
+                                border: "1px solid var(--border2)",
+                                color: "var(--text2)",
+                                fontSize: 12,
+                                fontWeight: 700,
+                            }}
+                        >
+                            部位を追加
+                        </button>
+                    </div>
+                )}
 
                 {!user ? (
                     <div style={{ fontSize: 12, color: "var(--text3)" }}>

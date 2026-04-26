@@ -69,6 +69,10 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
     const [manualBests, setManualBests] = useState([]);
+    const [customBodyParts, setCustomBodyParts] = useState(() => {
+        const saved = load("customBodyParts", []);
+        return [...new Set((saved || []).map((part) => String(part || "").trim()).filter(Boolean))];
+    });
 
 
     const [screen, setScreen] = useState("history");
@@ -157,6 +161,7 @@ export default function GymApp() {
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => { save("history", history); }, [history]);
+    useEffect(() => { save("customBodyParts", customBodyParts); }, [customBodyParts]);
     useEffect(() => {
         if (!user) return;
         const saveToSupabase = async () => {
@@ -923,6 +928,7 @@ export default function GymApp() {
                         <LogScreen
                             user={user}
                             manualBests={manualBests}
+                            customBodyParts={customBodyParts}
                             todayLabels={todayLabels}
                             dayColor={dayColor}
                             exercises={exercises}
@@ -1011,6 +1017,7 @@ export default function GymApp() {
                         onLogForDate={handleCalendarDayOpen}
                         user={user}
                         manualBests={manualBests}
+                        customBodyParts={customBodyParts}
                         onAddManualBest={(best) => {
                             setManualBests((prev) => [best, ...prev]);
                         }}
@@ -1021,6 +1028,11 @@ export default function GymApp() {
                         }}
                         onDeleteManualBest={(id) => {
                             setManualBests((prev) => prev.filter((item) => item.id !== id));
+                        }}
+                        onAddCustomBodyPart={(bodyPart) => {
+                            setCustomBodyParts((prev) =>
+                                prev.includes(bodyPart) ? prev : [...prev, bodyPart]
+                            );
                         }}
                     />
                 )}

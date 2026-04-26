@@ -6,6 +6,7 @@ import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
 import ManualBestModal from "./modals/ManualBestModal";
 import ManualBestManagerModal from "./modals/ManualBestManagerModal";
+import CustomBodyPartModal from "./modals/CustomBodyPartModal";
 import HistoryExerciseItem from "./history/HistoryExerciseItem";
 
 const EX_TO_LABEL = {};
@@ -53,14 +54,17 @@ export default function HistoryScreen({
     onLogForDate,
     user,
     manualBests = [],
+    customBodyParts = [],
     onAddManualBest,
     onUpdateManualBest,
     onDeleteManualBest,
+    onAddCustomBodyPart,
 }) {
     const [editTarget, setEditTarget] = useState(null);
     const [graphTarget, setGraphTarget] = useState(null);
     const [showManualBestModal, setShowManualBestModal] = useState(false);
     const [showManualBestManager, setShowManualBestManager] = useState(false);
+    const [showCustomBodyPartModal, setShowCustomBodyPartModal] = useState(false);
     const [editingManualBest, setEditingManualBest] = useState(null);
 
 
@@ -80,6 +84,11 @@ export default function HistoryScreen({
         setShowManualBestManager(false);
         setEditingManualBest(best);
         setShowManualBestModal(true);
+    };
+
+    const openCustomBodyPartModal = () => {
+        setShowManualBestManager(false);
+        setShowCustomBodyPartModal(true);
     };
 
     useEffect(() => {
@@ -353,6 +362,7 @@ export default function HistoryScreen({
                 isOpen={showManualBestModal}
                 mode={editingManualBest ? "edit" : "create"}
                 initialValue={editingManualBest}
+                customBodyParts={customBodyParts}
                 onClose={() => {
                     setShowManualBestModal(false);
                     setEditingManualBest(null);
@@ -404,8 +414,10 @@ export default function HistoryScreen({
                 isOpen={showManualBestManager}
                 user={user}
                 manualBests={manualBests}
+                customBodyParts={customBodyParts}
                 onClose={() => setShowManualBestManager(false)}
                 onOpenRegister={openManualBestModalForCreate}
+                onOpenAddBodyPart={openCustomBodyPartModal}
                 onEditBest={openManualBestModalForEdit}
                 onDeleteBest={async (best) => {
                     const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
@@ -423,6 +435,16 @@ export default function HistoryScreen({
                     }
 
                     onDeleteManualBest?.(best.id);
+                }}
+            />
+
+            <CustomBodyPartModal
+                isOpen={showCustomBodyPartModal}
+                customBodyParts={customBodyParts}
+                onClose={() => setShowCustomBodyPartModal(false)}
+                onSave={(bodyPart) => {
+                    onAddCustomBodyPart?.(bodyPart);
+                    setShowCustomBodyPartModal(false);
                 }}
             />
 
