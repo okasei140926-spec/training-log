@@ -182,23 +182,37 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const validateUsername = useCallback((rawUsername) => {
-        const trimmed = rawUsername.trim();
-        if (!trimmed) return "ユーザー名を入力してください";
+    const isReservedUsername = useCallback((rawUsername) => {
+        const trimmed = String(rawUsername || "").trim();
+        if (!trimmed) return false;
 
-        const isReserved = RESERVED_USERNAMES.some((reserved) => {
+        return RESERVED_USERNAMES.some((reserved) => {
             const isAsciiWord = /^[A-Za-z]+$/.test(reserved);
             return isAsciiWord
                 ? trimmed.toLowerCase() === reserved.toLowerCase()
                 : trimmed === reserved;
         });
+    }, []);
 
-        if (isReserved) {
+    const getDisplayUsername = useCallback((rawUsername, { isMe = false } = {}) => {
+        if (isMe) return "あなた";
+
+        const trimmed = String(rawUsername || "").trim();
+        if (!trimmed) return "ユーザー";
+        if (isReservedUsername(trimmed)) return "ユーザー";
+        return trimmed;
+    }, [isReservedUsername]);
+
+    const validateUsername = useCallback((rawUsername) => {
+        const trimmed = rawUsername.trim();
+        if (!trimmed) return "ユーザー名を入力してください";
+
+        if (isReservedUsername(trimmed)) {
             return "そのユーザー名は使用できません";
         }
 
         return "";
-    }, []);
+    }, [isReservedUsername]);
 
     useEffect(() => {
         if (!user) return;
@@ -375,16 +389,16 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     }, {});
 
     const todayActiveFriends = friends.filter((f) => todayActiveMap[f.id]);
-    const todayActiveLabel = todayActiveFriends.map((f) => f.username).join("、");
+    const todayActiveLabel = todayActiveFriends.map((f) => getDisplayUsername(f.username)).join("、");
     const myMonthlyWorkoutDays = new Set(
         Object.values(history || {})
             .flatMap((recs) => (recs || []).map((record) => record?.date))
             .filter((date) => typeof date === "string" && date.startsWith(currentMonthPrefix))
     ).size;
     const monthlyWorkoutRanking = [
-        { name: myUsername || "あなた", isMe: true, days: myMonthlyWorkoutDays },
+        { name: getDisplayUsername(myUsername, { isMe: true }), isMe: true, days: myMonthlyWorkoutDays },
         ...friends.map((friend) => ({
-            name: friend.username,
+            name: getDisplayUsername(friend.username),
             isMe: false,
             days: countMonthlyWorkoutDays(friend.workoutRows),
         })),
@@ -393,13 +407,13 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const big3Ranking = [
         {
             id: user?.id || "me",
-            name: myUsername || "あなた",
+            name: getDisplayUsername(myUsername, { isMe: true }),
             isMe: true,
             ...myBig3,
         },
         ...friends.map((friend) => ({
             id: friend.id,
-            name: friend.username,
+            name: getDisplayUsername(friend.username),
             isMe: false,
             ...computeBig3FromWorkoutRows(friend.workoutRows),
         })),
@@ -417,13 +431,13 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             const friendValue = friendBig3[exercise.key] || 0;
             if (!(friendValue > myValue && myValue > 0)) return [];
 
-            return [{
-                type: "big3_overtake",
-                friendId: friend.id,
-                friendName: friend.username,
-                exercise: exercise.key,
-                exerciseLabel: exercise.match,
-                friendValue,
+                return [{
+                    type: "big3_overtake",
+                    friendId: friend.id,
+                    friendName: getDisplayUsername(friend.username),
+                    exercise: exercise.key,
+                    exerciseLabel: exercise.match,
+                    friendValue,
                 myValue,
                 seenKey: `${friend.id}:${exercise.key}:${friendValue}:${myValue}`,
             }];
@@ -564,7 +578,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
             {receivedKudos.length > 0 && (
                 <div style={{ background: "#4ade8022", border: "1px solid #4ade8044", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)" }}>
-                    🔥 {receivedKudos.map(k => k.profiles?.username).join("、")}から今日クドスをもらった！
+                    🔥 {receivedKudos.map(k => getDisplayUsername(k.profiles?.username)).join("、")}から今日クドスをもらった！
                 </div>
             )}
 
@@ -591,7 +605,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                     {index + 1}位
                                 </div>
                                 <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {entry.isMe ? "あなた" : entry.name}
+                                    {entry.name}
                                 </div>
                             </div>
                             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
@@ -623,7 +637,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                         {index + 1}位
                                     </div>
                                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                        {entry.isMe ? "あなた" : entry.name}
+                                        {entry.name}
                                     </div>
                                 </div>
                                 <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
@@ -675,7 +689,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     </div>
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{myUsername || "自分"}</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{getDisplayUsername(myUsername, { isMe: true })}</div>
                             {activeToday && <div style={{ padding: "2px 8px", borderRadius: 10, background: "#4ade8022", border: "1px solid #4ade8044", fontSize: 10, color: "#4ade80", fontWeight: 700 }}>完了 ✓</div>}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
@@ -714,12 +728,12 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                 <div style={{ width: 44, height: 44, borderRadius: 22, background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#000", flexShrink: 0, overflow: "hidden" }}>
                                     {f.avatar1_url
                                         ? <img src={f.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                        : f.username?.[0]?.toUpperCase()
+                                        : getDisplayUsername(f.username)?.[0]?.toUpperCase()
                                     }
                                 </div>
                                 <div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{f.username}</div>
+                                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{getDisplayUsername(f.username)}</div>
                                         {todayActiveMap[f.id] && (
                                             <div
                                                 style={{
@@ -764,7 +778,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             {
                 KEY_EXERCISES.map(ex => {
                     const entries = [
-                        { name: "自分", color: "var(--text)", value: myBests[ex] || 0 },
+                        { name: getDisplayUsername(myUsername, { isMe: true }), color: "var(--text)", value: myBests[ex] || 0 },
                         ...friends.map(f => {
                             const recs = f.history?.[ex];
                             const value = recs?.length ? Math.max(...recs.map(r => Math.round(safeCalc1RM(
@@ -772,7 +786,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                                     ? r.sets
                                     : [{ weight: r.weight, reps: r.reps }]
                             )))) : 0;
-                            return { name: f.username, color: "#4ade80", value };
+                            return { name: getDisplayUsername(f.username), color: "#4ade80", value };
                         }),
                     ].filter(e => e.value > 0);
                     if (!entries.length) return null;
