@@ -844,14 +844,14 @@ export default function GymApp() {
     // ─── Main render ──────────────────────────────────
     const headerTitle =
         screen === "log" ? "Log"
-            : screen === "photos" ? "写真"
+            : screen === "photos" ? "比較"
                 : screen === "friends" ? "Friends"
                     : screen === "ai" ? "AI Coach"
                         : "記録";
 
     const bottomTabs = [
         { id: "history", icon: "📊", label: "記録" },
-        { id: "photos", icon: "📷", label: "写真" },
+        { id: "photos", icon: "📷", label: "比較" },
         { id: "analytics", icon: "📈", label: "分析" },
         { id: "friends", icon: "👥", label: "Friends" },
         { id: "ai", icon: "🤖", label: "AI" },
