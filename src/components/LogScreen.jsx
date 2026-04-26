@@ -57,7 +57,9 @@ export default function LogScreen({
     user,
     manualBests = [],
     customBodyParts = [],
+    hiddenBodyParts = [],
     onAddCustomBodyPart,
+    onUpdateHiddenBodyParts,
     todayLabels, dayColor,
     exercises, logData, getExSets, setField, addSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
@@ -767,7 +769,9 @@ export default function LogScreen({
                     muscleEx={muscleEx}
                     manualBests={manualBests}
                     customBodyParts={customBodyParts}
+                    hiddenBodyParts={hiddenBodyParts}
                     onAddCustomBodyPart={onAddCustomBodyPart}
+                    onUpdateHiddenBodyParts={onUpdateHiddenBodyParts}
                 />
             )}
 

@@ -73,6 +73,10 @@ export default function GymApp() {
         const saved = load("customBodyParts", []);
         return [...new Set((saved || []).map((part) => String(part || "").trim()).filter(Boolean))];
     });
+    const [hiddenBodyParts, setHiddenBodyParts] = useState(() => {
+        const saved = load("hiddenBodyParts", []);
+        return [...new Set((saved || []).map((part) => String(part || "").trim()).filter(Boolean))];
+    });
 
 
     const [screen, setScreen] = useState("history");
@@ -162,6 +166,7 @@ export default function GymApp() {
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => { save("history", history); }, [history]);
     useEffect(() => { save("customBodyParts", customBodyParts); }, [customBodyParts]);
+    useEffect(() => { save("hiddenBodyParts", hiddenBodyParts); }, [hiddenBodyParts]);
     useEffect(() => {
         if (!user) return;
         const saveToSupabase = async () => {
@@ -929,11 +934,13 @@ export default function GymApp() {
                             user={user}
                             manualBests={manualBests}
                             customBodyParts={customBodyParts}
+                            hiddenBodyParts={hiddenBodyParts}
                             onAddCustomBodyPart={(bodyPart) => {
                                 setCustomBodyParts((prev) =>
                                     prev.includes(bodyPart) ? prev : [...prev, bodyPart]
                                 );
                             }}
+                            onUpdateHiddenBodyParts={setHiddenBodyParts}
                             todayLabels={todayLabels}
                             dayColor={dayColor}
                             exercises={exercises}

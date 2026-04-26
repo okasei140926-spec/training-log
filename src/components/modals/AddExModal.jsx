@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 import CustomBodyPartModal from "./CustomBodyPartModal";
+import BodyPartManagerModal from "./BodyPartManagerModal";
 
 const matchesActiveTab = (bodyPart, activeTab) => {
     if (!bodyPart || bodyPart === "その他") return false;
@@ -28,19 +29,24 @@ export default function AddExModal({
     history = {},
     manualBests = [],
     customBodyParts = [],
+    hiddenBodyParts = [],
     onAddCustomBodyPart,
+    onUpdateHiddenBodyParts,
 }) {
     const inputRef = useRef(null);
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
     const [showCustomBodyPartModal, setShowCustomBodyPartModal] = useState(false);
+    const [showBodyPartManagerModal, setShowBodyPartManagerModal] = useState(false);
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
-    const tabLabels = [...new Set([...QUICK_LABELS, ...customBodyParts.filter(Boolean)])];
+    const allTabLabels = [...new Set([...QUICK_LABELS, ...customBodyParts.filter(Boolean)])];
+    const visibleTabLabels = allTabLabels.filter((label) => !hiddenBodyParts.includes(label));
+    const tabLabels = visibleTabLabels.length ? visibleTabLabels : allTabLabels.slice(0, 1);
 
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 50);
-        if (isFree) setActiveTab(QUICK_LABELS[0]);
+        if (isFree && tabLabels.length > 0) setActiveTab(tabLabels[0]);
 
         // ここを追加
         document.body.style.overflow = 'hidden';
@@ -48,6 +54,13 @@ export default function AddExModal({
             document.body.style.overflow = '';
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!isFree || !tabLabels.length) return;
+        if (!tabLabels.includes(activeTab)) {
+            setActiveTab(tabLabels[0]);
+        }
+    }, [activeTab, isFree, tabLabels]);
 
 
     useEffect(() => {
@@ -163,6 +176,21 @@ export default function AddExModal({
                             >
                                 ＋ 部位追加
                             </button>
+                            <button
+                                onClick={() => setShowBodyPartManagerModal(true)}
+                                style={{
+                                    padding: "6px 14px",
+                                    borderRadius: 20,
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    flexShrink: 0,
+                                    border: "1px dashed var(--border2)",
+                                    background: "transparent",
+                                    color: "var(--text2)",
+                                }}
+                            >
+                                部位管理
+                            </button>
                         </div>
                     </div>
                 )}
@@ -211,6 +239,14 @@ export default function AddExModal({
                     setActiveTab(bodyPart);
                     setShowCustomBodyPartModal(false);
                 }}
+            />
+
+            <BodyPartManagerModal
+                isOpen={showBodyPartManagerModal}
+                customBodyParts={customBodyParts}
+                hiddenBodyParts={hiddenBodyParts}
+                onClose={() => setShowBodyPartManagerModal(false)}
+                onUpdateHiddenBodyParts={onUpdateHiddenBodyParts}
             />
         </div>
     );
