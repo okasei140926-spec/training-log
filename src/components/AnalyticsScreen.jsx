@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { SUGGESTIONS } from "../constants/suggestions";
 import { calc1RM } from "../utils/helpers";
+import { normalizeExerciseName } from "../utils/exerciseName";
 
 const PERIODS = [
   { label: "1ヶ月", days: 30 },
@@ -32,8 +33,10 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 const normalizeName = (name) => String(name || "").replace(/\s+/g, "").trim();
 
 const resolveLabel = (exName, muscleEx = {}) => {
-  const normalized = normalizeName(exName);
+  const canonicalName = normalizeExerciseName(exName);
+  const normalized = normalizeName(canonicalName);
 
+  if (EX_TO_LABEL[canonicalName]) return EX_TO_LABEL[canonicalName];
   if (EX_TO_LABEL[exName]) return EX_TO_LABEL[exName];
 
   const suggestionMatch = Object.entries(EX_TO_LABEL).find(([name]) => {
@@ -71,6 +74,8 @@ const buildHistoryBestMap = (history = {}) => {
   const bestMap = {};
 
   Object.entries(history || {}).forEach(([name, records]) => {
+    const normalizedName = normalizeExerciseName(name);
+
     (records || []).forEach((record) => {
       const validSets = buildValidSets(record);
       const rm = calc1RM(validSets);
@@ -86,9 +91,9 @@ const buildHistoryBestMap = (history = {}) => {
 
       if (!bestSet) return;
 
-      if (!bestMap[name] || rm > bestMap[name].estimated1RM) {
-        bestMap[name] = {
-          name,
+      if (!bestMap[normalizedName] || rm > bestMap[normalizedName].estimated1RM) {
+        bestMap[normalizedName] = {
+          name: normalizedName,
           weight: bestSet.weight,
           reps: bestSet.reps,
           estimated1RM: Math.round(rm),
@@ -108,13 +113,14 @@ const buildManualBestMap = (manualBests = []) => {
 
   (manualBests || []).forEach((entry) => {
     if (!entry?.exercise_name) return;
+    const normalizedName = normalizeExerciseName(entry.exercise_name);
     const validSets = buildValidSets({ weight: entry.weight, reps: entry.reps });
     const rm = calc1RM(validSets);
     if (!validSets.length || rm <= 0) return;
 
-    if (!bestMap[entry.exercise_name] || rm > bestMap[entry.exercise_name].estimated1RM) {
-      bestMap[entry.exercise_name] = {
-        name: entry.exercise_name,
+    if (!bestMap[normalizedName] || rm > bestMap[normalizedName].estimated1RM) {
+      bestMap[normalizedName] = {
+        name: normalizedName,
         weight: Number(entry.weight),
         reps: Number(entry.reps),
         estimated1RM: Math.round(rm),
@@ -130,9 +136,10 @@ const buildManualBestMap = (manualBests = []) => {
 };
 
 const matchBig3Key = (name) => {
-  if (name.includes("ベンチプレス")) return "bench";
-  if (name.includes("スクワット")) return "squat";
-  if (name.includes("デッドリフト")) return "deadlift";
+  const normalizedName = normalizeExerciseName(name);
+  if (normalizedName.includes("ベンチプレス")) return "bench";
+  if (normalizedName.includes("スクワット")) return "squat";
+  if (normalizedName.includes("デッドリフト")) return "deadlift";
   return null;
 };
 
@@ -148,8 +155,9 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
   const manualBodyPartMap = useMemo(() => {
     const map = {};
     (manualBests || []).forEach((best) => {
-      if (best?.exercise_name && best?.body_part && !map[best.exercise_name]) {
-        map[best.exercise_name] = best.body_part;
+      const normalizedName = normalizeExerciseName(best?.exercise_name);
+      if (normalizedName && best?.body_part && !map[normalizedName]) {
+        map[normalizedName] = best.body_part;
       }
     });
     return map;

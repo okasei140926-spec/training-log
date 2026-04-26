@@ -1,4 +1,5 @@
 import { calc1RM } from "../utils/helpers";
+import { normalizeExerciseName } from "../utils/exerciseName";
 import {
     copySetDownHelper,
     copyRepDownHelper,
@@ -23,22 +24,26 @@ export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogDa
     };
 
     const getPR = (name) => {
-        const recs = history?.[name]; // sessionHistoryを使わない
+        const normalizedName = normalizeExerciseName(name);
         let best = null;
         let bestRM = 0;
 
-        (recs || []).forEach((r) => {
-            const validSets = buildValidSets(r);
-            const rm = calc1RM(validSets);
+        Object.entries(history || {}).forEach(([historyName, recs]) => {
+            if (normalizeExerciseName(historyName) !== normalizedName) return;
 
-            if (rm > bestRM && validSets.length) {
-                bestRM = rm;
-                best = { ...r, sets: validSets, rm: Math.round(rm) };
-            }
+            (recs || []).forEach((r) => {
+                const validSets = buildValidSets(r);
+                const rm = calc1RM(validSets);
+
+                if (rm > bestRM && validSets.length) {
+                    bestRM = rm;
+                    best = { ...r, sets: validSets, rm: Math.round(rm) };
+                }
+            });
         });
 
         manualBests
-            .filter((entry) => entry?.exercise_name === name)
+            .filter((entry) => normalizeExerciseName(entry?.exercise_name) === normalizedName)
             .forEach((entry) => {
                 const validSets = buildValidSets({
                     weight: entry.weight,

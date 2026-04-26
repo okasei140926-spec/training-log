@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
+import { normalizeExerciseName } from "../utils/exerciseName";
 import FriendDetailModal from "./modals/FriendDetailModal";
 import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
 import Big3RankingCard from "./friends/Big3RankingCard";
@@ -103,7 +104,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     }, []);
 
     const matchBig3Exercise = useCallback((name) => {
-        const normalized = String(name || "").replace(/[\s　]+/g, "");
+        const normalized = normalizeExerciseName(name).replace(/[\s　]+/g, "");
         const matched = BIG3_EXERCISES.find((exercise) => normalized.includes(exercise.match));
         return matched?.key || null;
     }, []);

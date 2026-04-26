@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 import { load, save } from "../../utils/helpers";
+import { normalizeExerciseName } from "../../utils/exerciseName";
 import CustomBodyPartModal from "./CustomBodyPartModal";
 
 const matchesActiveTab = (bodyPart, activeTab) => {
@@ -85,8 +86,14 @@ export default function AddExModal({
         .map(t => ({ label: t, items: suggestions.filter(s => s.label === t) }))
         .filter(g => g.items.length);
 
+    const historyUsageMap = Object.entries(history || {}).reduce((acc, [exerciseName, records]) => {
+        const normalizedName = normalizeExerciseName(exerciseName);
+        acc[normalizedName] = (acc[normalizedName] || 0) + (records?.length || 0);
+        return acc;
+    }, {});
+
     const getFrequency = (exName) => {
-        return history[exName]?.length || 0;
+        return historyUsageMap[normalizeExerciseName(exName)] || 0;
     };
 
     const freeItems = (() => {
