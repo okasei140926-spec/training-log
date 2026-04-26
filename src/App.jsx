@@ -977,6 +977,7 @@ export default function GymApp() {
                 {screen === "friends" && (
                     <FriendsScreen
                         history={history}
+                        manualBests={manualBests}
                         user={user}
                         onLogin={() => setShowAuth(true)}
                         onLogout={async () => {

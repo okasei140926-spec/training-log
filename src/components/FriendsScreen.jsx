@@ -25,7 +25,7 @@ const RESERVED_USERNAMES = [
     "管理者",
 ];
 
-export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLogout }) {
+export default function FriendsScreen({ history, manualBests = [], onCopyMenu, user, onLogin, onLogout }) {
     const [selectedFriend, setSelectedFriend] = useState(null);
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
@@ -126,6 +126,39 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             total: bests.bench + bests.squat + bests.deadlift,
         };
     }, [getRecordSets, matchBig3Exercise, safeCalc1RM]);
+
+    const computeBig3FromManualBests = useCallback((manualBestRows) => {
+        const bests = { bench: 0, squat: 0, deadlift: 0 };
+
+        (manualBestRows || []).forEach((best) => {
+            const key = matchBig3Exercise(best?.exercise_name);
+            if (!key) return;
+
+            const value = Math.round(safeCalc1RM([{
+                weight: best.weight,
+                reps: best.reps,
+            }]));
+            if (value > bests[key]) bests[key] = value;
+        });
+
+        return {
+            ...bests,
+            total: bests.bench + bests.squat + bests.deadlift,
+        };
+    }, [matchBig3Exercise, safeCalc1RM]);
+
+    const mergeBig3Bests = useCallback((base, manual) => {
+        const merged = {
+            bench: Math.max(base?.bench || 0, manual?.bench || 0),
+            squat: Math.max(base?.squat || 0, manual?.squat || 0),
+            deadlift: Math.max(base?.deadlift || 0, manual?.deadlift || 0),
+        };
+
+        return {
+            ...merged,
+            total: merged.bench + merged.squat + merged.deadlift,
+        };
+    }, []);
 
     const computeBig3FromWorkoutRows = useCallback((rows) => {
         const bests = { bench: 0, squat: 0, deadlift: 0 };
@@ -408,7 +441,10 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             days: countMonthlyWorkoutDays(friend.workoutRows),
         })),
     ].sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, "ja"));
-    const myBig3 = computeBig3FromHistory(history);
+    const myBig3 = mergeBig3Bests(
+        computeBig3FromHistory(history),
+        computeBig3FromManualBests(manualBests)
+    );
     const big3Ranking = [
         {
             id: user?.id || "me",
