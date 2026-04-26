@@ -9,6 +9,16 @@ const BIG3_EXERCISES = [
     { key: "squat", match: "スクワット", shortLabel: "スクワット" },
     { key: "deadlift", match: "デッドリフト", shortLabel: "デッド" },
 ];
+const RESERVED_USERNAMES = [
+    "あなた",
+    "自分",
+    "自分自身",
+    "me",
+    "you",
+    "admin",
+    "運営",
+    "管理者",
+];
 
 export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLogout }) {
     const [selectedFriend, setSelectedFriend] = useState(null);
@@ -19,6 +29,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [todayActiveMap, setTodayActiveMap] = useState({});
     const [showEditName, setShowEditName] = useState(false);
     const [newUsername, setNewUsername] = useState("");
+    const [usernameError, setUsernameError] = useState("");
     const [avatarUrl, setAvatarUrl] = useState(null);
     const [loading, setLoading] = useState(true);
     const [kudos, setKudos] = useState({});
@@ -170,6 +181,24 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
+
+    const validateUsername = useCallback((rawUsername) => {
+        const trimmed = rawUsername.trim();
+        if (!trimmed) return "ユーザー名を入力してください";
+
+        const isReserved = RESERVED_USERNAMES.some((reserved) => {
+            const isAsciiWord = /^[A-Za-z]+$/.test(reserved);
+            return isAsciiWord
+                ? trimmed.toLowerCase() === reserved.toLowerCase()
+                : trimmed === reserved;
+        });
+
+        if (isReserved) {
+            return "そのユーザー名は使用できません";
+        }
+
+        return "";
+    }, []);
 
     useEffect(() => {
         if (!user) return;
@@ -612,7 +641,10 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
             {/* 自分のカード */}
             <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", position: "relative" }}>
-                <button onClick={() => setShowEditName(true)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "var(--text3)", padding: 4 }}>
+                <button onClick={() => {
+                    setUsernameError("");
+                    setShowEditName(true);
+                }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "var(--text3)", padding: 4 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -771,16 +803,30 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#00000066", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
                         <div style={{ background: "var(--card)", borderRadius: 16, padding: 24, width: "100%" }}>
                             <h3 style={{ marginBottom: 16, color: "var(--text)" }}>ユーザー名を変更</h3>
-                            <input placeholder="新しいユーザー名" value={newUsername} onChange={e => setNewUsername(e.target.value)}
+                            <input placeholder="新しいユーザー名" value={newUsername} onChange={e => {
+                                setNewUsername(e.target.value);
+                                if (usernameError) setUsernameError("");
+                            }}
                                 style={{ display: "block", width: "100%", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border2)", background: "var(--card2)", color: "var(--text)", fontSize: 15, boxSizing: "border-box", marginBottom: 12 }} />
+                            {usernameError && (
+                                <div style={{ fontSize: 12, color: "#f87171", marginBottom: 12 }}>
+                                    {usernameError}
+                                </div>
+                            )}
                             <button onClick={async () => {
-                                if (!newUsername.trim()) return;
-                                await supabase.from("profiles").update({ username: newUsername }).eq("id", user.id);
-                                setMyUsername(newUsername);
+                                const trimmed = newUsername.trim();
+                                const errorMessage = validateUsername(trimmed);
+                                if (errorMessage) {
+                                    setUsernameError(errorMessage);
+                                    return;
+                                }
+                                await supabase.from("profiles").update({ username: trimmed }).eq("id", user.id);
+                                setMyUsername(trimmed);
+                                setUsernameError("");
                                 setShowEditName(false);
                                 setNewUsername("");
                             }} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 8 }}>保存</button>
-                            <button onClick={() => { setShowEditName(false); setNewUsername(""); }}
+                            <button onClick={() => { setShowEditName(false); setNewUsername(""); setUsernameError(""); }}
                                 style={{ width: "100%", padding: 14, borderRadius: 10, background: "none", border: "1px solid var(--border2)", fontSize: 15, cursor: "pointer", color: "var(--text2)" }}>キャンセル</button>
                         </div>
                     </div>
