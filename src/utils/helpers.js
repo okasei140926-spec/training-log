@@ -36,7 +36,11 @@ export function calc1RM(sets) {
   if (!sets || !sets.length) return 0;
   return Math.max(...sets.map(s => {
     if (!s.weight || s.weight === "BW") return 0;
-    return Number(s.weight) * (1 + Number(s.reps) / 30);
+    const weight = Number(s.weight);
+    const reps = Number(s.reps);
+    if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) return 0;
+    if (reps === 1) return weight;
+    return weight * (1 + reps / 30);
   }));
 }
 

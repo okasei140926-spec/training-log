@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { SUGGESTIONS } from "../constants/suggestions";
 import { calc1RM } from "../utils/helpers";
-import { normalizeExerciseName } from "../utils/exerciseName";
+import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 
 const PERIODS = [
   { label: "1ヶ月", days: 30 },
@@ -135,14 +135,6 @@ const buildManualBestMap = (manualBests = []) => {
   return bestMap;
 };
 
-const matchBig3Key = (name) => {
-  const normalizedName = normalizeExerciseName(name);
-  if (normalizedName.includes("ベンチプレス")) return "bench";
-  if (normalizedName.includes("スクワット")) return "squat";
-  if (normalizedName.includes("デッドリフト")) return "deadlift";
-  return null;
-};
-
 export default function AnalyticsScreen({ history, manualBests = [], muscleEx = {} }) {
   const [activeTab, setActiveTab] = useState("exercises");
   const [selectedEx, setSelectedEx] = useState(null);
@@ -202,7 +194,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
 
     const big3 = BIG3_EXERCISES.map(({ key, label }) => {
       const match = merged
-        .filter((item) => matchBig3Key(item.name) === key)
+        .filter((item) => getBig3ExerciseKey(item.name) === key)
         .sort((a, b) => b.estimated1RM - a.estimated1RM)[0] || null;
 
       return {
