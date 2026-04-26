@@ -55,6 +55,7 @@ function SortableExerciseItem({ id, children }) {
 
 export default function LogScreen({
     user,
+    manualBests = [],
     todayLabels, dayColor,
     exercises, logData, getExSets, setField, addSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
@@ -762,6 +763,7 @@ export default function LogScreen({
                     onQuickAdd={onQuickAddEx}
                     existingNames={exercises.map(e => e.name)}
                     muscleEx={muscleEx}
+                    manualBests={manualBests}
                 />
             )}
 

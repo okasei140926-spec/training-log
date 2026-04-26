@@ -1,7 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 
-export default function AddExModal({ name, setName, onConfirm, onClose, target, onQuickAdd, existingNames = [], muscleEx = {}, history = {} }) {
+const matchesActiveTab = (bodyPart, activeTab) => {
+    if (!bodyPart || bodyPart === "その他") return false;
+    if (bodyPart === "脚") {
+        return activeTab === "四頭" || activeTab === "ハムストリングス";
+    }
+    if (bodyPart === "腹") {
+        return activeTab === "腹筋";
+    }
+    return bodyPart === activeTab;
+};
+
+export default function AddExModal({
+    name,
+    setName,
+    onConfirm,
+    onClose,
+    target,
+    onQuickAdd,
+    existingNames = [],
+    muscleEx = {},
+    history = {},
+    manualBests = [],
+}) {
     const inputRef = useRef(null);
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
@@ -42,7 +64,12 @@ export default function AddExModal({ name, setName, onConfirm, onClose, target, 
         if (!isFree || !activeTab) return [];
         const fixed = SUGGESTIONS[activeTab] || [];
         const custom = (muscleEx[activeTab] || []).map(ex => ex.name);
-        return [...new Set([...fixed, ...custom])].sort((a, b) => getFrequency(b) - getFrequency(a));
+        const fromManualBests = manualBests
+            .filter((best) => matchesActiveTab(best?.body_part, activeTab))
+            .map((best) => best.exercise_name)
+            .filter(Boolean);
+        return [...new Set([...fixed, ...custom, ...fromManualBests])]
+            .sort((a, b) => getFrequency(b) - getFrequency(a));
     })();
 
     const handleQuick = (s) => {

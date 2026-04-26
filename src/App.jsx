@@ -922,6 +922,7 @@ export default function GymApp() {
                     >
                         <LogScreen
                             user={user}
+                            manualBests={manualBests}
                             todayLabels={todayLabels}
                             dayColor={dayColor}
                             exercises={exercises}
