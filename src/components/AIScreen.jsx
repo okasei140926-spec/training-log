@@ -1,11 +1,49 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+
+const AI_SUGGESTIONS = [
+    {
+        label: "種目組んで",
+        mode: "ask_part",
+    },
+    {
+        label: "次回メニュー提案",
+        prompt: "最近の記録をもとに、次は何をやればいいか初心者にも分かりやすく教えて",
+    },
+    {
+        label: "今日の記録分析",
+        prompt: "今日のトレーニング記録を分析して、良かった点と次回改善する点を教えて",
+    },
+];
 
 export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, aiEnd }) {
     const inputRef = useRef(null);
+    const [waitingForWorkoutPart, setWaitingForWorkoutPart] = useState(false);
 
     const handleSend = (overrideMsg) => {
+        const nextMessage = overrideMsg ?? aiInput;
+        if (!nextMessage?.trim()) return;
+
+        if (!overrideMsg && waitingForWorkoutPart) {
+            sendAI(`${nextMessage.trim()}のトレーニングメニューを、最近の記録を参考に初心者にも分かりやすく組んでください。`);
+            setWaitingForWorkoutPart(false);
+            setAiInput("");
+            setTimeout(() => inputRef.current?.blur(), 50);
+            return;
+        }
+
         sendAI(overrideMsg);
         setTimeout(() => inputRef.current?.blur(), 50);
+    };
+
+    const handleSuggestion = ({ prompt, mode }) => {
+        if (mode === "ask_part") {
+            setWaitingForWorkoutPart(true);
+            setAiInput("");
+            return;
+        }
+
+        setWaitingForWorkoutPart(false);
+        handleSend(prompt);
     };
 
     return (
@@ -24,6 +62,20 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                         </div>
                     </div>
                 ))}
+                {waitingForWorkoutPart && (
+                    <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
+                        <div style={{
+                            maxWidth: "80%", padding: "12px 16px", fontSize: 14, lineHeight: 1.6,
+                            borderRadius: "18px 18px 18px 4px",
+                            background: "var(--card2)",
+                            color: "var(--text)",
+                            border: "1px solid var(--border2)",
+                        }}>
+                            今日はどの部位をやりますか？<br />
+                            例：胸、背中、脚、肩、腕 など
+                        </div>
+                    </div>
+                )}
                 {aiLoad && (
                     <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
                         <div style={{ padding: "12px 16px", borderRadius: "18px 18px 18px 4px", background: "var(--card2)", border: "1px solid var(--border2)", animation: "pulse 1s infinite", fontSize: 20 }}>💭</div>
@@ -33,10 +85,10 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
             </div>
 
             <div style={{ padding: "10px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 6, overflowX: "auto", background: "var(--bg)" }}>
-                {["今日のメニュー", "モチベ上げて", "次の目標は？"].map(q => (
-                    <button key={q} onClick={() => handleSend(q)}
+                {AI_SUGGESTIONS.map(({ label, prompt, mode }) => (
+                    <button key={label} onClick={() => handleSuggestion({ prompt, mode })}
                         style={{ whiteSpace: "nowrap", padding: "7px 12px", borderRadius: 20, background: "var(--card2)", color: "var(--text3)", fontSize: 12, border: "1px solid var(--border2)" }}>
-                        {q}
+                        {label}
                     </button>
                 ))}
             </div>
