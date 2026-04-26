@@ -1,5 +1,9 @@
 import { useRef, useState } from "react";
 
+const HEADER_OFFSET = 72;
+const BOTTOM_NAV_OFFSET = 92;
+const FOOTER_SAFE_PADDING = `calc(env(safe-area-inset-bottom, 0px) + ${BOTTOM_NAV_OFFSET}px)`;
+
 const AI_SUGGESTIONS = [
     {
         label: "種目組んで",
@@ -47,8 +51,26 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
     };
 
     return (
-        <div className="fade-in" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 80px)" }}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+        <div
+            className="fade-in"
+            style={{
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 0,
+                height: `calc(100dvh - ${HEADER_OFFSET}px)`,
+                maxHeight: `calc(100dvh - ${HEADER_OFFSET}px)`,
+                overflow: "hidden",
+                background: "var(--bg)",
+            }}
+        >
+            <div
+                style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: "auto",
+                    padding: "20px 20px 24px",
+                }}
+            >
                 {aiMsgs.map((msg, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 12 }}>
                         <div style={{
@@ -84,7 +106,17 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                 <div ref={aiEnd} />
             </div>
 
-            <div style={{ padding: "10px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 6, overflowX: "auto", background: "var(--bg)" }}>
+            <div
+                style={{
+                    flexShrink: 0,
+                    padding: "10px 20px 8px",
+                    borderTop: "1px solid var(--border2)",
+                    display: "flex",
+                    gap: 6,
+                    overflowX: "auto",
+                    background: "var(--bg)",
+                }}
+            >
                 {AI_SUGGESTIONS.map(({ label, prompt, mode }) => (
                     <button key={label} onClick={() => handleSuggestion({ prompt, mode })}
                         style={{ whiteSpace: "nowrap", padding: "7px 12px", borderRadius: 20, background: "var(--card2)", color: "var(--text3)", fontSize: 12, border: "1px solid var(--border2)" }}>
@@ -93,7 +125,15 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                 ))}
             </div>
 
-            <div style={{ padding: "8px 20px 16px", display: "flex", gap: 8, background: "var(--bg)" }}>
+            <div
+                style={{
+                    flexShrink: 0,
+                    padding: `8px 20px ${FOOTER_SAFE_PADDING}`,
+                    display: "flex",
+                    gap: 8,
+                    background: "var(--bg)",
+                }}
+            >
                 <input ref={inputRef} value={aiInput} onChange={e => setAiInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleSend()}
                     placeholder="AI Coachに聞く..."
