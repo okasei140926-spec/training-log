@@ -984,7 +984,7 @@ export default function GymApp() {
                 )}
 
                 {screen === "analytics" && (
-                    <AnalyticsScreen history={history} />
+                    <AnalyticsScreen history={history} manualBests={manualBests} muscleEx={muscleEx} />
 
                 )}
 
