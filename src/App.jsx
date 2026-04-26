@@ -68,6 +68,7 @@ export default function GymApp() {
 
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
+    const [manualBests, setManualBests] = useState([]);
 
 
     const [screen, setScreen] = useState("history");
@@ -167,6 +168,39 @@ export default function GymApp() {
         };
         saveToSupabase();
     }, [history, user]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const loadManualBests = async () => {
+            if (!user?.id) {
+                if (isActive) setManualBests([]);
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from("manual_bests")
+                .select("id, exercise_name, weight, reps, best_date, created_at")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                console.error(error);
+                if (isActive) setManualBests([]);
+                return;
+            }
+
+            if (isActive) {
+                setManualBests(data || []);
+            }
+        };
+
+        loadManualBests();
+
+        return () => {
+            isActive = false;
+        };
+    }, [user]);
 
 
 
@@ -344,6 +378,7 @@ export default function GymApp() {
 
     const { getPrev, getPR, copySetDown, copyRepDown } = useWorkout({
         history,
+        manualBests,
         sessionHistory,
         setLogData,
         getExSets,

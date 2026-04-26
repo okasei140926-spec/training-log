@@ -4,7 +4,19 @@ import {
     copyRepDownHelper,
 } from "../utils/workoutHelpers";
 
-export const useWorkout = ({ history, sessionHistory, setLogData, getExSets, getExUnit, KG_TO_LBS }) => {
+export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogData, getExSets, getExUnit, KG_TO_LBS }) => {
+    const buildValidSets = (record) => {
+        const sourceSets = Array.isArray(record?.sets) && record.sets.length > 0
+            ? record.sets
+            : [{ weight: record?.weight, reps: record?.reps }];
+
+        return sourceSets.filter((s) => {
+            const w = Number(s.weight);
+            const reps = Number(s.reps);
+            return Number.isFinite(w) && Number.isFinite(reps) && w > 0 && reps > 0;
+        });
+    };
+
     const getPrev = (name) => {
         const r = (sessionHistory || history)[name];
         return r ? r[r.length - 1] : null;
@@ -12,25 +24,41 @@ export const useWorkout = ({ history, sessionHistory, setLogData, getExSets, get
 
     const getPR = (name) => {
         const recs = history?.[name]; // sessionHistoryを使わない
-        if (!recs || !recs.length) return null;
-
         let best = null;
         let bestRM = 0;
 
-        recs.forEach((r) => {
-            const validSets = (r.sets || []).filter(s => {
-                const w = Number(s.weight);
-                const reps = Number(s.reps);
-                return Number.isFinite(w) && Number.isFinite(reps) && w > 0 && reps > 0;
-            })
-
+        (recs || []).forEach((r) => {
+            const validSets = buildValidSets(r);
             const rm = calc1RM(validSets);
 
-            if (rm > bestRM) {
+            if (rm > bestRM && validSets.length) {
                 bestRM = rm;
                 best = { ...r, sets: validSets, rm: Math.round(rm) };
             }
         });
+
+        manualBests
+            .filter((entry) => entry?.exercise_name === name)
+            .forEach((entry) => {
+                const validSets = buildValidSets({
+                    weight: entry.weight,
+                    reps: entry.reps,
+                });
+                const rm = calc1RM(validSets);
+
+                if (rm > bestRM && validSets.length) {
+                    bestRM = rm;
+                    best = {
+                        date: entry.best_date || null,
+                        weight: Number(entry.weight),
+                        reps: Number(entry.reps),
+                        sets: validSets,
+                        rm: Math.round(rm),
+                        isManualBest: true,
+                        id: entry.id,
+                    };
+                }
+            });
 
         return best;
     };
