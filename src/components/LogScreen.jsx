@@ -52,6 +52,8 @@ function SortableExerciseItem({ id, children }) {
     );
 }
 
+const roundTo1Decimal = (value) => Math.round(Number(value || 0) * 10) / 10;
+
 
 export default function LogScreen({
     user,
@@ -522,22 +524,14 @@ export default function LogScreen({
                         }) || [];
 
                         const pr1RM = calc1RM(prSets);
+                        const currentRM = roundTo1Decimal(cur1RM);
+                        const previousPRRM = roundTo1Decimal(pr?.rm ?? pr1RM);
+                        const prDiff = roundTo1Decimal(currentRM - previousPRRM);
 
                         const isPR =
                             doneSets.length > 0 &&
                             prSets.length > 0 &&
                             cur1RM > pr1RM * 1.001;
-
-                        console.log("PR_DEBUG", {
-                            exercise: ex.name,
-                            sets,
-                            doneSets,
-                            cur1RM,
-                            pr,
-                            prSets: pr?.sets,
-                            pr1RM,
-                            isPR
-                        });
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = pr?.sets?.reduce((best, s) => {
@@ -702,6 +696,11 @@ export default function LogScreen({
                                                 {pr && prIsAlsoPrev && (
                                                     <div style={{ marginTop: 4, fontSize: 11, color: "var(--text2)" }}>
                                                         🏆 前回がPR（{prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit}×${prTopSet.reps}rep` : `${pr.rm}${exUnit}`}）
+                                                    </div>
+                                                )}
+                                                {isPR && prDiff > 0 && (
+                                                    <div style={{ marginTop: 6, fontSize: 11, color: "#4ade80", fontWeight: 700 }}>
+                                                        PR更新！ +{prDiff.toFixed(1)}kg
                                                     </div>
                                                 )}
                                             </div>
