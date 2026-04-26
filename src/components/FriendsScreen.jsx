@@ -5,6 +5,7 @@ import FriendDetailModal from "./modals/FriendDetailModal";
 import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
 import Big3RankingCard from "./friends/Big3RankingCard";
 import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
+import EditUsernameModal from "./friends/EditUsernameModal";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 const BIG3_EXERCISES = [
@@ -732,38 +733,33 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             </div>
 
             {
-                showEditName && (
-                    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#00000066", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
-                        <div style={{ background: "var(--card)", borderRadius: 16, padding: 24, width: "100%" }}>
-                            <h3 style={{ marginBottom: 16, color: "var(--text)" }}>ユーザー名を変更</h3>
-                            <input placeholder="新しいユーザー名" value={newUsername} onChange={e => {
-                                setNewUsername(e.target.value);
-                                if (usernameError) setUsernameError("");
-                            }}
-                                style={{ display: "block", width: "100%", padding: "12px 16px", borderRadius: 10, border: "1px solid var(--border2)", background: "var(--card2)", color: "var(--text)", fontSize: 15, boxSizing: "border-box", marginBottom: 12 }} />
-                            {usernameError && (
-                                <div style={{ fontSize: 12, color: "#f87171", marginBottom: 12 }}>
-                                    {usernameError}
-                                </div>
-                            )}
-                            <button onClick={async () => {
-                                const trimmed = newUsername.trim();
-                                const errorMessage = validateUsername(trimmed);
-                                if (errorMessage) {
-                                    setUsernameError(errorMessage);
-                                    return;
-                                }
-                                await supabase.from("profiles").update({ username: trimmed }).eq("id", user.id);
-                                setMyUsername(trimmed);
-                                setUsernameError("");
-                                setShowEditName(false);
-                                setNewUsername("");
-                            }} style={{ width: "100%", padding: 14, borderRadius: 10, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 8 }}>保存</button>
-                            <button onClick={() => { setShowEditName(false); setNewUsername(""); setUsernameError(""); }}
-                                style={{ width: "100%", padding: 14, borderRadius: 10, background: "none", border: "1px solid var(--border2)", fontSize: 15, cursor: "pointer", color: "var(--text2)" }}>キャンセル</button>
-                        </div>
-                    </div>
-                )
+                <EditUsernameModal
+                    isOpen={showEditName}
+                    value={newUsername}
+                    error={usernameError}
+                    onChange={(nextValue) => {
+                        setNewUsername(nextValue);
+                        if (usernameError) setUsernameError("");
+                    }}
+                    onSave={async () => {
+                        const trimmed = newUsername.trim();
+                        const errorMessage = validateUsername(trimmed);
+                        if (errorMessage) {
+                            setUsernameError(errorMessage);
+                            return;
+                        }
+                        await supabase.from("profiles").update({ username: trimmed }).eq("id", user.id);
+                        setMyUsername(trimmed);
+                        setUsernameError("");
+                        setShowEditName(false);
+                        setNewUsername("");
+                    }}
+                    onCancel={() => {
+                        setShowEditName(false);
+                        setNewUsername("");
+                        setUsernameError("");
+                    }}
+                />
             }
 
             {
