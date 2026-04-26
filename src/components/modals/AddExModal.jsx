@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
+import CustomBodyPartModal from "./CustomBodyPartModal";
 
 const matchesActiveTab = (bodyPart, activeTab) => {
     if (!bodyPart || bodyPart === "その他") return false;
@@ -27,10 +28,12 @@ export default function AddExModal({
     history = {},
     manualBests = [],
     customBodyParts = [],
+    onAddCustomBodyPart,
 }) {
     const inputRef = useRef(null);
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
+    const [showCustomBodyPartModal, setShowCustomBodyPartModal] = useState(false);
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
     const tabLabels = [...new Set([...QUICK_LABELS, ...customBodyParts.filter(Boolean)])];
@@ -145,6 +148,21 @@ export default function AddExModal({
                                     {label}
                                 </button>
                             ))}
+                            <button
+                                onClick={() => setShowCustomBodyPartModal(true)}
+                                style={{
+                                    padding: "6px 14px",
+                                    borderRadius: 20,
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    flexShrink: 0,
+                                    border: "1px dashed var(--border2)",
+                                    background: "transparent",
+                                    color: "var(--text2)",
+                                }}
+                            >
+                                ＋ 部位追加
+                            </button>
                         </div>
                     </div>
                 )}
@@ -183,6 +201,17 @@ export default function AddExModal({
                     </div>
                 </div>
             </div>
+
+            <CustomBodyPartModal
+                isOpen={showCustomBodyPartModal}
+                customBodyParts={customBodyParts}
+                onClose={() => setShowCustomBodyPartModal(false)}
+                onSave={(bodyPart) => {
+                    onAddCustomBodyPart?.(bodyPart);
+                    setActiveTab(bodyPart);
+                    setShowCustomBodyPartModal(false);
+                }}
+            />
         </div>
     );
 

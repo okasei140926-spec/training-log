@@ -929,6 +929,11 @@ export default function GymApp() {
                             user={user}
                             manualBests={manualBests}
                             customBodyParts={customBodyParts}
+                            onAddCustomBodyPart={(bodyPart) => {
+                                setCustomBodyParts((prev) =>
+                                    prev.includes(bodyPart) ? prev : [...prev, bodyPart]
+                                );
+                            }}
                             todayLabels={todayLabels}
                             dayColor={dayColor}
                             exercises={exercises}
