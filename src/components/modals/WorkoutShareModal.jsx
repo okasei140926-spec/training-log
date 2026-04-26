@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
+import SummaryShareCard from "../share/SummaryShareCard";
+import FullRecordShareCard from "../share/FullRecordShareCard";
 
 const TEMPLATE_OPTIONS = [
     { id: "cute", label: "Cute" },
@@ -77,26 +79,6 @@ function buildTemplateStyles(template) {
         brand: "#b48d99",
         title: "Workout Moment",
     };
-}
-
-function SummaryItem({ value, label, styleSet }) {
-    return (
-        <div
-            style={{
-                ...styleSet.summaryCard,
-                borderRadius: 18,
-                padding: "14px 12px",
-                minWidth: 0,
-            }}
-        >
-            <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1, marginBottom: 6 }}>
-                {value}
-            </div>
-            <div style={{ ...styleSet.label, fontSize: 11, lineHeight: 1.4 }}>
-                {label}
-            </div>
-        </div>
-    );
 }
 
 function waitForImageReady(img) {
@@ -652,66 +634,25 @@ export default function WorkoutShareModal({
                             overflow: "hidden",
                         }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
-                            <div>
-                                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
-                                    {styleSet.title}
-                                </div>
-                                <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
-                                    {dateLabel}
-                                </div>
-                            </div>
-                            <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                                {template === "cute" ? "today's glow" : "performance log"}
-                            </div>
-                        </div>
-
-                        <div style={{ ...styleSet.photoFrame, marginBottom: 14 }}>
-                            <img
-                                ref={photoImgRef}
-                                src={renderPhotoUrl}
-                                alt={`${dateLabel} workout share`}
-                                crossOrigin="anonymous"
-                                onLoad={() => {
-                                    setPhotoPreparing(false);
-                                    setPhotoReady(true);
-                                    setErrorMsg("");
-                                }}
-                                onError={(error) => {
-                                    console.error("share preview image load failed", error);
-                                    setPhotoPreparing(false);
-                                    setPhotoReady(false);
-                                    setErrorMsg("写真の読み込みに失敗しました。時間をおいてもう一度お試しください。");
-                                }}
-                                style={{
-                                    width: "100%",
-                                    display: "block",
-                                    aspectRatio: "4 / 5",
-                                    objectFit: "cover",
-                                    borderRadius: template === "cute" ? 22 : 18,
-                                }}
-                            />
-                        </div>
-
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                gap: 10,
-                                marginBottom: 14,
+                        <SummaryShareCard
+                            template={template}
+                            styleSet={styleSet}
+                            dateLabel={dateLabel}
+                            summaryItems={summaryItems}
+                            renderPhotoUrl={renderPhotoUrl}
+                            photoImgRef={photoImgRef}
+                            onPhotoLoad={() => {
+                                setPhotoPreparing(false);
+                                setPhotoReady(true);
+                                setErrorMsg("");
                             }}
-                        >
-                            {summaryItems.map((item) => (
-                                <SummaryItem key={item.label} value={item.value} label={item.label} styleSet={styleSet} />
-                            ))}
-                        </div>
-
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                            <div />
-                            <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
-                                IRON LOG
-                            </div>
-                        </div>
+                            onPhotoError={(error) => {
+                                console.error("share preview image load failed", error);
+                                setPhotoPreparing(false);
+                                setPhotoReady(false);
+                                setErrorMsg("写真の読み込みに失敗しました。時間をおいてもう一度お試しください。");
+                            }}
+                        />
                     </div>
                 ) : postType === "summary" ? (
                     <div
@@ -723,38 +664,16 @@ export default function WorkoutShareModal({
                             overflow: "hidden",
                         }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-                            <div>
-                                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
-                                    {styleSet.title}
-                                </div>
-                                <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
-                                    {dateLabel}
-                                </div>
-                            </div>
-                            <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                                {template === "cute" ? "summary only" : "stats focus"}
-                            </div>
-                        </div>
-
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                                gap: 10,
-                                marginBottom: 12,
-                            }}
-                        >
-                            {summaryItems.map((item) => (
-                                <SummaryItem key={item.label} value={item.value} label={item.label} styleSet={styleSet} />
-                            ))}
-                        </div>
-
-                        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
-                            <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
-                                IRON LOG
-                            </div>
-                        </div>
+                        <SummaryShareCard
+                            template={template}
+                            styleSet={styleSet}
+                            dateLabel={dateLabel}
+                            summaryItems={summaryItems}
+                            renderPhotoUrl={null}
+                            photoImgRef={photoImgRef}
+                            onPhotoLoad={() => { }}
+                            onPhotoError={() => { }}
+                        />
                     </div>
                 ) : (
                     <div
@@ -766,120 +685,25 @@ export default function WorkoutShareModal({
                             overflow: "hidden",
                         }}
                     >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
-                            <div>
-                                <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
-                                    {template === "cool" ? "FULL WORKOUT LOG" : "Workout Record"}
-                                </div>
-                                <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
-                                    {dateLabel}
-                                </div>
-                            </div>
-                            <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                                {template === "cool" ? "all sets" : "全セット"}
-                            </div>
-                        </div>
-
-                        {renderPhotoUrl && (
-                            <div style={{ ...styleSet.photoFrame, marginBottom: 12, padding: template === "cool" ? 8 : 10 }}>
-                                <img
-                                    ref={photoImgRef}
-                                    src={renderPhotoUrl}
-                                    alt={`${dateLabel} workout full record`}
-                                    crossOrigin="anonymous"
-                                    onLoad={() => {
-                                        setPhotoPreparing(false);
-                                        setPhotoReady(true);
-                                        setErrorMsg("");
-                                    }}
-                                    onError={(error) => {
-                                        console.error("share preview image load failed", error);
-                                        setPhotoPreparing(false);
-                                        setPhotoReady(false);
-                                        setErrorMsg("写真の読み込みに失敗しました。時間をおいてもう一度お試しください。");
-                                    }}
-                                    style={{
-                                        width: "100%",
-                                        display: "block",
-                                        aspectRatio: "16 / 9",
-                                        objectFit: "cover",
-                                        borderRadius: template === "cute" ? 18 : 16,
-                                    }}
-                                />
-                            </div>
-                        )}
-
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
-                            {fullRecord.length > 0 ? fullRecord.map((exercise) => (
-                                <div
-                                    key={exercise.name}
-                                    style={{
-                                        ...styleSet.summaryCard,
-                                        borderRadius: 16,
-                                        padding: "10px 12px",
-                                    }}
-                                >
-                                    <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 6 }}>
-                                        {exercise.name}
-                                    </div>
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                        {exercise.sets.map((set) => (
-                                            <div
-                                                key={`${exercise.name}-${set.setNumber}`}
-                                                style={{
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    gap: 8,
-                                                    flexWrap: "wrap",
-                                                    padding: "4px 0",
-                                                    borderBottom: `1px solid ${template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(232,199,210,0.75)"}`,
-                                                }}
-                                            >
-                                                <div style={{ fontSize: 12, fontWeight: 700, color: styleSet.label.color }}>
-                                                    #{set.setNumber}
-                                                </div>
-                                                <div style={{ fontSize: 13, fontWeight: 700 }}>
-                                                    {set.weightLabel}
-                                                </div>
-                                                <div style={{ fontSize: 13, fontWeight: 700 }}>
-                                                    ×
-                                                </div>
-                                                <div style={{ fontSize: 13, fontWeight: 700 }}>
-                                                    {set.repsLabel}
-                                                </div>
-                                                {set.isPR ? (
-                                                    <div
-                                                        style={{
-                                                            marginLeft: "auto",
-                                                            padding: "2px 7px",
-                                                            borderRadius: 999,
-                                                            fontSize: 10,
-                                                            fontWeight: 800,
-                                                            background: template === "cool" ? "#f5f5f5" : "#7f4653",
-                                                            color: template === "cool" ? "#111214" : "#fff",
-                                                        }}
-                                                    >
-                                                        PR
-                                                    </div>
-                                                ) : (
-                                                    <div style={{ marginLeft: "auto" }} />
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )) : (
-                                <div style={{ ...styleSet.summaryCard, borderRadius: 22, padding: "18px 16px", fontSize: 13 }}>
-                                    まだ記録されたセットがありません
-                                </div>
-                            )}
-                        </div>
-
-                        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
-                            <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
-                                IRON LOG
-                            </div>
-                        </div>
+                        <FullRecordShareCard
+                            template={template}
+                            styleSet={styleSet}
+                            dateLabel={dateLabel}
+                            fullRecord={fullRecord}
+                            renderPhotoUrl={renderPhotoUrl}
+                            photoImgRef={photoImgRef}
+                            onPhotoLoad={() => {
+                                setPhotoPreparing(false);
+                                setPhotoReady(true);
+                                setErrorMsg("");
+                            }}
+                            onPhotoError={(error) => {
+                                console.error("share preview image load failed", error);
+                                setPhotoPreparing(false);
+                                setPhotoReady(false);
+                                setErrorMsg("写真の読み込みに失敗しました。時間をおいてもう一度お試しください。");
+                            }}
+                        />
                     </div>
                 )}
             </div>
