@@ -187,9 +187,6 @@ export default function HistoryScreen({
             .filter(Boolean)
     )];
 
-    console.log("daySummary", daySummary);
-    console.log("workedLabels", workedLabels);
-
     const totalSets = Object.values(daySummary).reduce((a, b) => a + b, 0);
     const uniqueTrainingDates = [...new Set(
         Object.values(history || {})

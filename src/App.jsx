@@ -527,15 +527,11 @@ export default function GymApp() {
     };
 
     const quickAdd = (name, remove, labelOverride) => {
-        console.log("保存先ラベル", labelOverride);
-
         const tgts = labelOverride
             ? [labelOverride]
             : Array.isArray(addTarget)
                 ? addTarget
                 : (addTarget ? [addTarget] : []);
-
-        console.log("最終ターゲット", tgts);
 
         setMuscleEx((prev) => {
             const next = { ...prev };

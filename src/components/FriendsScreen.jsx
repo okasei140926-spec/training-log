@@ -361,7 +361,6 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             const sentMap = {};
             (sent || []).forEach(k => { sentMap[k.to_user_id] = true; });
             setKudos(sentMap);
-            console.log("received kudos:", received);
             setReceivedKudos(received || []);
         };
         fetchKudos();
@@ -635,10 +634,8 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                                 if (!file) return;
                                 const ext = file.name.split(".").pop();
                                 const path = `${user.id}.${ext}`;
-                                const { error: uploadError } = await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
-                                console.log("upload error:", uploadError);
+                                await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
                                 const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(path);
-                                console.log("publicUrl:", publicUrl);
                                 await supabase.from("profiles").update({ avatar1_url: publicUrl }).eq("id", user.id);
                                 setAvatarUrl(publicUrl);
                             }}
