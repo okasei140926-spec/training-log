@@ -5,6 +5,7 @@ import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
 import ManualBestModal from "./modals/ManualBestModal";
+import ManualBestManagerModal from "./modals/ManualBestManagerModal";
 import HistoryExerciseItem from "./history/HistoryExerciseItem";
 
 const EX_TO_LABEL = {};
@@ -16,11 +17,6 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 
 const normalizeName = (name) =>
     String(name || "").replace(/\s+/g, "").trim();
-
-const BODY_PART_LABELS = ["胸", "背中", "脚", "肩", "二頭", "三頭", "腹", "その他"];
-const resolveBodyPart = (value) => {
-    return BODY_PART_LABELS.includes(value) ? value : "その他";
-};
 
 const resolveLabel = (exName, muscleEx = {}) => {
     const normalized = normalizeName(exName);
@@ -63,6 +59,7 @@ export default function HistoryScreen({
     const [editTarget, setEditTarget] = useState(null);
     const [graphTarget, setGraphTarget] = useState(null);
     const [showManualBestModal, setShowManualBestModal] = useState(false);
+    const [showManualBestManager, setShowManualBestManager] = useState(false);
 
 
     const today = new Date();
@@ -181,11 +178,6 @@ export default function HistoryScreen({
         if (!date) return "—";
         return date.replace(/-/g, "/");
     };
-    const groupedManualBests = BODY_PART_LABELS.map((bodyPart) => ({
-        bodyPart,
-        items: manualBests.filter((best) => resolveBodyPart(best.body_part) === bodyPart),
-    })).filter((group) => group.items.length > 0);
-
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
 
@@ -277,7 +269,7 @@ export default function HistoryScreen({
                     移行用に、過去の自己ベストだけ先に登録できます
                 </div>
                 <button
-                    onClick={() => setShowManualBestModal(true)}
+                    onClick={() => setShowManualBestManager(true)}
                     disabled={!user}
                     style={{
                         padding: "8px 12px",
@@ -290,99 +282,8 @@ export default function HistoryScreen({
                         opacity: user ? 1 : 0.6,
                     }}
                 >
-                    過去ベスト登録
+                    過去ベストを登録・確認
                 </button>
-            </div>
-
-            <div
-                style={{
-                    background: "var(--card)",
-                    borderRadius: 16,
-                    padding: "14px 16px",
-                    border: "1px solid var(--border)",
-                    marginBottom: 14,
-                }}
-            >
-                <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
-                    登録済みの過去ベスト
-                </div>
-
-                {!user ? (
-                    <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                        ログインすると過去ベストを保存できます
-                    </div>
-                ) : manualBests.length === 0 ? (
-                    <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                        まだ登録された過去ベストはありません
-                    </div>
-                ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {groupedManualBests.map((group) => (
-                            <div key={group.bodyPart}>
-                                <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text3)", marginBottom: 8 }}>
-                                    {group.bodyPart}
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    {group.items.map((best) => (
-                                        <div
-                                            key={best.id}
-                                            style={{
-                                                background: "var(--card2)",
-                                                borderRadius: 12,
-                                                padding: "10px 12px",
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                gap: 12,
-                                            }}
-                                        >
-                                            <div style={{ minWidth: 0 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
-                                                    {best.exercise_name}
-                                                </div>
-                                                <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                                                    {best.weight}kg × {best.reps}rep
-                                                    {best.best_date ? ` ・ ${best.best_date.replace(/-/g, "/")}` : ""}
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={async () => {
-                                                    const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
-                                                    if (!confirmed) return;
-
-                                                    const { error } = await supabase
-                                                        .from("manual_bests")
-                                                        .delete()
-                                                        .eq("id", best.id)
-                                                        .eq("user_id", user.id);
-
-                                                    if (error) {
-                                                        console.error(error);
-                                                        return;
-                                                    }
-
-                                                    onDeleteManualBest?.(best.id);
-                                                }}
-                                                style={{
-                                                    padding: "6px 10px",
-                                                    borderRadius: 10,
-                                                    background: "transparent",
-                                                    border: "1px solid var(--border2)",
-                                                    color: "var(--text3)",
-                                                    fontSize: 11,
-                                                    fontWeight: 700,
-                                                    flexShrink: 0,
-                                                }}
-                                            >
-                                                削除
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
             </div>
 
             {/* カレンダー（←ここ外に出すのが超重要） */}
@@ -456,6 +357,31 @@ export default function HistoryScreen({
                     if (error) throw error;
 
                     onAddManualBest?.(data);
+                }}
+            />
+
+            <ManualBestManagerModal
+                isOpen={showManualBestManager}
+                user={user}
+                manualBests={manualBests}
+                onClose={() => setShowManualBestManager(false)}
+                onOpenRegister={() => setShowManualBestModal(true)}
+                onDeleteBest={async (best) => {
+                    const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
+                    if (!confirmed) return;
+
+                    const { error } = await supabase
+                        .from("manual_bests")
+                        .delete()
+                        .eq("id", best.id)
+                        .eq("user_id", user.id);
+
+                    if (error) {
+                        console.error(error);
+                        return;
+                    }
+
+                    onDeleteManualBest?.(best.id);
                 }}
             />
 
