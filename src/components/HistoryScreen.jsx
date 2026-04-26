@@ -70,6 +70,18 @@ export default function HistoryScreen({
     const [selectedDate, setSelectedDate] = useState(null);
     const [openExercises, setOpenExercises] = useState({});
 
+    const openManualBestModalForCreate = () => {
+        setShowManualBestManager(false);
+        setEditingManualBest(null);
+        setShowManualBestModal(true);
+    };
+
+    const openManualBestModalForEdit = (best) => {
+        setShowManualBestManager(false);
+        setEditingManualBest(best);
+        setShowManualBestModal(true);
+    };
+
     useEffect(() => {
         if (selectedDate) {
             document.body.style.overflow = 'hidden';
@@ -393,14 +405,8 @@ export default function HistoryScreen({
                 user={user}
                 manualBests={manualBests}
                 onClose={() => setShowManualBestManager(false)}
-                onOpenRegister={() => {
-                    setEditingManualBest(null);
-                    setShowManualBestModal(true);
-                }}
-                onEditBest={(best) => {
-                    setEditingManualBest(best);
-                    setShowManualBestModal(true);
-                }}
+                onOpenRegister={openManualBestModalForCreate}
+                onEditBest={openManualBestModalForEdit}
                 onDeleteBest={async (best) => {
                     const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
                     if (!confirmed) return;
