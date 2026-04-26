@@ -20,6 +20,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [receivedKudos, setReceivedKudos] = useState([]);
     const [myUsername, setMyUsername] = useState("");
     const today = new Date().toISOString().split("T")[0];
+    const currentMonthPrefix = today.slice(0, 7);
 
     const hasValidSet = useCallback((set) => {
         if (!set) return false;
@@ -43,6 +44,14 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             })
         );
     }, [hasValidSet, today]);
+
+    const countMonthlyWorkoutDays = useCallback((rows) => {
+        return new Set(
+            (rows || [])
+                .map((row) => row?.date)
+                .filter((date) => typeof date === "string" && date.startsWith(currentMonthPrefix))
+        ).size;
+    }, [currentMonthPrefix]);
 
     const safeCalc1RM = useCallback((sets) => {
         const validSets = (sets || []).filter((set) => {
@@ -137,8 +146,9 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
                     supabase
                         .from("workouts")
-                        .select("user_id, data")
-                        .in("user_id", friendIds),
+                        .select("user_id, date, data")
+                        .in("user_id", friendIds)
+                        .order("date", { ascending: false }),
                 ]);
 
                 const { data: profiles, error: profilesError } = profilesRes;
@@ -147,13 +157,17 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 if (profilesError) throw profilesError;
                 if (workoutsError) throw workoutsError;
 
-                const historyMap = new Map(
-                    (workouts || []).map(w => [w.user_id, w.data || {}])
-                );
+                const workoutRowsMap = new Map();
+                (workouts || []).forEach((workout) => {
+                    const current = workoutRowsMap.get(workout.user_id) || [];
+                    current.push(workout);
+                    workoutRowsMap.set(workout.user_id, current);
+                });
 
                 const friendsWithHistory = (profiles || []).map(p => ({
                     ...p,
-                    history: historyMap.get(p.id) || {}
+                    workoutRows: workoutRowsMap.get(p.id) || [],
+                    history: (workoutRowsMap.get(p.id) || [])[0]?.data || {},
                 }));
 
                 setFriendIds(friendIds);
@@ -273,6 +287,19 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
 
     const todayActiveFriends = friends.filter((f) => todayActiveMap[f.id]);
     const todayActiveLabel = todayActiveFriends.map((f) => f.username).join("、");
+    const myMonthlyWorkoutDays = new Set(
+        Object.values(history || {})
+            .flatMap((recs) => (recs || []).map((record) => record?.date))
+            .filter((date) => typeof date === "string" && date.startsWith(currentMonthPrefix))
+    ).size;
+    const monthlyWorkoutRanking = [
+        { name: myUsername || "あなた", isMe: true, days: myMonthlyWorkoutDays },
+        ...friends.map((friend) => ({
+            name: friend.username,
+            isMe: false,
+            days: countMonthlyWorkoutDays(friend.workoutRows),
+        })),
+    ].sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, "ja"));
     const sortedFriends = [...friends]
         .map((friend, index) => ({ friend, index }))
         .sort((a, b) => {
@@ -346,6 +373,40 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     🔥 {receivedKudos.map(k => k.profiles?.username).join("、")}から今日クドスをもらった！
                 </div>
             )}
+
+            <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
+                    今月のワークアウト数
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {monthlyWorkoutRanking.map((entry, index) => (
+                        <div
+                            key={`${entry.isMe ? "me" : entry.name}-${index}`}
+                            style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "10px 12px",
+                                borderRadius: 12,
+                                background: entry.isMe ? "var(--card2)" : "transparent",
+                                border: entry.isMe ? "1px solid var(--border)" : "1px solid transparent",
+                            }}
+                        >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                <div style={{ width: 22, fontSize: 12, fontWeight: 800, color: index === 0 ? "#FFD700" : "var(--text3)" }}>
+                                    {index + 1}位
+                                </div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {entry.isMe ? "あなた" : entry.name}
+                                </div>
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
+                                {entry.days}日
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
 
 
             {/* 自分のカード */}
