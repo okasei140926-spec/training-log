@@ -767,6 +767,7 @@ export default function LogScreen({
                     onQuickAdd={onQuickAddEx}
                     existingNames={exercises.map(e => e.name)}
                     muscleEx={muscleEx}
+                    history={history}
                     manualBests={manualBests}
                     customBodyParts={customBodyParts}
                     hiddenBodyParts={hiddenBodyParts}

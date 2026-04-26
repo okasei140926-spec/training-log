@@ -46,9 +46,6 @@ export default function AddExModal({
     const [hiddenExerciseSuggestions, setHiddenExerciseSuggestions] = useState(() =>
         load("hiddenExerciseSuggestions", {})
     );
-    const [exerciseUsageCounts, setExerciseUsageCounts] = useState(() =>
-        load("exerciseUsageCounts", {})
-    );
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
     const allTabLabels = [...new Set([...QUICK_LABELS, ...customBodyParts.filter(Boolean)])];
@@ -105,7 +102,7 @@ export default function AddExModal({
             .map((item, originalIndex) => ({
                 item,
                 originalIndex,
-                usageCount: exerciseUsageCounts[`${activeTab}::${item}`] || 0,
+                usageCount: getFrequency(item),
             }))
             .sort((a, b) => {
                 const usageDiff = b.usageCount - a.usageCount;
@@ -118,10 +115,6 @@ export default function AddExModal({
     useEffect(() => {
         save("hiddenExerciseSuggestions", hiddenExerciseSuggestions);
     }, [hiddenExerciseSuggestions]);
-
-    useEffect(() => {
-        save("exerciseUsageCounts", exerciseUsageCounts);
-    }, [exerciseUsageCounts]);
 
     useEffect(() => {
         return () => {
@@ -188,14 +181,6 @@ export default function AddExModal({
         }));
     };
 
-    const incrementUsage = (bodyPart, exerciseName) => {
-        const key = `${bodyPart}::${exerciseName}`;
-        setExerciseUsageCounts((prev) => ({
-            ...prev,
-            [key]: (prev[key] || 0) + 1,
-        }));
-    };
-
     const hideBodyPart = (bodyPart) => {
         if (tabLabels.length <= 1) {
             window.alert("最低1つの部位は表示したままにしてください");
@@ -215,9 +200,6 @@ export default function AddExModal({
         } else {
             onQuickAdd(s, false, activeTab);
             setAdded(p => new Set([...p, s]));
-            if (isFree) {
-                incrementUsage(activeTab, s);
-            }
         }
     };
 
