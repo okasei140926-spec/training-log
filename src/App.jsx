@@ -386,7 +386,7 @@ export default function GymApp() {
 
 
 
-    const { getPrev, getPR, copySetDown, copyRepDown } = useWorkout({
+    const { getPrev, getPR, getPreviousPR, copySetDown, copyRepDown } = useWorkout({
         history,
         manualBests,
         sessionHistory,
@@ -962,6 +962,7 @@ export default function GymApp() {
                             onRenameEx={renameEx}
                             getPrev={getPrev}
                             getPR={getPR}
+                            getPreviousPR={getPreviousPR}
                             onCopyDown={copySetDown}
                             onCopyDownReps={copyRepDown}
                             unit={unit}

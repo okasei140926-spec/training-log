@@ -64,7 +64,7 @@ export default function LogScreen({
     onUpdateHiddenBodyParts,
     todayLabels, dayColor,
     exercises, logData, getExSets, setField, addSet, removeEx,
-    onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, onCopyDown, onCopyDownReps, unit = "kg",
+    onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, getPreviousPR, onCopyDown, onCopyDownReps, unit = "kg",
     getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
 }) {
 
@@ -119,7 +119,7 @@ export default function LogScreen({
             weight: exUnit === "lbs" ? String(Number(s.weight) / KG_TO_LBS) : s.weight,
         }));
 
-        const pr = getPR ? getPR(ex.name) : null;
+        const pr = getPreviousPR ? getPreviousPR(ex.name, { excludeDate: logDate }) : (getPR ? getPR(ex.name) : null);
         const prSets = pr?.sets?.filter((s) => {
             const w = Number(s.weight);
             const r = Number(s.reps);
@@ -127,7 +127,7 @@ export default function LogScreen({
         }) || [];
 
         const cur1RM = calc1RM(doneSets);
-        const pr1RM = calc1RM(prSets);
+        const pr1RM = pr?.rm ?? calc1RM(prSets);
         const isPR = doneSets.length > 0 && prSets.length > 0 && cur1RM > pr1RM * 1.001;
 
         const exVolumeKg = doneSets.reduce((sum, s) => {
@@ -502,7 +502,7 @@ export default function LogScreen({
                         const sets = logData[ex.name] || getExSets(ex);
                         const isEditing = editingId === ex.id;
                         const prev = getPrev ? getPrev(ex.name) : null;
-                        const pr = getPR ? getPR(ex.name) : null;
+                        const pr = getPreviousPR ? getPreviousPR(ex.name, { excludeDate: logDate }) : (getPR ? getPR(ex.name) : null);
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
                         const prIsAlsoPrev = pr && prev && pr.date === prev.date;
 
@@ -523,7 +523,7 @@ export default function LogScreen({
                             return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
                         }) || [];
 
-                        const pr1RM = calc1RM(prSets);
+                        const pr1RM = pr?.rm ?? calc1RM(prSets);
                         const currentRM = roundTo1Decimal(cur1RM);
                         const previousPRRM = roundTo1Decimal(pr?.rm ?? pr1RM);
                         const prDiff = roundTo1Decimal(currentRM - previousPRRM);

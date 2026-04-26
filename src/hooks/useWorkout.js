@@ -68,6 +68,53 @@ export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogDa
         return best;
     };
 
+    const getPreviousPR = (name, { excludeDate } = {}) => {
+        const normalizedName = normalizeExerciseName(name);
+        let best = null;
+        let bestRM = 0;
+
+        Object.entries(history || {}).forEach(([historyName, recs]) => {
+            if (normalizeExerciseName(historyName) !== normalizedName) return;
+
+            (recs || []).forEach((r) => {
+                if (excludeDate && r?.date === excludeDate) return;
+
+                const validSets = buildValidSets(r);
+                const rm = calc1RM(validSets);
+
+                if (rm > bestRM && validSets.length) {
+                    bestRM = rm;
+                    best = { ...r, sets: validSets, rm: Math.round(rm) };
+                }
+            });
+        });
+
+        manualBests
+            .filter((entry) => normalizeExerciseName(entry?.exercise_name) === normalizedName)
+            .forEach((entry) => {
+                const validSets = buildValidSets({
+                    weight: entry.weight,
+                    reps: entry.reps,
+                });
+                const rm = calc1RM(validSets);
+
+                if (rm > bestRM && validSets.length) {
+                    bestRM = rm;
+                    best = {
+                        date: entry.best_date || null,
+                        weight: Number(entry.weight),
+                        reps: Number(entry.reps),
+                        sets: validSets,
+                        rm: Math.round(rm),
+                        isManualBest: true,
+                        id: entry.id,
+                    };
+                }
+            });
+
+        return best;
+    };
+
     const copySetDown = (name, idx) => {
         setLogData((p) => {
             const base = getExSets({ name });
@@ -95,6 +142,7 @@ export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogDa
     return {
         getPrev,
         getPR,
+        getPreviousPR,
         copySetDown,
         copyRepDown,
     };
