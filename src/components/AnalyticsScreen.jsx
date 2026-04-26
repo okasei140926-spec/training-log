@@ -11,7 +11,7 @@ const PERIODS = [
 ];
 
 const ANALYTICS_TABS = [
-  { id: "exercises", label: "種目" },
+  { id: "exercises", label: "グラフ" },
   { id: "pr", label: "PR" },
 ];
 
