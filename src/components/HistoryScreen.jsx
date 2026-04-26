@@ -42,12 +42,22 @@ const resolveLabel = (exName, muscleEx = {}) => {
     return customMatch ? customMatch[0] : null;
 };
 
-export default function HistoryScreen({ history, muscleEx, onEditHistory, onDeleteHistory, onDeleteDate, unit = "kg", onLogForDate, user }) {
+export default function HistoryScreen({
+    history,
+    muscleEx,
+    onEditHistory,
+    onDeleteHistory,
+    onDeleteDate,
+    unit = "kg",
+    onLogForDate,
+    user,
+    manualBests = [],
+    onAddManualBest,
+    onDeleteManualBest,
+}) {
     const [editTarget, setEditTarget] = useState(null);
     const [graphTarget, setGraphTarget] = useState(null);
     const [showManualBestModal, setShowManualBestModal] = useState(false);
-    const [manualBests, setManualBests] = useState([]);
-    const [manualBestsLoading, setManualBestsLoading] = useState(false);
 
 
     const today = new Date();
@@ -66,48 +76,6 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             document.body.style.overflow = '';
         };
     }, [selectedDate]);
-
-    useEffect(() => {
-        let isActive = true;
-
-        const loadManualBests = async () => {
-            if (!user?.id) {
-                if (isActive) {
-                    setManualBests([]);
-                    setManualBestsLoading(false);
-                }
-                return;
-            }
-
-            setManualBestsLoading(true);
-            const { data, error } = await supabase
-                .from("manual_bests")
-                .select("id, exercise_name, weight, reps, best_date, created_at")
-                .eq("user_id", user.id)
-                .order("created_at", { ascending: false });
-
-            if (error) {
-                console.error(error);
-                if (isActive) {
-                    setManualBests([]);
-                    setManualBestsLoading(false);
-                }
-                return;
-            }
-
-            if (isActive) {
-                setManualBests(data || []);
-                setManualBestsLoading(false);
-            }
-        };
-
-        loadManualBests();
-
-        return () => {
-            isActive = false;
-        };
-    }, [user]);
-
 
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay());
@@ -334,10 +302,6 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                     <div style={{ fontSize: 12, color: "var(--text3)" }}>
                         ログインすると過去ベストを保存できます
                     </div>
-                ) : manualBestsLoading ? (
-                    <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                        読み込み中...
-                    </div>
                 ) : manualBests.length === 0 ? (
                     <div style={{ fontSize: 12, color: "var(--text3)" }}>
                         まだ登録された過去ベストはありません
@@ -382,7 +346,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                                             return;
                                         }
 
-                                        setManualBests((prev) => prev.filter((item) => item.id !== best.id));
+                                        onDeleteManualBest?.(best.id);
                                     }}
                                     style={{
                                         padding: "6px 10px",
@@ -472,7 +436,7 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
 
                     if (error) throw error;
 
-                    setManualBests((prev) => [data, ...prev]);
+                    onAddManualBest?.(data);
                 }}
             />
 

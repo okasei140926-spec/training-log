@@ -998,7 +998,25 @@ export default function GymApp() {
                     />
                 )}
 
-                {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} onDeleteDate={deleteAllHistoryForDate} unit={unit} onLogForDate={handleCalendarDayOpen} user={user} />)}
+                {screen === "history" && (
+                    <HistoryScreen
+                        history={history}
+                        muscleEx={muscleEx}
+                        onEditHistory={handleEditHistory}
+                        onDeleteHistory={handleDeleteHistory}
+                        onDeleteDate={deleteAllHistoryForDate}
+                        unit={unit}
+                        onLogForDate={handleCalendarDayOpen}
+                        user={user}
+                        manualBests={manualBests}
+                        onAddManualBest={(best) => {
+                            setManualBests((prev) => [best, ...prev]);
+                        }}
+                        onDeleteManualBest={(id) => {
+                            setManualBests((prev) => prev.filter((item) => item.id !== id));
+                        }}
+                    />
+                )}
 
                 {screen === "ai" && (
                     <AIScreen
