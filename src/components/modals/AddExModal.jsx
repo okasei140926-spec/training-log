@@ -46,6 +46,9 @@ export default function AddExModal({
     const [hiddenExerciseSuggestions, setHiddenExerciseSuggestions] = useState(() =>
         load("hiddenExerciseSuggestions", {})
     );
+    const [exerciseUsageCounts, setExerciseUsageCounts] = useState(() =>
+        load("exerciseUsageCounts", {})
+    );
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
     const allTabLabels = [...new Set([...QUICK_LABELS, ...customBodyParts.filter(Boolean)])];
@@ -99,12 +102,26 @@ export default function AddExModal({
             .filter(Boolean);
         return [...new Set([...fixed, ...custom, ...fromManualBests])]
             .filter((name) => !hiddenExerciseSuggestions[`${activeTab}::${name}`])
-            .sort((a, b) => getFrequency(b) - getFrequency(a));
+            .map((item, originalIndex) => ({
+                item,
+                originalIndex,
+                usageCount: exerciseUsageCounts[`${activeTab}::${item}`] || 0,
+            }))
+            .sort((a, b) => {
+                const usageDiff = b.usageCount - a.usageCount;
+                if (usageDiff !== 0) return usageDiff;
+                return a.originalIndex - b.originalIndex;
+            })
+            .map(({ item }) => item);
     })();
 
     useEffect(() => {
         save("hiddenExerciseSuggestions", hiddenExerciseSuggestions);
     }, [hiddenExerciseSuggestions]);
+
+    useEffect(() => {
+        save("exerciseUsageCounts", exerciseUsageCounts);
+    }, [exerciseUsageCounts]);
 
     useEffect(() => {
         return () => {
@@ -171,6 +188,14 @@ export default function AddExModal({
         }));
     };
 
+    const incrementUsage = (bodyPart, exerciseName) => {
+        const key = `${bodyPart}::${exerciseName}`;
+        setExerciseUsageCounts((prev) => ({
+            ...prev,
+            [key]: (prev[key] || 0) + 1,
+        }));
+    };
+
     const hideBodyPart = (bodyPart) => {
         if (tabLabels.length <= 1) {
             window.alert("最低1つの部位は表示したままにしてください");
@@ -190,6 +215,9 @@ export default function AddExModal({
         } else {
             onQuickAdd(s, false, activeTab);
             setAdded(p => new Set([...p, s]));
+            if (isFree) {
+                incrementUsage(activeTab, s);
+            }
         }
     };
 
