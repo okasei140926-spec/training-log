@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
+import { load, save } from "../../utils/helpers";
 import CustomBodyPartModal from "./CustomBodyPartModal";
 import BodyPartManagerModal from "./BodyPartManagerModal";
 
@@ -34,10 +35,19 @@ export default function AddExModal({
     onUpdateHiddenBodyParts,
 }) {
     const inputRef = useRef(null);
+    const longPressRef = useRef({
+        timer: null,
+        triggered: false,
+        startX: 0,
+        startY: 0,
+    });
     const [added, setAdded] = useState(() => new Set(existingNames));
     const [activeTab, setActiveTab] = useState("胸");
     const [showCustomBodyPartModal, setShowCustomBodyPartModal] = useState(false);
     const [showBodyPartManagerModal, setShowBodyPartManagerModal] = useState(false);
+    const [hiddenExerciseSuggestions, setHiddenExerciseSuggestions] = useState(() =>
+        load("hiddenExerciseSuggestions", {})
+    );
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
     const allTabLabels = [...new Set([...QUICK_LABELS, ...customBodyParts.filter(Boolean)])];
@@ -90,8 +100,78 @@ export default function AddExModal({
             .map((best) => best.exercise_name)
             .filter(Boolean);
         return [...new Set([...fixed, ...custom, ...fromManualBests])]
+            .filter((name) => !hiddenExerciseSuggestions[`${activeTab}::${name}`])
             .sort((a, b) => getFrequency(b) - getFrequency(a));
     })();
+
+    useEffect(() => {
+        save("hiddenExerciseSuggestions", hiddenExerciseSuggestions);
+    }, [hiddenExerciseSuggestions]);
+
+    useEffect(() => {
+        return () => {
+            clearLongPress();
+        };
+    }, []);
+
+    const clearLongPress = () => {
+        if (longPressRef.current.timer) {
+            clearTimeout(longPressRef.current.timer);
+            longPressRef.current.timer = null;
+        }
+    };
+
+    const startLongPress = (onLongPress, point) => {
+        clearLongPress();
+        longPressRef.current.triggered = false;
+        longPressRef.current.startX = point?.clientX ?? 0;
+        longPressRef.current.startY = point?.clientY ?? 0;
+        longPressRef.current.timer = setTimeout(() => {
+            longPressRef.current.triggered = true;
+            onLongPress?.();
+        }, 600);
+    };
+
+    const cancelLongPress = () => {
+        clearLongPress();
+    };
+
+    const handleTouchMoveCancel = (touch) => {
+        if (!touch) return;
+        const dx = Math.abs(touch.clientX - longPressRef.current.startX);
+        const dy = Math.abs(touch.clientY - longPressRef.current.startY);
+        if (dx > 10 || dy > 10) {
+            clearLongPress();
+        }
+    };
+
+    const buildLongPressHandlers = ({ onTap, onLongPress }) => ({
+        onClick: (e) => {
+            if (longPressRef.current.triggered) {
+                e.preventDefault();
+                e.stopPropagation();
+                longPressRef.current.triggered = false;
+                return;
+            }
+            onTap?.();
+        },
+        onMouseDown: (e) => startLongPress(onLongPress, e),
+        onMouseUp: cancelLongPress,
+        onMouseLeave: cancelLongPress,
+        onTouchStart: (e) => startLongPress(onLongPress, e.touches[0]),
+        onTouchEnd: cancelLongPress,
+        onTouchCancel: cancelLongPress,
+        onTouchMove: (e) => handleTouchMoveCancel(e.touches[0]),
+    });
+
+    const hideSuggestion = (bodyPart, exerciseName) => {
+        const confirmed = window.confirm("この候補を非表示にしますか？");
+        if (!confirmed) return;
+        setHiddenExerciseSuggestions((prev) => ({
+            ...prev,
+            [`${bodyPart}::${exerciseName}`]: true,
+        }));
+    };
 
     const handleQuick = (s) => {
         if (added.has(s)) {
@@ -117,7 +197,12 @@ export default function AddExModal({
                 const key = typeof s === "string" ? s : s.name;
                 const isAdded = added.has(key);
                 return (
-                    <button key={key} onClick={() => handleQuick(key)}
+                    <button
+                        key={key}
+                        {...buildLongPressHandlers({
+                            onTap: () => handleQuick(key),
+                            onLongPress: () => hideSuggestion(activeTab, key),
+                        })}
                         style={{ width: "100%", padding: "13px 16px", borderRadius: 10, background: "var(--card2)", border: "1px solid var(--border)", color: isAdded ? "var(--text2)" : "var(--text)", fontSize: 14, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ textDecoration: isAdded ? "line-through" : "none" }}>{key}</span>
                         {isAdded
@@ -152,7 +237,12 @@ export default function AddExModal({
                     <div style={{ flexShrink: 0, marginBottom: 12 }}>
                         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, msOverflowStyle: "none", scrollbarWidth: "none" }}>
                             {tabLabels.map(label => (
-                                <button key={label} onClick={() => setActiveTab(label)}
+                                <button
+                                    key={label}
+                                    {...buildLongPressHandlers({
+                                        onTap: () => setActiveTab(label),
+                                        onLongPress: () => setShowBodyPartManagerModal(true),
+                                    })}
                                     style={{
                                         padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",
                                         background: activeTab === label ? "var(--text)" : "var(--card2)",
@@ -175,21 +265,6 @@ export default function AddExModal({
                                 }}
                             >
                                 ＋ 部位追加
-                            </button>
-                            <button
-                                onClick={() => setShowBodyPartManagerModal(true)}
-                                style={{
-                                    padding: "6px 14px",
-                                    borderRadius: 20,
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    flexShrink: 0,
-                                    border: "1px dashed var(--border2)",
-                                    background: "transparent",
-                                    color: "var(--text2)",
-                                }}
-                            >
-                                部位管理
                             </button>
                         </div>
                     </div>
