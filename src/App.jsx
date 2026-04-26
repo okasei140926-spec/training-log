@@ -963,7 +963,7 @@ export default function GymApp() {
                     />
                 )}
 
-                {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} onDeleteDate={deleteAllHistoryForDate} unit={unit} onLogForDate={handleCalendarDayOpen} />)}
+                {screen === "history" && (<HistoryScreen history={history} muscleEx={muscleEx} onEditHistory={handleEditHistory} onDeleteHistory={handleDeleteHistory} onDeleteDate={deleteAllHistoryForDate} unit={unit} onLogForDate={handleCalendarDayOpen} user={user} />)}
 
                 {screen === "ai" && (
                     <AIScreen

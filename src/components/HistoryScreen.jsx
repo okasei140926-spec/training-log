@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { supabase } from "../utils/supabase";
 import { SUGGESTIONS } from "../constants/suggestions";
 import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
+import ManualBestModal from "./modals/ManualBestModal";
 import HistoryExerciseItem from "./history/HistoryExerciseItem";
 
 const EX_TO_LABEL = {};
@@ -40,9 +42,12 @@ const resolveLabel = (exName, muscleEx = {}) => {
     return customMatch ? customMatch[0] : null;
 };
 
-export default function HistoryScreen({ history, muscleEx, onEditHistory, onDeleteHistory, onDeleteDate, unit = "kg", onLogForDate }) {
+export default function HistoryScreen({ history, muscleEx, onEditHistory, onDeleteHistory, onDeleteDate, unit = "kg", onLogForDate, user }) {
     const [editTarget, setEditTarget] = useState(null);
     const [graphTarget, setGraphTarget] = useState(null);
+    const [showManualBestModal, setShowManualBestModal] = useState(false);
+    const [manualBests, setManualBests] = useState([]);
+    const [manualBestsLoading, setManualBestsLoading] = useState(false);
 
 
     const today = new Date();
@@ -61,6 +66,47 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
             document.body.style.overflow = '';
         };
     }, [selectedDate]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const loadManualBests = async () => {
+            if (!user?.id) {
+                if (isActive) {
+                    setManualBests([]);
+                    setManualBestsLoading(false);
+                }
+                return;
+            }
+
+            setManualBestsLoading(true);
+            const { data, error } = await supabase
+                .from("manual_bests")
+                .select("id, exercise_name, weight, reps, best_date, created_at")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                console.error(error);
+                if (isActive) {
+                    setManualBests([]);
+                    setManualBestsLoading(false);
+                }
+                return;
+            }
+
+            if (isActive) {
+                setManualBests(data || []);
+                setManualBestsLoading(false);
+            }
+        };
+
+        loadManualBests();
+
+        return () => {
+            isActive = false;
+        };
+    }, [user]);
 
 
     const startOfWeek = new Date(today);
@@ -249,6 +295,114 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                 </div>
             </div>
 
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                    移行用に、過去の自己ベストだけ先に登録できます
+                </div>
+                <button
+                    onClick={() => setShowManualBestModal(true)}
+                    disabled={!user}
+                    style={{
+                        padding: "8px 12px",
+                        borderRadius: 12,
+                        background: "var(--card2)",
+                        border: "1px solid var(--border2)",
+                        color: "var(--text)",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        opacity: user ? 1 : 0.6,
+                    }}
+                >
+                    過去ベスト登録
+                </button>
+            </div>
+
+            <div
+                style={{
+                    background: "var(--card)",
+                    borderRadius: 16,
+                    padding: "14px 16px",
+                    border: "1px solid var(--border)",
+                    marginBottom: 14,
+                }}
+            >
+                <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
+                    登録済みの過去ベスト
+                </div>
+
+                {!user ? (
+                    <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                        ログインすると過去ベストを保存できます
+                    </div>
+                ) : manualBestsLoading ? (
+                    <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                        読み込み中...
+                    </div>
+                ) : manualBests.length === 0 ? (
+                    <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                        まだ登録された過去ベストはありません
+                    </div>
+                ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {manualBests.map((best) => (
+                            <div
+                                key={best.id}
+                                style={{
+                                    background: "var(--card2)",
+                                    borderRadius: 12,
+                                    padding: "10px 12px",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    gap: 12,
+                                }}
+                            >
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+                                        {best.exercise_name}
+                                    </div>
+                                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                                        {best.weight}kg × {best.reps}rep
+                                        {best.best_date ? ` ・ ${best.best_date.replace(/-/g, "/")}` : ""}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
+                                        if (!confirmed) return;
+
+                                        const { error } = await supabase
+                                            .from("manual_bests")
+                                            .delete()
+                                            .eq("id", best.id)
+                                            .eq("user_id", user.id);
+
+                                        if (error) {
+                                            console.error(error);
+                                            return;
+                                        }
+
+                                        setManualBests((prev) => prev.filter((item) => item.id !== best.id));
+                                    }}
+                                    style={{
+                                        padding: "6px 10px",
+                                        borderRadius: 10,
+                                        background: "transparent",
+                                        border: "1px solid var(--border2)",
+                                        color: "var(--text3)",
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    削除
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* カレンダー（←ここ外に出すのが超重要） */}
             <div style={{
                 background: "var(--card)",
@@ -297,6 +451,30 @@ export default function HistoryScreen({ history, muscleEx, onEditHistory, onDele
                     onClose={() => setGraphTarget(null)}
                 />
             )}
+
+            <ManualBestModal
+                isOpen={showManualBestModal}
+                onClose={() => setShowManualBestModal(false)}
+                onSave={async (payload) => {
+                    if (!user?.id) return;
+
+                    const { data, error } = await supabase
+                        .from("manual_bests")
+                        .insert({
+                            user_id: user.id,
+                            exercise_name: payload.exercise_name,
+                            weight: payload.weight,
+                            reps: payload.reps,
+                            best_date: payload.best_date,
+                        })
+                        .select("id, exercise_name, weight, reps, best_date, created_at")
+                        .single();
+
+                    if (error) throw error;
+
+                    setManualBests((prev) => [data, ...prev]);
+                }}
+            />
 
             {activeLabel && detailMap[activeLabel] && (
                 <div
