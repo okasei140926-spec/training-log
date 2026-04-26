@@ -7,7 +7,7 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
     const [weight, setWeight] = useState("");
     const [reps, setReps] = useState("");
     const [bestDate, setBestDate] = useState("");
-    const [bodyPart, setBodyPart] = useState("その他");
+    const [bodyPart, setBodyPart] = useState("");
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
 
@@ -17,7 +17,7 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
         setWeight("");
         setReps("");
         setBestDate("");
-        setBodyPart("その他");
+        setBodyPart("");
         setError("");
         setSaving(false);
     }, [isOpen]);
@@ -41,6 +41,10 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
             setError("回数を正しく入力してください");
             return;
         }
+        if (!bodyPart) {
+            setError("部位を選択してください");
+            return;
+        }
 
         setSaving(true);
         setError("");
@@ -51,7 +55,7 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
                 weight: weightNum,
                 reps: repsNum,
                 best_date: bestDate || null,
-                body_part: bodyPart || "その他",
+                body_part: bodyPart,
             });
             onClose();
         } catch (saveError) {
@@ -151,6 +155,32 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
                             }}
                         />
                     </div>
+                    <select
+                        value={bodyPart}
+                        onChange={(e) => setBodyPart(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "12px 14px",
+                            borderRadius: 12,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card2)",
+                            color: "var(--text)",
+                            fontSize: 14,
+                            boxSizing: "border-box",
+                        }}
+                    >
+                        <option value="" disabled>
+                            部位を選択
+                        </option>
+                        {BODY_PART_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                                {option}
+                            </option>
+                        ))}
+                    </select>
+                    <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2, marginBottom: -2 }}>
+                        日付（任意）
+                    </div>
                     <input
                         value={bestDate}
                         onChange={(e) => setBestDate(e.target.value)}
@@ -166,26 +196,6 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
                             boxSizing: "border-box",
                         }}
                     />
-                    <select
-                        value={bodyPart}
-                        onChange={(e) => setBodyPart(e.target.value)}
-                        style={{
-                            width: "100%",
-                            padding: "12px 14px",
-                            borderRadius: 12,
-                            border: "1px solid var(--border2)",
-                            background: "var(--card2)",
-                            color: "var(--text)",
-                            fontSize: 14,
-                            boxSizing: "border-box",
-                        }}
-                    >
-                        {BODY_PART_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                                {option}
-                            </option>
-                        ))}
-                    </select>
                 </div>
 
                 {error && (
