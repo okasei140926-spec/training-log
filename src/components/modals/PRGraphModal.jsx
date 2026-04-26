@@ -7,7 +7,7 @@ export default function PRGraphModal({ exName, history, unit = "kg", onClose }) 
   const toU = (kg) => unit === "lbs" ? kg * KG_TO_LBS : kg;
   const vals = recs.map(r => ({
     date: r.date,
-    rm: Math.round(toU(calc1RM(r.sets) || Number(r.weight) * (1 + Number(r.reps) / 30))),
+    rm: Math.round(toU(calc1RM(Array.isArray(r.sets) && r.sets.length ? r.sets : [{ weight: r.weight, reps: r.reps }]))),
     topSet: r.sets?.reduce((best, s) =>
       Number(s.weight) > Number(best?.weight || 0) ? s : best, r.sets[0]),
   }));

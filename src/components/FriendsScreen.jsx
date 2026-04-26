@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
+import { calc1RM } from "../utils/helpers";
 import FriendDetailModal from "./modals/FriendDetailModal";
 import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
 import Big3RankingCard from "./friends/Big3RankingCard";
@@ -91,9 +92,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
 
         if (!validSets.length) return 0;
 
-        return Math.max(...validSets.map((set) => (
-            Number(set.weight) * (1 + Number(set.reps) / 30)
-        )));
+        return calc1RM(validSets);
     }, []);
 
     const getRecordSets = useCallback((record) => {

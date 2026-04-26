@@ -70,7 +70,7 @@ export default function LogExerciseHistoryModal({
         return;
       }
 
-      const score = Number(set.weight) * (1 + Number(set.reps) / 30);
+      const score = calc1RM([set]);
       if (score > bestSetScore) {
         bestSet = set;
         bestSetScore = score;

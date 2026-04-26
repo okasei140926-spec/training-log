@@ -82,7 +82,7 @@ const buildHistoryBestMap = (history = {}) => {
       if (!validSets.length || rm <= 0) return;
 
       const bestSet = validSets.reduce((best, set) => {
-        const current = Number(set.weight) * (1 + Number(set.reps) / 30);
+        const current = calc1RM([set]);
         if (!best || current > best.score) {
           return { weight: Number(set.weight), reps: Number(set.reps), score: current };
         }
@@ -221,7 +221,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
       .sort((a, b) => a.date.localeCompare(b.date))
       .map(r => ({
         date: r.date.slice(5),
-        weight: Math.round(Number(r.weight) * (1 + Number(r.reps) / 30)),
+        weight: Math.round(calc1RM(Array.isArray(r.sets) && r.sets.length ? r.sets : [{ weight: r.weight, reps: r.reps }])),
       }));
   };
 

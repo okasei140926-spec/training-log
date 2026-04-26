@@ -193,7 +193,7 @@ export default function LogScreen({
             let prSetNumber = null;
             if (isExercisePR && comparableSets.length > 0) {
                 const topSet = comparableSets.reduce((best, set) => {
-                    const currentScore = Number(set.weight) * (1 + Number(set.reps) / 30);
+                    const currentScore = calc1RM([set]);
                     if (!best) return { setNumber: set.setNumber, score: currentScore };
                     return currentScore >= best.score ? { setNumber: set.setNumber, score: currentScore } : best;
                 }, null);
@@ -537,7 +537,7 @@ export default function LogScreen({
                         const prTopSet = pr?.sets?.reduce((best, s) => {
                             if (s.weight === "BW" || !s.weight || !s.reps) return best;
                             if (!best) return s;
-                            return Number(s.weight) * (1 + Number(s.reps) / 30) >= Number(best.weight) * (1 + Number(best.reps) / 30) ? s : best;
+                            return calc1RM([s]) >= calc1RM([best]) ? s : best;
                         }, null);
 
                         if (i !== activeExIdx) {
