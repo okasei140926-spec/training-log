@@ -4,6 +4,11 @@ import { S } from "../utils/styles";
 import FriendDetailModal from "./modals/FriendDetailModal";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
+const BIG3_EXERCISES = [
+    { key: "bench", match: "ベンチプレス", shortLabel: "ベンチ" },
+    { key: "squat", match: "スクワット", shortLabel: "スクワット" },
+    { key: "deadlift", match: "デッドリフト", shortLabel: "デッド" },
+];
 
 export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLogout }) {
     const [selectedFriend, setSelectedFriend] = useState(null);
@@ -70,6 +75,59 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             Number(set.weight) * (1 + Number(set.reps) / 30)
         )));
     }, []);
+
+    const getRecordSets = useCallback((record) => {
+        if (!record) return [];
+        return Array.isArray(record.sets) && record.sets.length > 0
+            ? record.sets
+            : [{ weight: record.weight, reps: record.reps }];
+    }, []);
+
+    const matchBig3Exercise = useCallback((name) => {
+        const normalized = String(name || "").replace(/[\s　]+/g, "");
+        const matched = BIG3_EXERCISES.find((exercise) => normalized.includes(exercise.match));
+        return matched?.key || null;
+    }, []);
+
+    const computeBig3FromHistory = useCallback((historyData) => {
+        const bests = { bench: 0, squat: 0, deadlift: 0 };
+
+        Object.entries(historyData || {}).forEach(([name, records]) => {
+            const key = matchBig3Exercise(name);
+            if (!key) return;
+
+            (records || []).forEach((record) => {
+                const best = Math.round(safeCalc1RM(getRecordSets(record)));
+                if (best > bests[key]) bests[key] = best;
+            });
+        });
+
+        return {
+            ...bests,
+            total: bests.bench + bests.squat + bests.deadlift,
+        };
+    }, [getRecordSets, matchBig3Exercise, safeCalc1RM]);
+
+    const computeBig3FromWorkoutRows = useCallback((rows) => {
+        const bests = { bench: 0, squat: 0, deadlift: 0 };
+
+        (rows || []).forEach((row) => {
+            Object.entries(row?.data || {}).forEach(([name, records]) => {
+                const key = matchBig3Exercise(name);
+                if (!key) return;
+
+                (records || []).forEach((record) => {
+                    const best = Math.round(safeCalc1RM(getRecordSets(record)));
+                    if (best > bests[key]) bests[key] = best;
+                });
+            });
+        });
+
+        return {
+            ...bests,
+            total: bests.bench + bests.squat + bests.deadlift,
+        };
+    }, [getRecordSets, matchBig3Exercise, safeCalc1RM]);
 
     const fetchTodayActive = useCallback(async (ids) => {
         if (!user || !ids.length) {
@@ -300,6 +358,19 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             days: countMonthlyWorkoutDays(friend.workoutRows),
         })),
     ].sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, "ja"));
+    const myBig3 = computeBig3FromHistory(history);
+    const big3Ranking = [
+        {
+            name: myUsername || "あなた",
+            isMe: true,
+            ...myBig3,
+        },
+        ...friends.map((friend) => ({
+            name: friend.username,
+            isMe: false,
+            ...computeBig3FromWorkoutRows(friend.workoutRows),
+        })),
+    ].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ja"));
     const sortedFriends = [...friends]
         .map((friend, index) => ({ friend, index }))
         .sort((a, b) => {
@@ -402,6 +473,42 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                             </div>
                             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
                                 {entry.days}日
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
+                    BIG3合計ランキング
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {big3Ranking.map((entry, index) => (
+                        <div
+                            key={`big3-${entry.isMe ? "me" : entry.name}-${index}`}
+                            style={{
+                                padding: "12px",
+                                borderRadius: 12,
+                                background: entry.isMe ? "var(--card2)" : "transparent",
+                                border: entry.isMe ? "1px solid var(--border)" : "1px solid transparent",
+                            }}
+                        >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                    <div style={{ width: 22, fontSize: 12, fontWeight: 800, color: index === 0 ? "#FFD700" : "var(--text3)" }}>
+                                        {index + 1}位
+                                    </div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {entry.isMe ? "あなた" : entry.name}
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
+                                    {entry.total}kg
+                                </div>
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>
+                                ベンチ {entry.bench} / スクワット {entry.squat} / デッド {entry.deadlift}
                             </div>
                         </div>
                     ))}
