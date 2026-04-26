@@ -7,6 +7,7 @@ import PhotoCropModal from "./modals/PhotoCropModal";
 import WorkoutShareModal from "./modals/WorkoutShareModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
+import WorkoutPhotoCard from "./log/WorkoutPhotoCard";
 
 
 import {
@@ -433,124 +434,28 @@ export default function LogScreen({
                 合計 {formattedVolumeKg}kg
             </div>
 
-            <div style={{ background: "var(--card)", borderRadius: 16, padding: "14px 16px", marginBottom: 14, border: "1px solid var(--border)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                    <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>体写真</div>
-                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                            {logDate} の記録に紐づく自分専用写真
-                        </div>
-                    </div>
-
-                    <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/*"
-                        style={{ display: "none" }}
-                        onChange={handlePhotoChange}
-                        disabled={!user || photoUploading || photoLimitReached || !!pendingPhotoFile}
-                    />
-
-                    {user ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <button
-                                onClick={() => setShowSharePreview(true)}
-                                disabled={photoLoading || photoUploading || !!pendingPhotoFile}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: 12,
-                                    background: accentColor,
-                                    border: "none",
-                                    color: accentText,
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    opacity: photoLoading || photoUploading || pendingPhotoFile ? 0.6 : 1,
-                                }}
-                            >
-                                投稿プレビュー
-                            </button>
-                            <button
-                                onClick={handlePhotoPick}
-                                disabled={photoUploading || !!photoDeletingId || photoLimitReached || !!pendingPhotoFile}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: 12,
-                                    background: "var(--card2)",
-                                    border: "1px solid var(--border2)",
-                                    color: "var(--text)",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    opacity: photoUploading || photoDeletingId || photoLimitReached || pendingPhotoFile ? 0.6 : 1,
-                                }}
-                            >
-                                {photoUploading ? "保存中..." : "＋ 体写真を追加"}
-                            </button>
-                        </div>
-                    ) : (
-                        <div style={{ fontSize: 11, color: "var(--text4)", textAlign: "right" }}>
-                            ログインすると保存できます
-                        </div>
-                    )}
-                </div>
-
-                <div style={{ fontSize: 11, color: photoLimitReached ? "#ef4444" : "var(--text3)", marginBottom: 10 }}>
-                    {photoCount}/5枚 {photoLimitReached ? "・最大5枚まで" : ""}
-                </div>
-
-                {!latestPhotoUrl && !photoLoading && (
-                    <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10 }}>
-                        写真がなくてもワークアウト要約をプレビューできます
-                    </div>
-                )}
-
-                {photoLoading ? (
-                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
-                        写真を読み込み中...
-                    </div>
-                ) : photoRows.length > 0 ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                        {photoRows.map((row, idx) => (
-                            <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
-                                {photoUrls[row.id] ? (
-                                    <img
-                                        src={photoUrls[row.id]}
-                                        alt={`${logDate} progress ${idx + 1}`}
-                                        onClick={() => setViewerPhoto({ id: row.id, url: photoUrls[row.id], title: `${logDate} の体写真 ${idx + 1}` })}
-                                        style={{ width: "100%", display: "block", borderRadius: 12, objectFit: "cover", aspectRatio: "1 / 1", cursor: "zoom-in" }}
-                                    />
-                                ) : (
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12, aspectRatio: "1 / 1", color: "var(--text3)", fontSize: 12 }}>
-                                        読み込み中...
-                                    </div>
-                                )}
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
-                                    <div style={{ fontSize: 11, color: "var(--text3)" }}>{idx + 1}枚目</div>
-                                    <button
-                                        onClick={() => handlePhotoDelete(row)}
-                                        disabled={photoDeletingId === row.id || photoUploading}
-                                        style={{
-                                            padding: "6px 10px",
-                                            borderRadius: 10,
-                                            background: "transparent",
-                                            border: "1px solid var(--border2)",
-                                            color: "var(--text3)",
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            opacity: photoDeletingId === row.id || photoUploading ? 0.6 : 1,
-                                        }}
-                                    >
-                                        {photoDeletingId === row.id ? "削除中..." : "削除"}
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
-                        {user ? "まだ写真はありません" : "写真はログイン後に追加できます"}
-                    </div>
-                )}
-            </div>
+            <WorkoutPhotoCard
+                user={user}
+                logDate={logDate}
+                photoRows={photoRows}
+                photoUrls={photoUrls}
+                photoLoading={photoLoading}
+                photoUploading={photoUploading}
+                photoDeletingId={photoDeletingId}
+                photoLimitReached={photoLimitReached}
+                photoCount={photoCount}
+                latestPhotoUrl={latestPhotoUrl}
+                canOpenSharePreview={!photoLoading && !photoUploading && !pendingPhotoFile}
+                accentColor={accentColor}
+                accentText={accentText}
+                pendingPhotoFile={pendingPhotoFile}
+                fileInputRef={photoInputRef}
+                onFileChange={handlePhotoChange}
+                onPickPhoto={handlePhotoPick}
+                onDeletePhoto={handlePhotoDelete}
+                onOpenViewer={(row, idx) => setViewerPhoto({ id: row.id, url: photoUrls[row.id], title: `${logDate} の体写真 ${idx + 1}` })}
+                onOpenSharePreview={() => setShowSharePreview(true)}
+            />
 
             {/* Empty State */}
             {!hasExercises && (
