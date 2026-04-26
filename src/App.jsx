@@ -17,6 +17,8 @@ import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
 import AIScreen from "./components/AIScreen";
 import PhotoScreen from "./components/PhotoScreen";
+import AppHeader from "./components/layout/AppHeader";
+import BottomNav from "./components/layout/BottomNav";
 
 import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
@@ -805,43 +807,40 @@ export default function GymApp() {
     }
 
     // ─── Main render ──────────────────────────────────
+    const headerTitle =
+        screen === "log" ? "Log"
+            : screen === "photos" ? "写真"
+                : screen === "friends" ? "Friends"
+                    : screen === "ai" ? "AI Coach"
+                        : "記録";
+
+    const bottomTabs = [
+        { id: "history", icon: "📊", label: "記録" },
+        { id: "photos", icon: "📷", label: "写真" },
+        { id: "analytics", icon: "📈", label: "分析" },
+        { id: "friends", icon: "👥", label: "Friends" },
+        { id: "ai", icon: "🤖", label: "AI" },
+    ];
+
     return (
         <>
             <div className={isDark ? "" : "theme-light"} style={S.root}>
                 <style>{css}</style>
 
-                <div style={S.header}>
-                    <div>
-                        <div style={S.appLabel}>IRON LOG</div>
-                        <div style={S.headerTitle}>
-                            {screen === "log" ? "Log"
-                                : screen === "photos" ? "写真"
-                                : screen === "friends" ? "Friends"
-                                    : screen === "ai" ? "AI Coach"
-                                        : "記録"}
-                        </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {screen === "log" && (
-                            <button onClick={() => {
-                                if (timerLeft !== null) {
-                                    stopTimer();
-                                } else {
-                                    setShowTimerMenu(p => !p);
-                                }
-                            }}
-                                style={{
-                                    padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, border: "none",
-                                    background: timerLeft !== null ? (timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)") : "var(--card2)",
-                                    color: timerLeft !== null ? (timerLeft === 0 ? "#000" : "var(--bg)") : "var(--text2)"
-                                }}>
-                                {timerLeft !== null ? (timerLeft === 0 ? "GO!💪" : `⏱ ${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`) : "⏱"}
-                            </button>
-                        )}
-                        <button onClick={() => setIsDark(p => !p)} style={S.pillBtn}>{isDark ? "☀️" : "🌙"}</button>
-                    </div>
-
-                </div>
+                <AppHeader
+                    title={headerTitle}
+                    showLogTimer={screen === "log"}
+                    timerLeft={timerLeft}
+                    onTimerClick={() => {
+                        if (timerLeft !== null) {
+                            stopTimer();
+                        } else {
+                            setShowTimerMenu(p => !p);
+                        }
+                    }}
+                    isDark={isDark}
+                    onToggleTheme={() => setIsDark(p => !p)}
+                />
 
 
                 {showTimerMenu && screen === "log" && (
@@ -977,21 +976,7 @@ export default function GymApp() {
                     />
                 )}
 
-                <div style={S.bottomNav}>
-                    {[
-                        { id: "history", icon: "📊", label: "記録" },
-                        { id: "photos", icon: "📷", label: "写真" },
-                        { id: "analytics", icon: "📈", label: "分析" },
-                        { id: "friends", icon: "👥", label: "Friends" },
-                        { id: "ai", icon: "🤖", label: "AI" },
-                    ].map(tab => (
-                        <button key={tab.id} onClick={() => setScreen(tab.id)}
-                            style={{ flex: 1, background: "none", color: screen === tab.id ? "var(--text)" : "var(--text3)", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "4px 0" }}>
-                            <div style={{ fontSize: 20 }}>{tab.icon}</div>
-                            <div style={{ fontSize: 9, fontWeight: screen === tab.id ? 700 : 400 }}>{tab.label}</div>
-                        </button>
-                    ))}
-                </div>
+                <BottomNav tabs={bottomTabs} activeTab={screen} onSelectTab={setScreen} />
 
                 {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
                 <SummaryModal
