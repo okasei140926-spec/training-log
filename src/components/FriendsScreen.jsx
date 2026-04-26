@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import FriendDetailModal from "./modals/FriendDetailModal";
+import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
+import Big3RankingCard from "./friends/Big3RankingCard";
+import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 const BIG3_EXERCISES = [
@@ -556,25 +559,7 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 </div>
             )}
 
-            {visibleBig3OvertakeEvents.map((event) => (
-                <div
-                    key={event.seenKey}
-                    style={{
-                        background: "#f9731614",
-                        border: "1px solid #f9731644",
-                        borderRadius: 12,
-                        padding: "12px 14px",
-                        marginBottom: 12,
-                    }}
-                >
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
-                        {event.friendName}があなたの{event.exerciseLabel}記録を超えました！
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                        {event.friendName} {event.friendValue}kg / あなた {event.myValue}kg
-                    </div>
-                </div>
-            ))}
+            <Big3OvertakeAlerts events={visibleBig3OvertakeEvents} />
 
             {receivedKudos.length > 0 && (
                 <div style={{ background: "#4ade8022", border: "1px solid #4ade8044", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)" }}>
@@ -582,75 +567,9 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                 </div>
             )}
 
-            <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
-                    今月のワークアウト数
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {monthlyWorkoutRanking.map((entry, index) => (
-                        <div
-                            key={`${entry.isMe ? "me" : entry.name}-${index}`}
-                            style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                padding: "10px 12px",
-                                borderRadius: 12,
-                                background: entry.isMe ? "var(--card2)" : "transparent",
-                                border: entry.isMe ? "1px solid var(--border)" : "1px solid transparent",
-                            }}
-                        >
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                <div style={{ width: 22, fontSize: 12, fontWeight: 800, color: index === 0 ? "#FFD700" : "var(--text3)" }}>
-                                    {index + 1}位
-                                </div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {entry.name}
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
-                                {entry.days}日
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <MonthlyWorkoutRankingCard ranking={monthlyWorkoutRanking} />
 
-            <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>
-                    BIG3合計ランキング
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {big3Ranking.map((entry, index) => (
-                        <div
-                            key={`big3-${entry.isMe ? "me" : entry.name}-${index}`}
-                            style={{
-                                padding: "12px",
-                                borderRadius: 12,
-                                background: entry.isMe ? "var(--card2)" : "transparent",
-                                border: entry.isMe ? "1px solid var(--border)" : "1px solid transparent",
-                            }}
-                        >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                    <div style={{ width: 22, fontSize: 12, fontWeight: 800, color: index === 0 ? "#FFD700" : "var(--text3)" }}>
-                                        {index + 1}位
-                                    </div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                        {entry.name}
-                                    </div>
-                                </div>
-                                <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
-                                    {entry.total}kg
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>
-                                ベンチ {entry.bench} / スクワット {entry.squat} / デッド {entry.deadlift}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <Big3RankingCard ranking={big3Ranking} />
 
 
             {/* 自分のカード */}
