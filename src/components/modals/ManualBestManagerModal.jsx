@@ -1,4 +1,4 @@
-const BODY_PART_LABELS = ["胸", "背中", "脚", "肩", "二頭", "三頭", "腹", "その他"];
+const BODY_PART_LABELS = ["胸", "背中", "脚", "尻", "肩", "二頭", "三頭", "腹", "その他"];
 
 const resolveBodyPart = (value) => {
     return BODY_PART_LABELS.includes(value) ? value : "その他";

@@ -6,6 +6,9 @@ const matchesActiveTab = (bodyPart, activeTab) => {
     if (bodyPart === "脚") {
         return activeTab === "四頭" || activeTab === "ハムストリングス";
     }
+    if (bodyPart === "尻") {
+        return activeTab === "尻";
+    }
     if (bodyPart === "腹") {
         return activeTab === "腹筋";
     }
