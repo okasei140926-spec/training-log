@@ -17,6 +17,11 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 const normalizeName = (name) =>
     String(name || "").replace(/\s+/g, "").trim();
 
+const BODY_PART_LABELS = ["胸", "背中", "脚", "肩", "二頭", "三頭", "腹", "その他"];
+const resolveBodyPart = (value) => {
+    return BODY_PART_LABELS.includes(value) ? value : "その他";
+};
+
 const resolveLabel = (exName, muscleEx = {}) => {
     const normalized = normalizeName(exName);
 
@@ -176,6 +181,10 @@ export default function HistoryScreen({
         if (!date) return "—";
         return date.replace(/-/g, "/");
     };
+    const groupedManualBests = BODY_PART_LABELS.map((bodyPart) => ({
+        bodyPart,
+        items: manualBests.filter((best) => resolveBodyPart(best.body_part) === bodyPart),
+    })).filter((group) => group.items.length > 0);
 
     return (
         <div className="fade-in" style={{ padding: "20px" }}>
@@ -308,59 +317,68 @@ export default function HistoryScreen({
                     </div>
                 ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {manualBests.map((best) => (
-                            <div
-                                key={best.id}
-                                style={{
-                                    background: "var(--card2)",
-                                    borderRadius: 12,
-                                    padding: "10px 12px",
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    gap: 12,
-                                }}
-                            >
-                                <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
-                                        {best.exercise_name}
-                                    </div>
-                                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                                        {best.weight}kg × {best.reps}rep
-                                        {best.best_date ? ` ・ ${best.best_date.replace(/-/g, "/")}` : ""}
-                                    </div>
+                        {groupedManualBests.map((group) => (
+                            <div key={group.bodyPart}>
+                                <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text3)", marginBottom: 8 }}>
+                                    {group.bodyPart}
                                 </div>
-                                <button
-                                    onClick={async () => {
-                                        const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
-                                        if (!confirmed) return;
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    {group.items.map((best) => (
+                                        <div
+                                            key={best.id}
+                                            style={{
+                                                background: "var(--card2)",
+                                                borderRadius: 12,
+                                                padding: "10px 12px",
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                gap: 12,
+                                            }}
+                                        >
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+                                                    {best.exercise_name}
+                                                </div>
+                                                <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                                                    {best.weight}kg × {best.reps}rep
+                                                    {best.best_date ? ` ・ ${best.best_date.replace(/-/g, "/")}` : ""}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
+                                                    if (!confirmed) return;
 
-                                        const { error } = await supabase
-                                            .from("manual_bests")
-                                            .delete()
-                                            .eq("id", best.id)
-                                            .eq("user_id", user.id);
+                                                    const { error } = await supabase
+                                                        .from("manual_bests")
+                                                        .delete()
+                                                        .eq("id", best.id)
+                                                        .eq("user_id", user.id);
 
-                                        if (error) {
-                                            console.error(error);
-                                            return;
-                                        }
+                                                    if (error) {
+                                                        console.error(error);
+                                                        return;
+                                                    }
 
-                                        onDeleteManualBest?.(best.id);
-                                    }}
-                                    style={{
-                                        padding: "6px 10px",
-                                        borderRadius: 10,
-                                        background: "transparent",
-                                        border: "1px solid var(--border2)",
-                                        color: "var(--text3)",
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    削除
-                                </button>
+                                                    onDeleteManualBest?.(best.id);
+                                                }}
+                                                style={{
+                                                    padding: "6px 10px",
+                                                    borderRadius: 10,
+                                                    background: "transparent",
+                                                    border: "1px solid var(--border2)",
+                                                    color: "var(--text3)",
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                削除
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -430,8 +448,9 @@ export default function HistoryScreen({
                             weight: payload.weight,
                             reps: payload.reps,
                             best_date: payload.best_date,
+                            body_part: payload.body_part,
                         })
-                        .select("id, exercise_name, weight, reps, best_date, created_at")
+                        .select("id, exercise_name, weight, reps, best_date, body_part, created_at")
                         .single();
 
                     if (error) throw error;

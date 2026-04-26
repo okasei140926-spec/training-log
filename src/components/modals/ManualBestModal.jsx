@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 
+const BODY_PART_OPTIONS = ["胸", "背中", "脚", "肩", "二頭", "三頭", "腹", "その他"];
+
 export default function ManualBestModal({ isOpen, onClose, onSave }) {
     const [exerciseName, setExerciseName] = useState("");
     const [weight, setWeight] = useState("");
     const [reps, setReps] = useState("");
     const [bestDate, setBestDate] = useState("");
+    const [bodyPart, setBodyPart] = useState("その他");
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
 
@@ -14,6 +17,7 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
         setWeight("");
         setReps("");
         setBestDate("");
+        setBodyPart("その他");
         setError("");
         setSaving(false);
     }, [isOpen]);
@@ -47,6 +51,7 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
                 weight: weightNum,
                 reps: repsNum,
                 best_date: bestDate || null,
+                body_part: bodyPart || "その他",
             });
             onClose();
         } catch (saveError) {
@@ -161,6 +166,26 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
                             boxSizing: "border-box",
                         }}
                     />
+                    <select
+                        value={bodyPart}
+                        onChange={(e) => setBodyPart(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "12px 14px",
+                            borderRadius: 12,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card2)",
+                            color: "var(--text)",
+                            fontSize: 14,
+                            boxSizing: "border-box",
+                        }}
+                    >
+                        {BODY_PART_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                                {option}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
                 {error && (

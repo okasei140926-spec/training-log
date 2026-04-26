@@ -180,7 +180,7 @@ export default function GymApp() {
 
             const { data, error } = await supabase
                 .from("manual_bests")
-                .select("id, exercise_name, weight, reps, best_date, created_at")
+                .select("id, exercise_name, weight, reps, best_date, body_part, created_at")
                 .eq("user_id", user.id)
                 .order("created_at", { ascending: false });
 
