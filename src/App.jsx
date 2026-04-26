@@ -1012,6 +1012,11 @@ export default function GymApp() {
                         onAddManualBest={(best) => {
                             setManualBests((prev) => [best, ...prev]);
                         }}
+                        onUpdateManualBest={(updatedBest) => {
+                            setManualBests((prev) =>
+                                prev.map((item) => (item.id === updatedBest.id ? updatedBest : item))
+                            );
+                        }}
                         onDeleteManualBest={(id) => {
                             setManualBests((prev) => prev.filter((item) => item.id !== id));
                         }}

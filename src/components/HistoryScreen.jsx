@@ -54,12 +54,14 @@ export default function HistoryScreen({
     user,
     manualBests = [],
     onAddManualBest,
+    onUpdateManualBest,
     onDeleteManualBest,
 }) {
     const [editTarget, setEditTarget] = useState(null);
     const [graphTarget, setGraphTarget] = useState(null);
     const [showManualBestModal, setShowManualBestModal] = useState(false);
     const [showManualBestManager, setShowManualBestManager] = useState(false);
+    const [editingManualBest, setEditingManualBest] = useState(null);
 
 
     const today = new Date();
@@ -337,9 +339,35 @@ export default function HistoryScreen({
 
             <ManualBestModal
                 isOpen={showManualBestModal}
-                onClose={() => setShowManualBestModal(false)}
+                mode={editingManualBest ? "edit" : "create"}
+                initialValue={editingManualBest}
+                onClose={() => {
+                    setShowManualBestModal(false);
+                    setEditingManualBest(null);
+                }}
                 onSave={async (payload) => {
                     if (!user?.id) return;
+
+                    if (editingManualBest) {
+                        const { data, error } = await supabase
+                            .from("manual_bests")
+                            .update({
+                                exercise_name: payload.exercise_name,
+                                weight: payload.weight,
+                                reps: payload.reps,
+                                best_date: payload.best_date,
+                                body_part: payload.body_part,
+                            })
+                            .eq("id", editingManualBest.id)
+                            .eq("user_id", user.id)
+                            .select("id, exercise_name, weight, reps, best_date, body_part, created_at")
+                            .single();
+
+                        if (error) throw error;
+
+                        onUpdateManualBest?.(data);
+                        return;
+                    }
 
                     const { data, error } = await supabase
                         .from("manual_bests")
@@ -365,7 +393,14 @@ export default function HistoryScreen({
                 user={user}
                 manualBests={manualBests}
                 onClose={() => setShowManualBestManager(false)}
-                onOpenRegister={() => setShowManualBestModal(true)}
+                onOpenRegister={() => {
+                    setEditingManualBest(null);
+                    setShowManualBestModal(true);
+                }}
+                onEditBest={(best) => {
+                    setEditingManualBest(best);
+                    setShowManualBestModal(true);
+                }}
                 onDeleteBest={async (best) => {
                     const confirmed = window.confirm(`${best.exercise_name} の過去ベストを削除しますか？`);
                     if (!confirmed) return;

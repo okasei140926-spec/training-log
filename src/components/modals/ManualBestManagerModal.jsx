@@ -10,6 +10,7 @@ export default function ManualBestManagerModal({
     manualBests = [],
     onClose,
     onOpenRegister,
+    onEditBest,
     onDeleteBest,
 }) {
     if (!isOpen) return null;
@@ -130,21 +131,36 @@ export default function ManualBestManagerModal({
                                                     {best.best_date ? ` ・ ${best.best_date.replace(/-/g, "/")}` : ""}
                                                 </div>
                                             </div>
-                                            <button
-                                                onClick={() => onDeleteBest?.(best)}
-                                                style={{
-                                                    padding: "6px 10px",
-                                                    borderRadius: 10,
-                                                    background: "transparent",
-                                                    border: "1px solid var(--border2)",
-                                                    color: "var(--text3)",
-                                                    fontSize: 11,
-                                                    fontWeight: 700,
-                                                    flexShrink: 0,
-                                                }}
-                                            >
-                                                削除
-                                            </button>
+                                            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                                                <button
+                                                    onClick={() => onEditBest?.(best)}
+                                                    style={{
+                                                        padding: "6px 10px",
+                                                        borderRadius: 10,
+                                                        background: "transparent",
+                                                        border: "1px solid var(--border2)",
+                                                        color: "var(--text2)",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    編集
+                                                </button>
+                                                <button
+                                                    onClick={() => onDeleteBest?.(best)}
+                                                    style={{
+                                                        padding: "6px 10px",
+                                                        borderRadius: 10,
+                                                        background: "transparent",
+                                                        border: "1px solid var(--border2)",
+                                                        color: "var(--text3)",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    削除
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

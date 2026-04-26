@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 
 const BODY_PART_OPTIONS = ["胸", "背中", "脚", "肩", "二頭", "三頭", "腹", "その他"];
 
-export default function ManualBestModal({ isOpen, onClose, onSave }) {
+export default function ManualBestModal({
+    isOpen,
+    onClose,
+    onSave,
+    initialValue = null,
+    mode = "create",
+}) {
     const [exerciseName, setExerciseName] = useState("");
     const [weight, setWeight] = useState("");
     const [reps, setReps] = useState("");
@@ -13,14 +19,14 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
 
     useEffect(() => {
         if (!isOpen) return;
-        setExerciseName("");
-        setWeight("");
-        setReps("");
-        setBestDate("");
-        setBodyPart("");
+        setExerciseName(initialValue?.exercise_name || "");
+        setWeight(initialValue?.weight != null ? String(initialValue.weight) : "");
+        setReps(initialValue?.reps != null ? String(initialValue.reps) : "");
+        setBestDate(initialValue?.best_date || "");
+        setBodyPart(initialValue?.body_part || "");
         setError("");
         setSaving(false);
-    }, [isOpen]);
+    }, [isOpen, initialValue]);
 
     if (!isOpen) return null;
 
@@ -102,7 +108,7 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
                 />
 
                 <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 14, color: "var(--text)" }}>
-                    過去ベスト登録
+                    {mode === "edit" ? "過去ベスト編集" : "過去ベスト登録"}
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -235,7 +241,7 @@ export default function ManualBestModal({ isOpen, onClose, onSave }) {
                             opacity: saving ? 0.7 : 1,
                         }}
                     >
-                        {saving ? "保存中..." : "保存"}
+                        {saving ? (mode === "edit" ? "更新中..." : "保存中...") : (mode === "edit" ? "更新" : "保存")}
                     </button>
                 </div>
             </div>
