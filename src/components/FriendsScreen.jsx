@@ -24,8 +24,11 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const [kudos, setKudos] = useState({});
     const [receivedKudos, setReceivedKudos] = useState([]);
     const [myUsername, setMyUsername] = useState("");
+    const [seenBig3Overtakes, setSeenBig3Overtakes] = useState({});
+    const [visibleBig3OvertakeEvents, setVisibleBig3OvertakeEvents] = useState([]);
     const today = new Date().toISOString().split("T")[0];
     const currentMonthPrefix = today.slice(0, 7);
+    const big3SeenStorageKey = "friends_big3_overtake_seen_v1";
 
     const hasValidSet = useCallback((set) => {
         if (!set) return false;
@@ -297,17 +300,16 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
         fetchProfile();
     }, [user]);
 
+    useEffect(() => {
+        try {
+            const raw = window.localStorage.getItem(big3SeenStorageKey);
+            setSeenBig3Overtakes(raw ? JSON.parse(raw) : {});
+        } catch (error) {
+            console.error("failed to load big3 overtake seen map", error);
+            setSeenBig3Overtakes({});
+        }
+    }, []);
 
-    if (!user) {
-        return (
-            <div style={{ padding: 32, textAlign: "center" }}>
-                <p style={{ marginBottom: 24 }}>Friends機能を使うにはログインが必要です</p>
-                <button onClick={onLogin} style={{ padding: "12px 32px", borderRadius: 8, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 16 }}>
-                    ログイン / 新規登録
-                </button>
-            </div>
-        );
-    }
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - 7);
     const thresholdStr = thresholdDate.toISOString().split("T")[0];
@@ -361,16 +363,46 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
     const myBig3 = computeBig3FromHistory(history);
     const big3Ranking = [
         {
+            id: user?.id || "me",
             name: myUsername || "あなた",
             isMe: true,
             ...myBig3,
         },
         ...friends.map((friend) => ({
+            id: friend.id,
             name: friend.username,
             isMe: false,
             ...computeBig3FromWorkoutRows(friend.workoutRows),
         })),
     ].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ja"));
+    const myBig3ByExercise = {
+        bench: myBig3.bench || 0,
+        squat: myBig3.squat || 0,
+        deadlift: myBig3.deadlift || 0,
+    };
+    const big3OvertakeEvents = friends.flatMap((friend) => {
+        const friendBig3 = computeBig3FromWorkoutRows(friend.workoutRows);
+
+        return BIG3_EXERCISES.flatMap((exercise) => {
+            const myValue = myBig3ByExercise[exercise.key] || 0;
+            const friendValue = friendBig3[exercise.key] || 0;
+            if (!(friendValue > myValue && myValue > 0)) return [];
+
+            return [{
+                type: "big3_overtake",
+                friendId: friend.id,
+                friendName: friend.username,
+                exercise: exercise.key,
+                exerciseLabel: exercise.match,
+                friendValue,
+                myValue,
+                seenKey: `${friend.id}:${exercise.key}:${friendValue}:${myValue}`,
+            }];
+        });
+    });
+    const unseenBig3OvertakeEvents = big3OvertakeEvents
+        .filter((event) => !seenBig3Overtakes[event.seenKey])
+        .slice(0, 3);
     const sortedFriends = [...friends]
         .map((friend, index) => ({ friend, index }))
         .sort((a, b) => {
@@ -379,6 +411,48 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
             return a.index - b.index;
         })
         .map(({ friend }) => friend);
+
+    useEffect(() => {
+        if (!unseenBig3OvertakeEvents.length) return;
+        setVisibleBig3OvertakeEvents(unseenBig3OvertakeEvents);
+    }, [unseenBig3OvertakeEvents]);
+
+    useEffect(() => {
+        if (!visibleBig3OvertakeEvents.length) return;
+
+        setSeenBig3Overtakes((prev) => {
+            const next = { ...prev };
+            let changed = false;
+
+            visibleBig3OvertakeEvents.forEach((event) => {
+                if (!next[event.seenKey]) {
+                    next[event.seenKey] = true;
+                    changed = true;
+                }
+            });
+
+            if (!changed) return prev;
+
+            try {
+                window.localStorage.setItem(big3SeenStorageKey, JSON.stringify(next));
+            } catch (error) {
+                console.error("failed to persist big3 overtake seen map", error);
+            }
+
+            return next;
+        });
+    }, [big3SeenStorageKey, visibleBig3OvertakeEvents]);
+
+    if (!user) {
+        return (
+            <div style={{ padding: 32, textAlign: "center" }}>
+                <p style={{ marginBottom: 24 }}>Friends機能を使うにはログインが必要です</p>
+                <button onClick={onLogin} style={{ padding: "12px 32px", borderRadius: 8, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 16 }}>
+                    ログイン / 新規登録
+                </button>
+            </div>
+        );
+    }
 
 
     const renderDateAccordion = (id, date, exMap) => {
@@ -438,6 +512,26 @@ export default function FriendsScreen({ history, onCopyMenu, user, onLogin, onLo
                     {todayActiveLabel}が今日トレーニングを記録しています！
                 </div>
             )}
+
+            {visibleBig3OvertakeEvents.map((event) => (
+                <div
+                    key={event.seenKey}
+                    style={{
+                        background: "#f9731614",
+                        border: "1px solid #f9731644",
+                        borderRadius: 12,
+                        padding: "12px 14px",
+                        marginBottom: 12,
+                    }}
+                >
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+                        {event.friendName}があなたの{event.exerciseLabel}記録を超えました！
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                        {event.friendName} {event.friendValue}kg / あなた {event.myValue}kg
+                    </div>
+                </div>
+            ))}
 
             {receivedKudos.length > 0 && (
                 <div style={{ background: "#4ade8022", border: "1px solid #4ade8044", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)" }}>
