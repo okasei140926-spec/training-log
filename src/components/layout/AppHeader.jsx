@@ -19,13 +19,14 @@ export default function AppHeader({
                     <button
                         onClick={onTimerClick}
                         style={{
-                            padding: "4px 12px",
-                            borderRadius: 20,
+                            padding: "6px 12px",
+                            borderRadius: 999,
                             fontSize: 12,
                             fontWeight: 700,
-                            border: "none",
-                            background: timerLeft !== null ? (timerLeft === 0 ? "#4ade80" : timerLeft <= 10 ? "#FF4D4D" : "var(--text)") : "var(--card2)",
-                            color: timerLeft !== null ? (timerLeft === 0 ? "#000" : "var(--bg)") : "var(--text2)",
+                            border: timerLeft !== null ? "1px solid transparent" : "1px solid var(--border2)",
+                            background: timerLeft !== null ? (timerLeft === 0 ? "linear-gradient(135deg, var(--accent), #4ADE80)" : timerLeft <= 10 ? "#FF4D4D" : "linear-gradient(135deg, var(--accent2), #7DD3FC)") : "var(--card)",
+                            color: timerLeft !== null ? "#fff" : "var(--text2)",
+                            boxShadow: timerLeft !== null ? "var(--shadow-soft)" : "var(--shadow-card)",
                         }}
                     >
                         {timerLeft !== null ? (timerLeft === 0 ? "GO!💪" : `⏱ ${Math.floor(timerLeft / 60)}:${String(timerLeft % 60).padStart(2, "0")}`) : "⏱"}

@@ -21,7 +21,7 @@ export default function WorkoutPhotoCard({
     onOpenSharePreview,
 }) {
     return (
-        <div style={{ background: "var(--card)", borderRadius: 16, padding: "14px 16px", marginBottom: 14, border: "1px solid var(--border)" }}>
+        <div style={{ background: "var(--card)", borderRadius: 20, padding: "14px 16px", marginBottom: 14, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
                 <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>体写真</div>
@@ -46,13 +46,14 @@ export default function WorkoutPhotoCard({
                             disabled={!canOpenSharePreview}
                             style={{
                                 padding: "8px 12px",
-                                borderRadius: 12,
-                                background: accentColor,
-                                border: "none",
-                                color: accentText,
+                                borderRadius: 14,
+                                background: "linear-gradient(135deg, var(--accent2), #7DD3FC)",
+                                border: "1px solid transparent",
+                                color: "#fff",
                                 fontSize: 12,
                                 fontWeight: 700,
                                 opacity: canOpenSharePreview ? 1 : 0.6,
+                                boxShadow: "var(--shadow-soft)",
                             }}
                         >
                             投稿プレビュー
@@ -62,13 +63,14 @@ export default function WorkoutPhotoCard({
                             disabled={photoUploading || !!photoDeletingId || photoLimitReached || !!pendingPhotoFile}
                             style={{
                                 padding: "8px 12px",
-                                borderRadius: 12,
-                                background: "var(--card2)",
+                                borderRadius: 14,
+                                background: "var(--card)",
                                 border: "1px solid var(--border2)",
                                 color: "var(--text)",
                                 fontSize: 12,
                                 fontWeight: 700,
                                 opacity: photoUploading || photoDeletingId || photoLimitReached || pendingPhotoFile ? 0.6 : 1,
+                                boxShadow: "var(--shadow-card)",
                             }}
                         >
                             {photoUploading ? "保存中..." : "＋ 体写真を追加"}
@@ -92,13 +94,13 @@ export default function WorkoutPhotoCard({
             )}
 
             {photoLoading ? (
-                <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
+                <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center", border: "1px solid rgba(186, 230, 253, 0.6)" }}>
                     写真を読み込み中...
                 </div>
             ) : photoRows.length > 0 ? (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
                     {photoRows.map((row, idx) => (
-                        <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
+                        <div key={row.id} style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: 10, border: "1px solid rgba(186, 230, 253, 0.6)" }}>
                             {photoUrls[row.id] ? (
                                 <img
                                     src={photoUrls[row.id]}
@@ -118,13 +120,14 @@ export default function WorkoutPhotoCard({
                                     disabled={photoDeletingId === row.id || photoUploading}
                                     style={{
                                         padding: "6px 10px",
-                                        borderRadius: 10,
-                                        background: "transparent",
+                                        borderRadius: 12,
+                                        background: "var(--card)",
                                         border: "1px solid var(--border2)",
                                         color: "var(--text3)",
                                         fontSize: 11,
                                         fontWeight: 700,
                                         opacity: photoDeletingId === row.id || photoUploading ? 0.6 : 1,
+                                        boxShadow: "var(--shadow-card)",
                                     }}
                                 >
                                     {photoDeletingId === row.id ? "削除中..." : "削除"}
@@ -134,7 +137,7 @@ export default function WorkoutPhotoCard({
                     ))}
                 </div>
             ) : (
-                <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center" }}>
+                <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "24px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center", border: "1px solid rgba(186, 230, 253, 0.6)" }}>
                     {user ? "まだ写真はありません" : "写真はログイン後に追加できます"}
                 </div>
             )}

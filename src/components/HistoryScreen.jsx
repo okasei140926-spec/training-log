@@ -220,11 +220,12 @@ export default function HistoryScreen({
                                         display: "flex",
                                         alignItems: "center",
                                         gap: 8,
-                                        padding: "10px 14px",
+                                        padding: "11px 14px",
                                         borderRadius: 999,
                                         cursor: "pointer",
-                                        background: isActive ? "var(--text)" : "var(--card2)",
-                                        border: "1px solid var(--border)",
+                                        background: isActive ? "linear-gradient(135deg, var(--accent), #4ADE80)" : "var(--card)",
+                                        border: isActive ? "1px solid transparent" : "1px solid var(--border2)",
+                                        boxShadow: isActive ? "var(--shadow-soft)" : "var(--shadow-card)",
                                     }}
                                 >
                                     <span style={{
@@ -255,9 +256,10 @@ export default function HistoryScreen({
             <div
                 style={{
                     background: "var(--card)",
-                    borderRadius: 16,
+                    borderRadius: 20,
                     padding: "14px 16px",
-                    border: "1px solid var(--border)",
+                    border: "1px solid var(--border2)",
+                    boxShadow: "var(--shadow-card)",
                     marginBottom: 14,
                 }}
             >
@@ -265,7 +267,7 @@ export default function HistoryScreen({
                     これまでの記録
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 }}>
-                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "12px 14px" }}>
+                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "12px 14px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
                         <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
                             {totalTrainingDays}日
                         </div>
@@ -273,7 +275,7 @@ export default function HistoryScreen({
                             累計トレーニング日数
                         </div>
                     </div>
-                    <div style={{ background: "var(--card2)", borderRadius: 14, padding: "12px 14px" }}>
+                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "12px 14px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
                         <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
                             {formatStatDate(firstTrainingDate)}
                         </div>
@@ -292,14 +294,15 @@ export default function HistoryScreen({
                     onClick={() => setShowManualBestManager(true)}
                     disabled={!user}
                     style={{
-                        padding: "8px 12px",
-                        borderRadius: 12,
-                        background: "var(--card2)",
+                        padding: "9px 13px",
+                        borderRadius: 14,
+                        background: "linear-gradient(135deg, var(--accent2), #7DD3FC)",
                         border: "1px solid var(--border2)",
-                        color: "var(--text)",
+                        color: "#fff",
                         fontSize: 12,
                         fontWeight: 700,
                         opacity: user ? 1 : 0.6,
+                        boxShadow: "var(--shadow-soft)",
                     }}
                 >
                     過去ベストを登録・確認
@@ -309,9 +312,10 @@ export default function HistoryScreen({
             {/* カレンダー（←ここ外に出すのが超重要） */}
             <div style={{
                 background: "var(--card)",
-                borderRadius: 16,
+                borderRadius: 20,
                 padding: "16px",
-                border: "1px solid var(--border)"
+                border: "1px solid var(--border2)",
+                boxShadow: "var(--shadow-card)",
             }}>
                 <CalendarView
                     history={history}

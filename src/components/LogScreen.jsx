@@ -549,10 +549,11 @@ export default function LogScreen({
                                             onClick={() => setActiveExIdx(i)}
                                             style={{
                                                 background: "var(--card)",
-                                                borderRadius: 16,
+                                                borderRadius: 20,
                                                 padding: "12px 16px",
                                                 marginBottom: 12,
-                                                border: "1px solid var(--border)",
+                                                border: "1px solid var(--border2)",
+                                                boxShadow: "var(--shadow-card)",
                                                 display: "flex",
                                                 justifyContent: "space-between",
                                                 alignItems: "center",
@@ -599,7 +600,7 @@ export default function LogScreen({
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
                                 {(dragHandleProps) => (
-                                    <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "#4ade8055" : "var(--border)"}` }}>
+                                    <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : "var(--border2)"}`, boxShadow: isPR ? "0 14px 32px rgba(34,197,94,0.12)" : "var(--shadow-card)" }}>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                             <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
@@ -667,12 +668,12 @@ export default function LogScreen({
 
                                         {/* 前回の記録 + PR */}
                                         {(prev || pr) && (
-                                            <div style={{ marginBottom: 10, padding: "8px 12px", background: "var(--card2)", borderRadius: 10 }}>
+                                            <div style={{ marginBottom: 10, padding: "10px 12px", background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 14, border: "1px solid rgba(186, 230, 253, 0.6)" }}>
                                                 {prev && (
                                                     <>
                                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                                                             <div style={{ fontSize: 11, color: "var(--text2)" }}>前回 <span style={{ color: "var(--text3)" }}>{prev.date}</span></div>
-                                                            {isPR && <div style={{ fontSize: 11, color: "#4ade80", fontWeight: 700 }}>PR更新！</div>}
+                                                            {isPR && <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>PR更新！</div>}
                                                         </div>
                                                         <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 3, lineHeight: 1.6 }}>
                                                             {prev.sets?.map((s, i) => (
@@ -685,7 +686,7 @@ export default function LogScreen({
                                                     </>
                                                 )}
                                                 {pr && !prIsAlsoPrev && (
-                                                    <div style={{ marginTop: prev ? 6 : 0, paddingTop: prev ? 6 : 0, borderTop: prev ? "1px solid var(--border)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                    <div style={{ marginTop: prev ? 6 : 0, paddingTop: prev ? 6 : 0, borderTop: prev ? "1px solid var(--border2)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                                         <div style={{ fontSize: 11, color: "var(--text2)" }}>🏆 PR <span style={{ color: "var(--text3)", fontWeight: 400 }}>{pr.date}</span></div>
                                                         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text3)" }}>
                                                             {prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit} × ${prTopSet.reps}rep` : `${pr.rm}${exUnit}`}
@@ -698,7 +699,7 @@ export default function LogScreen({
                                                     </div>
                                                 )}
                                                 {isPR && prDiff > 0 && (
-                                                    <div style={{ marginTop: 6, fontSize: 11, color: "#4ade80", fontWeight: 700 }}>
+                                                    <div style={{ marginTop: 6, fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
                                                         PR更新！ +{prDiff.toFixed(1)}kg
                                                     </div>
                                                 )}
@@ -725,22 +726,23 @@ export default function LogScreen({
                                             />
                                         ))}
 
-                                        <button
-                                            onClick={() => addSet(ex)}
-                                            style={{
-                                                width: "100%",
-                                                marginTop: 10,
-                                                padding: "12px",
-                                                borderRadius: 12,
-                                                background: "var(--card2)",
-                                                border: "none",
-                                                color: "var(--text)",
-                                                fontSize: 13,
-                                                fontWeight: 700
-                                            }}
-                                        >
-                                            ＋ セット追加
-                                        </button>
+                                            <button
+                                                onClick={() => addSet(ex)}
+                                                style={{
+                                                    width: "100%",
+                                                    marginTop: 10,
+                                                    padding: "12px",
+                                                    borderRadius: 14,
+                                                    background: "linear-gradient(135deg, var(--card2), var(--card))",
+                                                    border: "1px solid var(--border2)",
+                                                    color: "var(--text)",
+                                                    fontSize: 13,
+                                                    fontWeight: 700,
+                                                    boxShadow: "var(--shadow-card)",
+                                                }}
+                                            >
+                                                ＋ セット追加
+                                            </button>
 
                                     </div>
                                 )}
@@ -752,7 +754,7 @@ export default function LogScreen({
 
             {/* フローティング＋ボタン */}
             <button onClick={() => setShowAdd(true)}
-                style={{ position: "fixed", bottom: 154, left: 20, width: 52, height: 52, borderRadius: 26, background: accentColor, color: accentText, fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px #0004", border: "none", zIndex: 101 }}>
+                style={{ position: "fixed", bottom: 154, left: 20, width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, var(--accent), var(--accent2))", color: "#fff", fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 14px 28px rgba(34,197,94,0.22)", border: "1px solid rgba(255,255,255,0.55)", zIndex: 101 }}>
                 ＋
             </button>
 

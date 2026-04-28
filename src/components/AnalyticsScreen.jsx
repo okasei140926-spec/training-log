@@ -236,14 +236,15 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
             onClick={() => setActiveTab(tab.id)}
             style={{
               flex: 1,
-              padding: "10px 0",
-              borderRadius: 10,
-              border: "none",
-              background: activeTab === tab.id ? "var(--text)" : "var(--card)",
-              color: activeTab === tab.id ? "var(--bg)" : "var(--text2)",
+              padding: "11px 0",
+              borderRadius: 14,
+              border: activeTab === tab.id ? "1px solid transparent" : "1px solid var(--border2)",
+              background: activeTab === tab.id ? "linear-gradient(135deg, var(--accent2), #7DD3FC)" : "var(--card)",
+              color: activeTab === tab.id ? "#fff" : "var(--text2)",
               fontSize: 13,
               fontWeight: 800,
               cursor: "pointer",
+              boxShadow: activeTab === tab.id ? "var(--shadow-soft)" : "var(--shadow-card)",
             }}
           >
             {tab.label}
@@ -259,7 +260,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
                 placeholder="種目を検索..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                style={{ display: "block", width: "100%", padding: "12px 16px", borderRadius: 12, border: "1px solid var(--border2)", background: "var(--card)", color: "var(--text)", fontSize: 15, boxSizing: "border-box", marginBottom: 16 }}
+                style={{ display: "block", width: "100%", padding: "13px 16px", borderRadius: 14, border: "1px solid var(--border2)", background: "var(--card)", color: "var(--text)", fontSize: 15, boxSizing: "border-box", marginBottom: 16, boxShadow: "var(--shadow-card)" }}
               />
               {filtered.length === 0 && (
                 <div style={{ textAlign: "center", color: "var(--text3)", fontSize: 14, marginTop: 40 }}>
@@ -268,7 +269,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
               )}
               {filtered.map(ex => (
                 <button key={ex} onClick={() => setSelectedEx(ex)}
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "14px 16px", background: "var(--card)", borderRadius: 12, border: "1px solid var(--border2)", marginBottom: 8, color: "var(--text)", fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "15px 16px", background: "var(--card)", borderRadius: 16, border: "1px solid var(--border2)", marginBottom: 10, color: "var(--text)", fontSize: 14, fontWeight: 600, cursor: "pointer", boxShadow: "var(--shadow-card)" }}>
                   <span>{ex}</span>
                   <span style={{ color: "var(--text3)" }}>›</span>
                 </button>
@@ -284,23 +285,23 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
               <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
                 {PERIODS.map(p => (
                   <button key={p.days} onClick={() => setPeriod(p.days)}
-                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: period === p.days ? "#4ade80" : "var(--card)", color: period === p.days ? "#000" : "var(--text2)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    style={{ flex: 1, padding: "9px 0", borderRadius: 12, border: period === p.days ? "1px solid transparent" : "1px solid var(--border2)", background: period === p.days ? "linear-gradient(135deg, var(--accent), #4ADE80)" : "var(--card)", color: period === p.days ? "#fff" : "var(--text2)", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: period === p.days ? "var(--shadow-soft)" : "var(--shadow-card)" }}>
                     {p.label}
                   </button>
                 ))}
               </div>
-              <div style={{ background: "var(--card)", borderRadius: 16, padding: 16 }}>
+              <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={getChartData(selectedEx)}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border2)" />
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text3)" }} />
                     <YAxis tick={{ fontSize: 10, fill: "var(--text3)" }} />
                     <Tooltip
-                      contentStyle={{ background: "var(--card2)", border: "none", borderRadius: 8, fontSize: 12 }}
+                      contentStyle={{ background: "var(--card)", border: "1px solid var(--border2)", borderRadius: 12, fontSize: 12, boxShadow: "var(--shadow-card)" }}
                       labelStyle={{ color: "var(--text)" }}
                       formatter={(value) => [`${value}kg`, "1RM"]}
                     />
-                    <Line type="monotone" dataKey="weight" stroke="#4ade80" strokeWidth={2} dot={{ fill: "#4ade80", r: 3 }} />
+                    <Line type="monotone" dataKey="weight" stroke="var(--accent)" strokeWidth={2.5} dot={{ fill: "var(--accent)", r: 3.5 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -311,13 +312,13 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
 
       {activeTab === "pr" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border2)" }}>
+          <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
             <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 12 }}>
               BIG3 PR
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
               {prData.big3.map((entry) => (
-                <div key={entry.key} style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px" }}>
+                <div key={entry.key} style={{ background: "linear-gradient(180deg, var(--info-soft), var(--card))", borderRadius: 16, padding: "12px 14px", border: "1px solid var(--info-border)" }}>
                   <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>{entry.label}</div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>{entry.estimated1RM}kg</div>
                   {entry.item && (
@@ -327,7 +328,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
                   )}
                 </div>
               ))}
-              <div style={{ background: "var(--card2)", borderRadius: 12, padding: "12px 14px", gridColumn: "1 / -1" }}>
+              <div style={{ background: "linear-gradient(135deg, var(--success-soft), var(--card))", borderRadius: 16, padding: "12px 14px", gridColumn: "1 / -1", border: "1px solid var(--success-border)" }}>
                 <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>BIG3合計</div>
                 <div style={{ fontSize: 26, fontWeight: 800, color: "var(--text)" }}>{prData.big3Total}kg</div>
               </div>
@@ -336,13 +337,13 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {prData.groupedByBodyPart.map((group) => (
-              <div key={group.bodyPart} style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border2)" }}>
+              <div key={group.bodyPart} style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
                   {group.bodyPart}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {group.items.map((item) => (
-                    <div key={item.name} style={{ background: "var(--card2)", borderRadius: 12, padding: "10px 12px" }}>
+                    <div key={item.name} style={{ background: "var(--card2)", borderRadius: 16, padding: "11px 12px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 4 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{item.name}</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>{item.estimated1RM}kg</div>
@@ -351,7 +352,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
                         <span>{item.weight}kg × {item.reps}rep</span>
                         {item.date && <span>{formatDate(item.date)}</span>}
                         {item.source === "manual" && (
-                          <span style={{ padding: "2px 8px", borderRadius: 999, background: "rgba(74,222,128,0.14)", color: "#4ade80", fontSize: 11, fontWeight: 700 }}>
+                          <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--success-soft)", border: "1px solid var(--success-border)", color: "var(--accent)", fontSize: 11, fontWeight: 700 }}>
                             移行記録
                           </span>
                         )}

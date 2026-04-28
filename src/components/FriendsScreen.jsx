@@ -528,7 +528,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
         return (
             <div style={{ padding: 32, textAlign: "center" }}>
                 <p style={{ marginBottom: 24 }}>Friends機能を使うにはログインが必要です</p>
-                <button onClick={onLogin} style={{ padding: "12px 32px", borderRadius: 8, background: "#4ade80", border: "none", fontWeight: 700, fontSize: 16 }}>
+                <button onClick={onLogin} style={{ padding: "12px 32px", borderRadius: 14, background: "linear-gradient(135deg, var(--accent), #4ADE80)", color: "#fff", border: "1px solid transparent", fontWeight: 700, fontSize: 16, boxShadow: "var(--shadow-soft)" }}>
                     ログイン / 新規登録
                 </button>
             </div>
@@ -542,7 +542,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
         return (
             <div key={date} style={{ marginBottom: 6 }}>
                 <button onClick={() => setOpenDates(p => ({ ...p, [dateKey]: !isOpen }))}
-                    style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "6px 8px", background: "var(--border)", borderRadius: 8, border: "none", marginBottom: 4 }}>
+                    style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "8px 10px", background: "linear-gradient(135deg, var(--success-soft), var(--card))", borderRadius: 12, border: "1px solid var(--success-border)", marginBottom: 6 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)" }}>{date === today ? "今日" : date}</div>
                     <div style={{ fontSize: 11, color: "var(--text3)" }}>{isOpen ? "▲" : "▼"}</div>
                 </button>
@@ -551,7 +551,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                     .map(([name, val]) => {
                         const sets = Array.isArray(val) ? val : (val.sets || []);
                         return (
-                            <div key={name} style={{ background: "var(--card2)", borderRadius: 10, padding: "8px 12px", marginBottom: 4 }}>
+                            <div key={name} style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 14, padding: "8px 12px", marginBottom: 6, border: "1px solid rgba(186, 230, 253, 0.6)" }}>
                                 <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{name}</div>
                                 {sets.map((s, i) => (
                                     <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>
@@ -581,13 +581,14 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             {todayActiveFriends.length > 0 && (
                 <div
                     style={{
-                        background: "#22c55e1a",
-                        border: "1px solid #22c55e44",
-                        borderRadius: 12,
-                        padding: "10px 14px",
+                        background: "linear-gradient(135deg, var(--success-soft), var(--card))",
+                        border: "1px solid var(--success-border)",
+                        borderRadius: 16,
+                        padding: "12px 14px",
                         marginBottom: 12,
                         fontSize: 13,
                         color: "var(--text)",
+                        boxShadow: "var(--shadow-card)",
                     }}
                 >
                     {todayActiveLabel}が今日トレーニングを記録しています！
@@ -597,7 +598,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             <Big3OvertakeAlerts events={visibleBig3OvertakeEvents} />
 
             {receivedKudos.length > 0 && (
-                <div style={{ background: "#4ade8022", border: "1px solid #4ade8044", borderRadius: 12, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)" }}>
+                <div style={{ background: "linear-gradient(135deg, var(--info-soft), var(--card))", border: "1px solid var(--info-border)", borderRadius: 16, padding: "12px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)", boxShadow: "var(--shadow-card)" }}>
                     🔥 {receivedKudos.map(k => getDisplayUsername(k.profiles?.username)).join("、")}から今日クドスをもらった！
                 </div>
             )}
@@ -608,7 +609,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
 
 
             {/* 自分のカード */}
-            <div style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", position: "relative" }}>
+            <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", position: "relative", boxShadow: "var(--shadow-card)" }}>
                 <button onClick={() => {
                     setUsernameError("");
                     setShowEditName(true);
@@ -619,7 +620,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                     </svg>
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: activeRecently ? 14 : 0 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 22, background: "var(--text)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "var(--bg)", flexShrink: 0, overflow: "hidden", cursor: "pointer", position: "relative" }}
+                    <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg, var(--accent2), #7DD3FC)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden", cursor: "pointer", position: "relative", boxShadow: "var(--shadow-soft)" }}
                         onClick={() => document.getElementById("avatar-input").click()}>
                         {avatarUrl
                             ? <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -642,7 +643,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                     <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{getDisplayUsername(myUsername, { isMe: true })}</div>
-                            {activeToday && <div style={{ padding: "2px 8px", borderRadius: 10, background: "#4ade8022", border: "1px solid #4ade8044", fontSize: 10, color: "#4ade80", fontWeight: 700 }}>完了 ✓</div>}
+                            {activeToday && <div style={{ padding: "2px 8px", borderRadius: 10, background: "var(--success-soft)", border: "1px solid var(--success-border)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>完了 ✓</div>}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
                             {activeRecently ? `直近7日 ${myTotalExCount}種目` : "直近7日の記録なし"}
@@ -675,9 +676,9 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                     const friendExCount = new Set(Object.values(friendGrouped).flatMap(d => Object.keys(d))).size;
 
                     return (
-                        <div key={f.id} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)" }}>
+                        <div key={f.id} style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: friendDates.length ? 14 : 0 }}>
-                                <div style={{ width: 44, height: 44, borderRadius: 22, background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#000", flexShrink: 0, overflow: "hidden" }}>
+                                <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg, var(--accent), #4ADE80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden", boxShadow: "var(--shadow-soft)" }}>
                                     {f.avatar1_url
                                         ? <img src={f.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                         : getDisplayUsername(f.username)?.[0]?.toUpperCase()
@@ -691,10 +692,10 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                                                 style={{
                                                     padding: "2px 8px",
                                                     borderRadius: 10,
-                                                    background: "#22c55e1a",
-                                                    border: "1px solid #22c55e44",
+                                                    background: "var(--success-soft)",
+                                                    border: "1px solid var(--success-border)",
                                                     fontSize: 10,
-                                                    color: "#22c55e",
+                                                    color: "var(--accent)",
                                                     fontWeight: 700,
                                                 }}
                                             >
@@ -744,7 +745,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                     if (!entries.length) return null;
                     const maxVal = Math.max(...entries.map(e => e.value));
                     return (
-                        <div key={ex} style={{ background: "var(--card)", borderRadius: 16, padding: "16px", marginBottom: 10, border: "1px solid var(--border)" }}>
+                        <div key={ex} style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 10, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
                             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, color: "var(--text)" }}>{ex}</div>
                             {entries.sort((a, b) => b.value - a.value).map((e, i) => (
                                 <CompareBar key={e.name} rank={i + 1} name={e.name} value={e.value} max={maxVal} color={e.color} />
@@ -810,7 +811,7 @@ function CompareBar({ rank, name, value, max, color }) {
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 800, color }}>{value}kg</div>
             </div>
-            <div style={{ height: 6, borderRadius: 4, background: "var(--border)" }}>
+            <div style={{ height: 8, borderRadius: 999, background: "var(--info-soft)", overflow: "hidden" }}>
                 <div style={{ height: "100%", borderRadius: 4, background: color, width: `${pct}%`, transition: "width 0.5s ease" }} />
             </div>
         </div>
