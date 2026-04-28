@@ -3,6 +3,7 @@ export default function FullRecordShareCard({
     styleSet,
     dateLabel,
     fullRecord,
+    hiddenExerciseCount = 0,
     renderPhotoUrl,
     photoImgRef,
     onPhotoLoad,
@@ -82,9 +83,9 @@ export default function FullRecordShareCard({
                                         display: "flex",
                                         alignItems: "center",
                                         gap: 8,
-                                        flexWrap: "wrap",
+                                        flexWrap: "nowrap",
                                         padding: "4px 0",
-                                        borderBottom: `1px solid ${template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(232,199,210,0.75)"}`,
+                                        borderBottom: `1px solid ${template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(183,235,226,0.75)"}`,
                                     }}
                                 >
                                     <div style={{ fontSize: 12, fontWeight: 700, color: styleSet.label.color }}>
@@ -111,7 +112,7 @@ export default function FullRecordShareCard({
                                                 color: template === "cool" ? "#111214" : styleSet.accentText,
                                             }}
                                         >
-                                            {template === "cool" ? "PR" : "✦ PR"}
+                                        {template === "cool" ? "PR" : "✦ PR"}
                                         </div>
                                     ) : (
                                         <div style={{ marginLeft: "auto" }} />
@@ -126,6 +127,22 @@ export default function FullRecordShareCard({
                     </div>
                 )}
             </div>
+
+            {hiddenExerciseCount > 0 && (
+                <div
+                    style={{
+                        ...styleSet.summaryCard,
+                        borderRadius: 16,
+                        padding: "10px 12px",
+                        marginBottom: 10,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: styleSet.label.color,
+                    }}
+                >
+                    ほか {hiddenExerciseCount} 種目
+                </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
                 <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>

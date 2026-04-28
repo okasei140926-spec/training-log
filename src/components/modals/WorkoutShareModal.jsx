@@ -18,6 +18,8 @@ const POST_TYPE_OPTIONS = [
     { id: "fullRecord", label: "全記録" },
 ];
 
+const MAX_FULL_RECORD_SHARE_EXERCISES = 8;
+
 function waitForImageReady(img) {
     return new Promise((resolve, reject) => {
         if (!img) {
@@ -95,6 +97,29 @@ export default function WorkoutShareModal({
         { value: totalVolumeLabel, label: "ボリューム" },
     ];
     const shareTitle = useMemo(() => `${dateLabel} のワークアウト`, [dateLabel]);
+    const shareFullRecord = useMemo(() => {
+        const normalized = (fullRecord || [])
+            .filter((exercise) => exercise?.name && Array.isArray(exercise.sets) && exercise.sets.length > 0)
+            .map((exercise) => ({
+                name: exercise.name,
+                sets: exercise.sets
+                    .filter((set) => set?.setNumber && set?.weightLabel && set?.repsLabel)
+                    .map((set) => ({
+                        setNumber: set.setNumber,
+                        weightLabel: set.weightLabel,
+                        repsLabel: set.repsLabel,
+                        isPR: Boolean(set.isPR),
+                    })),
+            }))
+            .filter((exercise) => exercise.sets.length > 0);
+
+        const hiddenCount = Math.max(0, normalized.length - MAX_FULL_RECORD_SHARE_EXERCISES);
+
+        return {
+            items: normalized.slice(0, MAX_FULL_RECORD_SHARE_EXERCISES),
+            hiddenCount,
+        };
+    }, [fullRecord]);
 
     useEffect(() => {
         if (isOpen) {
@@ -204,7 +229,7 @@ export default function WorkoutShareModal({
 
                 blob = await toBlob(cardRef.current, {
                     cacheBust: true,
-                    pixelRatio: 2,
+                    pixelRatio: postType === "fullRecord" ? 1.2 : 2,
                     backgroundColor: "transparent",
                 });
             }
@@ -241,6 +266,9 @@ export default function WorkoutShareModal({
                 photoPreparing,
                 imgComplete: photoImgRef.current?.complete,
                 imgNaturalWidth: photoImgRef.current?.naturalWidth,
+                postType,
+                shareFullRecordCount: shareFullRecord.items.length,
+                hiddenFullRecordCount: shareFullRecord.hiddenCount,
             });
             setErrorMsg("共有画像の作成に失敗しました。もう一度お試しください。");
         } finally {
@@ -536,7 +564,8 @@ export default function WorkoutShareModal({
                             template={template}
                             styleSet={styleSet}
                             dateLabel={dateLabel}
-                            fullRecord={fullRecord}
+                            fullRecord={shareFullRecord.items}
+                            hiddenExerciseCount={shareFullRecord.hiddenCount}
                             renderPhotoUrl={renderPhotoUrl}
                             photoImgRef={photoImgRef}
                             onPhotoLoad={() => {
