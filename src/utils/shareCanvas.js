@@ -103,9 +103,17 @@ export async function buildPhotoShareBlob({
 
     ctx.save();
     ctx.fillStyle = isCool ? "#f5f5f5cc" : "#8f5d4ccc";
+    fillRoundedRect(ctx, shellX + 44, shellY + 34, 34, 34, 17, isCool ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.72)");
+    ctx.fillStyle = isCool ? "#f5f5f5" : "#8f5d4c";
+    ctx.font = "900 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(isCool ? "◆" : "✦", shellX + 61, shellY + 51);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
     ctx.font = "500 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.letterSpacing = "0px";
-    ctx.fillText(isCool ? "TODAY'S WORKOUT" : "Glow Workout", shellX + 44, shellY + 60);
+    ctx.fillText(isCool ? "TODAY'S WORKOUT" : "Glow Workout", shellX + 92, shellY + 60);
 
     ctx.fillStyle = isCool ? "#f5f5f5" : "#5f4648";
     ctx.font = "800 64px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";

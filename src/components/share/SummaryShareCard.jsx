@@ -32,8 +32,25 @@ export default function SummaryShareCard({
         <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
                 <div>
-                    <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
-                        {styleSet.title}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
+                        <span
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: 18,
+                                height: 18,
+                                borderRadius: 999,
+                                background: template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.72)",
+                                color: styleSet.accent,
+                                fontSize: 10,
+                                fontWeight: 900,
+                                letterSpacing: 0,
+                            }}
+                        >
+                            {styleSet.titleIcon}
+                        </span>
+                        <span>{styleSet.title}</span>
                     </div>
                     <div style={{ fontSize: renderPhotoUrl ? 26 : 28, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
                         {dateLabel}
@@ -41,8 +58,8 @@ export default function SummaryShareCard({
                 </div>
                 <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
                     {renderPhotoUrl
-                        ? template === "cute" ? "glow highlight" : "performance log"
-                        : template === "cute" ? "soft summary" : "stats focus"}
+                        ? styleSet.summaryBadgeWithPhoto
+                        : styleSet.summaryBadgeWithoutPhoto}
                 </div>
             </div>
 

@@ -33,6 +33,11 @@ export function buildTemplateStyles(template) {
             accent: "#f5f5f5",
             brand: "#9c9ca8",
             title: "TODAY'S WORKOUT",
+            titleIcon: "◆",
+            summaryBadgeWithPhoto: "performance log",
+            summaryBadgeWithoutPhoto: "stats focus",
+            fullRecordTitle: "FULL WORKOUT LOG",
+            fullRecordBadge: "all sets",
         };
     }
 
@@ -63,5 +68,10 @@ export function buildTemplateStyles(template) {
         accent: "#8f5d4c",
         brand: "#c09f92",
         title: "Glow Workout",
+        titleIcon: "✦",
+        summaryBadgeWithPhoto: "glow highlight",
+        summaryBadgeWithoutPhoto: "soft summary",
+        fullRecordTitle: "Glow Workout Log",
+        fullRecordBadge: "highlight log",
     };
 }
