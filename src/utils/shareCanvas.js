@@ -86,9 +86,9 @@ export async function buildPhotoShareBlob({
         bgGradient.addColorStop(0, "#0f0f10");
         bgGradient.addColorStop(1, "#1a1a1d");
     } else {
-        bgGradient.addColorStop(0, "#f3fffd");
-        bgGradient.addColorStop(0.42, "#e8fff7");
-        bgGradient.addColorStop(1, "#eef8ff");
+        bgGradient.addColorStop(0, "#F0FBFF");
+        bgGradient.addColorStop(0.48, "#EAF8FF");
+        bgGradient.addColorStop(1, "#F7FDFF");
     }
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -98,13 +98,13 @@ export async function buildPhotoShareBlob({
     const shellW = canvas.width - shellX * 2;
     const shellH = canvas.height - shellY * 2;
 
-    fillRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#16171a" : "rgba(255,255,255,0.82)");
-    strokeRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#3b3b40" : "#cdeee7", 2);
+    fillRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#16171a" : "rgba(255,255,255,0.84)");
+    strokeRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#3b3b40" : "#BAE6FD", 2);
 
     ctx.save();
-    ctx.fillStyle = isCool ? "#f5f5f5cc" : "#18b8b3cc";
-    fillRoundedRect(ctx, shellX + 44, shellY + 34, 34, 34, 17, isCool ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.78)");
-    ctx.fillStyle = isCool ? "#f5f5f5" : "#18b8b3";
+    ctx.fillStyle = isCool ? "#f5f5f5cc" : "#38BDF8cc";
+    fillRoundedRect(ctx, shellX + 44, shellY + 34, 34, 34, 17, isCool ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.82)");
+    ctx.fillStyle = isCool ? "#f5f5f5" : "#38BDF8";
     ctx.font = "900 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -115,7 +115,7 @@ export async function buildPhotoShareBlob({
     ctx.letterSpacing = "0px";
     ctx.fillText(isCool ? "TODAY'S WORKOUT" : "GYM GLOW", shellX + 92, shellY + 60);
 
-    ctx.fillStyle = isCool ? "#f5f5f5" : "#1f4b52";
+    ctx.fillStyle = isCool ? "#f5f5f5" : "#155E75";
     ctx.font = "800 64px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.fillText(dateLabel, shellX + 44, shellY + 138);
     ctx.restore();
@@ -124,10 +124,10 @@ export async function buildPhotoShareBlob({
     const badgeY = shellY + 46;
     const badgeW = 170;
     const badgeH = 54;
-    fillRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#202127" : "#edfffa");
-    strokeRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#363741" : "#bfeee5", 2);
+    fillRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#202127" : "#ECFEFF");
+    strokeRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#363741" : "#BAE6FD", 2);
     ctx.save();
-    ctx.fillStyle = isCool ? "#d7d7dd" : "#12897a";
+    ctx.fillStyle = isCool ? "#d7d7dd" : "#0891B2";
     ctx.font = "700 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -139,7 +139,7 @@ export async function buildPhotoShareBlob({
     const photoFrameW = shellW - 88;
     const photoFrameH = 860;
     fillRoundedRect(ctx, photoFrameX, photoFrameY, photoFrameW, photoFrameH, isCool ? 34 : 40, isCool ? "#111214" : "#ffffff");
-    strokeRoundedRect(ctx, photoFrameX, photoFrameY, photoFrameW, photoFrameH, isCool ? 34 : 40, isCool ? "#2e2f35" : "#caedf2", 2);
+    strokeRoundedRect(ctx, photoFrameX, photoFrameY, photoFrameW, photoFrameH, isCool ? 34 : 40, isCool ? "#2e2f35" : "#BAE6FD", 2);
 
     const photoPadding = isCool ? 18 : 22;
     const photoX = photoFrameX + photoPadding;
@@ -156,10 +156,10 @@ export async function buildPhotoShareBlob({
     const gridGap = 22;
     const cardW = (shellW - 88 - gridGap) / 2;
     const cardH = 170;
-    const gridStroke = isCool ? "rgba(255,255,255,0.08)" : "rgba(183,235,226,0.95)";
+    const gridStroke = isCool ? "rgba(255,255,255,0.08)" : "rgba(186,230,253,0.95)";
     const gridFill = isCool ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.88)";
-    const valueColor = isCool ? "#f5f5f5" : "#1f4b52";
-    const labelColor = isCool ? "#9c9ca8" : "#5f8f93";
+    const valueColor = isCool ? "#f5f5f5" : "#155E75";
+    const labelColor = isCool ? "#9c9ca8" : "#4B89A0";
 
     summaryItems.forEach((item, index) => {
         const col = index % 2;
