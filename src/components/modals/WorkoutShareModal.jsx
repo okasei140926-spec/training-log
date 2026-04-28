@@ -9,8 +9,8 @@ import {
 } from "../../utils/shareCanvas";
 
 const TEMPLATE_OPTIONS = [
-    { id: "cute", label: "Cute" },
-    { id: "cool", label: "Cool" },
+    { id: "cute", label: "白" },
+    { id: "cool", label: "黒" },
 ];
 
 const POST_TYPE_OPTIONS = [
@@ -64,7 +64,9 @@ export default function WorkoutShareModal({
     onClose,
     template,
     onChangeTemplate,
-    photoUrl,
+    photoRows = [],
+    photoUrls = {},
+    initialPhotoId = null,
     workoutDate,
     summary,
     fullRecord = [],
@@ -74,9 +76,15 @@ export default function WorkoutShareModal({
     const [sharing, setSharing] = useState(false);
     const [errorMsg, setErrorMsg] = useState("");
     const [postType, setPostType] = useState("summary");
-    const [renderPhotoUrl, setRenderPhotoUrl] = useState(photoUrl || null);
-    const [photoPreparing, setPhotoPreparing] = useState(Boolean(photoUrl));
-    const [photoReady, setPhotoReady] = useState(!photoUrl);
+    const [selectedPhotoId, setSelectedPhotoId] = useState(initialPhotoId);
+    const availablePhotos = useMemo(
+        () => photoRows.filter((row) => Boolean(photoUrls[row.id])),
+        [photoRows, photoUrls]
+    );
+    const selectedPhotoUrl = selectedPhotoId ? (photoUrls[selectedPhotoId] || null) : null;
+    const [renderPhotoUrl, setRenderPhotoUrl] = useState(selectedPhotoUrl || null);
+    const [photoPreparing, setPhotoPreparing] = useState(Boolean(selectedPhotoUrl));
+    const [photoReady, setPhotoReady] = useState(!selectedPhotoUrl);
     const styleSet = buildTemplateStyles(template);
     const dateLabel = formatDate(workoutDate);
     const totalVolumeLabel = `${Number(summary?.totalVolumeKg || 0).toLocaleString("ja-JP")}kg`;
@@ -91,15 +99,16 @@ export default function WorkoutShareModal({
     useEffect(() => {
         if (isOpen) {
             setPostType("summary");
+            setSelectedPhotoId(initialPhotoId);
         }
-    }, [isOpen]);
+    }, [isOpen, initialPhotoId]);
 
     useEffect(() => {
         let isActive = true;
         let nextObjectUrl = null;
 
         const preparePhotoUrl = async () => {
-            if (!photoUrl) {
+            if (!selectedPhotoUrl) {
                 if (isActive) {
                     setRenderPhotoUrl(null);
                     setPhotoPreparing(false);
@@ -114,7 +123,7 @@ export default function WorkoutShareModal({
             }
 
             try {
-                const res = await fetch(photoUrl);
+                const res = await fetch(selectedPhotoUrl);
                 if (!res.ok) throw new Error("photo fetch failed");
                 const blob = await res.blob();
                 nextObjectUrl = URL.createObjectURL(blob);
@@ -147,7 +156,7 @@ export default function WorkoutShareModal({
             isActive = false;
             if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
         };
-    }, [photoUrl]);
+    }, [selectedPhotoUrl]);
 
     if (!isOpen) return null;
 
@@ -163,7 +172,7 @@ export default function WorkoutShareModal({
     };
 
     const handleShare = async () => {
-        if (!cardRef.current || sharing || (photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))) return;
+        if (!cardRef.current || sharing || (selectedPhotoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))) return;
 
         setSharing(true);
         setErrorMsg("");
@@ -231,7 +240,7 @@ export default function WorkoutShareModal({
                 error,
                 message: error?.message,
                 name: error?.name,
-                hasPhoto: Boolean(photoUrl),
+                hasPhoto: Boolean(selectedPhotoUrl),
                 renderPhotoUrl,
                 photoReady,
                 photoPreparing,
@@ -320,7 +329,7 @@ export default function WorkoutShareModal({
                     </div>
                     <button
                         onClick={handleShare}
-                        disabled={sharing || (postType === "summary" && photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))}
+                        disabled={sharing || (postType === "summary" && selectedPhotoUrl && (!renderPhotoUrl || !photoReady || photoPreparing))}
                         style={{
                             padding: "10px 14px",
                             borderRadius: 14,
@@ -329,11 +338,11 @@ export default function WorkoutShareModal({
                             color: template === "cool" ? "#111214" : "#fff",
                             fontSize: 12,
                             fontWeight: 800,
-                            opacity: sharing || (postType === "summary" && photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing)) ? 0.7 : 1,
+                            opacity: sharing || (postType === "summary" && selectedPhotoUrl && (!renderPhotoUrl || !photoReady || photoPreparing)) ? 0.7 : 1,
                             whiteSpace: "nowrap",
                         }}
                     >
-                        {sharing ? "共有中..." : postType === "summary" && photoUrl && (!renderPhotoUrl || !photoReady || photoPreparing) ? "画像準備中..." : "共有"}
+                        {sharing ? "共有中..." : postType === "summary" && selectedPhotoUrl && (!renderPhotoUrl || !photoReady || photoPreparing) ? "画像準備中..." : "共有"}
                     </button>
                 </div>
 
@@ -360,6 +369,95 @@ export default function WorkoutShareModal({
                         );
                     })}
                 </div>
+
+                {availablePhotos.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                        <div
+                            style={{
+                                color: "var(--text2)",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                marginBottom: 8,
+                            }}
+                        >
+                            投稿に使う写真
+                        </div>
+                        <div
+                            style={{
+                                display: "flex",
+                                gap: 10,
+                                overflowX: "auto",
+                                paddingBottom: 4,
+                            }}
+                        >
+                            <button
+                                onClick={() => setSelectedPhotoId(null)}
+                                style={{
+                                    flex: "0 0 auto",
+                                    minWidth: 84,
+                                    padding: "10px 12px",
+                                    borderRadius: 16,
+                                    border: `1px solid ${selectedPhotoId === null ? styleSet.accent : "var(--border2)"}`,
+                                    background: selectedPhotoId === null ? `${styleSet.accent}12` : "var(--card2)",
+                                    color: selectedPhotoId === null ? styleSet.accent : "var(--text2)",
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                }}
+                            >
+                                写真なし
+                            </button>
+                            {availablePhotos.map((row, idx) => {
+                                const isSelected = selectedPhotoId === row.id;
+                                return (
+                                    <button
+                                        key={row.id}
+                                        onClick={() => setSelectedPhotoId(row.id)}
+                                        style={{
+                                            flex: "0 0 auto",
+                                            width: 92,
+                                            borderRadius: 18,
+                                            border: `1px solid ${isSelected ? styleSet.accent : "var(--border2)"}`,
+                                            background: isSelected ? `${styleSet.accent}12` : "var(--card2)",
+                                            padding: 6,
+                                            color: "inherit",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                width: "100%",
+                                                aspectRatio: "1 / 1",
+                                                borderRadius: 12,
+                                                overflow: "hidden",
+                                                background: "var(--card)",
+                                                marginBottom: 6,
+                                            }}
+                                        >
+                                            <img
+                                                src={photoUrls[row.id]}
+                                                alt={`${idx + 1}枚目の体写真`}
+                                                style={{
+                                                    width: "100%",
+                                                    height: "100%",
+                                                    objectFit: "cover",
+                                                    display: "block",
+                                                }}
+                                            />
+                                        </div>
+                                        <div
+                                            style={{
+                                                fontSize: 11,
+                                                fontWeight: 800,
+                                                color: isSelected ? styleSet.accent : "var(--text2)",
+                                            }}
+                                        >
+                                            {idx + 1}枚目
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {errorMsg && (
                     <div

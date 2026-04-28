@@ -261,7 +261,6 @@ export default function LogScreen({
         .reverse()
         .find((row) => Boolean(photoUrls[row.id]));
     const latestPhotoUrl = latestPhotoRow ? photoUrls[latestPhotoRow.id] : null;
-
     useEffect(() => {
         let isActive = true;
 
@@ -806,7 +805,9 @@ export default function LogScreen({
                     onClose={() => setShowSharePreview(false)}
                     template={shareTemplate}
                     onChangeTemplate={setShareTemplate}
-                    photoUrl={latestPhotoUrl}
+                    photoRows={photoRows}
+                    photoUrls={photoUrls}
+                    initialPhotoId={latestPhotoRow?.id ?? null}
                     workoutDate={logDate}
                     summary={{
                         exerciseCount: exCount,
