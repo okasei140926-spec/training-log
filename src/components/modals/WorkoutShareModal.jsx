@@ -105,7 +105,6 @@ export default function WorkoutShareModal({
 
     useEffect(() => {
         let isActive = true;
-        let nextObjectUrl = null;
 
         const preparePhotoUrl = async () => {
             if (!selectedPhotoUrl) {
@@ -113,6 +112,7 @@ export default function WorkoutShareModal({
                     setRenderPhotoUrl(null);
                     setPhotoPreparing(false);
                     setPhotoReady(true);
+                    setErrorMsg("");
                 }
                 return;
             }
@@ -120,21 +120,17 @@ export default function WorkoutShareModal({
             if (isActive) {
                 setPhotoPreparing(true);
                 setPhotoReady(false);
+                setErrorMsg("");
             }
 
             try {
-                const res = await fetch(selectedPhotoUrl);
-                if (!res.ok) throw new Error("photo fetch failed");
-                const blob = await res.blob();
-                nextObjectUrl = URL.createObjectURL(blob);
-
                 const preloadImg = new Image();
                 preloadImg.crossOrigin = "anonymous";
-                preloadImg.src = nextObjectUrl;
+                preloadImg.src = selectedPhotoUrl;
                 await waitForImageReady(preloadImg);
 
                 if (isActive) {
-                    setRenderPhotoUrl(nextObjectUrl);
+                    setRenderPhotoUrl(selectedPhotoUrl);
                     setPhotoPreparing(false);
                     setPhotoReady(true);
                     setErrorMsg("");
@@ -154,7 +150,6 @@ export default function WorkoutShareModal({
 
         return () => {
             isActive = false;
-            if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
         };
     }, [selectedPhotoUrl]);
 
@@ -317,7 +312,7 @@ export default function WorkoutShareModal({
                                         borderRadius: 14,
                                         border: `1px solid ${isActive ? styleSet.accent : "var(--border2)"}`,
                                         background: isActive ? styleSet.accent : "var(--card2)",
-                                        color: isActive ? "#fff" : "var(--text2)",
+                                        color: isActive ? styleSet.accentText : "var(--text2)",
                                         fontSize: 12,
                                         fontWeight: 800,
                                     }}
@@ -335,7 +330,7 @@ export default function WorkoutShareModal({
                             borderRadius: 14,
                             border: "none",
                             background: styleSet.accent,
-                            color: template === "cool" ? "#111214" : "#fff",
+                            color: styleSet.accentText,
                             fontSize: 12,
                             fontWeight: 800,
                             opacity: sharing || (postType === "summary" && selectedPhotoUrl && (!renderPhotoUrl || !photoReady || photoPreparing)) ? 0.7 : 1,
@@ -359,7 +354,7 @@ export default function WorkoutShareModal({
                                     borderRadius: 14,
                                     border: `1px solid ${isActive ? styleSet.accent : "var(--border2)"}`,
                                     background: isActive ? styleSet.accent : "var(--card2)",
-                                    color: isActive ? "#fff" : "var(--text2)",
+                                    color: isActive ? styleSet.accentText : "var(--text2)",
                                     fontSize: 12,
                                     fontWeight: 800,
                                 }}

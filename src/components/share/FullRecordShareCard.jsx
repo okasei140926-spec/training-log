@@ -21,7 +21,7 @@ export default function FullRecordShareCard({
                                 width: 18,
                                 height: 18,
                                 borderRadius: 999,
-                                background: template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.72)",
+                                background: template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.78)",
                                 color: styleSet.accent,
                                 fontSize: 10,
                                 fontWeight: 900,
@@ -107,8 +107,8 @@ export default function FullRecordShareCard({
                                                 borderRadius: 999,
                                                 fontSize: 10,
                                                 fontWeight: 800,
-                                                background: template === "cool" ? "#f5f5f5" : "#8f5d4c",
-                                                color: template === "cool" ? "#111214" : "#fff",
+                                                background: template === "cool" ? "#f5f5f5" : styleSet.accent,
+                                                color: template === "cool" ? "#111214" : styleSet.accentText,
                                             }}
                                         >
                                             {template === "cool" ? "PR" : "✦ PR"}

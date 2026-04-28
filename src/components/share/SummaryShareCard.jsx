@@ -41,7 +41,7 @@ export default function SummaryShareCard({
                                 width: 18,
                                 height: 18,
                                 borderRadius: 999,
-                                background: template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.72)",
+                                background: template === "cool" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.78)",
                                 color: styleSet.accent,
                                 fontSize: 10,
                                 fontWeight: 900,
