@@ -9,7 +9,7 @@ import {
 } from "../../utils/shareCanvas";
 
 const TEMPLATE_OPTIONS = [
-    { id: "cute", label: "白" },
+    { id: "cute", label: "映え" },
     { id: "cool", label: "黒" },
 ];
 

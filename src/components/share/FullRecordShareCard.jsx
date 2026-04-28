@@ -13,14 +13,14 @@ export default function FullRecordShareCard({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
                 <div>
                     <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
-                        {template === "cool" ? "FULL WORKOUT LOG" : "Workout Record"}
+                        {template === "cool" ? "FULL WORKOUT LOG" : "Glow Workout Log"}
                     </div>
                     <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.15, marginTop: 6 }}>
                         {dateLabel}
                     </div>
                 </div>
                 <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {template === "cool" ? "all sets" : "全セット"}
+                    {template === "cool" ? "all sets" : "highlight log"}
                 </div>
             </div>
 
@@ -90,7 +90,7 @@ export default function FullRecordShareCard({
                                                 borderRadius: 999,
                                                 fontSize: 10,
                                                 fontWeight: 800,
-                                                background: template === "cool" ? "#f5f5f5" : "#7f4653",
+                                                background: template === "cool" ? "#f5f5f5" : "#8f5d4c",
                                                 color: template === "cool" ? "#111214" : "#fff",
                                             }}
                                         >

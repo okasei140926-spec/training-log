@@ -86,8 +86,9 @@ export async function buildPhotoShareBlob({
         bgGradient.addColorStop(0, "#0f0f10");
         bgGradient.addColorStop(1, "#1a1a1d");
     } else {
-        bgGradient.addColorStop(0, "#fff8fb");
-        bgGradient.addColorStop(1, "#fff5ef");
+        bgGradient.addColorStop(0, "#fffaf5");
+        bgGradient.addColorStop(0.52, "#fff3ea");
+        bgGradient.addColorStop(1, "#fef7f9");
     }
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -97,16 +98,16 @@ export async function buildPhotoShareBlob({
     const shellW = canvas.width - shellX * 2;
     const shellH = canvas.height - shellY * 2;
 
-    fillRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#16171a" : "rgba(255,255,255,0.72)");
-    strokeRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#3b3b40" : "#f3dfe5", 2);
+    fillRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#16171a" : "rgba(255,255,255,0.78)");
+    strokeRoundedRect(ctx, shellX, shellY, shellW, shellH, 54, isCool ? "#3b3b40" : "#f1e2d7", 2);
 
     ctx.save();
-    ctx.fillStyle = isCool ? "#f5f5f5cc" : "#7f4653cc";
+    ctx.fillStyle = isCool ? "#f5f5f5cc" : "#8f5d4ccc";
     ctx.font = "500 28px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.letterSpacing = "0px";
-    ctx.fillText(isCool ? "TODAY'S WORKOUT" : "Workout Moment", shellX + 44, shellY + 60);
+    ctx.fillText(isCool ? "TODAY'S WORKOUT" : "Glow Workout", shellX + 44, shellY + 60);
 
-    ctx.fillStyle = isCool ? "#f5f5f5" : "#51363c";
+    ctx.fillStyle = isCool ? "#f5f5f5" : "#5f4648";
     ctx.font = "800 64px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.fillText(dateLabel, shellX + 44, shellY + 138);
     ctx.restore();
@@ -115,22 +116,22 @@ export async function buildPhotoShareBlob({
     const badgeY = shellY + 46;
     const badgeW = 170;
     const badgeH = 54;
-    fillRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#202127" : "#fff0f5");
-    strokeRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#363741" : "#f3d7df", 2);
+    fillRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#202127" : "#fff7ef");
+    strokeRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 27, isCool ? "#363741" : "#f0ddd0", 2);
     ctx.save();
-    ctx.fillStyle = isCool ? "#d7d7dd" : "#a25d6c";
+    ctx.fillStyle = isCool ? "#d7d7dd" : "#a06b57";
     ctx.font = "700 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(isCool ? "performance log" : "today's glow", badgeX + badgeW / 2, badgeY + badgeH / 2);
+    ctx.fillText(isCool ? "performance log" : "glow highlight", badgeX + badgeW / 2, badgeY + badgeH / 2);
     ctx.restore();
 
     const photoFrameX = shellX + 44;
     const photoFrameY = shellY + 182;
     const photoFrameW = shellW - 88;
     const photoFrameH = 860;
-    fillRoundedRect(ctx, photoFrameX, photoFrameY, photoFrameW, photoFrameH, isCool ? 34 : 40, isCool ? "#111214" : "#fffdfd");
-    strokeRoundedRect(ctx, photoFrameX, photoFrameY, photoFrameW, photoFrameH, isCool ? 34 : 40, isCool ? "#2e2f35" : "#f1e6ea", 2);
+    fillRoundedRect(ctx, photoFrameX, photoFrameY, photoFrameW, photoFrameH, isCool ? 34 : 40, isCool ? "#111214" : "#fffefd");
+    strokeRoundedRect(ctx, photoFrameX, photoFrameY, photoFrameW, photoFrameH, isCool ? 34 : 40, isCool ? "#2e2f35" : "#efe4dc", 2);
 
     const photoPadding = isCool ? 18 : 22;
     const photoX = photoFrameX + photoPadding;
@@ -147,10 +148,10 @@ export async function buildPhotoShareBlob({
     const gridGap = 22;
     const cardW = (shellW - 88 - gridGap) / 2;
     const cardH = 170;
-    const gridStroke = isCool ? "rgba(255,255,255,0.08)" : "rgba(232,199,210,0.9)";
-    const gridFill = isCool ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.78)";
-    const valueColor = isCool ? "#f5f5f5" : "#51363c";
-    const labelColor = isCool ? "#9c9ca8" : "#9b7d86";
+    const gridStroke = isCool ? "rgba(255,255,255,0.08)" : "rgba(236,219,207,0.95)";
+    const gridFill = isCool ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.82)";
+    const valueColor = isCool ? "#f5f5f5" : "#5f4648";
+    const labelColor = isCool ? "#9c9ca8" : "#9d7d73";
 
     summaryItems.forEach((item, index) => {
         const col = index % 2;

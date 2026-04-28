@@ -41,8 +41,8 @@ export default function SummaryShareCard({
                 </div>
                 <div style={{ ...styleSet.badge, borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
                     {renderPhotoUrl
-                        ? template === "cute" ? "today's glow" : "performance log"
-                        : template === "cute" ? "summary only" : "stats focus"}
+                        ? template === "cute" ? "glow highlight" : "performance log"
+                        : template === "cute" ? "soft summary" : "stats focus"}
                 </div>
             </div>
 

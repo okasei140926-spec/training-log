@@ -38,30 +38,30 @@ export function buildTemplateStyles(template) {
 
     return {
         shell: {
-            background: "linear-gradient(180deg, #fff8fb 0%, #fff5ef 100%)",
-            color: "#51363c",
-            border: "1px solid #f3dfe5",
-            boxShadow: "0 24px 60px rgba(196,132,148,0.18)",
+            background: "linear-gradient(180deg, #fffaf5 0%, #fff3ea 52%, #fef7f9 100%)",
+            color: "#5f4648",
+            border: "1px solid #f1e2d7",
+            boxShadow: "0 24px 60px rgba(201, 167, 146, 0.2)",
         },
         photoFrame: {
-            background: "#fffdfd",
-            border: "1px solid #f1e6ea",
+            background: "#fffefd",
+            border: "1px solid #efe4dc",
             borderRadius: 28,
             padding: 12,
         },
         badge: {
-            background: "#fff0f5",
-            color: "#a25d6c",
-            border: "1px solid #f3d7df",
+            background: "#fff7ef",
+            color: "#a06b57",
+            border: "1px solid #f0ddd0",
         },
         summaryCard: {
-            background: "rgba(255,255,255,0.75)",
-            border: "1px solid rgba(232,199,210,0.9)",
-            color: "#51363c",
+            background: "rgba(255,255,255,0.82)",
+            border: "1px solid rgba(236,219,207,0.95)",
+            color: "#5f4648",
         },
-        label: { color: "#9b7d86" },
-        accent: "#7f4653",
-        brand: "#b48d99",
-        title: "Workout Moment",
+        label: { color: "#9d7d73" },
+        accent: "#8f5d4c",
+        brand: "#c09f92",
+        title: "Glow Workout",
     };
 }
