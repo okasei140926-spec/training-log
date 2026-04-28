@@ -14,7 +14,7 @@ export const css = `
     --card: #1a1a1a;
     --card2: #242424;
     --card-modal: #1e1e1e;
-    --border: #22c55e;
+    --border: #86EFAC;
     --border2: #333333;
     --border3: #444444;
     --text: #ffffff;
@@ -25,15 +25,15 @@ export const css = `
     --nav-bg: #0f0f0fee;
     --input-bg: #242424;
     --btn-secondary: #2a2a2a;
-    --accent: #22c55e;
-    --accent2: #ff7a00;
+    --accent: #22C55E;
+    --accent2: #38BDF8;
   }
   .theme-light {
     --bg: #f5f5f5;
     --card: #ffffff;
     --card2: #f0f0f0;
     --card-modal: #ffffff;
-    --border: #22c55e;
+    --border: #86EFAC;
     --border2: #dddddd;
     --border3: #cccccc;
     --text: #111111;
@@ -44,8 +44,8 @@ export const css = `
     --nav-bg: #ffffffee;
     --input-bg: #f0f0f0;
     --btn-secondary: #e5e5e5;
-    --accent: #22c55e;
-    --accent2: #ff7a00;
+    --accent: #22C55E;
+    --accent2: #38BDF8;
   }
   * { box-sizing: border-box; }
   input { outline: none; }
