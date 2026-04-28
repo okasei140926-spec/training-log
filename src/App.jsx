@@ -40,6 +40,80 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
     });
 });
 
+const HISTORY_OWNER_KEY = "historyOwnerUserId";
+const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
+
+const isPlainObject = (value) =>
+    !!value && typeof value === "object" && !Array.isArray(value);
+
+const cloneRecord = (record) => ({
+    ...record,
+    sets: Array.isArray(record?.sets)
+        ? record.sets.map((set) => ({ ...set }))
+        : record?.sets,
+});
+
+const buildHistoryRecordSignature = (record) => {
+    const setsSignature = Array.isArray(record?.sets)
+        ? record.sets
+            .map((set) => `${set?.weight ?? ""}|${set?.reps ?? ""}|${set?.done ? 1 : 0}`)
+            .join(";")
+        : "";
+
+    return [
+        record?.date ?? "",
+        setsSignature,
+        record?.weight ?? "",
+        record?.reps ?? "",
+    ].join("::");
+};
+
+const mergeHistoryMaps = (...sources) => {
+    const merged = {};
+
+    sources.forEach((source) => {
+        if (!isPlainObject(source)) return;
+
+        Object.entries(source).forEach(([exerciseName, records]) => {
+            if (!exerciseName || !Array.isArray(records) || !records.length) return;
+
+            if (!merged[exerciseName]) merged[exerciseName] = [];
+            const seen = new Set(merged[exerciseName].map(buildHistoryRecordSignature));
+
+            records.forEach((record) => {
+                if (!record || typeof record !== "object") return;
+
+                const signature = buildHistoryRecordSignature(record);
+                if (seen.has(signature)) return;
+
+                merged[exerciseName].push(cloneRecord(record));
+                seen.add(signature);
+            });
+        });
+    });
+
+    Object.keys(merged).forEach((exerciseName) => {
+        merged[exerciseName] = merged[exerciseName]
+            .sort((a, b) => {
+                const dateCompare = String(a?.date || "").localeCompare(String(b?.date || ""));
+                if (dateCompare !== 0) return dateCompare;
+
+                const orderA = Number.isFinite(a?.order) ? a.order : 999;
+                const orderB = Number.isFinite(b?.order) ? b.order : 999;
+                return orderA - orderB;
+            });
+
+        if (!merged[exerciseName].length) {
+            delete merged[exerciseName];
+        }
+    });
+
+    return merged;
+};
+
+const buildHistoryFromWorkoutRows = (rows) =>
+    mergeHistoryMaps(...(rows || []).map((row) => row?.data));
+
 export default function GymApp() {
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
@@ -69,6 +143,7 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => load("history", {}));
     const [manualBests, setManualBests] = useState([]);
+    const [historySyncReady, setHistorySyncReady] = useState(false);
     const [customBodyParts, setCustomBodyParts] = useState(() => {
         const saved = load("customBodyParts", []);
         return [...new Set((saved || []).map((part) => String(part || "").trim()).filter(Boolean))];
@@ -164,11 +239,83 @@ export default function GymApp() {
 
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
-    useEffect(() => { save("history", history); }, [history]);
+    useEffect(() => {
+        save("history", history);
+
+        if (user?.id) {
+            save(getUserHistoryCacheKey(user.id), history);
+            save(HISTORY_OWNER_KEY, user.id);
+        }
+    }, [history, user]);
     useEffect(() => { save("customBodyParts", customBodyParts); }, [customBodyParts]);
     useEffect(() => { save("hiddenBodyParts", hiddenBodyParts); }, [hiddenBodyParts]);
+
     useEffect(() => {
-        if (!user) return;
+        let isActive = true;
+
+        const syncHistoryFromSupabase = async () => {
+            if (!user?.id) {
+                if (isActive) setHistorySyncReady(true);
+                return;
+            }
+
+            if (isActive) setHistorySyncReady(false);
+
+            const rawLocalHistory = load("history", {});
+            const localOwnerUserId = load(HISTORY_OWNER_KEY, null);
+            const scopedLocalHistory = load(getUserHistoryCacheKey(user.id), null);
+
+            let localMergeCandidate = {};
+
+            if (isPlainObject(scopedLocalHistory)) {
+                localMergeCandidate = scopedLocalHistory;
+            } else if (!localOwnerUserId || localOwnerUserId === user.id) {
+                localMergeCandidate = rawLocalHistory;
+            } else {
+                save(getUserHistoryCacheKey(localOwnerUserId), rawLocalHistory);
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from("workouts")
+                    .select("date, data")
+                    .eq("user_id", user.id)
+                    .order("date", { ascending: true });
+
+                if (error) throw error;
+
+                const remoteHistory = buildHistoryFromWorkoutRows(data);
+                const mergedHistory = mergeHistoryMaps(remoteHistory, localMergeCandidate);
+
+                if (!isActive) return;
+
+                setHistory(mergedHistory);
+                save("history", mergedHistory);
+                save(getUserHistoryCacheKey(user.id), mergedHistory);
+                save(HISTORY_OWNER_KEY, user.id);
+            } catch (error) {
+                console.error("history sync load failed", error);
+
+                if (!isActive) return;
+
+                setHistory(localMergeCandidate);
+                save("history", localMergeCandidate);
+                save(getUserHistoryCacheKey(user.id), localMergeCandidate);
+                save(HISTORY_OWNER_KEY, user.id);
+            } finally {
+                if (isActive) setHistorySyncReady(true);
+            }
+        };
+
+        syncHistoryFromSupabase();
+
+        return () => {
+            isActive = false;
+        };
+    }, [user]);
+
+    useEffect(() => {
+        if (!user || !historySyncReady) return;
         const saveToSupabase = async () => {
             await supabase.from("workouts").upsert({
                 user_id: user.id,
@@ -177,7 +324,7 @@ export default function GymApp() {
             }, { onConflict: "user_id,date" });
         };
         saveToSupabase();
-    }, [history, user]);
+    }, [history, user, historySyncReady]);
 
     useEffect(() => {
         let isActive = true;
