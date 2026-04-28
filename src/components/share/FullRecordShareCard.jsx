@@ -44,21 +44,31 @@ export default function FullRecordShareCard({
 
             {renderPhotoUrl && (
                 <div style={{ ...styleSet.photoFrame, marginBottom: 12, padding: template === "cool" ? 8 : 10 }}>
-                    <img
-                        ref={photoImgRef}
-                        src={renderPhotoUrl}
-                        alt={`${dateLabel} workout full record`}
-                        crossOrigin="anonymous"
-                        onLoad={onPhotoLoad}
-                        onError={onPhotoError}
+                    <div
                         style={{
-                            width: "100%",
-                            display: "block",
                             aspectRatio: "16 / 9",
-                            objectFit: "cover",
+                            width: "100%",
                             borderRadius: template === "cute" ? 18 : 16,
+                            overflow: "hidden",
+                            background: template === "cool" ? "#111214" : "#F0FBFF",
                         }}
-                    />
+                    >
+                        <img
+                            key={renderPhotoUrl}
+                            ref={photoImgRef}
+                            src={renderPhotoUrl}
+                            alt={`${dateLabel} workout full record`}
+                            crossOrigin="anonymous"
+                            onLoad={onPhotoLoad}
+                            onError={onPhotoError}
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                display: "block",
+                                objectFit: "cover",
+                            }}
+                        />
+                    </div>
                 </div>
             )}
 
