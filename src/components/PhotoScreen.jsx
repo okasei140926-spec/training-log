@@ -39,7 +39,7 @@ export default function PhotoScreen({ user }) {
     const [compareLoading, setCompareLoading] = useState(false);
     const [comparePreviewUrls, setComparePreviewUrls] = useState({});
     const cameraInputRef = useRef(null);
-    const fileInputRef = useRef(null);
+    const libraryInputRef = useRef(null);
 
     useEffect(() => {
         let isActive = true;
@@ -229,7 +229,7 @@ export default function PhotoScreen({ user }) {
     const handlePickFromLibrary = () => {
         if (!selectedDate || photoUploading || photoDeletingId) return;
         setShowSourcePicker(false);
-        fileInputRef.current?.click();
+        libraryInputRef.current?.click();
     };
 
     const handlePhotoChange = (e) => {
@@ -656,7 +656,7 @@ export default function PhotoScreen({ user }) {
             />
 
             <input
-                ref={fileInputRef}
+                ref={libraryInputRef}
                 type="file"
                 accept="image/*"
                 onChange={handlePhotoChange}
@@ -754,7 +754,7 @@ export default function PhotoScreen({ user }) {
                                 fontWeight: 700,
                             }}
                         >
-                            フォルダから選ぶ
+                            写真から選ぶ
                         </button>
 
                         <button
