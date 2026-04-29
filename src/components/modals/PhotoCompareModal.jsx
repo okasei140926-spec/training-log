@@ -72,7 +72,7 @@ export default function PhotoCompareModal({ photos, onClose }) {
                     <div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>写真比較</div>
                         {daysText && (
-                            <div style={{ fontSize: 12, fontWeight: 800, color: "var(--accent)", marginTop: 4 }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent)", marginTop: 4 }}>
                                 {daysText}
                             </div>
                         )}
@@ -96,7 +96,7 @@ export default function PhotoCompareModal({ photos, onClose }) {
                 </div>
 
                 <div style={{ padding: 16, overflowY: "auto", maxHeight: "calc(92vh - 72px)" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
                         {[
                             { label: "Before", photo: beforePhoto, accent: "rgba(56, 189, 248, 0.18)", border: "rgba(56, 189, 248, 0.36)" },
                             { label: "After", photo: afterPhoto, accent: "rgba(34, 197, 94, 0.14)", border: "rgba(34, 197, 94, 0.34)" },
