@@ -5,6 +5,8 @@ import PhotoCropModal from "./modals/PhotoCropModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
+const CAMERA_ACCEPT = "image/*";
+const LIBRARY_ACCEPT = "image/png,image/jpeg,image/heic,image/heif,image/webp";
 
 const formatDateLabel = (dateString) => String(dateString || "").replace(/-/g, "/");
 
@@ -649,7 +651,7 @@ export default function PhotoScreen({ user }) {
             <input
                 ref={cameraInputRef}
                 type="file"
-                accept="image/*"
+                accept={CAMERA_ACCEPT}
                 capture="environment"
                 onChange={handlePhotoChange}
                 style={{ display: "none" }}
@@ -658,7 +660,7 @@ export default function PhotoScreen({ user }) {
             <input
                 ref={libraryInputRef}
                 type="file"
-                accept="image/*"
+                accept={LIBRARY_ACCEPT}
                 onChange={handlePhotoChange}
                 style={{ display: "none" }}
             />
