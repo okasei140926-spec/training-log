@@ -257,56 +257,33 @@ export default function HistoryScreen({
                 style={{
                     background: "var(--card)",
                     borderRadius: 20,
-                    padding: "14px 16px",
+                    padding: "12px 14px",
                     border: "1px solid var(--border2)",
                     boxShadow: "var(--shadow-card)",
-                    marginBottom: 14,
+                    marginBottom: 12,
                 }}
             >
-                <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
+                <div style={{ fontSize: 10, letterSpacing: 2.2, color: "var(--text3)", marginBottom: 8 }}>
                     これまでの記録
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 }}>
-                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "12px 14px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 15, padding: "10px 12px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", lineHeight: 1.05 }}>
                             {totalTrainingDays}日
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
+                        <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
                             累計トレーニング日数
                         </div>
                     </div>
-                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "12px 14px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
+                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 15, padding: "10px 12px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text)", lineHeight: 1.05 }}>
                             {formatStatDate(firstTrainingDate)}
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
+                        <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
                             開始日
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                    移行用に、過去の自己ベストだけ先に登録できます
-                </div>
-                <button
-                    onClick={() => setShowManualBestManager(true)}
-                    disabled={!user}
-                    style={{
-                        padding: "9px 13px",
-                        borderRadius: 14,
-                        background: "linear-gradient(135deg, var(--accent2), #7DD3FC)",
-                        border: "1px solid var(--border2)",
-                        color: "#fff",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        opacity: user ? 1 : 0.6,
-                        boxShadow: "var(--shadow-soft)",
-                    }}
-                >
-                    過去ベストを登録・確認
-                </button>
             </div>
 
             {/* カレンダー（←ここ外に出すのが超重要） */}
@@ -316,6 +293,7 @@ export default function HistoryScreen({
                 padding: "16px",
                 border: "1px solid var(--border2)",
                 boxShadow: "var(--shadow-card)",
+                marginBottom: 12,
             }}>
                 <CalendarView
                     history={history}
@@ -331,6 +309,29 @@ export default function HistoryScreen({
                         }
                     }}
                 />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                    移行用に、過去の自己ベストだけ先に登録できます
+                </div>
+                <button
+                    onClick={() => setShowManualBestManager(true)}
+                    disabled={!user}
+                    style={{
+                        padding: "8px 12px",
+                        borderRadius: 14,
+                        background: "linear-gradient(135deg, var(--accent2), #7DD3FC)",
+                        border: "1px solid var(--border2)",
+                        color: "#fff",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        opacity: user ? 1 : 0.6,
+                        boxShadow: "var(--shadow-soft)",
+                    }}
+                >
+                    過去ベストを登録・確認
+                </button>
             </div>
 
             {/* モーダル */}
