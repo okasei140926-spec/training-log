@@ -257,29 +257,29 @@ export default function HistoryScreen({
                 style={{
                     background: "var(--card)",
                     borderRadius: 20,
-                    padding: "12px 14px",
+                    padding: "10px 12px",
                     border: "1px solid var(--border2)",
                     boxShadow: "var(--shadow-card)",
-                    marginBottom: 12,
+                    marginBottom: 10,
                 }}
             >
-                <div style={{ fontSize: 10, letterSpacing: 2.2, color: "var(--text3)", marginBottom: 8 }}>
+                <div style={{ fontSize: 10, letterSpacing: 2.2, color: "var(--text3)", marginBottom: 6 }}>
                     これまでの記録
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 15, padding: "10px 12px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 15, padding: "8px 10px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", lineHeight: 1.05 }}>
                             {totalTrainingDays}日
                         </div>
-                        <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
+                        <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
                             累計トレーニング日数
                         </div>
                     </div>
-                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 15, padding: "10px 12px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text)", lineHeight: 1.05 }}>
+                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 15, padding: "8px 10px", border: "1px solid rgba(186, 230, 253, 0.65)" }}>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", lineHeight: 1.05 }}>
                             {formatStatDate(firstTrainingDate)}
                         </div>
-                        <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 4 }}>
+                        <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
                             開始日
                         </div>
                     </div>
