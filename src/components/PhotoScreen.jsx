@@ -152,7 +152,12 @@ export default function PhotoScreen({ user }) {
         setSelectedPhotoUrls({});
         setViewerPhoto(null);
 
-        if (!dateRows.length) return;
+        if (!dateRows.length) {
+            if (user?.id && !photoUploading && !photoDeletingId) {
+                photoInputRef.current?.click();
+            }
+            return;
+        }
 
         setSelectedPhotoLoading(true);
 
@@ -169,7 +174,6 @@ export default function PhotoScreen({ user }) {
     };
 
     const selectedDateRows = selectedDate ? (photoMap[selectedDate] || []) : [];
-    const selectedDateLabel = selectedDate ? formatDateLabel(selectedDate) : "";
 
     const resetCompareState = () => {
         setIsCompareMode(false);
@@ -246,11 +250,6 @@ export default function PhotoScreen({ user }) {
     const handleCompareCardSelect = (row) => {
         if (!row?.id || compareLoading) return;
         setCompareSelection((prev) => getToggledCompareSelection(prev, row));
-    };
-
-    const handlePhotoPick = () => {
-        if (!user?.id || !selectedDate || photoUploading || photoDeletingId) return;
-        photoInputRef.current?.click();
     };
 
     const handlePhotoChange = (e) => {
@@ -746,38 +745,12 @@ export default function PhotoScreen({ user }) {
                                     </div>
                                 ))}
                             </div>
-                        ) : selectedDate ? (
-                            <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center" }}>
-                                <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
-                                    {selectedDateLabel} の写真はまだありません
-                                </div>
-                                <div style={{ color: "var(--text3)", fontSize: 12, lineHeight: 1.7, marginBottom: 14 }}>
-                                    この日に写真を追加して、変化を残しましょう
-                                </div>
-                                <button
-                                    onClick={handlePhotoPick}
-                                    disabled={photoUploading}
-                                    style={{
-                                        padding: "10px 14px",
-                                        borderRadius: 12,
-                                        background: "linear-gradient(135deg, var(--accent), #4ADE80)",
-                                        border: "1px solid transparent",
-                                        color: "#fff",
-                                        fontSize: 12,
-                                        fontWeight: 800,
-                                        boxShadow: "var(--shadow-soft)",
-                                        opacity: photoUploading ? 0.7 : 1,
-                                    }}
-                                >
-                                    {photoUploading ? "追加中..." : `${selectedDateLabel} に写真を追加`}
-                                </button>
-                            </div>
                         ) : (
                             <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
                                 {isCompareMode
                                     ? "比較したい写真がある日を選んで、2枚タップしてください"
                                     : photoRows.length > 0
-                                        ? "写真がある日付を選ぶとここに表示されます"
+                                        ? selectedDate ? "この日に保存されている写真はありません" : "写真がある日付を選ぶとここに表示されます"
                                         : "まだ保存されている写真はありません"}
                             </div>
                         )}
