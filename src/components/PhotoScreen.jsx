@@ -25,7 +25,6 @@ export default function PhotoScreen({ user }) {
     const [year, setYear] = useState(today.getFullYear());
     const [month, setMonth] = useState(today.getMonth());
     const [photoRows, setPhotoRows] = useState([]);
-    const [photoLoading, setPhotoLoading] = useState(false);
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedPhotoUrls, setSelectedPhotoUrls] = useState({});
     const [selectedPhotoLoading, setSelectedPhotoLoading] = useState(false);
@@ -33,13 +32,14 @@ export default function PhotoScreen({ user }) {
     const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
     const [photoDeletingId, setPhotoDeletingId] = useState(null);
     const [viewerPhoto, setViewerPhoto] = useState(null);
-    const [isCompareMode, setIsCompareMode] = useState(false);
+    const [showSourcePicker, setShowSourcePicker] = useState(false);
     const [compareSelection, setCompareSelection] = useState([]);
     const [comparePhotos, setComparePhotos] = useState([]);
     const [isCompareOpen, setIsCompareOpen] = useState(false);
     const [compareLoading, setCompareLoading] = useState(false);
     const [comparePreviewUrls, setComparePreviewUrls] = useState({});
-    const photoInputRef = useRef(null);
+    const cameraInputRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         let isActive = true;
@@ -51,11 +51,8 @@ export default function PhotoScreen({ user }) {
                 setSelectedDate(null);
                 setSelectedPhotoUrls({});
                 setViewerPhoto(null);
-                setPhotoLoading(false);
                 return;
             }
-
-            setPhotoLoading(true);
 
             const { data, error } = await supabase
                 .from("progress_photos")
@@ -67,7 +64,6 @@ export default function PhotoScreen({ user }) {
 
             if (error || !data) {
                 setPhotoRows([]);
-                setPhotoLoading(false);
                 return;
             }
 
@@ -79,7 +75,6 @@ export default function PhotoScreen({ user }) {
                     return String(a.storage_path || "").localeCompare(String(b.storage_path || ""));
                 })
             );
-            setPhotoLoading(false);
         };
 
         loadPhotos();
@@ -154,7 +149,7 @@ export default function PhotoScreen({ user }) {
 
         if (!dateRows.length) {
             if (user?.id && !photoUploading && !photoDeletingId) {
-                photoInputRef.current?.click();
+                setShowSourcePicker(true);
             }
             return;
         }
@@ -174,35 +169,19 @@ export default function PhotoScreen({ user }) {
     };
 
     const selectedDateRows = selectedDate ? (photoMap[selectedDate] || []) : [];
+    const selectedDateLabel = selectedDate ? formatDateLabel(selectedDate) : "";
 
     const resetCompareState = () => {
-        setIsCompareMode(false);
         setCompareSelection([]);
         setComparePhotos([]);
         setIsCompareOpen(false);
         setCompareLoading(false);
     };
 
-    const handleCompareToggle = () => {
-        if (isCompareMode) {
-            resetCompareState();
-            return;
-        }
-
-        setViewerPhoto(null);
-        setIsCompareMode(true);
-        setCompareSelection([]);
-        setComparePhotos([]);
-        setIsCompareOpen(false);
-    };
-
-    const openCompareWithRows = async (rows, { keepCompareMode = false } = {}) => {
+    const openCompareWithRows = async (rows) => {
         const filteredRows = (rows || []).filter(Boolean).slice(0, 2);
         if (filteredRows.length !== 2 || compareLoading) return;
 
-        if (!keepCompareMode) {
-            setIsCompareMode(false);
-        }
         setViewerPhoto(null);
         setCompareSelection(filteredRows);
         setCompareLoading(true);
@@ -236,20 +215,21 @@ export default function PhotoScreen({ user }) {
         }
     };
 
-    const handleCompareSelect = async (row) => {
-        if (!row?.id || compareLoading) return;
-
-        const nextSelection = getToggledCompareSelection(compareSelection, row);
-        setCompareSelection(nextSelection);
-
-        if (nextSelection.length !== 2) return;
-
-        await openCompareWithRows(nextSelection, { keepCompareMode: true });
-    };
-
     const handleCompareCardSelect = (row) => {
         if (!row?.id || compareLoading) return;
         setCompareSelection((prev) => getToggledCompareSelection(prev, row));
+    };
+
+    const handlePickFromCamera = () => {
+        if (!selectedDate || photoUploading || photoDeletingId) return;
+        setShowSourcePicker(false);
+        cameraInputRef.current?.click();
+    };
+
+    const handlePickFromLibrary = () => {
+        if (!selectedDate || photoUploading || photoDeletingId) return;
+        setShowSourcePicker(false);
+        fileInputRef.current?.click();
     };
 
     const handlePhotoChange = (e) => {
@@ -257,6 +237,7 @@ export default function PhotoScreen({ user }) {
         e.target.value = "";
 
         if (!file || !user?.id || !selectedDate) return;
+        setShowSourcePicker(false);
         setPendingPhotoFile(file);
     };
 
@@ -314,6 +295,7 @@ export default function PhotoScreen({ user }) {
         } finally {
             setPhotoUploading(false);
             setPendingPhotoFile(null);
+            setShowSourcePicker(false);
         }
     };
 
@@ -595,174 +577,88 @@ export default function PhotoScreen({ user }) {
                         </div>
                     </div>
 
-                    <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                            <div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>写真一覧</div>
-                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                                    {selectedDate ? `${selectedDate} の写真 ${selectedDateRows.length}枚` : "日付をタップして表示"}
-                                </div>
-                            </div>
-                            {!isCompareMode && (
-                                <button
-                                    onClick={handleCompareToggle}
-                                    disabled={!canCompare || compareLoading}
-                                    style={{
-                                        padding: "8px 12px",
-                                        borderRadius: 12,
-                                        background: "var(--card2)",
-                                        border: "1px solid var(--border2)",
-                                        color: !canCompare || compareLoading ? "var(--text4)" : "var(--text)",
-                                        fontSize: 12,
-                                        fontWeight: 700,
-                                        opacity: !canCompare || compareLoading ? 0.6 : 1,
-                                    }}
-                                >
-                                    {compareLoading ? "準備中..." : "比較モード"}
-                                </button>
-                            )}
-                        </div>
-
-                        {isCompareMode && (
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    gap: 12,
-                                    padding: "12px 14px",
-                                    borderRadius: 14,
-                                    background: "#ef444418",
-                                    border: "1px solid #ef444455",
-                                    marginBottom: 12,
-                                }}
-                            >
-                                <div>
-                                    <div style={{ fontSize: 12, fontWeight: 800, color: "#ef4444" }}>比較モード</div>
-                                    <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>
-                                        Before / After にしたい写真を2枚選択してください {compareSelection.length}/2
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={resetCompareState}
-                                    style={{
-                                        padding: "8px 12px",
-                                        borderRadius: 12,
-                                        background: "var(--card)",
-                                        border: "1px solid var(--border2)",
-                                        color: "var(--text)",
-                                        fontSize: 12,
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    キャンセル
-                                </button>
-                            </div>
-                        )}
-
-                        {photoLoading ? (
-                            <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-                                写真一覧を読み込み中...
-                            </div>
-                        ) : selectedPhotoLoading ? (
-                            <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-                                写真を読み込み中...
-                            </div>
-                        ) : selectedDateRows.length > 0 ? (
-                            <div style={{ display: "grid", gridTemplateColumns: isCompareMode ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                                {selectedDateRows.map((row, idx) => (
-                                    <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
-                                        {selectedPhotoUrls[row.id] ? (
-                                            <div style={{ position: "relative" }}>
-                                                <img
-                                                    src={selectedPhotoUrls[row.id]}
-                                                    alt={`${selectedDate} progress ${idx + 1}`}
-                                                    onClick={() => {
-                                                        if (isCompareMode) {
-                                                            handleCompareSelect(row);
-                                                            return;
-                                                        }
-                                                        setViewerPhoto({ id: row.id, url: selectedPhotoUrls[row.id], title: `${selectedDate} の体写真 ${idx + 1}` });
-                                                    }}
-                                                    style={{
-                                                        width: "100%",
-                                                        display: "block",
-                                                        borderRadius: 12,
-                                                        objectFit: "cover",
-                                                        aspectRatio: isCompareMode ? "3 / 4" : "1 / 1",
-                                                        cursor: isCompareMode ? "pointer" : "zoom-in",
-                                                        border: compareSelection.some((selected) => selected.id === row.id) ? "4px solid #ef4444" : "2px solid transparent",
-                                                        boxSizing: "border-box",
-                                                    }}
-                                                />
-                                                {compareSelection.some((selected) => selected.id === row.id) && (
-                                                    <div
-                                                        style={{
-                                                            position: "absolute",
-                                                            top: 8,
-                                                            right: 8,
-                                                            minWidth: 24,
-                                                            height: 24,
-                                                            borderRadius: 999,
-                                                            background: "#ef4444",
-                                                            color: "#fff",
-                                                            fontSize: 12,
-                                                            fontWeight: 800,
-                                                            display: "flex",
-                                                            alignItems: "center",
-                                                            justifyContent: "center",
-                                                            boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
-                                                        }}
-                                                    >
-                                                        {`${compareSelection.findIndex((selected) => selected.id === row.id) + 1}枚目`}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12, aspectRatio: "1 / 1", color: "var(--text3)", fontSize: 12 }}>
-                                                写真を表示できません
-                                            </div>
-                                        )}
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
-                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>{idx + 1}枚目</div>
-                                            <button
-                                                onClick={() => handlePhotoDelete(row)}
-                                                disabled={photoDeletingId === row.id}
-                                                style={{
-                                                    padding: "6px 10px",
-                                                    borderRadius: 10,
-                                                    background: "transparent",
-                                                    border: "1px solid var(--border2)",
-                                                    color: "var(--text3)",
-                                                    fontSize: 11,
-                                                    fontWeight: 700,
-                                                    opacity: photoDeletingId === row.id ? 0.6 : 1,
-                                                }}
-                                            >
-                                                {photoDeletingId === row.id ? "削除中..." : "削除"}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-                                {isCompareMode
-                                    ? "比較したい写真がある日を選んで、2枚タップしてください"
-                                    : photoRows.length > 0
-                                        ? selectedDate ? "この日に保存されている写真はありません" : "写真がある日付を選ぶとここに表示されます"
-                                        : "まだ保存されている写真はありません"}
-                            </div>
-                        )}
-                    </div>
                 </>
             )}
 
+            {selectedDateRows.length > 0 && (
+                <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+                                {selectedDateLabel} の写真
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                                {selectedDateRows.length}枚
+                            </div>
+                        </div>
+                    </div>
+
+                    {selectedPhotoLoading ? (
+                        <div style={{ background: "var(--card2)", borderRadius: 14, padding: "18px 14px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+                            写真を読み込み中...
+                        </div>
+                    ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                            {selectedDateRows.map((row, idx) => (
+                                <div key={row.id} style={{ background: "var(--card2)", borderRadius: 14, padding: 10 }}>
+                                    {selectedPhotoUrls[row.id] ? (
+                                        <img
+                                            src={selectedPhotoUrls[row.id]}
+                                            alt={`${selectedDate} progress ${idx + 1}`}
+                                            onClick={() => setViewerPhoto({ id: row.id, url: selectedPhotoUrls[row.id], title: `${selectedDate} の体写真 ${idx + 1}` })}
+                                            style={{
+                                                width: "100%",
+                                                display: "block",
+                                                borderRadius: 12,
+                                                objectFit: "cover",
+                                                aspectRatio: "1 / 1",
+                                                cursor: "zoom-in",
+                                            }}
+                                        />
+                                    ) : (
+                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12, aspectRatio: "1 / 1", color: "var(--text3)", fontSize: 12 }}>
+                                            写真を表示できません
+                                        </div>
+                                    )}
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
+                                        <div style={{ fontSize: 11, color: "var(--text3)" }}>{idx + 1}枚目</div>
+                                        <button
+                                            onClick={() => handlePhotoDelete(row)}
+                                            disabled={photoDeletingId === row.id}
+                                            style={{
+                                                padding: "6px 10px",
+                                                borderRadius: 10,
+                                                background: "transparent",
+                                                border: "1px solid var(--border2)",
+                                                color: "var(--text3)",
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                opacity: photoDeletingId === row.id ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {photoDeletingId === row.id ? "削除中..." : "削除"}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
             <input
-                ref={photoInputRef}
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
+                onChange={handlePhotoChange}
+                style={{ display: "none" }}
+            />
+
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
                 onChange={handlePhotoChange}
                 style={{ display: "none" }}
             />
@@ -788,6 +684,96 @@ export default function PhotoScreen({ user }) {
                     onCancel={() => setPendingPhotoFile(null)}
                     onConfirm={handlePhotoUpload}
                 />
+            )}
+
+            {showSourcePicker && (
+                <div
+                    onClick={() => setShowSourcePicker(false)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(15, 23, 42, 0.42)",
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        zIndex: 1200,
+                        padding: 16,
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "100%",
+                            maxWidth: 420,
+                            background: "var(--card)",
+                            borderRadius: 22,
+                            border: "1px solid var(--border2)",
+                            boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
+                            padding: 16,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 10,
+                        }}
+                    >
+                        <div style={{ padding: "2px 4px 8px" }}>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
+                                {selectedDateLabel ? `${selectedDateLabel} に写真を追加` : "写真を追加"}
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
+                                追加方法を選んでください
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handlePickFromCamera}
+                            style={{
+                                width: "100%",
+                                padding: "14px 16px",
+                                borderRadius: 16,
+                                background: "linear-gradient(135deg, var(--accent), #4ADE80)",
+                                border: "1px solid transparent",
+                                color: "#fff",
+                                fontSize: 14,
+                                fontWeight: 800,
+                                boxShadow: "var(--shadow-soft)",
+                            }}
+                        >
+                            カメラで撮る
+                        </button>
+
+                        <button
+                            onClick={handlePickFromLibrary}
+                            style={{
+                                width: "100%",
+                                padding: "14px 16px",
+                                borderRadius: 16,
+                                background: "var(--card2)",
+                                border: "1px solid var(--border2)",
+                                color: "var(--text)",
+                                fontSize: 14,
+                                fontWeight: 700,
+                            }}
+                        >
+                            フォルダから選ぶ
+                        </button>
+
+                        <button
+                            onClick={() => setShowSourcePicker(false)}
+                            style={{
+                                width: "100%",
+                                padding: "12px 16px",
+                                borderRadius: 14,
+                                background: "transparent",
+                                border: "1px solid transparent",
+                                color: "var(--text3)",
+                                fontSize: 13,
+                                fontWeight: 700,
+                            }}
+                        >
+                            キャンセル
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );
