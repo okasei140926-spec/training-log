@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
+
+function formatDateLabel(date) {
+    if (!date) return "";
+    const [year, month, day] = String(date).split("-");
+    if (!year || !month || !day) return date;
+    return `${year}/${month}/${day}`;
+}
 
 function diffDaysLabel(photos) {
     const dates = photos
@@ -17,106 +24,22 @@ function diffDaysLabel(photos) {
 }
 
 export default function PhotoCompareModal({ photos, onClose }) {
-    const [activeIndex, setActiveIndex] = useState(0);
-    const [photoRatios, setPhotoRatios] = useState({});
-    const touchStartX = useRef(null);
     const safePhotos = useMemo(
         () => (Array.isArray(photos) ? photos.filter(Boolean) : []),
         [photos]
     );
-    const activePhoto = safePhotos[activeIndex] || safePhotos[0];
 
-    useEffect(() => {
-        let isActive = true;
-
-        const loadRatios = async () => {
-            const ratioEntries = await Promise.all(
-                safePhotos.map(
-                    (photo) =>
-                        new Promise((resolve) => {
-                            if (!photo?.id || !photo?.url) {
-                                resolve(null);
-                                return;
-                            }
-
-                            const image = new Image();
-                            image.onload = () => {
-                                const ratio = image.naturalWidth > 0
-                                    ? image.naturalHeight / image.naturalWidth
-                                    : 4 / 3;
-                                resolve([photo.id, ratio]);
-                            };
-                            image.onerror = () => resolve([photo.id, 4 / 3]);
-                            image.src = photo.url;
-                        })
-                )
-            );
-
-            if (!isActive) return;
-            setPhotoRatios(Object.fromEntries(ratioEntries.filter(Boolean)));
-        };
-
-        if (safePhotos.length) {
-            loadRatios();
-        } else {
-            setPhotoRatios({});
-        }
-
-        return () => {
-            isActive = false;
-        };
+    const orderedPhotos = useMemo(() => {
+        return [...safePhotos].sort((a, b) =>
+            String(a?.workout_date || "").localeCompare(String(b?.workout_date || ""))
+        );
     }, [safePhotos]);
 
-    const periodText = useMemo(() => {
-        if (safePhotos.length < 2) return "";
+    const beforePhoto = orderedPhotos[0] || null;
+    const afterPhoto = orderedPhotos[1] || null;
+    const daysText = useMemo(() => diffDaysLabel(orderedPhotos), [orderedPhotos]);
 
-        const dates = safePhotos
-            .map((photo) => photo?.workout_date)
-            .filter(Boolean)
-            .sort();
-
-        if (dates.length < 2) return "";
-        return `${dates[0]} → ${dates[dates.length - 1]}`;
-    }, [safePhotos]);
-
-    const daysText = useMemo(() => diffDaysLabel(safePhotos), [safePhotos]);
-    const maxPhotoRatio = useMemo(() => {
-        const ratios = safePhotos
-            .map((photo) => photoRatios[photo.id])
-            .filter(Boolean);
-
-        return ratios.length ? Math.max(...ratios) : 4 / 3;
-    }, [photoRatios, safePhotos]);
-    const frameAspectRatio = useMemo(
-        () => `${1 / maxPhotoRatio}`,
-        [maxPhotoRatio]
-    );
-
-    const goPrev = () => {
-        setActiveIndex((prev) => Math.max(0, prev - 1));
-    };
-
-    const goNext = () => {
-        setActiveIndex((prev) => Math.min(safePhotos.length - 1, prev + 1));
-    };
-
-    const handleTouchStart = (e) => {
-        touchStartX.current = e.touches[0].clientX;
-    };
-
-    const handleTouchEnd = (e) => {
-        if (touchStartX.current == null) return;
-
-        const endX = e.changedTouches[0].clientX;
-        const dx = endX - touchStartX.current;
-
-        if (dx <= -50) goNext();
-        if (dx >= 50) goPrev();
-
-        touchStartX.current = null;
-    };
-
-    if (!activePhoto) return null;
+    if (!beforePhoto || !afterPhoto) return null;
 
     return (
         <div
@@ -134,11 +57,9 @@ export default function PhotoCompareModal({ photos, onClose }) {
         >
             <div
                 onClick={(e) => e.stopPropagation()}
-                onTouchStart={handleTouchStart}
-                onTouchEnd={handleTouchEnd}
                 style={{
                     width: "100%",
-                    maxWidth: 720,
+                    maxWidth: 760,
                     maxHeight: "92vh",
                     background: "var(--card)",
                     borderRadius: 20,
@@ -150,16 +71,14 @@ export default function PhotoCompareModal({ photos, onClose }) {
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
                     <div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>写真比較</div>
-                        {periodText && (
-                            <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-                                {periodText}
-                            </div>
-                        )}
                         {daysText && (
-                            <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: "var(--accent)", marginTop: 4 }}>
                                 {daysText}
                             </div>
                         )}
+                        <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
+                            Before / After を見比べて変化を確認
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
@@ -176,84 +95,65 @@ export default function PhotoCompareModal({ photos, onClose }) {
                     </button>
                 </div>
 
-                <div style={{ padding: 16 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
-                        <button
-                            onClick={goPrev}
-                            disabled={activeIndex === 0}
-                            style={{
-                                padding: "8px 12px",
-                                borderRadius: 12,
-                                border: "1px solid var(--border2)",
-                                background: "var(--card2)",
-                                color: "var(--text)",
-                                fontSize: 12,
-                                fontWeight: 700,
-                                opacity: activeIndex === 0 ? 0.45 : 1,
-                            }}
-                        >
-                            前へ
-                        </button>
-
-                        <div style={{ textAlign: "center" }}>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>
-                                {activeIndex + 1}/{safePhotos.length}
-                            </div>
-                            <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>
-                                {activePhoto.workout_date || activePhoto.title}
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={goNext}
-                            disabled={activeIndex === safePhotos.length - 1}
-                            style={{
-                                padding: "8px 12px",
-                                borderRadius: 12,
-                                border: "1px solid var(--border2)",
-                                background: "var(--card2)",
-                                color: "var(--text)",
-                                fontSize: 12,
-                                fontWeight: 700,
-                                opacity: activeIndex === safePhotos.length - 1 ? 0.45 : 1,
-                            }}
-                        >
-                            次へ
-                        </button>
-                    </div>
-
-                    <div
-                        style={{
-                            background: "var(--card2)",
-                            borderRadius: 16,
-                            padding: 10,
-                        }}
-                    >
-                        <div
-                            style={{
-                                width: "100%",
-                                aspectRatio: frameAspectRatio,
-                                maxHeight: "calc(92vh - 210px)",
-                                background: "#000",
-                                borderRadius: 12,
-                                overflow: "hidden",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
-                            <img
-                                src={activePhoto.url}
-                                alt={activePhoto.title || `compare-${activeIndex + 1}`}
+                <div style={{ padding: 16, overflowY: "auto", maxHeight: "calc(92vh - 72px)" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+                        {[
+                            { label: "Before", photo: beforePhoto, accent: "rgba(56, 189, 248, 0.18)", border: "rgba(56, 189, 248, 0.36)" },
+                            { label: "After", photo: afterPhoto, accent: "rgba(34, 197, 94, 0.14)", border: "rgba(34, 197, 94, 0.34)" },
+                        ].map(({ label, photo, accent, border }) => (
+                            <div
+                                key={label}
                                 style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    display: "block",
-                                    objectFit: "contain",
-                                    background: "#000",
+                                    background: "var(--card2)",
+                                    borderRadius: 18,
+                                    padding: 12,
+                                    border: `1px solid ${border}`,
                                 }}
-                            />
-                        </div>
+                            >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                        <div
+                                            style={{
+                                                padding: "5px 10px",
+                                                borderRadius: 999,
+                                                background: accent,
+                                                color: "var(--text)",
+                                                fontSize: 11,
+                                                fontWeight: 800,
+                                            }}
+                                        >
+                                            {label}
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 700 }}>
+                                        {formatDateLabel(photo.workout_date)}
+                                    </div>
+                                </div>
+
+                                <div
+                                    style={{
+                                        width: "100%",
+                                        aspectRatio: "3 / 4",
+                                        borderRadius: 14,
+                                        overflow: "hidden",
+                                        background: "#000",
+                                        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.05)",
+                                    }}
+                                >
+                                    <img
+                                        src={photo.url}
+                                        alt={photo.title || label}
+                                        style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            display: "block",
+                                            objectFit: "cover",
+                                            background: "#000",
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

@@ -5,6 +5,35 @@ import PhotoViewerModal from "./modals/PhotoViewerModal";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
+const toDateValue = (dateString) => new Date(`${dateString}T00:00:00`);
+
+const findClosestPastRow = (rows, latestDate, monthsBack) => {
+    if (!rows.length || !latestDate) return null;
+
+    const targetDate = new Date(`${latestDate}T00:00:00`);
+    targetDate.setMonth(targetDate.getMonth() - monthsBack);
+
+    const candidates = rows.filter((row) => {
+        if (!row?.workout_date) return false;
+        return row.workout_date < latestDate;
+    });
+
+    if (!candidates.length) return null;
+
+    return candidates.reduce((closest, row) => {
+        if (!closest) return row;
+
+        const currentDiff = Math.abs(toDateValue(row.workout_date) - targetDate);
+        const closestDiff = Math.abs(toDateValue(closest.workout_date) - targetDate);
+
+        if (currentDiff !== closestDiff) {
+            return currentDiff < closestDiff ? row : closest;
+        }
+
+        return row.workout_date > closest.workout_date ? row : closest;
+    }, null);
+};
+
 export default function PhotoScreen({ user }) {
     const today = new Date();
     const [year, setYear] = useState(today.getFullYear());
@@ -81,6 +110,21 @@ export default function PhotoScreen({ user }) {
     }, [photoRows]);
 
     const photoDates = useMemo(() => new Set(Object.keys(photoMap)), [photoMap]);
+    const compareDateRows = useMemo(() => {
+        return Object.entries(photoMap)
+            .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+            .map(([, rows]) => rows[0])
+            .filter(Boolean);
+    }, [photoMap]);
+    const latestCompareRow = compareDateRows[compareDateRows.length - 1] || null;
+    const firstCompareRow = compareDateRows[0] || null;
+    const oneMonthCompareRow = latestCompareRow
+        ? findClosestPastRow(compareDateRows, latestCompareRow.workout_date, 1)
+        : null;
+    const threeMonthCompareRow = latestCompareRow
+        ? findClosestPastRow(compareDateRows, latestCompareRow.workout_date, 3)
+        : null;
+    const canCompare = photoRows.length >= 2;
 
     useEffect(() => {
         if (selectedDate && !(photoMap[selectedDate] || []).length) {
@@ -135,28 +179,19 @@ export default function PhotoScreen({ user }) {
         setIsCompareOpen(false);
     };
 
-    const handleCompareSelect = async (row) => {
-        if (!row?.id || compareLoading) return;
+    const openCompareWithRows = async (rows, { keepCompareMode = false } = {}) => {
+        const filteredRows = (rows || []).filter(Boolean).slice(0, 2);
+        if (filteredRows.length !== 2 || compareLoading) return;
 
-        let nextSelection;
-
-        if (compareSelection.some((selected) => selected.id === row.id)) {
-            nextSelection = compareSelection.filter((selected) => selected.id !== row.id);
-            setCompareSelection(nextSelection);
-            return;
+        if (!keepCompareMode) {
+            setIsCompareMode(false);
         }
-
-        if (compareSelection.length >= 2) return;
-
-        nextSelection = [...compareSelection, row];
-        setCompareSelection(nextSelection);
-
-        if (nextSelection.length !== 2) return;
-
+        setViewerPhoto(null);
+        setCompareSelection(filteredRows);
         setCompareLoading(true);
 
         try {
-            const signedEntries = await Promise.all(nextSelection.map(async (photo, idx) => {
+            const signedEntries = await Promise.all(filteredRows.map(async (photo, idx) => {
                 const { data, error } = await supabase
                     .storage
                     .from("progress-photos-private")
@@ -182,6 +217,27 @@ export default function PhotoScreen({ user }) {
         } finally {
             setCompareLoading(false);
         }
+    };
+
+    const handleCompareSelect = async (row) => {
+        if (!row?.id || compareLoading) return;
+
+        let nextSelection;
+
+        if (compareSelection.some((selected) => selected.id === row.id)) {
+            nextSelection = compareSelection.filter((selected) => selected.id !== row.id);
+            setCompareSelection(nextSelection);
+            return;
+        }
+
+        if (compareSelection.length >= 2) return;
+
+        nextSelection = [...compareSelection, row];
+        setCompareSelection(nextSelection);
+
+        if (nextSelection.length !== 2) return;
+
+        await openCompareWithRows(nextSelection, { keepCompareMode: true });
     };
 
     const handlePhotoDelete = async (row) => {
@@ -359,22 +415,95 @@ export default function PhotoScreen({ user }) {
                     {!isCompareMode && (
                         <button
                             onClick={handleCompareToggle}
-                            disabled={!user || !photoRows.length || compareLoading}
+                            disabled={!user || !canCompare || compareLoading}
                             style={{
                                 padding: "8px 12px",
                                 borderRadius: 12,
                                 background: "var(--card2)",
                                 border: "1px solid var(--border2)",
-                                color: !user || !photoRows.length || compareLoading ? "var(--text4)" : "var(--text)",
+                                color: !user || !canCompare || compareLoading ? "var(--text4)" : "var(--text)",
                                 fontSize: 12,
                                 fontWeight: 700,
-                                opacity: !user || !photoRows.length || compareLoading ? 0.6 : 1,
+                                opacity: !user || !canCompare || compareLoading ? 0.6 : 1,
                             }}
                         >
                             {compareLoading ? "準備中..." : "比較"}
                         </button>
                     )}
                 </div>
+
+                {user && photoRows.length > 0 && (
+                    <div style={{ marginBottom: 12, padding: "12px 14px", borderRadius: 14, background: "linear-gradient(180deg, #F8FCFF, var(--card))", border: "1px solid rgba(56, 189, 248, 0.16)" }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+                            かんたん比較
+                        </div>
+                        {canCompare ? (
+                            <>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                    <button
+                                        onClick={() => openCompareWithRows([firstCompareRow, latestCompareRow])}
+                                        disabled={!firstCompareRow || !latestCompareRow || compareLoading}
+                                        style={{
+                                            padding: "8px 12px",
+                                            borderRadius: 999,
+                                            background: "var(--card)",
+                                            border: "1px solid rgba(56, 189, 248, 0.22)",
+                                            color: "var(--text)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            boxShadow: "var(--shadow-card)",
+                                        }}
+                                    >
+                                        最初と最新
+                                    </button>
+                                    <button
+                                        onClick={() => openCompareWithRows([oneMonthCompareRow, latestCompareRow])}
+                                        disabled={!oneMonthCompareRow || !latestCompareRow || compareLoading}
+                                        style={{
+                                            padding: "8px 12px",
+                                            borderRadius: 999,
+                                            background: "var(--card)",
+                                            border: "1px solid rgba(56, 189, 248, 0.22)",
+                                            color: oneMonthCompareRow ? "var(--text)" : "var(--text4)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            opacity: oneMonthCompareRow ? 1 : 0.55,
+                                            boxShadow: "var(--shadow-card)",
+                                        }}
+                                    >
+                                        1ヶ月前と比較
+                                    </button>
+                                    <button
+                                        onClick={() => openCompareWithRows([threeMonthCompareRow, latestCompareRow])}
+                                        disabled={!threeMonthCompareRow || !latestCompareRow || compareLoading}
+                                        style={{
+                                            padding: "8px 12px",
+                                            borderRadius: 999,
+                                            background: "var(--card)",
+                                            border: "1px solid rgba(56, 189, 248, 0.22)",
+                                            color: threeMonthCompareRow ? "var(--text)" : "var(--text4)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            opacity: threeMonthCompareRow ? 1 : 0.55,
+                                            boxShadow: "var(--shadow-card)",
+                                        }}
+                                    >
+                                        3ヶ月前と比較
+                                    </button>
+                                </div>
+                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>
+                                    2枚を選んで比較したい時は、今まで通り比較モードも使えます
+                                </div>
+                            </>
+                        ) : (
+                            <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.6 }}>
+                                比較には2枚以上の写真が必要です
+                                <br />
+                                今日の写真を追加して、変化を残しましょう
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {isCompareMode && (
                     <div
@@ -393,7 +522,7 @@ export default function PhotoScreen({ user }) {
                         <div>
                             <div style={{ fontSize: 12, fontWeight: 800, color: "#ef4444" }}>比較モード</div>
                             <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2 }}>
-                                写真を2枚選択してください {compareSelection.length}/2
+                                Before / After にしたい写真を2枚選択してください {compareSelection.length}/2
                             </div>
                         </div>
                         <button
@@ -504,7 +633,9 @@ export default function PhotoScreen({ user }) {
                     </div>
                 ) : (
                     <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
-                        {photoRows.length > 0
+                        {isCompareMode
+                            ? "比較したい写真がある日を選んで、2枚タップしてください"
+                            : photoRows.length > 0
                             ? selectedDate ? "この日に保存されている写真はありません" : "写真がある日付を選ぶとここに表示されます"
                             : "まだ保存されている写真はありません"}
                     </div>
