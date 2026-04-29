@@ -136,7 +136,7 @@ const buildManualBestMap = (manualBests = []) => {
 };
 
 export default function AnalyticsScreen({ history, manualBests = [], muscleEx = {} }) {
-  const [activeTab, setActiveTab] = useState("exercises");
+  const [activeTab, setActiveTab] = useState("pr");
   const [selectedEx, setSelectedEx] = useState(null);
   const [period, setPeriod] = useState(90);
   const [search, setSearch] = useState("");

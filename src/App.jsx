@@ -998,6 +998,7 @@ export default function GymApp() {
     const headerTitle =
         screen === "log" ? "Log"
             : screen === "photos" ? "比較"
+                : screen === "analytics" ? "PR"
                 : screen === "friends" ? "Friends"
                     : screen === "ai" ? "AI Coach"
                         : "記録";
@@ -1005,7 +1006,7 @@ export default function GymApp() {
     const bottomTabs = [
         { id: "history", icon: "📊", label: "記録" },
         { id: "photos", icon: "📷", label: "比較" },
-        { id: "analytics", icon: "📈", label: "分析" },
+        { id: "analytics", icon: "📈", label: "PR" },
         { id: "friends", icon: "👥", label: "Friends" },
         { id: "ai", icon: "🤖", label: "AI" },
     ];
