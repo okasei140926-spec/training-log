@@ -1,47 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../utils/supabase";
 import PhotoCompareModal from "./modals/PhotoCompareModal";
+import PhotoCropModal from "./modals/PhotoCropModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
-const toDateValue = (dateString) => new Date(`${dateString}T00:00:00`);
-
 const formatDateLabel = (dateString) => String(dateString || "").replace(/-/g, "/");
-
-const diffDaysText = (startDate, endDate) => {
-    if (!startDate || !endDate) return "";
-    const diffMs = toDateValue(endDate) - toDateValue(startDate);
-    const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
-    return `${diffDays}日間の変化`;
-};
-
-const findClosestPastRow = (rows, latestDate, monthsBack) => {
-    if (!rows.length || !latestDate) return null;
-
-    const targetDate = new Date(`${latestDate}T00:00:00`);
-    targetDate.setMonth(targetDate.getMonth() - monthsBack);
-
-    const candidates = rows.filter((row) => {
-        if (!row?.workout_date) return false;
-        return row.workout_date < latestDate;
-    });
-
-    if (!candidates.length) return null;
-
-    return candidates.reduce((closest, row) => {
-        if (!closest) return row;
-
-        const currentDiff = Math.abs(toDateValue(row.workout_date) - targetDate);
-        const closestDiff = Math.abs(toDateValue(closest.workout_date) - targetDate);
-
-        if (currentDiff !== closestDiff) {
-            return currentDiff < closestDiff ? row : closest;
-        }
-
-        return row.workout_date > closest.workout_date ? row : closest;
-    }, null);
-};
 
 const getToggledCompareSelection = (selection, row) => {
     if (!row?.id) return selection;
@@ -64,6 +29,8 @@ export default function PhotoScreen({ user }) {
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedPhotoUrls, setSelectedPhotoUrls] = useState({});
     const [selectedPhotoLoading, setSelectedPhotoLoading] = useState(false);
+    const [photoUploading, setPhotoUploading] = useState(false);
+    const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
     const [photoDeletingId, setPhotoDeletingId] = useState(null);
     const [viewerPhoto, setViewerPhoto] = useState(null);
     const [isCompareMode, setIsCompareMode] = useState(false);
@@ -72,6 +39,7 @@ export default function PhotoScreen({ user }) {
     const [isCompareOpen, setIsCompareOpen] = useState(false);
     const [compareLoading, setCompareLoading] = useState(false);
     const [comparePreviewUrls, setComparePreviewUrls] = useState({});
+    const photoInputRef = useRef(null);
 
     useEffect(() => {
         let isActive = true;
@@ -146,24 +114,7 @@ export default function PhotoScreen({ user }) {
         );
     }, [compareDateRows]);
 
-    const latestCompareRow = compareDateRows[compareDateRows.length - 1] || null;
-    const firstCompareRow = compareDateRows[0] || null;
-    const oneMonthCompareRow = latestCompareRow
-        ? findClosestPastRow(compareDateRows, latestCompareRow.workout_date, 1)
-        : null;
-    const threeMonthCompareRow = latestCompareRow
-        ? findClosestPastRow(compareDateRows, latestCompareRow.workout_date, 3)
-        : null;
-
     const canCompare = photoRows.length >= 2;
-
-    useEffect(() => {
-        if (selectedDate && !(photoMap[selectedDate] || []).length) {
-            setSelectedDate(null);
-            setSelectedPhotoUrls({});
-            setViewerPhoto(null);
-        }
-    }, [selectedDate, photoMap]);
 
     useEffect(() => {
         let isActive = true;
@@ -218,6 +169,7 @@ export default function PhotoScreen({ user }) {
     };
 
     const selectedDateRows = selectedDate ? (photoMap[selectedDate] || []) : [];
+    const selectedDateLabel = selectedDate ? formatDateLabel(selectedDate) : "";
 
     const resetCompareState = () => {
         setIsCompareMode(false);
@@ -296,6 +248,76 @@ export default function PhotoScreen({ user }) {
         setCompareSelection((prev) => getToggledCompareSelection(prev, row));
     };
 
+    const handlePhotoPick = () => {
+        if (!user?.id || !selectedDate || photoUploading || photoDeletingId) return;
+        photoInputRef.current?.click();
+    };
+
+    const handlePhotoChange = (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+
+        if (!file || !user?.id || !selectedDate) return;
+        setPendingPhotoFile(file);
+    };
+
+    const handlePhotoUpload = async ({ blob, extension, mimeType }) => {
+        if (!user?.id || !selectedDate) return;
+
+        setPhotoUploading(true);
+
+        try {
+            const ext = extension || "jpg";
+            const storagePath = `${user.id}/${selectedDate}/progress-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+            const { error: uploadError } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .upload(storagePath, blob, {
+                    contentType: mimeType || "image/jpeg",
+                });
+
+            if (uploadError) throw uploadError;
+
+            const { data: insertedRow, error: insertError } = await supabase
+                .from("progress_photos")
+                .insert({
+                    user_id: user.id,
+                    workout_date: selectedDate,
+                    storage_path: storagePath,
+                })
+                .select("id, storage_path, workout_date")
+                .single();
+
+            if (insertError) throw insertError;
+
+            const { data: signedData, error: signedError } = await supabase
+                .storage
+                .from("progress-photos-private")
+                .createSignedUrl(storagePath, 3600);
+
+            if (signedError) throw signedError;
+
+            setPhotoRows((prev) =>
+                [...prev, insertedRow].sort((a, b) => {
+                    if (a.workout_date !== b.workout_date) {
+                        return String(b.workout_date || "").localeCompare(String(a.workout_date || ""));
+                    }
+                    return String(a.storage_path || "").localeCompare(String(b.storage_path || ""));
+                })
+            );
+            setSelectedPhotoUrls((prev) => ({
+                ...prev,
+                [insertedRow.id]: signedData?.signedUrl || null,
+            }));
+        } catch (error) {
+            console.error("photo upload failed", error);
+        } finally {
+            setPhotoUploading(false);
+            setPendingPhotoFile(null);
+        }
+    };
+
     const handlePhotoDelete = async (row) => {
         if (!user?.id || !row?.id || !row?.storage_path || photoDeletingId) return;
 
@@ -333,9 +355,6 @@ export default function PhotoScreen({ user }) {
             });
             setCompareSelection((prev) => prev.filter((photo) => photo.id !== row.id));
             setComparePhotos((prev) => prev.filter((photo) => photo.id !== row.id));
-            if (selectedDate === row.workout_date && selectedDateRows.length === 1) {
-                setSelectedDate(null);
-            }
             setViewerPhoto((prev) => (prev?.id === row.id ? null : prev));
         } catch (error) {
             console.error("photo delete failed", error);
@@ -355,14 +374,6 @@ export default function PhotoScreen({ user }) {
     const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
     const monthPhotoCount = [...photoDates].filter((d) => d.startsWith(monthPrefix)).length;
     const compareSelectionReady = compareSelection.length === 2;
-    const recommendedDaysText = firstCompareRow && latestCompareRow
-        ? diffDaysText(firstCompareRow.workout_date, latestCompareRow.workout_date)
-        : "";
-    const recommendedCompareReady =
-        Boolean(firstCompareRow?.id) &&
-        Boolean(latestCompareRow?.id) &&
-        Boolean(comparePreviewUrls[firstCompareRow?.id]) &&
-        Boolean(comparePreviewUrls[latestCompareRow?.id]);
 
     const prevMonth = () => {
         if (month === 0) {
@@ -408,218 +419,100 @@ export default function PhotoScreen({ user }) {
                             </div>
                         </div>
                     ) : (
-                        <>
-                            <div style={{ background: "linear-gradient(180deg, #F8FCFF, var(--card))", borderRadius: 18, padding: 16, border: "1px solid rgba(56, 189, 248, 0.16)", marginBottom: 16 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                                    <div>
-                                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>おすすめ比較</div>
-                                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                                            最初の写真と最新の写真で変化を見比べる
-                                        </div>
+                        <div style={{ background: "var(--card)", borderRadius: 18, padding: 16, border: "1px solid var(--border2)", marginBottom: 16 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                                <div>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>写真から選んで比較</div>
+                                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                                        代表写真を2枚選んで Before / After を見比べる
                                     </div>
+                                </div>
+                                {compareSelection.length > 0 && (
                                     <button
-                                        onClick={() => openCompareWithRows([firstCompareRow, latestCompareRow])}
-                                        disabled={!recommendedCompareReady || compareLoading}
+                                        onClick={() => setCompareSelection([])}
                                         style={{
-                                            padding: "8px 12px",
-                                            borderRadius: 12,
-                                            background: "linear-gradient(135deg, var(--accent2), #7DD3FC)",
-                                            border: "1px solid transparent",
-                                            color: "#fff",
-                                            fontSize: 12,
-                                            fontWeight: 800,
-                                            opacity: recommendedCompareReady ? 1 : 0.6,
-                                            boxShadow: "var(--shadow-soft)",
+                                            padding: "7px 10px",
+                                            borderRadius: 10,
+                                            background: "var(--card2)",
+                                            border: "1px solid var(--border2)",
+                                            color: "var(--text2)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
                                         }}
                                     >
-                                        比較する
+                                        選択クリア
                                     </button>
-                                </div>
+                                )}
+                            </div>
 
-                                <div style={{ fontSize: 14, fontWeight: 800, color: "var(--accent)", marginBottom: 12 }}>
-                                    {recommendedDaysText}
-                                </div>
+                            <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, marginBottom: 12 }}>
+                                {compareBrowseRows.map((row) => {
+                                    const isSelected = compareSelection.some((selected) => selected.id === row.id);
+                                    const selectedIndex = compareSelection.findIndex((selected) => selected.id === row.id);
 
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-                                    {[
-                                        { label: "Before", row: firstCompareRow, accent: "rgba(56, 189, 248, 0.18)", border: "rgba(56, 189, 248, 0.34)" },
-                                        { label: "After", row: latestCompareRow, accent: "rgba(34, 197, 94, 0.14)", border: "rgba(34, 197, 94, 0.32)" },
-                                    ].map(({ label, row, accent, border }) => (
-                                        <div key={label} style={{ background: "var(--card)", borderRadius: 16, padding: 10, border: `1px solid ${border}`, boxShadow: "var(--shadow-card)" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                                                <div style={{ padding: "4px 10px", borderRadius: 999, background: accent, color: "var(--text)", fontSize: 11, fontWeight: 800 }}>
-                                                    {label}
-                                                </div>
-                                                <div style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700 }}>
-                                                    {formatDateLabel(row?.workout_date)}
-                                                </div>
-                                            </div>
-                                            <div style={{ width: "100%", aspectRatio: "3 / 4", borderRadius: 14, overflow: "hidden", background: "var(--card2)" }}>
-                                                {row && comparePreviewUrls[row.id] ? (
+                                    return (
+                                        <button
+                                            key={row.id}
+                                            onClick={() => handleCompareCardSelect(row)}
+                                            style={{
+                                                minWidth: 132,
+                                                background: "var(--card2)",
+                                                borderRadius: 16,
+                                                border: isSelected ? "2px solid var(--accent)" : "1px solid rgba(217, 228, 239, 0.9)",
+                                                padding: 8,
+                                                textAlign: "left",
+                                                boxShadow: isSelected ? "0 10px 24px rgba(34, 197, 94, 0.12)" : "var(--shadow-card)",
+                                            }}
+                                        >
+                                            <div style={{ width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden", background: "var(--card)" }}>
+                                                {comparePreviewUrls[row.id] ? (
                                                     <img
                                                         src={comparePreviewUrls[row.id]}
-                                                        alt={`${label}-${row.workout_date}`}
+                                                        alt={row.workout_date}
                                                         style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
                                                     />
                                                 ) : (
-                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 12 }}>
+                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 11 }}>
                                                         読み込み中...
                                                     </div>
                                                 )}
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div style={{ background: "var(--card)", borderRadius: 18, padding: 16, border: "1px solid var(--border2)", marginBottom: 16 }}>
-                                <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>クイック比較</div>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                                    <button
-                                        onClick={() => openCompareWithRows([firstCompareRow, latestCompareRow])}
-                                        disabled={!firstCompareRow || !latestCompareRow || compareLoading}
-                                        style={{
-                                            padding: "8px 12px",
-                                            borderRadius: 999,
-                                            background: "var(--card2)",
-                                            border: "1px solid rgba(56, 189, 248, 0.22)",
-                                            color: "var(--text)",
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                        }}
-                                    >
-                                        最初と最新
-                                    </button>
-                                    <button
-                                        onClick={() => openCompareWithRows([oneMonthCompareRow, latestCompareRow])}
-                                        disabled={!oneMonthCompareRow || !latestCompareRow || compareLoading}
-                                        style={{
-                                            padding: "8px 12px",
-                                            borderRadius: 999,
-                                            background: "var(--card2)",
-                                            border: "1px solid rgba(56, 189, 248, 0.22)",
-                                            color: oneMonthCompareRow ? "var(--text)" : "var(--text4)",
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            opacity: oneMonthCompareRow ? 1 : 0.55,
-                                        }}
-                                    >
-                                        1ヶ月前と比較
-                                    </button>
-                                    <button
-                                        onClick={() => openCompareWithRows([threeMonthCompareRow, latestCompareRow])}
-                                        disabled={!threeMonthCompareRow || !latestCompareRow || compareLoading}
-                                        style={{
-                                            padding: "8px 12px",
-                                            borderRadius: 999,
-                                            background: "var(--card2)",
-                                            border: "1px solid rgba(56, 189, 248, 0.22)",
-                                            color: threeMonthCompareRow ? "var(--text)" : "var(--text4)",
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            opacity: threeMonthCompareRow ? 1 : 0.55,
-                                        }}
-                                    >
-                                        3ヶ月前と比較
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div style={{ background: "var(--card)", borderRadius: 18, padding: 16, border: "1px solid var(--border2)", marginBottom: 16 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                                    <div>
-                                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>写真から選んで比較</div>
-                                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                                            代表写真を2枚選んで Before / After を見比べる
-                                        </div>
-                                    </div>
-                                    {compareSelection.length > 0 && (
-                                        <button
-                                            onClick={() => setCompareSelection([])}
-                                            style={{
-                                                padding: "7px 10px",
-                                                borderRadius: 10,
-                                                background: "var(--card2)",
-                                                border: "1px solid var(--border2)",
-                                                color: "var(--text2)",
-                                                fontSize: 11,
-                                                fontWeight: 700,
-                                            }}
-                                        >
-                                            選択クリア
+                                            <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "var(--text)" }}>
+                                                {formatDateLabel(row.workout_date)}
+                                            </div>
+                                            <div style={{ marginTop: 4, fontSize: 10, color: isSelected ? "var(--accent)" : "var(--text3)", fontWeight: isSelected ? 800 : 600 }}>
+                                                {isSelected ? `${selectedIndex + 1}枚目に選択中` : "タップして選択"}
+                                            </div>
                                         </button>
-                                    )}
-                                </div>
-
-                                <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, marginBottom: 12 }}>
-                                    {compareBrowseRows.map((row) => {
-                                        const isSelected = compareSelection.some((selected) => selected.id === row.id);
-                                        const selectedIndex = compareSelection.findIndex((selected) => selected.id === row.id);
-
-                                        return (
-                                            <button
-                                                key={row.id}
-                                                onClick={() => handleCompareCardSelect(row)}
-                                                style={{
-                                                    minWidth: 132,
-                                                    background: "var(--card2)",
-                                                    borderRadius: 16,
-                                                    border: isSelected ? "2px solid var(--accent)" : "1px solid rgba(217, 228, 239, 0.9)",
-                                                    padding: 8,
-                                                    textAlign: "left",
-                                                    boxShadow: isSelected ? "0 10px 24px rgba(34, 197, 94, 0.12)" : "var(--shadow-card)",
-                                                }}
-                                            >
-                                                <div style={{ width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden", background: "var(--card)" }}>
-                                                    {comparePreviewUrls[row.id] ? (
-                                                        <img
-                                                            src={comparePreviewUrls[row.id]}
-                                                            alt={row.workout_date}
-                                                            style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
-                                                        />
-                                                    ) : (
-                                                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 11 }}>
-                                                            読み込み中...
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "var(--text)" }}>
-                                                    {formatDateLabel(row.workout_date)}
-                                                </div>
-                                                <div style={{ marginTop: 4, fontSize: 10, color: isSelected ? "var(--accent)" : "var(--text3)", fontWeight: isSelected ? 800 : 600 }}>
-                                                    {isSelected ? `${selectedIndex + 1}枚目に選択中` : "タップして選択"}
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                                    <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                        {compareSelection.length === 0
-                                            ? "2枚選ぶと比較できます"
-                                            : `${compareSelection.length}/2 枚選択中`}
-                                    </div>
-                                    <button
-                                        onClick={() => openCompareWithRows(compareSelection)}
-                                        disabled={!compareSelectionReady || compareLoading}
-                                        style={{
-                                            padding: "9px 14px",
-                                            borderRadius: 12,
-                                            background: compareSelectionReady ? "linear-gradient(135deg, var(--accent), #4ADE80)" : "var(--card2)",
-                                            border: "1px solid transparent",
-                                            color: compareSelectionReady ? "#fff" : "var(--text4)",
-                                            fontSize: 12,
-                                            fontWeight: 800,
-                                            opacity: compareSelectionReady ? 1 : 0.65,
-                                            boxShadow: compareSelectionReady ? "0 10px 22px rgba(34, 197, 94, 0.16)" : "none",
-                                        }}
-                                    >
-                                        選んだ2枚を比較
-                                    </button>
-                                </div>
+                                    );
+                                })}
                             </div>
-                        </>
+
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                                <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                    {compareSelection.length === 0
+                                        ? "2枚選ぶと比較できます"
+                                        : `${compareSelection.length}/2 枚選択中`}
+                                </div>
+                                <button
+                                    onClick={() => openCompareWithRows(compareSelection)}
+                                    disabled={!compareSelectionReady || compareLoading}
+                                    style={{
+                                        padding: "9px 14px",
+                                        borderRadius: 12,
+                                        background: compareSelectionReady ? "linear-gradient(135deg, var(--accent), #4ADE80)" : "var(--card2)",
+                                        border: "1px solid transparent",
+                                        color: compareSelectionReady ? "#fff" : "var(--text4)",
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                        opacity: compareSelectionReady ? 1 : 0.65,
+                                        boxShadow: compareSelectionReady ? "0 10px 22px rgba(34, 197, 94, 0.16)" : "none",
+                                    }}
+                                >
+                                    選んだ2枚を比較
+                                </button>
+                            </div>
+                        </div>
                     )}
 
                     <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 16 }}>
@@ -853,18 +746,53 @@ export default function PhotoScreen({ user }) {
                                     </div>
                                 ))}
                             </div>
+                        ) : selectedDate ? (
+                            <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center" }}>
+                                <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                                    {selectedDateLabel} の写真はまだありません
+                                </div>
+                                <div style={{ color: "var(--text3)", fontSize: 12, lineHeight: 1.7, marginBottom: 14 }}>
+                                    この日に写真を追加して、変化を残しましょう
+                                </div>
+                                <button
+                                    onClick={handlePhotoPick}
+                                    disabled={photoUploading}
+                                    style={{
+                                        padding: "10px 14px",
+                                        borderRadius: 12,
+                                        background: "linear-gradient(135deg, var(--accent), #4ADE80)",
+                                        border: "1px solid transparent",
+                                        color: "#fff",
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                        boxShadow: "var(--shadow-soft)",
+                                        opacity: photoUploading ? 0.7 : 1,
+                                    }}
+                                >
+                                    {photoUploading ? "追加中..." : `${selectedDateLabel} に写真を追加`}
+                                </button>
+                            </div>
                         ) : (
                             <div style={{ background: "var(--card2)", borderRadius: 14, padding: "24px 16px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
                                 {isCompareMode
                                     ? "比較したい写真がある日を選んで、2枚タップしてください"
                                     : photoRows.length > 0
-                                        ? selectedDate ? "この日に保存されている写真はありません" : "写真がある日付を選ぶとここに表示されます"
+                                        ? "写真がある日付を選ぶとここに表示されます"
                                         : "まだ保存されている写真はありません"}
                             </div>
                         )}
                     </div>
                 </>
             )}
+
+            <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoChange}
+                style={{ display: "none" }}
+            />
 
             {viewerPhoto?.url && (
                 <PhotoViewerModal
@@ -878,6 +806,14 @@ export default function PhotoScreen({ user }) {
                 <PhotoCompareModal
                     photos={comparePhotos}
                     onClose={resetCompareState}
+                />
+            )}
+
+            {pendingPhotoFile && (
+                <PhotoCropModal
+                    file={pendingPhotoFile}
+                    onCancel={() => setPendingPhotoFile(null)}
+                    onConfirm={handlePhotoUpload}
                 />
             )}
         </div>
