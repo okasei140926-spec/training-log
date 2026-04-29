@@ -5,8 +5,6 @@ import PhotoCropModal from "./modals/PhotoCropModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
-const CAMERA_ACCEPT = "image/*";
-const LIBRARY_ACCEPT = "image/png,image/jpeg,image/heic,image/heif,image/webp";
 
 const formatDateLabel = (dateString) => String(dateString || "").replace(/-/g, "/");
 
@@ -34,14 +32,12 @@ export default function PhotoScreen({ user }) {
     const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
     const [photoDeletingId, setPhotoDeletingId] = useState(null);
     const [viewerPhoto, setViewerPhoto] = useState(null);
-    const [showSourcePicker, setShowSourcePicker] = useState(false);
     const [compareSelection, setCompareSelection] = useState([]);
     const [comparePhotos, setComparePhotos] = useState([]);
     const [isCompareOpen, setIsCompareOpen] = useState(false);
     const [compareLoading, setCompareLoading] = useState(false);
     const [comparePreviewUrls, setComparePreviewUrls] = useState({});
-    const cameraInputRef = useRef(null);
-    const libraryInputRef = useRef(null);
+    const photoInputRef = useRef(null);
 
     useEffect(() => {
         let isActive = true;
@@ -151,7 +147,7 @@ export default function PhotoScreen({ user }) {
 
         if (!dateRows.length) {
             if (user?.id && !photoUploading && !photoDeletingId) {
-                setShowSourcePicker(true);
+                photoInputRef.current?.click();
             }
             return;
         }
@@ -222,24 +218,11 @@ export default function PhotoScreen({ user }) {
         setCompareSelection((prev) => getToggledCompareSelection(prev, row));
     };
 
-    const handlePickFromCamera = () => {
-        if (!selectedDate || photoUploading || photoDeletingId) return;
-        setShowSourcePicker(false);
-        cameraInputRef.current?.click();
-    };
-
-    const handlePickFromLibrary = () => {
-        if (!selectedDate || photoUploading || photoDeletingId) return;
-        setShowSourcePicker(false);
-        libraryInputRef.current?.click();
-    };
-
     const handlePhotoChange = (e) => {
         const file = e.target.files?.[0];
         e.target.value = "";
 
         if (!file || !user?.id || !selectedDate) return;
-        setShowSourcePicker(false);
         setPendingPhotoFile(file);
     };
 
@@ -297,7 +280,6 @@ export default function PhotoScreen({ user }) {
         } finally {
             setPhotoUploading(false);
             setPendingPhotoFile(null);
-            setShowSourcePicker(false);
         }
     };
 
@@ -649,18 +631,9 @@ export default function PhotoScreen({ user }) {
             )}
 
             <input
-                ref={cameraInputRef}
+                ref={photoInputRef}
                 type="file"
-                accept={CAMERA_ACCEPT}
-                capture="environment"
-                onChange={handlePhotoChange}
-                style={{ display: "none" }}
-            />
-
-            <input
-                ref={libraryInputRef}
-                type="file"
-                accept={LIBRARY_ACCEPT}
+                accept="image/*"
                 onChange={handlePhotoChange}
                 style={{ display: "none" }}
             />
@@ -686,96 +659,6 @@ export default function PhotoScreen({ user }) {
                     onCancel={() => setPendingPhotoFile(null)}
                     onConfirm={handlePhotoUpload}
                 />
-            )}
-
-            {showSourcePicker && (
-                <div
-                    onClick={() => setShowSourcePicker(false)}
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        background: "rgba(15, 23, 42, 0.42)",
-                        display: "flex",
-                        alignItems: "flex-end",
-                        justifyContent: "center",
-                        zIndex: 1200,
-                        padding: 16,
-                    }}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            width: "100%",
-                            maxWidth: 420,
-                            background: "var(--card)",
-                            borderRadius: 22,
-                            border: "1px solid var(--border2)",
-                            boxShadow: "0 18px 48px rgba(0,0,0,0.22)",
-                            padding: 16,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 10,
-                        }}
-                    >
-                        <div style={{ padding: "2px 4px 8px" }}>
-                            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
-                                {selectedDateLabel ? `${selectedDateLabel} に写真を追加` : "写真を追加"}
-                            </div>
-                            <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
-                                追加方法を選んでください
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={handlePickFromCamera}
-                            style={{
-                                width: "100%",
-                                padding: "14px 16px",
-                                borderRadius: 16,
-                                background: "linear-gradient(135deg, var(--accent), #4ADE80)",
-                                border: "1px solid transparent",
-                                color: "#fff",
-                                fontSize: 14,
-                                fontWeight: 800,
-                                boxShadow: "var(--shadow-soft)",
-                            }}
-                        >
-                            カメラで撮る
-                        </button>
-
-                        <button
-                            onClick={handlePickFromLibrary}
-                            style={{
-                                width: "100%",
-                                padding: "14px 16px",
-                                borderRadius: 16,
-                                background: "var(--card2)",
-                                border: "1px solid var(--border2)",
-                                color: "var(--text)",
-                                fontSize: 14,
-                                fontWeight: 700,
-                            }}
-                        >
-                            写真から選ぶ
-                        </button>
-
-                        <button
-                            onClick={() => setShowSourcePicker(false)}
-                            style={{
-                                width: "100%",
-                                padding: "12px 16px",
-                                borderRadius: 14,
-                                background: "transparent",
-                                border: "1px solid transparent",
-                                color: "var(--text3)",
-                                fontSize: 13,
-                                fontWeight: 700,
-                            }}
-                        >
-                            キャンセル
-                        </button>
-                    </div>
-                </div>
             )}
         </div>
     );
