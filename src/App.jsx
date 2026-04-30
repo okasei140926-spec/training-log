@@ -114,6 +114,17 @@ const mergeHistoryMaps = (...sources) => {
 const buildHistoryFromWorkoutRows = (rows) =>
     mergeHistoryMaps(...(rows || []).map((row) => row?.data));
 
+const serializeHistoryMap = (historyMap) => JSON.stringify(historyMap || {});
+
+const persistHistoryForUser = (userId, nextHistory) => {
+    save("history", nextHistory);
+
+    if (userId) {
+        save(getUserHistoryCacheKey(userId), nextHistory);
+        save(HISTORY_OWNER_KEY, userId);
+    }
+};
+
 export default function GymApp() {
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
@@ -226,6 +237,8 @@ export default function GymApp() {
 
     const touchStartX = useRef(null);
     const touchStartY = useRef(null);
+    const latestUserIdRef = useRef(null);
+    const historySaveQueueRef = useRef(Promise.resolve());
 
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
@@ -237,15 +250,14 @@ export default function GymApp() {
     // ─── AI Coach ─────────────────────────────────────
     const { aiMsgs, aiInput, setAiInput, aiLoad, aiEnd, sendAI } = useAI(history);
 
+    useEffect(() => {
+        latestUserIdRef.current = user?.id ?? null;
+    }, [user?.id]);
+
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => {
-        save("history", history);
-
-        if (user?.id) {
-            save(getUserHistoryCacheKey(user.id), history);
-            save(HISTORY_OWNER_KEY, user.id);
-        }
+        persistHistoryForUser(user?.id, history);
     }, [history, user]);
     useEffect(() => { save("customBodyParts", customBodyParts); }, [customBodyParts]);
     useEffect(() => { save("hiddenBodyParts", hiddenBodyParts); }, [hiddenBodyParts]);
@@ -290,18 +302,14 @@ export default function GymApp() {
                 if (!isActive) return;
 
                 setHistory(mergedHistory);
-                save("history", mergedHistory);
-                save(getUserHistoryCacheKey(user.id), mergedHistory);
-                save(HISTORY_OWNER_KEY, user.id);
+                persistHistoryForUser(user.id, mergedHistory);
             } catch (error) {
                 console.error("history sync load failed", error);
 
                 if (!isActive) return;
 
                 setHistory(localMergeCandidate);
-                save("history", localMergeCandidate);
-                save(getUserHistoryCacheKey(user.id), localMergeCandidate);
-                save(HISTORY_OWNER_KEY, user.id);
+                persistHistoryForUser(user.id, localMergeCandidate);
             } finally {
                 if (isActive) setHistorySyncReady(true);
             }
@@ -316,14 +324,45 @@ export default function GymApp() {
 
     useEffect(() => {
         if (!user || !historySyncReady) return;
-        const saveToSupabase = async () => {
-            await supabase.from("workouts").upsert({
-                user_id: user.id,
-                date: new Date().toISOString().split("T")[0],
-                data: history,
-            }, { onConflict: "user_id,date" });
-        };
-        saveToSupabase();
+        const currentUserId = user.id;
+        const localHistorySnapshot = mergeHistoryMaps(history);
+
+        historySaveQueueRef.current = historySaveQueueRef.current
+            .catch(() => {})
+            .then(async () => {
+                if (latestUserIdRef.current !== currentUserId) return;
+
+                const { data, error } = await supabase
+                    .from("workouts")
+                    .select("date, data")
+                    .eq("user_id", currentUserId)
+                    .order("date", { ascending: true });
+
+                if (error) throw error;
+                if (latestUserIdRef.current !== currentUserId) return;
+
+                const remoteHistory = buildHistoryFromWorkoutRows(data);
+                const mergedHistory = mergeHistoryMaps(remoteHistory, localHistorySnapshot);
+
+                await supabase.from("workouts").upsert({
+                    user_id: currentUserId,
+                    date: new Date().toISOString().split("T")[0],
+                    data: mergedHistory,
+                }, { onConflict: "user_id,date" });
+
+                if (latestUserIdRef.current !== currentUserId) return;
+
+                persistHistoryForUser(currentUserId, mergedHistory);
+                setHistory((prev) => {
+                    const reconciledHistory = mergeHistoryMaps(prev, mergedHistory);
+                    return serializeHistoryMap(reconciledHistory) === serializeHistoryMap(prev)
+                        ? prev
+                        : reconciledHistory;
+                });
+            })
+            .catch((error) => {
+                console.error("history sync save failed", error);
+            });
     }, [history, user, historySyncReady]);
 
     useEffect(() => {
