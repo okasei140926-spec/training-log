@@ -38,6 +38,7 @@ export default function PhotoScreen({ user }) {
     const [compareLoading, setCompareLoading] = useState(false);
     const [comparePreviewUrls, setComparePreviewUrls] = useState({});
     const photoInputRef = useRef(null);
+    const selectedDateRequestIdRef = useRef(0);
 
     useEffect(() => {
         let isActive = true;
@@ -141,6 +142,8 @@ export default function PhotoScreen({ user }) {
 
     const openPhotoForDate = async (date) => {
         const dateRows = photoMap[date] || [];
+        const requestId = selectedDateRequestIdRef.current + 1;
+        selectedDateRequestIdRef.current = requestId;
         setSelectedDate(date);
         setSelectedPhotoUrls({});
         setViewerPhoto(null);
@@ -161,6 +164,8 @@ export default function PhotoScreen({ user }) {
                 .createSignedUrl(row.storage_path, 3600);
             return error ? null : [row.id, data?.signedUrl || null];
         }));
+
+        if (selectedDateRequestIdRef.current !== requestId) return;
 
         setSelectedPhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
         setSelectedPhotoLoading(false);

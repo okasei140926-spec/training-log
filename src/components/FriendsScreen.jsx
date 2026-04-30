@@ -9,6 +9,7 @@ import Big3RankingCard from "./friends/Big3RankingCard";
 import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
+import NotificationSettings from "./NotificationSettings";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 const BIG3_EXERCISES = [
@@ -756,6 +757,8 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             }
 
             <InviteCard copied={copied} onCopyInvite={handleCopyInvite} />
+
+            <NotificationSettings user={user} />
 
             {
                 <EditUsernameModal
