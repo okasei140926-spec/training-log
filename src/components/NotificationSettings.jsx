@@ -12,8 +12,11 @@ import {
 const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY;
 
 async function persistSubscription(userId, subscription, enabled = true) {
+  if (!userId) {
+    throw new Error("ログイン情報が取得できませんでした");
+  }
+
   const serialized = serializePushSubscription(subscription);
-  if (!serialized) throw new Error("subscription serialize failed");
 
   const { error } = await supabase.from("push_subscriptions").upsert(
     {
@@ -27,7 +30,14 @@ async function persistSubscription(userId, subscription, enabled = true) {
     { onConflict: "endpoint" }
   );
 
-  if (error) throw error;
+  if (error) {
+    console.error("push subscription upsert failed", {
+      error,
+      userId,
+      endpoint: serialized.endpoint,
+    });
+    throw new Error("通知情報の保存に失敗しました");
+  }
 }
 
 async function disableSubscription(userId, endpoint) {
@@ -42,7 +52,10 @@ async function disableSubscription(userId, endpoint) {
     .eq("user_id", userId)
     .eq("endpoint", endpoint);
 
-  if (error) throw error;
+  if (error) {
+    console.error("push subscription disable failed", { error, userId, endpoint });
+    throw new Error("通知情報の更新に失敗しました");
+  }
 }
 
 export default function NotificationSettings({ user }) {
@@ -72,7 +85,13 @@ export default function NotificationSettings({ user }) {
           await persistSubscription(user.id, subscription, true);
         }
       } catch (error) {
-        console.error("push subscription sync failed", error);
+        console.error("push subscription sync failed", {
+          error,
+          message: error?.message,
+          userId: user?.id,
+          permission: typeof Notification === "undefined" ? "unknown" : Notification.permission,
+          hasVapidPublicKey: Boolean(vapidPublicKey),
+        });
       }
     };
 
@@ -84,7 +103,12 @@ export default function NotificationSettings({ user }) {
   }, [support.supported, user?.id]);
 
   const handleEnable = async () => {
-    if (!user?.id || busy) return;
+    if (busy) return;
+
+    if (!user?.id) {
+      setMessage("ログイン情報が取得できませんでした");
+      return;
+    }
 
     if (!support.supported) {
       setMessage(support.message);
@@ -92,7 +116,7 @@ export default function NotificationSettings({ user }) {
     }
 
     if (!vapidPublicKey) {
-      setMessage("通知設定の準備がまだ完了していません。");
+      setMessage("VAPID公開キーが設定されていません");
       return;
     }
 
@@ -106,7 +130,11 @@ export default function NotificationSettings({ user }) {
 
       if (nextPermission !== "granted") {
         setEnabled(false);
-        setMessage("通知を許可するとテスト通知を受け取れます。");
+        setMessage(
+          nextPermission === "denied"
+            ? "通知がブロックされています。iPhoneの設定でIRON LOGの通知を許可してください"
+            : "通知を許可するとテスト通知を受け取れます。"
+        );
         return;
       }
 
@@ -115,8 +143,14 @@ export default function NotificationSettings({ user }) {
       setEnabled(true);
       setMessage("通知を有効にしました。");
     } catch (error) {
-      console.error("push enable failed", error);
-      setMessage("通知の有効化に失敗しました。");
+      console.error("push enable failed", {
+        error,
+        message: error?.message,
+        userId: user?.id,
+        permission: typeof Notification === "undefined" ? "unknown" : Notification.permission,
+        hasVapidPublicKey: Boolean(vapidPublicKey),
+      });
+      setMessage(error?.message || "通知の有効化に失敗しました。");
     } finally {
       setBusy(false);
     }
@@ -135,8 +169,12 @@ export default function NotificationSettings({ user }) {
       setPermission(typeof Notification === "undefined" ? "default" : Notification.permission);
       setMessage("通知をオフにしました。");
     } catch (error) {
-      console.error("push disable failed", error);
-      setMessage("通知の停止に失敗しました。");
+      console.error("push disable failed", {
+        error,
+        message: error?.message,
+        userId: user?.id,
+      });
+      setMessage(error?.message || "通知の停止に失敗しました。");
     } finally {
       setBusy(false);
     }

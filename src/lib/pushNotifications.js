@@ -3,6 +3,12 @@ function isProbablyIOS() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent || "");
 }
 
+function createPushError(message, cause) {
+  const error = new Error(message);
+  if (cause) error.cause = cause;
+  return error;
+}
+
 function isStandaloneDisplayMode() {
   if (typeof window === "undefined") return false;
   return (
@@ -37,12 +43,16 @@ export function getPushSupportState() {
 
 export async function registerPushServiceWorker() {
   if (!("serviceWorker" in navigator)) {
-    throw new Error("serviceWorker not supported");
+    throw createPushError("Service Workerに対応していません");
   }
 
-  const registration = await navigator.serviceWorker.register("/sw.js");
-  await navigator.serviceWorker.ready;
-  return registration;
+  try {
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    return registration;
+  } catch (error) {
+    throw createPushError("Service Workerの登録に失敗しました", error);
+  }
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -59,37 +69,67 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 export async function getCurrentPushSubscription() {
-  const registration = await registerPushServiceWorker();
-  return registration.pushManager.getSubscription();
+  try {
+    const registration = await registerPushServiceWorker();
+    return await registration.pushManager.getSubscription();
+  } catch (error) {
+    throw createPushError("現在の通知状態の取得に失敗しました", error);
+  }
 }
 
 export async function subscribeToPush(vapidPublicKey) {
-  const registration = await registerPushServiceWorker();
-  const existingSubscription = await registration.pushManager.getSubscription();
-  if (existingSubscription) return existingSubscription;
+  if (!vapidPublicKey) {
+    throw createPushError("VAPID公開キーが設定されていません");
+  }
 
-  return registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-  });
+  if (typeof Notification === "undefined") {
+    throw createPushError("通知機能に対応していません");
+  }
+
+  if (Notification.permission === "denied") {
+    throw createPushError("通知がブロックされています。iPhoneの設定でIRON LOGの通知を許可してください");
+  }
+
+  try {
+    const registration = await registerPushServiceWorker();
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) return existingSubscription;
+
+    return await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+    });
+  } catch (error) {
+    throw createPushError("Push購読の作成に失敗しました", error);
+  }
 }
 
 export async function unsubscribeFromPush() {
-  const registration = await registerPushServiceWorker();
-  const subscription = await registration.pushManager.getSubscription();
-  if (!subscription) return null;
+  try {
+    const registration = await registerPushServiceWorker();
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return null;
 
-  const serialized = subscription.toJSON();
-  await subscription.unsubscribe();
-  return {
-    endpoint: serialized.endpoint,
-    keys: serialized.keys || {},
-  };
+    const serialized = subscription.toJSON();
+    await subscription.unsubscribe();
+    return {
+      endpoint: serialized.endpoint,
+      keys: serialized.keys || {},
+    };
+  } catch (error) {
+    throw createPushError("Push購読の解除に失敗しました", error);
+  }
 }
 
 export function serializePushSubscription(subscription) {
   const json = subscription?.toJSON?.();
-  if (!json?.endpoint || !json?.keys) return null;
+  if (!json?.endpoint) {
+    throw createPushError("Push購読の endpoint が取得できませんでした");
+  }
+
+  if (!json?.keys?.p256dh || !json?.keys?.auth) {
+    throw createPushError("Push購読の keys が不足しています");
+  }
 
   return {
     endpoint: json.endpoint,
