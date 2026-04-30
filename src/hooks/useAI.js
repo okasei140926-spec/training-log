@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { supabase } from "../utils/supabase";
 
 export function useAI(history) {
   const [aiMsgs, setAiMsgs] = useState([{
@@ -21,23 +22,46 @@ export function useAI(history) {
     setAiMsgs(newMsgs);
     setAiLoad(true);
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) {
+        setAiMsgs(p => [...p, { role: "assistant", content: "ログインが必要です。" }]);
+        return;
+      }
+
       const historyContext = Object.entries(history).slice(-8).map(([name, recs]) => {
         const last = recs[recs.length - 1];
         return `${name}: ${last.sets?.map(s => `${s.weight}kg×${s.reps}rep`).join(", ")}`;
       }).join("\n");
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           messages: newMsgs.map(m => ({ role: m.role, content: m.content })),
           historyContext,
         }),
       });
       const data = await res.json();
-      const reply = data.content?.[0]?.text || "すみません、エラーが発生しました。";
+
+      if (!res.ok) {
+        const errorMessage =
+          res.status === 401
+            ? "ログインが必要です。"
+            : data?.error || "AI Coachの応答に失敗しました。";
+        setAiMsgs(p => [...p, { role: "assistant", content: errorMessage }]);
+        return;
+      }
+
+      const reply = data.content?.[0]?.text || "AI Coachの応答に失敗しました。";
       setAiMsgs(p => [...p, { role: "assistant", content: reply }]);
     } catch {
-      setAiMsgs(p => [...p, { role: "assistant", content: "接続エラーが発生しました。" }]);
+      setAiMsgs(p => [...p, { role: "assistant", content: "AI Coachの応答に失敗しました。" }]);
     } finally {
       setAiLoad(false);
     }
