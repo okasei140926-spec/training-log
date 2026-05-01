@@ -1,7 +1,11 @@
+import { supabase } from "../utils/supabase";
+
 function isProbablyIOS() {
   if (typeof navigator === "undefined") return false;
   return /iphone|ipad|ipod/i.test(navigator.userAgent || "");
 }
+
+const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY;
 
 function createPushError(message, cause) {
   const error = new Error(message);
@@ -39,6 +43,11 @@ export function getPushSupportState() {
   }
 
   return { supported: true, message: "" };
+}
+
+export function getNotificationPermission() {
+  if (typeof Notification === "undefined") return "default";
+  return Notification.permission;
 }
 
 export async function registerPushServiceWorker() {
@@ -134,5 +143,130 @@ export function serializePushSubscription(subscription) {
   return {
     endpoint: json.endpoint,
     keys: json.keys,
+  };
+}
+
+export async function persistPushSubscription(userId, subscription, enabled = true) {
+  if (!userId) {
+    throw new Error("ログイン情報が取得できませんでした");
+  }
+
+  const serialized = serializePushSubscription(subscription);
+
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: userId,
+      endpoint: serialized.endpoint,
+      keys: serialized.keys,
+      enabled,
+      user_agent: navigator.userAgent,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "endpoint" }
+  );
+
+  if (error) {
+    console.error("push subscription upsert failed", {
+      error,
+      userId,
+      endpoint: serialized.endpoint,
+    });
+    throw new Error("通知情報の保存に失敗しました");
+  }
+}
+
+export async function disablePushSubscription(userId, endpoint) {
+  if (!endpoint) return;
+
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .update({
+      enabled: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("endpoint", endpoint);
+
+  if (error) {
+    console.error("push subscription disable failed", { error, userId, endpoint });
+    throw new Error("通知情報の更新に失敗しました");
+  }
+}
+
+export async function syncPushSubscriptionState(userId) {
+  if (!userId) {
+    throw new Error("ログイン情報が取得できませんでした");
+  }
+
+  const support = getPushSupportState();
+  const permission = getNotificationPermission();
+
+  if (!support.supported) {
+    return {
+      enabled: false,
+      permission,
+      support,
+    };
+  }
+
+  await registerPushServiceWorker();
+  const subscription = await getCurrentPushSubscription();
+  const enabled = Boolean(subscription && permission === "granted");
+
+  if (enabled) {
+    await persistPushSubscription(userId, subscription, true);
+  }
+
+  return {
+    enabled,
+    permission,
+    support,
+    subscription,
+  };
+}
+
+export async function enablePushNotificationsForUser(userId) {
+  if (!userId) {
+    throw new Error("ログイン情報が取得できませんでした");
+  }
+
+  const support = getPushSupportState();
+  if (!support.supported) {
+    return {
+      enabled: false,
+      permission: getNotificationPermission(),
+      support,
+      message: support.message,
+    };
+  }
+
+  if (!vapidPublicKey) {
+    throw new Error("VAPID公開キーが設定されていません");
+  }
+
+  await registerPushServiceWorker();
+  const nextPermission = await Notification.requestPermission();
+
+  if (nextPermission !== "granted") {
+    return {
+      enabled: false,
+      permission: nextPermission,
+      support,
+      message:
+        nextPermission === "denied"
+          ? "通知がブロックされています。iPhoneの設定でIRON LOGの通知を許可してください"
+          : "通知を許可するとテスト通知を受け取れます。",
+    };
+  }
+
+  const subscription = await subscribeToPush(vapidPublicKey);
+  await persistPushSubscription(userId, subscription, true);
+
+  return {
+    enabled: true,
+    permission: nextPermission,
+    support,
+    subscription,
+    message: "通知を有効にしました。",
   };
 }

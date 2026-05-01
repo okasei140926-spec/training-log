@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../utils/supabase";
 import { SUGGESTIONS } from "../constants/suggestions";
 import CalendarView from "./CalendarView";
@@ -19,7 +19,7 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 const normalizeName = (name) =>
     String(name || "").replace(/\s+/g, "").trim();
 
-const resolveLabel = (exName, muscleEx = {}) => {
+const resolveDefaultLabel = (exName) => {
     const normalized = normalizeName(exName);
 
     // まず SUGGESTIONS の完全一致
@@ -32,16 +32,32 @@ const resolveLabel = (exName, muscleEx = {}) => {
     });
     if (suggestionMatch) return suggestionMatch[1];
 
-    // 手入力で追加した種目から探す
-    const customMatch = Object.entries(muscleEx || {}).find(([label, list]) =>
-        (list || []).some((ex) => {
-            const name = typeof ex === "string" ? ex : ex.name;
-            const base = normalizeName(name);
-            return base === normalized || base.includes(normalized) || normalized.includes(base);
-        })
-    );
+    return null;
+};
 
-    return customMatch ? customMatch[0] : null;
+const matchesExerciseName = (candidateName, exName) => {
+    const base = normalizeName(candidateName);
+    const normalized = normalizeName(exName);
+    return base === normalized || base.includes(normalized) || normalized.includes(base);
+};
+
+const resolveVisibleLabel = (exName, muscleEx = {}, hiddenBodyParts = []) => {
+    const hiddenSet = new Set(hiddenBodyParts || []);
+
+    const visibleCustomMatch = Object.entries(muscleEx || {}).find(([label, list]) => {
+        if (!label || hiddenSet.has(label)) return false;
+        return (list || []).some((ex) => {
+            const name = typeof ex === "string" ? ex : ex?.name;
+            return matchesExerciseName(name, exName);
+        });
+    });
+
+    if (visibleCustomMatch) return visibleCustomMatch[0];
+
+    const defaultLabel = resolveDefaultLabel(exName);
+    if (!defaultLabel || hiddenSet.has(defaultLabel)) return null;
+
+    return defaultLabel;
 };
 
 export default function HistoryScreen({
@@ -55,6 +71,7 @@ export default function HistoryScreen({
     user,
     manualBests = [],
     customBodyParts = [],
+    hiddenBodyParts = [],
     onAddManualBest,
     onUpdateManualBest,
     onDeleteManualBest,
@@ -114,42 +131,37 @@ export default function HistoryScreen({
     const weekStartStr = toDateKey(startOfWeek);
     const weekEndStr = toDateKey(endOfWeek);
 
-    const weekStats = {};
-    Object.entries(history || {}).forEach(([exName, recs]) => {
-        const label = resolveLabel(exName, muscleEx);
+    const {
+        detailMap,
+        sortedWeekStats,
+    } = useMemo(() => {
+        const nextWeekStats = {};
+        const nextDetailMap = {};
 
-        if (!label) return;
+        Object.entries(history || {}).forEach(([exName, recs]) => {
+            const label = resolveVisibleLabel(exName, muscleEx, hiddenBodyParts);
+            if (!label) return;
 
-        (recs || []).forEach((r) => {
-            if (!r?.date) return;
-            if (r.date < weekStartStr || r.date > weekEndStr) return;
+            (recs || []).forEach((r) => {
+                if (!r?.date) return;
+                if (r.date < weekStartStr || r.date > weekEndStr) return;
 
-            const setCount = (r.sets || []).filter((s) => s.weight && s.reps).length;
-            if (!setCount) return;
+                const sets = (r.sets || []).filter((s) => s.weight && s.reps).length;
+                if (!sets) return;
 
-            weekStats[label] = (weekStats[label] || 0) + setCount;
+                nextWeekStats[label] = (nextWeekStats[label] || 0) + sets;
+
+                if (!nextDetailMap[label]) nextDetailMap[label] = {};
+                nextDetailMap[label][exName] = (nextDetailMap[label][exName] || 0) + sets;
+            });
         });
-    });
 
-    const detailMap = {};
-    Object.entries(history || {}).forEach(([exName, recs]) => {
-        const label = resolveLabel(exName, muscleEx);
-        if (!label) return;
-
-        (recs || []).forEach((r) => {
-            if (!r?.date) return;
-            if (r.date < weekStartStr || r.date > weekEndStr) return;
-
-            const sets = (r.sets || []).filter((s) => s.weight && s.reps).length;
-            if (!sets) return;
-
-            if (!detailMap[label]) detailMap[label] = {};
-            detailMap[label][exName] = (detailMap[label][exName] || 0) + sets;
-        });
-    });
-
-    const sortedWeekStats = Object.entries(weekStats)
-        .sort((a, b) => b[1] - a[1]);
+        return {
+            weekStats: nextWeekStats,
+            detailMap: nextDetailMap,
+            sortedWeekStats: Object.entries(nextWeekStats).sort((a, b) => b[1] - a[1]),
+        };
+    }, [history, hiddenBodyParts, muscleEx, weekEndStr, weekStartStr]);
 
     const daySummary = {};
 
@@ -183,7 +195,7 @@ export default function HistoryScreen({
 
     const workedLabels = [...new Set(
         Object.keys(daySummary)
-            .map((exName) => resolveLabel(exName, muscleEx))
+            .map((exName) => resolveVisibleLabel(exName, muscleEx, hiddenBodyParts))
             .filter(Boolean)
     )];
 

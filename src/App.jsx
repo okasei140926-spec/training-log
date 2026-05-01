@@ -19,6 +19,7 @@ import AIScreen from "./components/AIScreen";
 import PhotoScreen from "./components/PhotoScreen";
 import AppHeader from "./components/layout/AppHeader";
 import BottomNav from "./components/layout/BottomNav";
+import PushPromptModal from "./components/PushPromptModal";
 
 import AddExModal from "./components/modals/AddExModal";
 import SummaryModal from "./components/modals/SummaryModal";
@@ -31,6 +32,12 @@ import {
 import { useWorkout } from "./hooks/useWorkout";
 import { useTimer } from "./hooks/useTimer";
 import { useLogLogic } from "./hooks/useLogLogic";
+import {
+    enablePushNotificationsForUser,
+    getNotificationPermission,
+    getPushSupportState,
+    syncPushSubscriptionState,
+} from "./lib/pushNotifications";
 
 
 const EX_TO_LABEL = {};
@@ -115,6 +122,7 @@ const buildHistoryFromWorkoutRows = (rows) =>
     mergeHistoryMaps(...(rows || []).map((row) => row?.data));
 
 const serializeHistoryMap = (historyMap) => JSON.stringify(historyMap || {});
+const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
 
 const persistHistoryForUser = (userId, nextHistory) => {
     save("history", nextHistory);
@@ -167,6 +175,14 @@ export default function GymApp() {
 
     const [screen, setScreen] = useState("history");
     const [showAuth, setShowAuth] = useState(false);
+    const [showPushPrompt, setShowPushPrompt] = useState(false);
+    const [pushPromptBusy, setPushPromptBusy] = useState(false);
+    const [pushPromptMessage, setPushPromptMessage] = useState("");
+    const [pushStatus, setPushStatus] = useState({
+        enabled: false,
+        permission: getNotificationPermission(),
+        support: getPushSupportState(),
+    });
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
     const updateTodayLabels = (nextOrUpdater) => {
@@ -261,6 +277,117 @@ export default function GymApp() {
     }, [history, user]);
     useEffect(() => { save("customBodyParts", customBodyParts); }, [customBodyParts]);
     useEffect(() => { save("hiddenBodyParts", hiddenBodyParts); }, [hiddenBodyParts]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const syncPushPromptState = async () => {
+            if (!user?.id) {
+                if (isActive) {
+                    setShowPushPrompt(false);
+                    setPushPromptMessage("");
+                    setPushStatus({
+                        enabled: false,
+                        permission: getNotificationPermission(),
+                        support: getPushSupportState(),
+                    });
+                }
+                return;
+            }
+
+            const support = getPushSupportState();
+            const permission = getNotificationPermission();
+            const todayStr = new Date().toISOString().split("T")[0];
+            const laterDate = load(PUSH_PROMPT_LATER_KEY, "");
+
+            try {
+                let nextStatus = {
+                    enabled: false,
+                    permission,
+                    support,
+                };
+
+                if (support.supported) {
+                    nextStatus = await syncPushSubscriptionState(user.id);
+                }
+
+                if (!isActive) return;
+
+                setPushStatus(nextStatus);
+
+                const shouldShow =
+                    screen === "history" &&
+                    !showAuth &&
+                    !nextStatus.enabled &&
+                    laterDate !== todayStr;
+
+                setShowPushPrompt(shouldShow);
+            } catch (error) {
+                if (!isActive) return;
+
+                console.error("push prompt state sync failed", {
+                    error,
+                    message: error?.message,
+                    userId: user?.id,
+                });
+
+                setPushStatus({
+                    enabled: false,
+                    permission,
+                    support,
+                });
+                setShowPushPrompt(screen === "history" && !showAuth && laterDate !== todayStr);
+            }
+        };
+
+        syncPushPromptState();
+
+        return () => {
+            isActive = false;
+        };
+    }, [user?.id, screen, showAuth]);
+
+    const dismissPushPromptForToday = useCallback(() => {
+        const todayStr = new Date().toISOString().split("T")[0];
+        save(PUSH_PROMPT_LATER_KEY, todayStr);
+        setShowPushPrompt(false);
+        setPushPromptMessage("");
+    }, []);
+
+    const enablePushFromPrompt = useCallback(async () => {
+        if (!user?.id || pushPromptBusy) return;
+
+        setPushPromptBusy(true);
+        setPushPromptMessage("");
+
+        try {
+            const result = await enablePushNotificationsForUser(user.id);
+
+            setPushStatus({
+                enabled: result.enabled,
+                permission: result.permission,
+                support: result.support,
+            });
+
+            if (result.enabled) {
+                save(PUSH_PROMPT_LATER_KEY, "");
+                setShowPushPrompt(false);
+                setPushPromptMessage("");
+                return;
+            }
+
+            setPushPromptMessage(result.message || "");
+        } catch (error) {
+            console.error("push prompt enable failed", {
+                error,
+                message: error?.message,
+                userId: user?.id,
+            });
+            setPushPromptMessage(error?.message || "通知の有効化に失敗しました。");
+        } finally {
+            setPushPromptBusy(false);
+        }
+    }, [pushPromptBusy, user?.id]);
 
     useEffect(() => {
         let isActive = true;
@@ -1206,6 +1333,7 @@ export default function GymApp() {
                     <HistoryScreen
                         history={history}
                         muscleEx={muscleEx}
+                        hiddenBodyParts={hiddenBodyParts}
                         onEditHistory={handleEditHistory}
                         onDeleteHistory={handleDeleteHistory}
                         onDeleteDate={deleteAllHistoryForDate}
@@ -1259,6 +1387,32 @@ export default function GymApp() {
                         <Auth onClose={() => setShowAuth(false)} isDark={isDark} />
                     </div>
                 )}
+
+                <PushPromptModal
+                    isOpen={showPushPrompt}
+                    title={
+                        pushStatus.permission === "denied"
+                            ? "通知を有効にできません"
+                            : pushStatus.support.supported
+                                ? "通知をオンにしますか？"
+                                : "通知を使うには準備が必要です"
+                    }
+                    body={
+                        pushStatus.permission === "denied"
+                            ? "iPhoneの設定でIRON LOGの通知を許可すると、友達の記録やトレーニングのリマインドを受け取れます。"
+                            : pushStatus.support.supported
+                                ? "友達の記録や、トレーニングのリマインドをお知らせします。"
+                                : pushStatus.support.message || "この環境では通知を利用できません。"
+                    }
+                    note={
+                        pushPromptMessage ||
+                        "iPhoneではホーム画面に追加したアプリで通知を受け取れます。"
+                    }
+                    onPrimary={enablePushFromPrompt}
+                    onSecondary={dismissPushPromptForToday}
+                    busy={pushPromptBusy}
+                    showPrimary={pushStatus.support.supported && pushStatus.permission !== "denied"}
+                />
 
                 <Analytics />
             </div>

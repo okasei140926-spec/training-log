@@ -1,67 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabase";
 import {
-  getCurrentPushSubscription,
+  disablePushSubscription,
+  enablePushNotificationsForUser,
+  getNotificationPermission,
   getPushSupportState,
-  registerPushServiceWorker,
-  serializePushSubscription,
-  subscribeToPush,
+  syncPushSubscriptionState,
   unsubscribeFromPush,
 } from "../lib/pushNotifications";
-
-const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY;
-
-async function persistSubscription(userId, subscription, enabled = true) {
-  if (!userId) {
-    throw new Error("ログイン情報が取得できませんでした");
-  }
-
-  const serialized = serializePushSubscription(subscription);
-
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      user_id: userId,
-      endpoint: serialized.endpoint,
-      keys: serialized.keys,
-      enabled,
-      user_agent: navigator.userAgent,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "endpoint" }
-  );
-
-  if (error) {
-    console.error("push subscription upsert failed", {
-      error,
-      userId,
-      endpoint: serialized.endpoint,
-    });
-    throw new Error("通知情報の保存に失敗しました");
-  }
-}
-
-async function disableSubscription(userId, endpoint) {
-  if (!endpoint) return;
-
-  const { error } = await supabase
-    .from("push_subscriptions")
-    .update({
-      enabled: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId)
-    .eq("endpoint", endpoint);
-
-  if (error) {
-    console.error("push subscription disable failed", { error, userId, endpoint });
-    throw new Error("通知情報の更新に失敗しました");
-  }
-}
 
 export default function NotificationSettings({ user }) {
   const support = useMemo(() => getPushSupportState(), []);
   const [permission, setPermission] = useState(
-    typeof Notification === "undefined" ? "default" : Notification.permission
+    getNotificationPermission()
   );
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -74,23 +25,17 @@ export default function NotificationSettings({ user }) {
       if (!user?.id || !support.supported) return;
 
       try {
-        await registerPushServiceWorker();
-        const subscription = await getCurrentPushSubscription();
+        const status = await syncPushSubscriptionState(user.id);
         if (!isActive) return;
 
-        setPermission(Notification.permission);
-        setEnabled(Boolean(subscription && Notification.permission === "granted"));
-
-        if (subscription && Notification.permission === "granted") {
-          await persistSubscription(user.id, subscription, true);
-        }
+        setPermission(status.permission);
+        setEnabled(status.enabled);
       } catch (error) {
         console.error("push subscription sync failed", {
           error,
           message: error?.message,
           userId: user?.id,
-          permission: typeof Notification === "undefined" ? "unknown" : Notification.permission,
-          hasVapidPublicKey: Boolean(vapidPublicKey),
+          permission: getNotificationPermission(),
         });
       }
     };
@@ -115,40 +60,20 @@ export default function NotificationSettings({ user }) {
       return;
     }
 
-    if (!vapidPublicKey) {
-      setMessage("VAPID公開キーが設定されていません");
-      return;
-    }
-
     setBusy(true);
     setMessage("");
 
     try {
-      await registerPushServiceWorker();
-      const nextPermission = await Notification.requestPermission();
-      setPermission(nextPermission);
-
-      if (nextPermission !== "granted") {
-        setEnabled(false);
-        setMessage(
-          nextPermission === "denied"
-            ? "通知がブロックされています。iPhoneの設定でIRON LOGの通知を許可してください"
-            : "通知を許可するとテスト通知を受け取れます。"
-        );
-        return;
-      }
-
-      const subscription = await subscribeToPush(vapidPublicKey);
-      await persistSubscription(user.id, subscription, true);
-      setEnabled(true);
-      setMessage("通知を有効にしました。");
+      const result = await enablePushNotificationsForUser(user.id);
+      setPermission(result.permission);
+      setEnabled(result.enabled);
+      setMessage(result.message);
     } catch (error) {
       console.error("push enable failed", {
         error,
         message: error?.message,
         userId: user?.id,
-        permission: typeof Notification === "undefined" ? "unknown" : Notification.permission,
-        hasVapidPublicKey: Boolean(vapidPublicKey),
+        permission: getNotificationPermission(),
       });
       setMessage(error?.message || "通知の有効化に失敗しました。");
     } finally {
@@ -164,9 +89,9 @@ export default function NotificationSettings({ user }) {
 
     try {
       const subscription = await unsubscribeFromPush();
-      await disableSubscription(user.id, subscription?.endpoint);
+      await disablePushSubscription(user.id, subscription?.endpoint);
       setEnabled(false);
-      setPermission(typeof Notification === "undefined" ? "default" : Notification.permission);
+      setPermission(getNotificationPermission());
       setMessage("通知をオフにしました。");
     } catch (error) {
       console.error("push disable failed", {
