@@ -255,6 +255,7 @@ export default function GymApp() {
     const touchStartY = useRef(null);
     const latestUserIdRef = useRef(null);
     const historySaveQueueRef = useRef(Promise.resolve());
+    const pendingWorkoutNotificationRef = useRef(null);
 
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
@@ -453,6 +454,7 @@ export default function GymApp() {
         if (!user || !historySyncReady) return;
         const currentUserId = user.id;
         const localHistorySnapshot = mergeHistoryMaps(history);
+        const pendingWorkoutNotification = pendingWorkoutNotificationRef.current;
 
         historySaveQueueRef.current = historySaveQueueRef.current
             .catch(() => {})
@@ -486,11 +488,46 @@ export default function GymApp() {
                         ? prev
                         : reconciledHistory;
                 });
+
+                const todayStr = new Date().toISOString().split("T")[0];
+                const shouldSendWorkoutNotification =
+                    pendingWorkoutNotification &&
+                    pendingWorkoutNotification.id === pendingWorkoutNotificationRef.current?.id &&
+                    pendingWorkoutNotification.userId === currentUserId &&
+                    pendingWorkoutNotification.logDate === logDate &&
+                    logDate === todayStr &&
+                    screen === "log";
+
+                if (shouldSendWorkoutNotification) {
+                    pendingWorkoutNotificationRef.current = null;
+
+                    try {
+                        const {
+                            data: { session },
+                        } = await supabase.auth.getSession();
+                        const accessToken = session?.access_token;
+
+                        if (accessToken) {
+                            fetch("/api/notify-workout-save", {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${accessToken}`,
+                                },
+                                body: JSON.stringify({ workoutDate: logDate }),
+                            }).catch((error) => {
+                                console.error("notify workout save request failed", error);
+                            });
+                        }
+                    } catch (error) {
+                        console.error("notify workout save setup failed", error);
+                    }
+                }
             })
             .catch((error) => {
                 console.error("history sync save failed", error);
             });
-    }, [history, user, historySyncReady]);
+    }, [history, user, historySyncReady, logDate, screen]);
 
     useEffect(() => {
         let isActive = true;
@@ -641,6 +678,12 @@ export default function GymApp() {
 
     // useEffectより前に定義
     const persistCurrentLog = useCallback(() => {
+        pendingWorkoutNotificationRef.current = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            userId: user?.id || null,
+            logDate,
+        };
+
         setHistory((prev) => {
             const nh = { ...prev };
 
@@ -674,7 +717,7 @@ export default function GymApp() {
 
             return nh;
         });
-    }, [exercises, logData, logDate, getExUnit]); // ← 依存配列
+    }, [exercises, logData, logDate, getExUnit, user?.id]); // ← 依存配列
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
