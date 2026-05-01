@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
-import { calc1RM } from "../utils/helpers";
+import { buildHistoryFromWorkoutRows, calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import FriendDetailModal from "./modals/FriendDetailModal";
 import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
 import Big3RankingCard from "./friends/Big3RankingCard";
@@ -48,6 +48,9 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     const today = new Date().toISOString().split("T")[0];
     const currentMonthPrefix = today.slice(0, 7);
     const big3SeenStorageKey = "friends_big3_overtake_seen_v1";
+    const thresholdDate = new Date();
+    thresholdDate.setDate(thresholdDate.getDate() - 7);
+    const thresholdStr = thresholdDate.toISOString().split("T")[0];
 
     const hasValidSet = useCallback((set) => {
         if (!set) return false;
@@ -62,12 +65,8 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
         return Object.values(workoutData || {}).some((records) =>
             (records || []).some((record) => {
                 if (!record || record.date !== today) return false;
-
-                const sets = Array.isArray(record.sets) && record.sets.length > 0
-                    ? record.sets
-                    : [{ weight: record.weight, reps: record.reps }];
-
-                return sets.some(hasValidSet);
+                return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true })
+                    .some(hasValidSet);
             })
         );
     }, [hasValidSet, today]);
@@ -81,14 +80,10 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     }, [currentMonthPrefix]);
 
     const safeCalc1RM = useCallback((sets) => {
-        const validSets = (sets || []).filter((set) => {
-            if (!set || set.weight === "BW") return false;
+        const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: false }).filter((set) => {
             const weightNum = Number(set.weight);
             const repsNum = Number(set.reps);
-            if (!Number.isFinite(weightNum) || !Number.isFinite(repsNum)) return false;
-            if (weightNum <= 0 || repsNum <= 0) return false;
-            if (weightNum > 1000 || repsNum > 100) return false;
-            return true;
+            return weightNum <= 1000 && repsNum <= 100;
         });
 
         if (!validSets.length) return 0;
@@ -97,10 +92,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     }, []);
 
     const getRecordSets = useCallback((record) => {
-        if (!record) return [];
-        return Array.isArray(record.sets) && record.sets.length > 0
-            ? record.sets
-            : [{ weight: record.weight, reps: record.reps }];
+        return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
     }, []);
 
     const matchBig3Exercise = useCallback((name) => {
@@ -160,25 +152,39 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     }, []);
 
     const computeBig3FromWorkoutRows = useCallback((rows) => {
-        const bests = { bench: 0, squat: 0, deadlift: 0 };
+        return computeBig3FromHistory(buildHistoryFromWorkoutRows(rows));
+    }, [computeBig3FromHistory]);
 
-        (rows || []).forEach((row) => {
-            Object.entries(row?.data || {}).forEach(([name, records]) => {
-                const key = matchBig3Exercise(name);
-                if (!key) return;
+    const buildRecentGrouped = useCallback((historyData) => {
+        return Object.entries(historyData || {})
+            .flatMap(([name, recs]) =>
+                (recs || []).map((record) => {
+                    const sets = sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
+                    if (!record?.date || !sets.length) return null;
 
-                (records || []).forEach((record) => {
-                    const best = Math.round(safeCalc1RM(getRecordSets(record)));
-                    if (best > bests[key]) bests[key] = best;
-                });
-            });
-        });
+                    return {
+                        name,
+                        date: record.date,
+                        sets,
+                        order: Number.isFinite(Number(record.order)) ? Number(record.order) : 999,
+                    };
+                }).filter(Boolean)
+            )
+            .filter((record) => record.date >= thresholdStr)
+            .reduce((acc, record) => {
+                if (!acc[record.date]) acc[record.date] = {};
 
-        return {
-            ...bests,
-            total: bests.bench + bests.squat + bests.deadlift,
-        };
-    }, [getRecordSets, matchBig3Exercise, safeCalc1RM]);
+                const existing = acc[record.date][record.name];
+                if (!existing || record.sets.length >= (existing.sets?.length || 0)) {
+                    acc[record.date][record.name] = {
+                        sets: record.sets,
+                        order: record.order,
+                    };
+                }
+
+                return acc;
+            }, {});
+    }, [thresholdStr]);
 
     const fetchTodayActive = useCallback(async (ids) => {
         if (!user || !ids.length) {
@@ -308,7 +314,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                 const friendsWithHistory = (profiles || []).map(p => ({
                     ...p,
                     workoutRows: workoutRowsMap.get(p.id) || [],
-                    history: (workoutRowsMap.get(p.id) || [])[0]?.data || {},
+                    history: buildHistoryFromWorkoutRows(workoutRowsMap.get(p.id) || []),
                 }));
 
                 setFriendIds(friendIds);
@@ -389,20 +395,8 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
         }
     }, []);
 
-    const thresholdDate = new Date();
-    thresholdDate.setDate(thresholdDate.getDate() - 7);
-    const thresholdStr = thresholdDate.toISOString().split("T")[0];
-
     // 自分の直近データ
-    const myRecentGrouped = Object.entries(history || {})
-        .flatMap(([name, recs]) => recs.map(r => ({ name, date: r.date, sets: r.sets, order: r.order ?? 999 })))
-        .filter(r => r.date >= thresholdStr)
-        .reduce((acc, r) => {
-            if (!acc[r.date]) acc[r.date] = {};
-            if (!acc[r.date][r.name]) acc[r.date][r.name] = { sets: [], order: r.order ?? 999 };
-            acc[r.date][r.name].sets.push(...(r.sets || []));
-            return acc;
-        }, {});
+    const myRecentGrouped = buildRecentGrouped(history);
 
     const myRecentDates = Object.keys(myRecentGrouped).sort((a, b) => b.localeCompare(a));
     const activeRecently = myRecentDates.length > 0;
@@ -664,15 +658,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             ) : (
                 sortedFriends.map(f => {
                     const friendHistory = f.history || {};
-                    const friendGrouped = Object.entries(friendHistory)
-                        .flatMap(([name, recs]) => recs.map(r => ({ name, date: r.date, sets: r.sets })))
-                        .filter(r => r.date >= thresholdStr)
-                        .reduce((acc, r) => {
-                            if (!acc[r.date]) acc[r.date] = {};
-                            if (!acc[r.date][r.name]) acc[r.date][r.name] = [];
-                            acc[r.date][r.name].push(...(r.sets || []));
-                            return acc;
-                        }, {});
+                    const friendGrouped = buildRecentGrouped(friendHistory);
                     const friendDates = Object.keys(friendGrouped).sort((a, b) => b.localeCompare(a));
                     const friendExCount = new Set(Object.values(friendGrouped).flatMap(d => Object.keys(d))).size;
 

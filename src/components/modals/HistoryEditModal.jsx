@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { calc1RM } from "../../utils/helpers";
+import { calc1RM, sanitizeWorkoutSets } from "../../utils/helpers";
 
 export default function HistoryEditModal({ exName, record, onSave, onDelete, onClose }) {
   const [sets, setSets] = useState(
@@ -21,12 +21,17 @@ export default function HistoryEditModal({ exName, record, onSave, onDelete, onC
   };
 
   const handleSave = () => {
-    const valid = sets.filter(s => (s.weight || s.weight === 0) && s.reps);
+    const valid = sanitizeWorkoutSets(sets, { allowBodyweight: true });
     if (!valid.length) return;
-    onSave(exName, { ...record, sets: valid, weight: Number(valid[0].weight) || 0, reps: Number(valid[0].reps) || 0 });
+    onSave(exName, {
+      ...record,
+      sets: valid,
+      weight: valid[0].weight === "BW" ? "BW" : Number(valid[0].weight) || 0,
+      reps: Number(valid[0].reps) || 0,
+    });
   };
 
-  const new1RM = Math.round(calc1RM(sets.filter(s => s.weight && s.reps)));
+  const new1RM = Math.round(calc1RM(sanitizeWorkoutSets(sets, { allowBodyweight: false })));
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-end" }}

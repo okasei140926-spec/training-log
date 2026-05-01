@@ -1,6 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 import { getBig3ExerciseKey } from "../../src/utils/exerciseName.js";
+import {
+  buildHistoryFromWorkoutRows as buildHistoryFromWorkoutRowsShared,
+  calc1RM as calc1RMShared,
+  getRecordSourceSets as getRecordSourceSetsShared,
+  mergeHistoryMaps as mergeHistoryMapsShared,
+} from "../../src/utils/helpers.js";
 
 const supabaseUrl =
   process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
@@ -92,71 +98,19 @@ const buildHistoryRecordSignature = (record) => {
 };
 
 export function mergeHistoryMaps(...sources) {
-  const merged = {};
-
-  sources.forEach((source) => {
-    if (!isPlainObject(source)) return;
-
-    Object.entries(source).forEach(([exerciseName, records]) => {
-      if (!exerciseName || !Array.isArray(records) || !records.length) return;
-
-      if (!merged[exerciseName]) merged[exerciseName] = [];
-      const seen = new Set(merged[exerciseName].map(buildHistoryRecordSignature));
-
-      records.forEach((record) => {
-        if (!record || typeof record !== "object") return;
-
-        const signature = buildHistoryRecordSignature(record);
-        if (seen.has(signature)) return;
-
-        merged[exerciseName].push(cloneRecord(record));
-        seen.add(signature);
-      });
-    });
-  });
-
-  Object.keys(merged).forEach((exerciseName) => {
-    merged[exerciseName] = merged[exerciseName].sort((a, b) => {
-      const dateCompare = String(a?.date || "").localeCompare(String(b?.date || ""));
-      if (dateCompare !== 0) return dateCompare;
-
-      const orderA = Number.isFinite(a?.order) ? a.order : 999;
-      const orderB = Number.isFinite(b?.order) ? b.order : 999;
-      return orderA - orderB;
-    });
-
-    if (!merged[exerciseName].length) delete merged[exerciseName];
-  });
-
-  return merged;
+  return mergeHistoryMapsShared(...sources);
 }
 
 export function buildHistoryFromWorkoutRows(rows) {
-  return mergeHistoryMaps(...(rows || []).map((row) => row?.data));
+  return buildHistoryFromWorkoutRowsShared(rows);
 }
 
 export function calc1RMFromSets(sets) {
-  if (!sets || !sets.length) return 0;
-
-  return Math.max(
-    ...sets.map((set) => {
-      if (!set?.weight || set.weight === "BW") return 0;
-      const weight = Number(set.weight);
-      const reps = Number(set.reps);
-      if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) {
-        return 0;
-      }
-      if (reps === 1) return weight;
-      return weight * (1 + reps / 30);
-    })
-  );
+  return calc1RMShared(sets);
 }
 
 export function getRecordSets(record) {
-  if (!record) return [];
-  return Array.isArray(record.sets) && record.sets.length > 0
-    ? record.sets
-    : [{ weight: record.weight, reps: record.reps }];
+  return getRecordSourceSetsShared(record);
 }
 
 export function hasWorkoutOnDate(historyMap, workoutDate) {

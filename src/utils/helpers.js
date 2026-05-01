@@ -31,11 +31,167 @@ export function getTodayStr() {
   return new Date().toISOString().split("T")[0];
 }
 
+const isPlainObject = (value) =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+
+export function sanitizeWorkoutSet(set, { allowBodyweight = true } = {}) {
+  if (!set || typeof set !== "object") return null;
+
+  const reps = Number(set.reps);
+  if (!Number.isFinite(reps) || reps <= 0) return null;
+
+  if (set.weight === "BW") {
+    if (!allowBodyweight) return null;
+    return {
+      ...set,
+      weight: "BW",
+      reps,
+      done: Boolean(set.done),
+    };
+  }
+
+  const weight = Number(set.weight);
+  if (!Number.isFinite(weight) || weight <= 0) return null;
+
+  return {
+    ...set,
+    weight,
+    reps,
+    done: Boolean(set.done),
+  };
+}
+
+export function sanitizeWorkoutSets(sets, options) {
+  return (Array.isArray(sets) ? sets : [])
+    .map((set) => sanitizeWorkoutSet(set, options))
+    .filter(Boolean);
+}
+
+export function getRecordSourceSets(record) {
+  if (!record || typeof record !== "object") return [];
+
+  if (Array.isArray(record.sets) && record.sets.length > 0) {
+    return record.sets;
+  }
+
+  return [{ weight: record.weight, reps: record.reps, done: record.done }];
+}
+
+export function sanitizeHistoryRecord(record, { allowBodyweight = true } = {}) {
+  if (!record || typeof record !== "object") return null;
+
+  const sets = sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight });
+  if (!sets.length) return null;
+
+  const firstSet = sets[0];
+  const weight = firstSet.weight === "BW" ? "BW" : Number(firstSet.weight);
+  const reps = Number(firstSet.reps);
+  const order = Number(record.order);
+
+  return {
+    ...record,
+    date: String(record.date || ""),
+    order: Number.isFinite(order) ? order : 999,
+    sets,
+    weight,
+    reps,
+  };
+}
+
+export function buildHistoryRecordSignature(record) {
+  const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
+  if (!sanitizedRecord?.date) return "";
+
+  const setsSignature = sanitizedRecord.sets
+    .map((set) => `${set.weight === "BW" ? "BW" : Number(set.weight)}|${Number(set.reps)}|${set.done ? 1 : 0}`)
+    .join(";");
+
+  return `${sanitizedRecord.date}::${setsSignature}`;
+}
+
+const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
+  if (!existingRecord) return incomingRecord;
+
+  const existingSignature = buildHistoryRecordSignature(existingRecord);
+  const incomingSignature = buildHistoryRecordSignature(incomingRecord);
+
+  if (!existingSignature) return incomingRecord;
+  if (!incomingSignature) return existingRecord;
+  if (existingSignature === incomingSignature) return incomingRecord;
+
+  const existingSetCount = Array.isArray(existingRecord.sets) ? existingRecord.sets.length : 0;
+  const incomingSetCount = Array.isArray(incomingRecord.sets) ? incomingRecord.sets.length : 0;
+
+  if (incomingSetCount > existingSetCount) return incomingRecord;
+  if (incomingSetCount < existingSetCount) return existingRecord;
+
+  return incomingRecord;
+};
+
+export function mergeHistoryMaps(...sources) {
+  const mergedMaps = new Map();
+
+  sources.forEach((source) => {
+    if (!isPlainObject(source)) return;
+
+    Object.entries(source).forEach(([exerciseName, records]) => {
+      if (!exerciseName || !Array.isArray(records) || !records.length) return;
+
+      const dateMap = mergedMaps.get(exerciseName) || new Map();
+
+      records.forEach((record) => {
+        const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
+        if (!sanitizedRecord?.date) return;
+
+        const existingRecord = dateMap.get(sanitizedRecord.date);
+        dateMap.set(
+          sanitizedRecord.date,
+          choosePreferredHistoryRecord(existingRecord, sanitizedRecord)
+        );
+      });
+
+      if (dateMap.size > 0) {
+        mergedMaps.set(exerciseName, dateMap);
+      }
+    });
+  });
+
+  const mergedHistory = {};
+
+  mergedMaps.forEach((dateMap, exerciseName) => {
+    const records = Array.from(dateMap.values())
+      .filter(Boolean)
+      .sort((a, b) => {
+        const dateCompare = String(a?.date || "").localeCompare(String(b?.date || ""));
+        if (dateCompare !== 0) return dateCompare;
+
+        const orderA = Number.isFinite(a?.order) ? a.order : 999;
+        const orderB = Number.isFinite(b?.order) ? b.order : 999;
+        return orderA - orderB;
+      });
+
+    if (records.length > 0) {
+      mergedHistory[exerciseName] = records;
+    }
+  });
+
+  return mergedHistory;
+}
+
+export function buildHistoryFromWorkoutRows(rows) {
+  const sortedRows = [...(rows || [])]
+    .filter((row) => isPlainObject(row?.data))
+    .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
+
+  return mergeHistoryMaps(...sortedRows.map((row) => row.data));
+}
+
 // ─── 推定1RM計算（Epley式）────────────────────────────
 export function calc1RM(sets) {
-  if (!sets || !sets.length) return 0;
-  return Math.max(...sets.map(s => {
-    if (!s.weight || s.weight === "BW") return 0;
+  const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: false });
+  if (!validSets.length) return 0;
+
+  return Math.max(...validSets.map((s) => {
     const weight = Number(s.weight);
     const reps = Number(s.reps);
     if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) return 0;

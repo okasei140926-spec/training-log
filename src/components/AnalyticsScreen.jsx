@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { SUGGESTIONS } from "../constants/suggestions";
-import { calc1RM } from "../utils/helpers";
+import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 
 const PERIODS = [
@@ -55,15 +55,7 @@ const resolveLabel = (exName, muscleEx = {}) => {
 const resolveBodyPart = (value) => (FIXED_BODY_PART_LABELS.includes(value) ? value : "その他");
 
 const buildValidSets = (record) => {
-  const sourceSets = Array.isArray(record?.sets) && record.sets.length > 0
-    ? record.sets
-    : [{ weight: record?.weight, reps: record?.reps }];
-
-  return sourceSets.filter((s) => {
-    const w = Number(s.weight);
-    const reps = Number(s.reps);
-    return Number.isFinite(w) && Number.isFinite(reps) && w > 0 && reps > 0;
-  });
+  return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
 };
 
 const getBestSet = (validSets = []) => {

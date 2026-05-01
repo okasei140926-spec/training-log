@@ -1,4 +1,4 @@
-import { calc1RM } from "../utils/helpers";
+import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
 import {
     copySetDownHelper,
@@ -7,15 +7,7 @@ import {
 
 export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogData, getExSets, getExUnit, KG_TO_LBS }) => {
     const buildValidSets = (record) => {
-        const sourceSets = Array.isArray(record?.sets) && record.sets.length > 0
-            ? record.sets
-            : [{ weight: record?.weight, reps: record?.reps }];
-
-        return sourceSets.filter((s) => {
-            const w = Number(s.weight);
-            const reps = Number(s.reps);
-            return Number.isFinite(w) && Number.isFinite(reps) && w > 0 && reps > 0;
-        });
+        return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
     };
 
     const getPrev = (name) => {

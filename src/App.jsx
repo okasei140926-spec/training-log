@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./utils/supabase";
-import { load, save, storeW, KG_TO_LBS } from "./utils/helpers";
+import {
+    load,
+    save,
+    storeW,
+    KG_TO_LBS,
+    buildHistoryFromWorkoutRows,
+    mergeHistoryMaps,
+    sanitizeHistoryRecord,
+    sanitizeWorkoutSets,
+} from "./utils/helpers";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
@@ -52,74 +61,6 @@ const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
 
 const isPlainObject = (value) =>
     !!value && typeof value === "object" && !Array.isArray(value);
-
-const cloneRecord = (record) => ({
-    ...record,
-    sets: Array.isArray(record?.sets)
-        ? record.sets.map((set) => ({ ...set }))
-        : record?.sets,
-});
-
-const buildHistoryRecordSignature = (record) => {
-    const setsSignature = Array.isArray(record?.sets)
-        ? record.sets
-            .map((set) => `${set?.weight ?? ""}|${set?.reps ?? ""}|${set?.done ? 1 : 0}`)
-            .join(";")
-        : "";
-
-    return [
-        record?.date ?? "",
-        setsSignature,
-        record?.weight ?? "",
-        record?.reps ?? "",
-    ].join("::");
-};
-
-const mergeHistoryMaps = (...sources) => {
-    const merged = {};
-
-    sources.forEach((source) => {
-        if (!isPlainObject(source)) return;
-
-        Object.entries(source).forEach(([exerciseName, records]) => {
-            if (!exerciseName || !Array.isArray(records) || !records.length) return;
-
-            if (!merged[exerciseName]) merged[exerciseName] = [];
-            const seen = new Set(merged[exerciseName].map(buildHistoryRecordSignature));
-
-            records.forEach((record) => {
-                if (!record || typeof record !== "object") return;
-
-                const signature = buildHistoryRecordSignature(record);
-                if (seen.has(signature)) return;
-
-                merged[exerciseName].push(cloneRecord(record));
-                seen.add(signature);
-            });
-        });
-    });
-
-    Object.keys(merged).forEach((exerciseName) => {
-        merged[exerciseName] = merged[exerciseName]
-            .sort((a, b) => {
-                const dateCompare = String(a?.date || "").localeCompare(String(b?.date || ""));
-                if (dateCompare !== 0) return dateCompare;
-
-                const orderA = Number.isFinite(a?.order) ? a.order : 999;
-                const orderB = Number.isFinite(b?.order) ? b.order : 999;
-                return orderA - orderB;
-            });
-
-        if (!merged[exerciseName].length) {
-            delete merged[exerciseName];
-        }
-    });
-
-    return merged;
-};
-
-const buildHistoryFromWorkoutRows = (rows) =>
-    mergeHistoryMaps(...(rows || []).map((row) => row?.data));
 
 const serializeHistoryMap = (historyMap) => JSON.stringify(historyMap || {});
 const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
@@ -694,22 +635,20 @@ export default function GymApp() {
 
             exercises.forEach((ex, index) => {
                 const sets = logData[ex.name] || [];
-                const valid = sets.filter((s) => s.weight && s.reps);
+                const exUnit = getExUnit(ex.name);
+                const stored = sanitizeWorkoutSets(sets.map((s) => ({
+                    ...s,
+                    weight: storeW(s.weight, exUnit),
+                })), { allowBodyweight: true });
 
-                if (!valid.length) return;
+                if (!stored.length) return;
 
                 if (!nh[ex.name]) nh[ex.name] = [];
 
-                const exUnit = getExUnit(ex.name);
-                const stored = valid.map((s) => ({
-                    ...s,
-                    weight: storeW(s.weight, exUnit),
-                }));
-
                 nh[ex.name].push({
                     sets: stored,
-                    weight: Number(stored[0].weight),
-                    reps: Number(valid[0].reps),
+                    weight: stored[0].weight === "BW" ? "BW" : Number(stored[0].weight),
+                    reps: Number(stored[0].reps),
                     date: logDate,
                     order: index,
                 });
@@ -1014,9 +953,12 @@ export default function GymApp() {
             const idx = historyIdx !== undefined
                 ? historyIdx
                 : recs.findIndex(r => r.date === updatedRecord.date);
+            const sanitizedRecord = sanitizeHistoryRecord(updatedRecord, { allowBodyweight: true });
+
+            if (!sanitizedRecord) return prev;
 
             if (idx >= 0 && idx < recs.length) {
-                recs[idx] = updatedRecord;
+                recs[idx] = sanitizedRecord;
             }
 
             return { ...prev, [exName]: recs };
@@ -1035,13 +977,16 @@ export default function GymApp() {
             // セット単位削除
             if (setIdx !== undefined) {
                 const target = recs[idx];
-                const nextSets = (target.sets || []).filter((_, i) => i !== setIdx);
+                const nextSets = sanitizeWorkoutSets(
+                    (target.sets || []).filter((_, i) => i !== setIdx),
+                    { allowBodyweight: true }
+                );
 
                 if (nextSets.length > 0) {
                     recs[idx] = {
                         ...target,
                         sets: nextSets,
-                        weight: Number(nextSets[0]?.weight || 0),
+                        weight: nextSets[0]?.weight === "BW" ? "BW" : Number(nextSets[0]?.weight || 0),
                         reps: Number(nextSets[0]?.reps || 0),
                     };
                     return { ...prev, [exName]: recs };
