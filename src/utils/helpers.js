@@ -117,14 +117,7 @@ const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
 
   if (!existingSignature) return incomingRecord;
   if (!incomingSignature) return existingRecord;
-  if (existingSignature === incomingSignature) return incomingRecord;
-
-  const existingSetCount = Array.isArray(existingRecord.sets) ? existingRecord.sets.length : 0;
-  const incomingSetCount = Array.isArray(incomingRecord.sets) ? incomingRecord.sets.length : 0;
-
-  if (incomingSetCount > existingSetCount) return incomingRecord;
-  if (incomingSetCount < existingSetCount) return existingRecord;
-
+  if (existingSignature === incomingSignature) return existingRecord;
   return incomingRecord;
 };
 

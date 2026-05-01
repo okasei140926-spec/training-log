@@ -173,15 +173,10 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             .filter((record) => record.date >= thresholdStr)
             .reduce((acc, record) => {
                 if (!acc[record.date]) acc[record.date] = {};
-
-                const existing = acc[record.date][record.name];
-                if (!existing || record.sets.length >= (existing.sets?.length || 0)) {
-                    acc[record.date][record.name] = {
-                        sets: record.sets,
-                        order: record.order,
-                    };
-                }
-
+                acc[record.date][record.name] = {
+                    sets: record.sets,
+                    order: record.order,
+                };
                 return acc;
             }, {});
     }, [thresholdStr]);

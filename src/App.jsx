@@ -101,7 +101,7 @@ export default function GymApp() {
 
 
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
-    const [history, setHistory] = useState(() => load("history", {}));
+    const [history, setHistory] = useState(() => mergeHistoryMaps(load("history", {})));
     const [manualBests, setManualBests] = useState([]);
     const [historySyncReady, setHistorySyncReady] = useState(false);
     const [customBodyParts, setCustomBodyParts] = useState(() => {
@@ -424,7 +424,7 @@ export default function GymApp() {
 
                 persistHistoryForUser(currentUserId, mergedHistory);
                 setHistory((prev) => {
-                    const reconciledHistory = mergeHistoryMaps(prev, mergedHistory);
+                    const reconciledHistory = mergeHistoryMaps(mergedHistory, prev);
                     return serializeHistoryMap(reconciledHistory) === serializeHistoryMap(prev)
                         ? prev
                         : reconciledHistory;
