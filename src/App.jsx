@@ -47,6 +47,7 @@ import {
     getPushSupportState,
     syncPushSubscriptionState,
 } from "./lib/pushNotifications";
+import { normalizeExerciseName } from "./utils/exerciseName";
 
 
 const EX_TO_LABEL = {};
@@ -86,12 +87,21 @@ const normalizeHistoryDeleteMarkers = (markers) => {
 
     return {
         dates: [...new Set((markers.dates || []).map((date) => String(date || "")).filter(Boolean))],
-        records: [...new Set((markers.records || []).map((key) => String(key || "")).filter(Boolean))],
+        records: [...new Set(
+            (markers.records || [])
+                .map((key) => {
+                    const rawKey = String(key || "");
+                    if (!rawKey) return "";
+                    const [date, exerciseName = ""] = rawKey.split("::");
+                    return buildHistoryRecordDeleteKey(date, exerciseName);
+                })
+                .filter(Boolean)
+        )],
     };
 };
 
 const buildHistoryRecordDeleteKey = (date, exerciseName) =>
-    `${String(date || "")}::${String(exerciseName || "")}`;
+    `${String(date || "")}::${normalizeExerciseName(exerciseName)}`;
 
 const applyHistoryDeleteMarkers = (historyMap, markers) => {
     const normalizedMarkers = normalizeHistoryDeleteMarkers(markers);
@@ -378,9 +388,20 @@ export default function GymApp() {
         }
     }, [pushPromptBusy, user?.id]);
 
-    const appendHistoryDeleteMarkers = useCallback((nextMarkers) => {
+    const commitHistoryDeleteMarkers = useCallback((nextMarkers) => {
+        const normalizedMarkers = normalizeHistoryDeleteMarkers(nextMarkers);
+        historyDeleteMarkersRef.current = normalizedMarkers;
+
         const userId = latestUserIdRef.current;
-        const mergedMarkers = normalizeHistoryDeleteMarkers({
+        if (userId) {
+            save(getHistoryDeleteMarkersKey(userId), normalizedMarkers);
+        }
+
+        return normalizedMarkers;
+    }, []);
+
+    const appendHistoryDeleteMarkers = useCallback((nextMarkers) => {
+        return commitHistoryDeleteMarkers({
             dates: [
                 ...(historyDeleteMarkersRef.current?.dates || []),
                 ...(nextMarkers?.dates || []),
@@ -390,12 +411,35 @@ export default function GymApp() {
                 ...(nextMarkers?.records || []),
             ],
         });
+    }, [commitHistoryDeleteMarkers]);
 
-        historyDeleteMarkersRef.current = mergedMarkers;
-        if (userId) {
-            save(getHistoryDeleteMarkersKey(userId), mergedMarkers);
+    const pruneHistoryDeleteMarkersForHistory = useCallback((historyMap) => {
+        const normalizedMarkers = normalizeHistoryDeleteMarkers(historyDeleteMarkersRef.current);
+        if (!normalizedMarkers.dates.length && !normalizedMarkers.records.length) {
+            return normalizedMarkers;
         }
-    }, []);
+
+        const restoredDates = new Set();
+        const restoredRecords = new Set();
+
+        Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+            (records || []).forEach((record) => {
+                const recordDate = String(record?.date || "");
+                if (!recordDate) return;
+                restoredDates.add(recordDate);
+                restoredRecords.add(buildHistoryRecordDeleteKey(recordDate, exerciseName));
+            });
+        });
+
+        const prunedMarkers = {
+            dates: normalizedMarkers.dates.filter((date) => !restoredDates.has(date)),
+            records: normalizedMarkers.records.filter((key) => !restoredRecords.has(key)),
+        };
+
+        return serializeHistoryMap(prunedMarkers) === serializeHistoryMap(normalizedMarkers)
+            ? normalizedMarkers
+            : commitHistoryDeleteMarkers(prunedMarkers);
+    }, [commitHistoryDeleteMarkers]);
 
     useEffect(() => {
         let isActive = true;
@@ -427,6 +471,8 @@ export default function GymApp() {
                 save(getUserHistoryCacheKey(localOwnerUserId), rawLocalHistory);
             }
 
+            const effectiveDeleteMarkers = pruneHistoryDeleteMarkersForHistory(localMergeCandidate);
+
             try {
                 const { data, error } = await supabase
                     .from("workouts")
@@ -438,11 +484,11 @@ export default function GymApp() {
 
                 const remoteHistory = applyHistoryDeleteMarkers(
                     buildHistoryFromWorkoutRows(data),
-                    historyDeleteMarkersRef.current
+                    effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
                     mergeHistoryMaps(remoteHistory, localMergeCandidate),
-                    historyDeleteMarkersRef.current
+                    effectiveDeleteMarkers
                 );
 
                 if (!isActive) return;
@@ -454,7 +500,7 @@ export default function GymApp() {
 
                 if (!isActive) return;
 
-                const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, historyDeleteMarkersRef.current);
+                const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
                 setHistory(fallbackHistory);
                 persistHistoryForUser(user.id, fallbackHistory);
             } finally {
@@ -467,14 +513,16 @@ export default function GymApp() {
         return () => {
             isActive = false;
         };
-    }, [user]);
+    }, [user, pruneHistoryDeleteMarkersForHistory]);
 
     useEffect(() => {
         if (!user || !historySyncReady) return;
         const currentUserId = user.id;
+        const baseLocalHistory = mergeHistoryMaps(history);
+        const effectiveDeleteMarkers = pruneHistoryDeleteMarkersForHistory(baseLocalHistory);
         const localHistorySnapshot = applyHistoryDeleteMarkers(
-            mergeHistoryMaps(history),
-            historyDeleteMarkersRef.current
+            baseLocalHistory,
+            effectiveDeleteMarkers
         );
         const pendingWorkoutNotification = pendingWorkoutNotificationRef.current;
 
@@ -494,28 +542,35 @@ export default function GymApp() {
 
                 const remoteHistory = applyHistoryDeleteMarkers(
                     buildHistoryFromWorkoutRows(data),
-                    historyDeleteMarkersRef.current
+                    effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
                     mergeHistoryMaps(remoteHistory, localHistorySnapshot),
-                    historyDeleteMarkersRef.current
+                    effectiveDeleteMarkers
                 );
+                const syncDates = [
+                    ...new Set([
+                        ...(data || []).map((row) => String(row?.date || "")).filter(Boolean),
+                        new Date().toISOString().split("T")[0],
+                    ]),
+                ];
 
-                await supabase.from("workouts").upsert({
-                    user_id: currentUserId,
-                    date: new Date().toISOString().split("T")[0],
-                    data: mergedHistory,
-                }, { onConflict: "user_id,date" });
+                await supabase.from("workouts").upsert(
+                    syncDates.map((date) => ({
+                        user_id: currentUserId,
+                        date,
+                        data: mergedHistory,
+                    })),
+                    { onConflict: "user_id,date" }
+                );
 
                 if (latestUserIdRef.current !== currentUserId) return;
 
                 persistHistoryForUser(currentUserId, mergedHistory);
-                historyDeleteMarkersRef.current = createEmptyHistoryDeleteMarkers();
-                save(getHistoryDeleteMarkersKey(currentUserId), historyDeleteMarkersRef.current);
                 setHistory((prev) => {
                     const reconciledHistory = applyHistoryDeleteMarkers(
                         mergeHistoryMaps(mergedHistory, prev),
-                        historyDeleteMarkersRef.current
+                        effectiveDeleteMarkers
                     );
                     return serializeHistoryMap(reconciledHistory) === serializeHistoryMap(prev)
                         ? prev
@@ -560,7 +615,7 @@ export default function GymApp() {
             .catch((error) => {
                 console.error("history sync save failed", error);
             });
-    }, [history, user, historySyncReady, logDate, screen]);
+    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory]);
 
     useEffect(() => {
         let isActive = true;
