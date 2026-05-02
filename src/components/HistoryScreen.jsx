@@ -170,12 +170,12 @@ export default function HistoryScreen({
         <div className="fade-in" style={{ padding: "20px" }}>
 
             {/* WEEKLY SPLIT */}
-            <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 16 }}>
-                    今週のセット数
-                </div>
+            {sortedWeekStats.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 16 }}>
+                        今週のセット数
+                    </div>
 
-                {sortedWeekStats.length > 0 ? (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                         {sortedWeekStats.map(([label, count]) => {
                             const isActive = activeLabel === label;
@@ -215,22 +215,9 @@ export default function HistoryScreen({
                             );
                         })}
                     </div>
-                ) : (
-                    <div
-                        style={{
-                            padding: "12px 14px",
-                            borderRadius: 14,
-                            background: "var(--card)",
-                            border: "1px solid var(--border2)",
-                            color: "var(--text3)",
-                            fontSize: 13,
-                            boxShadow: "var(--shadow-card)",
-                        }}
-                    >
-                        まだ今週の記録はありません
-                    </div>
-                )}
-            </div>
+
+                </div>
+            )}
 
 
 
