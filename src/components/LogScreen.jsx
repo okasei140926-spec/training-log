@@ -72,6 +72,7 @@ export default function LogScreen({
 
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
+    const [reorderMenuId, setReorderMenuId] = useState(null);
 
 
     const [editingId, setEditingId] = useState(null);
@@ -265,6 +266,16 @@ export default function LogScreen({
         onReorderEx(oldIndex, newIndex);
     };
 
+    const moveExerciseByOffset = (exerciseId, offset) => {
+        const currentIndex = exercises.findIndex((ex) => ex.id === exerciseId);
+        if (currentIndex === -1) return;
+
+        const nextIndex = currentIndex + offset;
+        if (nextIndex < 0 || nextIndex >= exercises.length) return;
+
+        onReorderEx(currentIndex, nextIndex);
+    };
+
     const historyTargetRecords = historyTarget
         ? [...(history?.[historyTarget] || [])]
             .filter((record) => record?.date && record.date !== logDate)
@@ -339,6 +350,12 @@ export default function LogScreen({
             isActive = false;
         };
     }, [user?.id, logDate]);
+
+    useEffect(() => {
+        if (!exercises.some((ex) => ex.id === reorderMenuId)) {
+            setReorderMenuId(null);
+        }
+    }, [exercises, reorderMenuId]);
 
     const handlePhotoPick = () => {
         if (!user?.id || photoUploading || photoDeletingId || photoLimitReached) return;
@@ -557,54 +574,118 @@ export default function LogScreen({
 
                             return (
                                 <SortableExerciseItem key={ex.id} id={ex.id}>
-                                    {(dragHandleProps) => (
-                                        <div
-                                            onClick={() => setActiveExIdx(i)}
-                                            style={{
-                                                background: "var(--card)",
-                                                borderRadius: 20,
-                                                padding: "12px 16px",
-                                                marginBottom: 12,
-                                                border: "1px solid var(--border2)",
-                                                boxShadow: "var(--shadow-card)",
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                transition: "transform 0.1s ease"
-                                            }}
-                                            onTouchStart={(e) => {
-                                                e.currentTarget.style.transform = "scale(0.9)";
-                                            }}
-                                            onTouchEnd={(e) => {
-                                                e.currentTarget.style.transform = "scale(1)"
-                                            }}
-                                        >
-                                            <div>
-                                                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
-                                                    {ex.name}
+                                    {() => (
+                                        <>
+                                            <div
+                                                onClick={() => setActiveExIdx(i)}
+                                                style={{
+                                                    background: "var(--card)",
+                                                    borderRadius: 20,
+                                                    padding: "12px 16px",
+                                                    marginBottom: 12,
+                                                    border: "1px solid var(--border2)",
+                                                    boxShadow: "var(--shadow-card)",
+                                                    display: "flex",
+                                                    justifyContent: "space-between",
+                                                    alignItems: "center",
+                                                    transition: "transform 0.1s ease"
+                                                }}
+                                                onTouchStart={(e) => {
+                                                    e.currentTarget.style.transform = "scale(0.9)";
+                                                }}
+                                                onTouchEnd={(e) => {
+                                                    e.currentTarget.style.transform = "scale(1)";
+                                                }}
+                                            >
+                                                <div>
+                                                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+                                                        {ex.name}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
+                                                        {doneSetsCount > 0 ? `${doneSetsCount}セット完了` : "タップして開始"}
+                                                    </div>
                                                 </div>
-                                                <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
-                                                    {doneSetsCount > 0 ? `${doneSetsCount}セット完了` : "タップして開始"}
-                                                </div>
-                                            </div>
 
-                                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                <div
-                                                    {...dragHandleProps}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    style={{
-                                                        cursor: "grab",
-                                                        padding: "6px 8px",
-                                                        color: "var(--text3)",
-                                                        fontSize: 18,
-                                                        touchAction: "none",
-                                                        userSelect: "none",
-                                                    }}
-                                                >
-                                                    ≡
+                                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
+                                                        }}
+                                                        style={{
+                                                            background: "none",
+                                                            border: "none",
+                                                            padding: "6px 8px",
+                                                            color: "var(--text3)",
+                                                            fontSize: 18,
+                                                        }}
+                                                    >
+                                                        ≡
+                                                    </button>
                                                 </div>
                                             </div>
-                                        </div>
+                                            {reorderMenuId === ex.id && (
+                                                <div
+                                                    style={{
+                                                        marginTop: -4,
+                                                        marginBottom: 12,
+                                                        display: "flex",
+                                                        gap: 8,
+                                                        justifyContent: "flex-end",
+                                                    }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveExerciseByOffset(ex.id, -1)}
+                                                        disabled={i === 0}
+                                                        style={{
+                                                            padding: "7px 10px",
+                                                            borderRadius: 10,
+                                                            border: "1px solid var(--border2)",
+                                                            background: "var(--card2)",
+                                                            color: i === 0 ? "var(--text4)" : "var(--text2)",
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                        }}
+                                                    >
+                                                        上へ
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveExerciseByOffset(ex.id, 1)}
+                                                        disabled={i === exercises.length - 1}
+                                                        style={{
+                                                            padding: "7px 10px",
+                                                            borderRadius: 10,
+                                                            border: "1px solid var(--border2)",
+                                                            background: "var(--card2)",
+                                                            color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)",
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                        }}
+                                                    >
+                                                        下へ
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setReorderMenuId(null)}
+                                                        style={{
+                                                            padding: "7px 10px",
+                                                            borderRadius: 10,
+                                                            border: "1px solid var(--border2)",
+                                                            background: "transparent",
+                                                            color: "var(--text3)",
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                        }}
+                                                    >
+                                                        閉じる
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </SortableExerciseItem>
                             );
@@ -612,7 +693,7 @@ export default function LogScreen({
 
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
-                                {(dragHandleProps) => (
+                                {() => (
                                     <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : "var(--border2)"}`, boxShadow: isPR ? "0 14px 32px rgba(34,197,94,0.12)" : "var(--shadow-card)" }}>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -634,20 +715,22 @@ export default function LogScreen({
                                             </div>
 
                                             <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
-                                                <div
-                                                    {...dragHandleProps}
-                                                    onClick={(e) => e.stopPropagation()}
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
+                                                    }}
                                                     style={{
-                                                        cursor: "grab",
+                                                        background: "none",
+                                                        border: "none",
                                                         padding: "6px 8px",
                                                         color: "var(--text3)",
                                                         fontSize: 18,
-                                                        touchAction: "none",
-                                                        userSelect: "none",
                                                     }}
                                                 >
                                                     ≡
-                                                </div>
+                                                </button>
 
                                                 {onToggleExUnit && (
                                                     <button
@@ -678,6 +761,58 @@ export default function LogScreen({
                                                 <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
                                             </div>
                                         </div>
+
+                                        {reorderMenuId === ex.id && (
+                                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 10 }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveExerciseByOffset(ex.id, -1)}
+                                                    disabled={i === 0}
+                                                    style={{
+                                                        padding: "7px 10px",
+                                                        borderRadius: 10,
+                                                        border: "1px solid var(--border2)",
+                                                        background: "var(--card2)",
+                                                        color: i === 0 ? "var(--text4)" : "var(--text2)",
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    上へ
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveExerciseByOffset(ex.id, 1)}
+                                                    disabled={i === exercises.length - 1}
+                                                    style={{
+                                                        padding: "7px 10px",
+                                                        borderRadius: 10,
+                                                        border: "1px solid var(--border2)",
+                                                        background: "var(--card2)",
+                                                        color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)",
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    下へ
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setReorderMenuId(null)}
+                                                    style={{
+                                                        padding: "7px 10px",
+                                                        borderRadius: 10,
+                                                        border: "1px solid var(--border2)",
+                                                        background: "transparent",
+                                                        color: "var(--text3)",
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    閉じる
+                                                </button>
+                                            </div>
+                                        )}
 
                                         {/* 前回の記録 + PR */}
                                         {(prev || pr) && (

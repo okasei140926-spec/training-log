@@ -976,6 +976,8 @@ export default function GymApp() {
             const current = [...(p !== null ? p : baseExercises)];
             const [moved] = current.splice(fromIdx, 1);
             current.splice(toIdx, 0, moved);
+            save("draft_sessionEx", current);
+            save("draft_logDate", logDate);
             return current;
         });
     };

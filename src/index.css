@@ -12,6 +12,25 @@ body,
 #root {
   height: 100%;
   overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body,
+#root,
+#root *:not(input):not(textarea):not(select):not(option):not([contenteditable="true"]) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+select,
+option,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 code {
