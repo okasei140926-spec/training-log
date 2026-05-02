@@ -857,6 +857,8 @@ export default function GymApp() {
         getExSets,
         getExUnit,
         KG_TO_LBS,
+        muscleEx,
+        exerciseBodyPartOverrides,
     });
 
 
@@ -1522,7 +1524,13 @@ export default function GymApp() {
                 )}
 
                 {screen === "analytics" && (
-                    <AnalyticsScreen history={history} manualBests={manualBests} muscleEx={muscleEx} />
+                    <AnalyticsScreen
+                        history={history}
+                        manualBests={manualBests}
+                        muscleEx={muscleEx}
+                        hiddenBodyParts={hiddenBodyParts}
+                        exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                    />
 
                 )}
 

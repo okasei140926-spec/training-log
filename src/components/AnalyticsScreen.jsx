@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { SUGGESTIONS } from "../constants/suggestions";
 import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
+import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 
 const PERIODS = [
   { label: "1ヶ月", days: 30 },
@@ -18,48 +18,13 @@ const BIG3_EXERCISES = [
   { key: "deadlift", label: "デッドリフト" },
 ];
 
-const EX_TO_LABEL = {};
-Object.entries(SUGGESTIONS).forEach(([label, names]) => {
-  names.forEach((n) => {
-    EX_TO_LABEL[n] = label;
-  });
-});
-
-const normalizeName = (name) => String(name || "").replace(/\s+/g, "").trim();
 const formatDate = (date) => (date ? date.replace(/-/g, "/") : null);
 
-const resolveLabel = (exName, muscleEx = {}) => {
-  const canonicalName = normalizeExerciseName(exName);
-  const normalized = normalizeName(canonicalName);
+const buildValidSets = (record) =>
+  sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
 
-  if (EX_TO_LABEL[canonicalName]) return EX_TO_LABEL[canonicalName];
-  if (EX_TO_LABEL[exName]) return EX_TO_LABEL[exName];
-
-  const suggestionMatch = Object.entries(EX_TO_LABEL).find(([name]) => {
-    const base = normalizeName(name);
-    return base === normalized || base.includes(normalized) || normalized.includes(base);
-  });
-  if (suggestionMatch) return suggestionMatch[1];
-
-  const customMatch = Object.entries(muscleEx || {}).find(([label, list]) =>
-    (list || []).some((ex) => {
-      const name = typeof ex === "string" ? ex : ex.name;
-      const base = normalizeName(name);
-      return base === normalized || base.includes(normalized) || normalized.includes(base);
-    })
-  );
-
-  return customMatch ? customMatch[0] : null;
-};
-
-const resolveBodyPart = (value) => (FIXED_BODY_PART_LABELS.includes(value) ? value : "その他");
-
-const buildValidSets = (record) => {
-  return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
-};
-
-const getBestSet = (validSets = []) => {
-  return validSets.reduce((best, set) => {
+const getBestSet = (validSets = []) =>
+  validSets.reduce((best, set) => {
     const score = calc1RM([set]);
     if (!best || score > best.score) {
       return {
@@ -70,7 +35,6 @@ const getBestSet = (validSets = []) => {
     }
     return best;
   }, null);
-};
 
 const formatSetsText = (sets = []) =>
   sets.map((set) => `${Number(set.weight)}kg × ${Number(set.reps)}rep`).join(" / ");
@@ -82,21 +46,50 @@ const sortByDateDesc = (a, b) => {
   return (b?.estimated1RM || 0) - (a?.estimated1RM || 0);
 };
 
-const buildHistoryBestMap = (history = {}) => {
+const sortBodyPartLabels = (labels = []) =>
+  [...new Set(labels)].sort((a, b) => {
+    const aIndex = FIXED_BODY_PART_LABELS.indexOf(a);
+    const bIndex = FIXED_BODY_PART_LABELS.indexOf(b);
+    const safeA = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+    const safeB = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+    if (safeA !== safeB) return safeA - safeB;
+    return String(a).localeCompare(String(b), "ja");
+  });
+
+const getCompositeKey = (bodyPart, exerciseName) =>
+  buildBodyPartExerciseKey(bodyPart, normalizeExerciseName(exerciseName));
+
+const resolveAnalyticsBodyPart = (record, exerciseName, ctx) => {
+  const bodyPart = resolveRecordBodyPartLabel(record, exerciseName, {
+    muscleEx: ctx.muscleEx,
+    exerciseBodyPartOverrides: ctx.exerciseBodyPartOverrides,
+  });
+  if (!bodyPart || ctx.hiddenSet.has(bodyPart)) return null;
+  return bodyPart;
+};
+
+const buildHistoryBestMap = (history = {}, ctx) => {
   const bestMap = {};
 
-  Object.entries(history || {}).forEach(([name, records]) => {
-    const normalizedName = normalizeExerciseName(name);
+  Object.entries(history || {}).forEach(([exerciseName, records]) => {
+    const normalizedName = normalizeExerciseName(exerciseName);
 
     (records || []).forEach((record) => {
+      const bodyPart = resolveAnalyticsBodyPart(record, exerciseName, ctx);
+      if (!bodyPart) return;
+
       const validSets = buildValidSets(record);
       const rm = calc1RM(validSets);
       const bestSet = getBestSet(validSets);
       if (!bestSet || rm <= 0) return;
 
-      if (!bestMap[normalizedName] || rm > bestMap[normalizedName].estimated1RM) {
-        bestMap[normalizedName] = {
+      const key = getCompositeKey(bodyPart, normalizedName);
+      if (!bestMap[key] || rm > bestMap[key].estimated1RM) {
+        bestMap[key] = {
+          key,
           name: normalizedName,
+          displayName: normalizedName,
+          bodyPart,
           weight: bestSet.weight,
           reps: bestSet.reps,
           estimated1RM: Math.round(rm),
@@ -111,26 +104,32 @@ const buildHistoryBestMap = (history = {}) => {
   return bestMap;
 };
 
-const buildManualBestMap = (manualBests = []) => {
+const buildManualBestMap = (manualBests = [], ctx) => {
   const bestMap = {};
 
   (manualBests || []).forEach((entry) => {
     if (!entry?.exercise_name) return;
     const normalizedName = normalizeExerciseName(entry.exercise_name);
+    const bodyPart = resolveAnalyticsBodyPart({ bodyPart: entry?.body_part }, entry.exercise_name, ctx);
+    if (!bodyPart) return;
+
     const validSets = buildValidSets({ weight: entry.weight, reps: entry.reps });
     const rm = calc1RM(validSets);
     if (!validSets.length || rm <= 0) return;
 
-    if (!bestMap[normalizedName] || rm > bestMap[normalizedName].estimated1RM) {
-      bestMap[normalizedName] = {
+    const key = getCompositeKey(bodyPart, normalizedName);
+    if (!bestMap[key] || rm > bestMap[key].estimated1RM) {
+      bestMap[key] = {
+        key,
         name: normalizedName,
+        displayName: normalizedName,
+        bodyPart,
         weight: Number(entry.weight),
         reps: Number(entry.reps),
         estimated1RM: Math.round(rm),
         date: entry.best_date || null,
         source: "manual",
         sourceLabel: "移行記録",
-        bodyPart: entry.body_part || "その他",
       };
     }
   });
@@ -138,22 +137,29 @@ const buildManualBestMap = (manualBests = []) => {
   return bestMap;
 };
 
-const buildHistoryRecordMap = (history = {}) => {
+const buildHistoryRecordMap = (history = {}, ctx) => {
   const recordMap = {};
 
-  Object.entries(history || {}).forEach(([name, records]) => {
-    const normalizedName = normalizeExerciseName(name);
+  Object.entries(history || {}).forEach(([exerciseName, records]) => {
+    const normalizedName = normalizeExerciseName(exerciseName);
 
     (records || []).forEach((record, index) => {
+      const bodyPart = resolveAnalyticsBodyPart(record, exerciseName, ctx);
+      if (!bodyPart) return;
+
       const validSets = buildValidSets(record);
       const rm = calc1RM(validSets);
       const bestSet = getBestSet(validSets);
       if (!bestSet || rm <= 0) return;
 
-      if (!recordMap[normalizedName]) recordMap[normalizedName] = [];
-      recordMap[normalizedName].push({
-        id: `history-${normalizedName}-${record?.date || "nodate"}-${index}`,
+      const key = getCompositeKey(bodyPart, normalizedName);
+      if (!recordMap[key]) recordMap[key] = [];
+      recordMap[key].push({
+        id: `history-${key}-${record?.date || "nodate"}-${index}`,
+        key,
         name: normalizedName,
+        displayName: normalizedName,
+        bodyPart,
         date: record?.date || null,
         weight: bestSet.weight,
         reps: bestSet.reps,
@@ -168,20 +174,27 @@ const buildHistoryRecordMap = (history = {}) => {
   return recordMap;
 };
 
-const buildManualRecordMap = (manualBests = []) => {
+const buildManualRecordMap = (manualBests = [], ctx) => {
   const recordMap = {};
 
   (manualBests || []).forEach((entry, index) => {
     if (!entry?.exercise_name) return;
     const normalizedName = normalizeExerciseName(entry.exercise_name);
+    const bodyPart = resolveAnalyticsBodyPart({ bodyPart: entry?.body_part }, entry.exercise_name, ctx);
+    if (!bodyPart) return;
+
     const validSets = buildValidSets({ weight: entry.weight, reps: entry.reps });
     const rm = calc1RM(validSets);
     if (!validSets.length || rm <= 0) return;
 
-    if (!recordMap[normalizedName]) recordMap[normalizedName] = [];
-    recordMap[normalizedName].push({
-      id: `manual-${normalizedName}-${entry?.best_date || "nodate"}-${entry?.id || index}`,
+    const key = getCompositeKey(bodyPart, normalizedName);
+    if (!recordMap[key]) recordMap[key] = [];
+    recordMap[key].push({
+      id: `manual-${key}-${entry?.best_date || "nodate"}-${entry?.id || index}`,
+      key,
       name: normalizedName,
+      displayName: normalizedName,
+      bodyPart,
       date: entry.best_date || null,
       weight: Number(entry.weight),
       reps: Number(entry.reps),
@@ -218,60 +231,60 @@ const buildChartData = (records = [], period) => {
     }));
 };
 
-export default function AnalyticsScreen({ history, manualBests = [], muscleEx = {} }) {
-  const [selectedExerciseName, setSelectedExerciseName] = useState(null);
+export default function AnalyticsScreen({
+  history,
+  manualBests = [],
+  muscleEx = {},
+  hiddenBodyParts = [],
+  exerciseBodyPartOverrides = {},
+}) {
+  const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
 
-  const manualBodyPartMap = useMemo(() => {
-    const map = {};
-    (manualBests || []).forEach((best) => {
-      const normalizedName = normalizeExerciseName(best?.exercise_name);
-      if (normalizedName && best?.body_part && !map[normalizedName]) {
-        map[normalizedName] = best.body_part;
-      }
-    });
-    return map;
-  }, [manualBests]);
+  const resolutionContext = useMemo(
+    () => ({
+      muscleEx,
+      exerciseBodyPartOverrides,
+      hiddenSet: new Set(hiddenBodyParts || []),
+    }),
+    [muscleEx, exerciseBodyPartOverrides, hiddenBodyParts]
+  );
 
-  const historyBestMap = useMemo(() => buildHistoryBestMap(history), [history]);
-  const manualBestMap = useMemo(() => buildManualBestMap(manualBests), [manualBests]);
-  const historyRecordMap = useMemo(() => buildHistoryRecordMap(history), [history]);
-  const manualRecordMap = useMemo(() => buildManualRecordMap(manualBests), [manualBests]);
+  const historyBestMap = useMemo(
+    () => buildHistoryBestMap(history, resolutionContext),
+    [history, resolutionContext]
+  );
+  const manualBestMap = useMemo(
+    () => buildManualBestMap(manualBests, resolutionContext),
+    [manualBests, resolutionContext]
+  );
+  const historyRecordMap = useMemo(
+    () => buildHistoryRecordMap(history, resolutionContext),
+    [history, resolutionContext]
+  );
+  const manualRecordMap = useMemo(
+    () => buildManualRecordMap(manualBests, resolutionContext),
+    [manualBests, resolutionContext]
+  );
 
   const prData = useMemo(() => {
-    const allNames = [...new Set([...Object.keys(historyBestMap), ...Object.keys(manualBestMap)])];
+    const allKeys = [...new Set([...Object.keys(historyBestMap), ...Object.keys(manualBestMap)])];
 
-    const merged = allNames.map((name) => {
-      const historyBest = historyBestMap[name];
-      const manualBest = manualBestMap[name];
-      const best = !historyBest
-        ? manualBest
-        : !manualBest
-          ? historyBest
-          : manualBest.estimated1RM > historyBest.estimated1RM
-            ? manualBest
-            : historyBest;
-
-      const bodyPart = best?.source === "manual"
-        ? resolveBodyPart(best.bodyPart)
-        : resolveBodyPart(
-          manualBodyPartMap[name] ||
-          resolveLabel(name, muscleEx) ||
-          "その他"
-        );
-
-      return {
-        ...best,
-        bodyPart,
-      };
+    const merged = allKeys.map((key) => {
+      const historyBest = historyBestMap[key];
+      const manualBest = manualBestMap[key];
+      if (!historyBest) return manualBest;
+      if (!manualBest) return historyBest;
+      return manualBest.estimated1RM > historyBest.estimated1RM ? manualBest : historyBest;
     }).filter(Boolean);
 
-    const groupedByBodyPart = FIXED_BODY_PART_LABELS.map((bodyPart) => ({
+    const groupLabels = sortBodyPartLabels(merged.map((item) => item.bodyPart));
+    const groupedByBodyPart = groupLabels.map((bodyPart) => ({
       bodyPart,
       items: merged
         .filter((item) => item.bodyPart === bodyPart)
-        .sort((a, b) => b.estimated1RM - a.estimated1RM || a.name.localeCompare(b.name, "ja")),
-    })).filter((group) => group.items.length > 0);
+        .sort((a, b) => b.estimated1RM - a.estimated1RM || a.displayName.localeCompare(b.displayName, "ja")),
+    }));
 
     const big3 = BIG3_EXERCISES.map(({ key, label }) => {
       const match = merged
@@ -281,12 +294,12 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
       return {
         key,
         label,
-        item: match,
+        item: match ? { ...match, displayName: label } : null,
         estimated1RM: match?.estimated1RM || 0,
       };
     });
 
-    const itemMap = Object.fromEntries(merged.map((item) => [item.name, item]));
+    const itemMap = Object.fromEntries(merged.map((item) => [item.key, item]));
 
     return {
       groupedByBodyPart,
@@ -294,17 +307,17 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
       big3Total: big3.reduce((sum, item) => sum + item.estimated1RM, 0),
       itemMap,
     };
-  }, [historyBestMap, manualBestMap, manualBodyPartMap, muscleEx]);
+  }, [historyBestMap, manualBestMap]);
 
-  const selectedExercise = selectedExerciseName ? prData.itemMap[selectedExerciseName] || null : null;
+  const selectedExercise = selectedExerciseKey ? prData.itemMap[selectedExerciseKey] || null : null;
 
   const selectedRecords = useMemo(() => {
-    if (!selectedExerciseName) return [];
+    if (!selectedExerciseKey) return [];
     return [
-      ...(historyRecordMap[selectedExerciseName] || []),
-      ...(manualRecordMap[selectedExerciseName] || []),
+      ...(historyRecordMap[selectedExerciseKey] || []),
+      ...(manualRecordMap[selectedExerciseKey] || []),
     ].sort(sortByDateDesc);
-  }, [selectedExerciseName, historyRecordMap, manualRecordMap]);
+  }, [selectedExerciseKey, historyRecordMap, manualRecordMap]);
 
   const selectedChartData = useMemo(
     () => buildChartData(selectedRecords, period),
@@ -316,7 +329,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
       width: "100%",
       textAlign: "left",
       background: compact ? "linear-gradient(180deg, var(--info-soft), var(--card))" : "var(--card2)",
-      borderRadius: compact ? 16 : 16,
+      borderRadius: 16,
       padding: compact ? "12px 14px" : "11px 12px",
       border: compact ? "1px solid var(--info-border)" : "1px solid rgba(186, 230, 253, 0.65)",
       boxShadow: compact ? "var(--shadow-card)" : "none",
@@ -334,16 +347,25 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
 
     return (
       <button
-        onClick={() => setSelectedExerciseName(item.name)}
+        onClick={() => setSelectedExerciseKey(item.key)}
         style={sharedStyle}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 4 }}>
-          <div style={{ fontSize: compact ? 11 : 13, fontWeight: 700, color: "var(--text)" }}>{item.name}</div>
-          <div style={{ fontSize: compact ? 22 : 15, fontWeight: 800, color: "var(--text)" }}>{item.estimated1RM}kg</div>
+          <div style={{ fontSize: compact ? 11 : 13, fontWeight: 700, color: "var(--text)" }}>
+            {item.displayName || item.name}
+          </div>
+          <div style={{ fontSize: compact ? 22 : 15, fontWeight: 800, color: "var(--text)" }}>
+            {item.estimated1RM}kg
+          </div>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, color: "var(--text2)" }}>
           <span>{item.weight}kg × {item.reps}rep</span>
           {item.date && <span>{formatDate(item.date)}</span>}
+          {!compact && item.bodyPart && (
+            <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--info-strong)", fontSize: 11, fontWeight: 700 }}>
+              {item.bodyPart}
+            </span>
+          )}
           {item.source === "manual" && (
             <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--success-soft)", border: "1px solid var(--success-border)", color: "var(--accent)", fontSize: 11, fontWeight: 700 }}>
               移行記録
@@ -358,7 +380,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
     return (
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
         <button
-          onClick={() => setSelectedExerciseName(null)}
+          onClick={() => setSelectedExerciseKey(null)}
           style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--text2)", fontSize: 14, cursor: "pointer", padding: 0 }}
         >
           ← PR一覧に戻る
@@ -368,8 +390,15 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
           <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
             CURRENT PR
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
-            {selectedExercise.name}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>
+              {selectedExercise.displayName || selectedExercise.name}
+            </div>
+            {selectedExercise.bodyPart && (
+              <span style={{ padding: "4px 10px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--info-strong)", fontSize: 12, fontWeight: 700 }}>
+                {selectedExercise.bodyPart}
+              </span>
+            )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             <div style={{ background: "var(--card2)", borderRadius: 16, padding: 12, border: "1px solid var(--border2)" }}>
@@ -453,8 +482,15 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
                     推定1RM {record.estimated1RM}kg
                   </div>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", marginBottom: 6 }}>
-                  {record.weight}kg × {record.reps}rep
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
+                    {record.weight}kg × {record.reps}rep
+                  </div>
+                  {record.bodyPart && (
+                    <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--info-strong)", fontSize: 11, fontWeight: 700 }}>
+                      {record.bodyPart}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
                   {record.setsText}
@@ -481,7 +517,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
           {prData.big3.map((entry) => (
             <div key={entry.key}>
-              {renderPRCard(entry.item ? { ...entry.item, name: entry.label } : null, { compact: true })}
+              {renderPRCard(entry.item, { compact: true })}
             </div>
           ))}
           <div style={{ background: "linear-gradient(135deg, var(--success-soft), var(--card))", borderRadius: 16, padding: "12px 14px", gridColumn: "1 / -1", border: "1px solid var(--success-border)" }}>
@@ -499,7 +535,7 @@ export default function AnalyticsScreen({ history, manualBests = [], muscleEx = 
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {group.items.map((item) => (
-                <div key={item.name}>
+                <div key={item.key}>
                   {renderPRCard(item)}
                 </div>
               ))}

@@ -63,6 +63,27 @@ const getOverrideLabel = (exName, exerciseBodyPartOverrides = {}, hiddenBodyPart
   return overrideLabel;
 };
 
+export const buildBodyPartExerciseKey = (bodyPart, exName) =>
+  `${String(bodyPart || "").trim()}::${normalizeExerciseName(exName)}`;
+
+export const resolveRecordBodyPartLabel = (
+  record,
+  exName,
+  { muscleEx = {}, exerciseBodyPartOverrides = {} } = {}
+) => {
+  const explicitBodyPart = String(record?.bodyPart || record?.body_part || "").trim();
+  if (explicitBodyPart) return explicitBodyPart;
+
+  const overrideLabel = getOverrideLabel(exName, exerciseBodyPartOverrides, []);
+  if (overrideLabel) return overrideLabel;
+
+  const defaultLabels = getDefaultBodyPartLabels(exName);
+  if (defaultLabels.length > 0) return defaultLabels[0];
+
+  const visibleCustomLabels = getVisibleCustomBodyPartLabels(exName, muscleEx, []);
+  return visibleCustomLabels[0] || null;
+};
+
 export const resolveVisibleBodyPartLabel = (
   exName,
   { muscleEx = {}, hiddenBodyParts = [], exerciseBodyPartOverrides = {} } = {}
@@ -98,17 +119,12 @@ export const resolveRecordedBodyPartLabel = (
   exName,
   { muscleEx = {}, hiddenBodyParts = [], exerciseBodyPartOverrides = {} } = {}
 ) => {
-  const explicitBodyPart = String(record?.bodyPart || record?.body_part || "").trim();
-  if (explicitBodyPart) {
-    if ((hiddenBodyParts || []).includes(explicitBodyPart)) return null;
-    return explicitBodyPart;
-  }
-
-  return resolveVisibleBodyPartLabel(exName, {
+  const bodyPart = resolveRecordBodyPartLabel(record, exName, {
     muscleEx,
-    hiddenBodyParts,
     exerciseBodyPartOverrides,
   });
+  if (!bodyPart || (hiddenBodyParts || []).includes(bodyPart)) return null;
+  return bodyPart;
 };
 
 export const getBodyPartResolutionSamples = (

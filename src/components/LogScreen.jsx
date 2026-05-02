@@ -120,7 +120,7 @@ export default function LogScreen({
             weight: exUnit === "lbs" ? String(Number(s.weight) / KG_TO_LBS) : s.weight,
         }));
 
-        const pr = getPreviousPR ? getPreviousPR(ex.name, { excludeDate: logDate }) : (getPR ? getPR(ex.name) : null);
+        const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
         const prSets = pr?.sets?.filter((s) => {
             const w = Number(s.weight);
             const r = Number(s.reps);
@@ -536,8 +536,8 @@ export default function LogScreen({
 
                         const sets = logData[ex.name] || getExSets(ex);
                         const isEditing = editingId === ex.id;
-                        const prev = getPrev ? getPrev(ex.name) : null;
-                        const pr = getPreviousPR ? getPreviousPR(ex.name, { excludeDate: logDate }) : (getPR ? getPR(ex.name) : null);
+                        const prev = getPrev ? getPrev(ex) : null;
+                        const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
                         const prIsAlsoPrev = pr && prev && pr.date === prev.date;
 
