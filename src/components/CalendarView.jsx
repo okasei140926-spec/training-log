@@ -1,16 +1,16 @@
 import { useState } from "react";
-import { LABEL_COLORS, SUGGESTIONS } from "../constants/suggestions";
+import { LABEL_COLORS } from "../constants/suggestions";
+import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
-const EX_TO_LABEL = {};
-Object.entries(SUGGESTIONS).forEach(([label, names]) => {
-  names.forEach((n) => {
-    EX_TO_LABEL[n] = label;
-  });
-});
-
-export default function CalendarView({ history, onDayOpen }) {
+export default function CalendarView({
+  history,
+  onDayOpen,
+  muscleEx = {},
+  hiddenBodyParts = [],
+  exerciseBodyPartOverrides = {},
+}) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -19,9 +19,13 @@ export default function CalendarView({ history, onDayOpen }) {
 
   const dateLabelColors = {};
   Object.entries(safeHistory).forEach(([exName, recs]) => {
-    const label = EX_TO_LABEL[exName];
     (recs || []).forEach((r) => {
       if (!r?.date) return;
+      const label = resolveRecordedBodyPartLabel(r, exName, {
+        muscleEx,
+        hiddenBodyParts,
+        exerciseBodyPartOverrides,
+      });
       if (!dateLabelColors[r.date]) dateLabelColors[r.date] = [];
       const color = label ? LABEL_COLORS[label] : "#4ade80";
       if (!dateLabelColors[r.date].includes(color)) dateLabelColors[r.date].push(color);

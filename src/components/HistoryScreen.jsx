@@ -7,7 +7,7 @@ import ManualBestModal from "./modals/ManualBestModal";
 import ManualBestManagerModal from "./modals/ManualBestManagerModal";
 import CustomBodyPartModal from "./modals/CustomBodyPartModal";
 import HistoryExerciseItem from "./history/HistoryExerciseItem";
-import { resolveVisibleBodyPartLabel } from "../utils/bodyPartClassification";
+import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
 
 export default function HistoryScreen({
     history,
@@ -89,10 +89,9 @@ export default function HistoryScreen({
         const nextDetailMap = {};
 
         Object.entries(history || {}).forEach(([exName, recs]) => {
-            const label = resolveVisibleBodyPartLabel(exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
-            if (!label) return;
-
             (recs || []).forEach((r) => {
+                const label = resolveRecordedBodyPartLabel(r, exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
+                if (!label) return;
                 if (!r?.date) return;
                 if (r.date < weekStartStr || r.date > weekEndStr) return;
 
@@ -116,10 +115,9 @@ export default function HistoryScreen({
     const daySummary = {};
 
     Object.entries(history || {}).forEach(([exName, recs]) => {
-        const label = resolveVisibleBodyPartLabel(exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
-        if (!label) return;
-
         (recs || []).forEach((r) => {
+            const label = resolveRecordedBodyPartLabel(r, exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
+            if (!label) return;
             if (r.date !== selectedDate) return;
 
             const sets = (r.sets || []).filter(s => s.weight && s.reps).length;
@@ -131,11 +129,10 @@ export default function HistoryScreen({
 
     const dayDetails = Object.entries(history || {})
         .map(([name, recs]) => {
-            const label = resolveVisibleBodyPartLabel(name, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
-            if (!label) return null;
-
             const record = recs.find((r) => r.date === selectedDate);
             if (!record) return null;
+            const label = resolveRecordedBodyPartLabel(record, name, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
+            if (!label) return null;
 
             return {
                 name,
@@ -150,8 +147,12 @@ export default function HistoryScreen({
 
 
     const workedLabels = [...new Set(
-        Object.keys(daySummary)
-            .map((exName) => resolveVisibleBodyPartLabel(exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides }))
+        Object.entries(history || {})
+            .flatMap(([exName, recs]) =>
+                (recs || [])
+                    .filter((record) => record?.date === selectedDate)
+                    .map((record) => resolveRecordedBodyPartLabel(record, exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides }))
+            )
             .filter(Boolean)
     )];
 
@@ -265,6 +266,9 @@ export default function HistoryScreen({
             }}>
                 <CalendarView
                     history={history}
+                    muscleEx={muscleEx}
+                    hiddenBodyParts={hiddenBodyParts}
+                    exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                     onDayOpen={(date) => {
                         const hasData = Object.values(history || {}).some((recs) =>
                             (recs || []).some((r) => r.date === date)

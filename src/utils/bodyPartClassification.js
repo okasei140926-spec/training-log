@@ -93,6 +93,24 @@ export const resolveVisibleBodyPartLabel = (
   return visibleCustomLabels[0] || null;
 };
 
+export const resolveRecordedBodyPartLabel = (
+  record,
+  exName,
+  { muscleEx = {}, hiddenBodyParts = [], exerciseBodyPartOverrides = {} } = {}
+) => {
+  const explicitBodyPart = String(record?.bodyPart || record?.body_part || "").trim();
+  if (explicitBodyPart) {
+    if ((hiddenBodyParts || []).includes(explicitBodyPart)) return null;
+    return explicitBodyPart;
+  }
+
+  return resolveVisibleBodyPartLabel(exName, {
+    muscleEx,
+    hiddenBodyParts,
+    exerciseBodyPartOverrides,
+  });
+};
+
 export const getBodyPartResolutionSamples = (
   muscleEx = {},
   hiddenBodyParts = [],

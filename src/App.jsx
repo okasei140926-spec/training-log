@@ -58,6 +58,9 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
     });
 });
 
+const getExerciseRecordBodyPart = (exercise, fallbackLabel) =>
+    exercise?.bodyPart || exercise?.label || fallbackLabel || EX_TO_LABEL[exercise?.name] || null;
+
 const HISTORY_OWNER_KEY = "historyOwnerUserId";
 const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
 const getHistoryDeleteMarkersKey = (userId) => `historyDeleteMarkers_${userId}`;
@@ -799,6 +802,7 @@ export default function GymApp() {
             exercises.forEach((ex, index) => {
                 const sets = logData[ex.name] || [];
                 const exUnit = getExUnit(ex.name);
+                const bodyPart = getExerciseRecordBodyPart(ex, todayLabels[0] || null);
                 const stored = sanitizeWorkoutSets(sets.map((s) => ({
                     ...s,
                     weight: storeW(s.weight, exUnit),
@@ -814,12 +818,13 @@ export default function GymApp() {
                     reps: Number(stored[0].reps),
                     date: logDate,
                     order: index,
+                    bodyPart,
                 });
             });
 
             return nh;
         });
-    }, [exercises, logData, logDate, getExUnit, user?.id]); // ← 依存配列
+    }, [exercises, logData, logDate, getExUnit, todayLabels, user?.id]); // ← 依存配列
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
@@ -939,9 +944,14 @@ export default function GymApp() {
         const trimmed = name.trim();
         if (!trimmed) return;
 
+        const label = labelOverride || todayLabels[0];
+        if (!label) return;
+
         const ex = {
             id: Date.now() + (Math.random() * 1000 | 0),
-            name: trimmed
+            name: trimmed,
+            label,
+            bodyPart: label,
         };
 
         setSessionEx((p) => {
@@ -953,9 +963,6 @@ export default function GymApp() {
             save("draft_logDate", logDate);
             return next;
         });
-
-        const label = labelOverride || todayLabels[0];
-        if (!label) return;
 
         setMuscleEx((prev) => {
             const next = { ...prev };
@@ -1096,9 +1103,12 @@ export default function GymApp() {
             .map(([name, recs]) => {
                 const rec = recs.find(r => r.date === dateStr);
                 if (!rec) return null;
+                const recordBodyPart = String(rec.bodyPart || rec.body_part || "").trim();
                 return {
                     id: name,
                     name,
+                    label: recordBodyPart || EX_TO_LABEL[name] || null,
+                    bodyPart: recordBodyPart || EX_TO_LABEL[name] || null,
                     order: typeof rec.order === "number" ? rec.order : 999,
                     rec,
                 };
@@ -1108,7 +1118,7 @@ export default function GymApp() {
 
         const inferredLabels = [...new Set(
             dayExercises
-                .map(({ name }) => EX_TO_LABEL[name])
+                .map(({ bodyPart, name }) => bodyPart || EX_TO_LABEL[name])
                 .filter(Boolean)
         )];
 
@@ -1121,7 +1131,7 @@ export default function GymApp() {
             });
 
             setTodayLabels(inferredLabels);
-            setSessionEx(dayExercises.map(({ id, name }) => ({ id, name })));
+            setSessionEx(dayExercises.map(({ id, name, label, bodyPart }) => ({ id, name, label, bodyPart })));
             setLogData(dayLogData);
         } else {
             setTodayLabels([]);

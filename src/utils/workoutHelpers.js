@@ -8,7 +8,7 @@ export const buildBaseExercises = ({
     const routineKey = getRoutineKey(todayLabels);
 
     const baseExercisesRaw = todayLabels.flatMap((label) =>
-        (muscleEx[label] || []).map((ex) => ({ ...ex, label }))
+        (muscleEx[label] || []).map((ex) => ({ ...ex, label, bodyPart: label }))
     );
 
     const savedOrder = routineOrder[routineKey] || [];

@@ -87,11 +87,13 @@ export function sanitizeHistoryRecord(record, { allowBodyweight = true } = {}) {
   const weight = firstSet.weight === "BW" ? "BW" : Number(firstSet.weight);
   const reps = Number(firstSet.reps);
   const order = Number(record.order);
+  const bodyPart = String(record.bodyPart || record.body_part || "").trim();
 
   return {
     ...record,
     date: String(record.date || ""),
     order: Number.isFinite(order) ? order : 999,
+    bodyPart,
     sets,
     weight,
     reps,
@@ -106,7 +108,7 @@ export function buildHistoryRecordSignature(record) {
     .map((set) => `${set.weight === "BW" ? "BW" : Number(set.weight)}|${Number(set.reps)}|${set.done ? 1 : 0}`)
     .join(";");
 
-  return `${sanitizedRecord.date}::${setsSignature}`;
+  return `${sanitizedRecord.date}::${sanitizedRecord.bodyPart || ""}::${setsSignature}`;
 }
 
 const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
