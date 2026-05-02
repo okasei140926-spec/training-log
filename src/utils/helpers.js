@@ -179,6 +179,44 @@ export function buildHistoryFromWorkoutRows(rows) {
   return mergeHistoryMaps(...sortedRows.map((row) => row.data));
 }
 
+export const PR_UPDATE_TOLERANCE_KG = 0.15;
+
+export function getBestRmSet(sets, { allowBodyweight = false } = {}) {
+  const validSets = sanitizeWorkoutSets(sets, { allowBodyweight });
+  if (!validSets.length) return null;
+
+  return validSets.reduce((best, set) => {
+    const rm = calc1RM([set]);
+    if (!best || rm > best.rm) {
+      return {
+        ...set,
+        rm,
+      };
+    }
+    return best;
+  }, null);
+}
+
+export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = null, tolerance = PR_UPDATE_TOLERANCE_KG) {
+  const currentTopSet = getBestRmSet(currentSets, { allowBodyweight: false });
+  const previousTopSet = getBestRmSet(previousSets, { allowBodyweight: false });
+
+  if (!currentTopSet || !previousTopSet) return false;
+
+  if (
+    Number(currentTopSet.weight) === Number(previousTopSet.weight) &&
+    Number(currentTopSet.reps) === Number(previousTopSet.reps)
+  ) {
+    return false;
+  }
+
+  const baselineRM = Number.isFinite(previousRM) && previousRM > 0
+    ? previousRM
+    : previousTopSet.rm;
+
+  return currentTopSet.rm - baselineRM > tolerance;
+}
+
 // ─── 推定1RM計算（Epley式）────────────────────────────
 export function calc1RM(sets) {
   const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: false });

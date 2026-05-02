@@ -29,7 +29,7 @@ export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogDa
 
                 if (rm > bestRM && validSets.length) {
                     bestRM = rm;
-                    best = { ...r, sets: validSets, rm: Math.round(rm) };
+                    best = { ...r, sets: validSets, rm };
                 }
             });
         });
@@ -50,7 +50,7 @@ export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogDa
                         weight: Number(entry.weight),
                         reps: Number(entry.reps),
                         sets: validSets,
-                        rm: Math.round(rm),
+                        rm,
                         isManualBest: true,
                         id: entry.id,
                     };
@@ -76,7 +76,7 @@ export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogDa
 
                 if (rm > bestRM && validSets.length) {
                     bestRM = rm;
-                    best = { ...r, sets: validSets, rm: Math.round(rm) };
+                    best = { ...r, sets: validSets, rm };
                 }
             });
         });
@@ -97,7 +97,7 @@ export const useWorkout = ({ history, manualBests = [], sessionHistory, setLogDa
                         weight: Number(entry.weight),
                         reps: Number(entry.reps),
                         sets: validSets,
-                        rm: Math.round(rm),
+                        rm,
                         isManualBest: true,
                         id: entry.id,
                     };

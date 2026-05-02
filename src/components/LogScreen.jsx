@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { calc1RM, dispW, KG_TO_LBS } from "../utils/helpers";
+import { calc1RM, dispW, getBestRmSet, hasMeaningfulPRIncrease, KG_TO_LBS, PR_UPDATE_TOLERANCE_KG } from "../utils/helpers";
 import { supabase } from "../utils/supabase";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
@@ -126,9 +126,8 @@ export default function LogScreen({
             return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
         }) || [];
 
-        const cur1RM = calc1RM(doneSets);
         const pr1RM = pr?.rm ?? calc1RM(prSets);
-        const isPR = doneSets.length > 0 && prSets.length > 0 && cur1RM > pr1RM * 1.001;
+        const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG);
 
         const exVolumeKg = doneSets.reduce((sum, s) => {
             const w = Number(s.weight);
@@ -187,8 +186,28 @@ export default function LogScreen({
                 }
             });
 
-            const cur1RM = calc1RM(comparableSets);
-            const isExercisePR = comparableSets.length > 0 && cur1RM > pastPr1RM * 1.001;
+            const previousComparableSets = pastRecords.flatMap((record) => {
+                const baseSets = Array.isArray(record.sets) && record.sets.length > 0
+                    ? record.sets
+                    : [{ weight: record.weight, reps: record.reps }];
+
+                return baseSets
+                    .filter((set) => {
+                        const w = Number(set.weight);
+                        const r = Number(set.reps);
+                        return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
+                    })
+                    .map((set) => ({
+                        ...set,
+                        weight: String(set.weight),
+                    }));
+            });
+            const isExercisePR = hasMeaningfulPRIncrease(
+                comparableSets,
+                previousComparableSets,
+                pastPr1RM,
+                PR_UPDATE_TOLERANCE_KG
+            );
 
             let prSetNumber = null;
             if (isExercisePR && comparableSets.length > 0) {
@@ -523,21 +542,15 @@ export default function LogScreen({
                         }) || [];
 
                         const pr1RM = pr?.rm ?? calc1RM(prSets);
-                        const currentRM = roundTo1Decimal(cur1RM);
-                        const previousPRRM = roundTo1Decimal(pr?.rm ?? pr1RM);
-                        const prDiff = roundTo1Decimal(currentRM - previousPRRM);
+                        const rawPrDiff = cur1RM - pr1RM;
+                        const prDiff = rawPrDiff > PR_UPDATE_TOLERANCE_KG
+                            ? roundTo1Decimal(rawPrDiff)
+                            : 0;
 
-                        const isPR =
-                            doneSets.length > 0 &&
-                            prSets.length > 0 &&
-                            cur1RM > pr1RM * 1.001;
+                        const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG);
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
-                        const prTopSet = pr?.sets?.reduce((best, s) => {
-                            if (s.weight === "BW" || !s.weight || !s.reps) return best;
-                            if (!best) return s;
-                            return calc1RM([s]) >= calc1RM([best]) ? s : best;
-                        }, null);
+                        const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: false });
 
                         if (i !== activeExIdx) {
                             const doneSetsCount = sets.filter(s => s.done && s.weight && s.reps).length;
@@ -689,13 +702,13 @@ export default function LogScreen({
                                                     <div style={{ marginTop: prev ? 6 : 0, paddingTop: prev ? 6 : 0, borderTop: prev ? "1px solid var(--border2)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                                         <div style={{ fontSize: 11, color: "var(--text2)" }}>🏆 PR <span style={{ color: "var(--text3)", fontWeight: 400 }}>{pr.date}</span></div>
                                                         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text3)" }}>
-                                                            {prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit} × ${prTopSet.reps}rep` : `${pr.rm}${exUnit}`}
+                                                            {prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit} × ${prTopSet.reps}rep` : `${roundTo1Decimal(pr.rm)}${exUnit}`}
                                                         </div>
                                                     </div>
                                                 )}
                                                 {pr && prIsAlsoPrev && (
                                                     <div style={{ marginTop: 4, fontSize: 11, color: "var(--text2)" }}>
-                                                        🏆 前回がPR（{prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit}×${prTopSet.reps}rep` : `${pr.rm}${exUnit}`}）
+                                                        🏆 前回がPR（{prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit}×${prTopSet.reps}rep` : `${roundTo1Decimal(pr.rm)}${exUnit}`}）
                                                     </div>
                                                 )}
                                                 {isPR && prDiff > 0 && (
