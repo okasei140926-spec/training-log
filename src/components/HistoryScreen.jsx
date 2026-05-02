@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../utils/supabase";
-import { SUGGESTIONS } from "../constants/suggestions";
 import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
 import PRGraphModal from "./modals/PRGraphModal";
@@ -8,56 +7,12 @@ import ManualBestModal from "./modals/ManualBestModal";
 import ManualBestManagerModal from "./modals/ManualBestManagerModal";
 import CustomBodyPartModal from "./modals/CustomBodyPartModal";
 import HistoryExerciseItem from "./history/HistoryExerciseItem";
-
-const normalizeName = (name) =>
-    String(name || "").replace(/\s+/g, "").trim();
-
-const matchesExerciseName = (candidateName, exName) => {
-    const base = normalizeName(candidateName);
-    const normalized = normalizeName(exName);
-    return base === normalized || base.includes(normalized) || normalized.includes(base);
-};
-
-const resolveVisibleLabel = (exName, muscleEx = {}, hiddenBodyParts = []) => {
-    const hiddenSet = new Set(hiddenBodyParts || []);
-    const matchingDefaultLabels = Object.entries(SUGGESTIONS)
-        .filter(([, names]) => (names || []).some((name) => matchesExerciseName(name, exName)))
-        .map(([label]) => label);
-    const visibleDefaultLabels = matchingDefaultLabels.filter((label) => !hiddenSet.has(label));
-
-    const visibleCustomMatches = Object.entries(muscleEx || {})
-        .filter(([label]) => label && !hiddenSet.has(label))
-        .filter(([, list]) =>
-            (list || []).some((ex) => {
-                const name = typeof ex === "string" ? ex : ex?.name;
-                return matchesExerciseName(name, exName);
-            })
-        )
-        .map(([label]) => label);
-
-    const visibleExplicitUserLabels = visibleCustomMatches.filter((label) => {
-        const defaultsForLabel = SUGGESTIONS[label] || [];
-        return !defaultsForLabel.some((name) => matchesExerciseName(name, exName));
-    });
-
-    if (visibleDefaultLabels.length === 1) {
-        return visibleDefaultLabels[0];
-    }
-
-    if (visibleDefaultLabels.length > 1) {
-        return visibleExplicitUserLabels[0] || visibleDefaultLabels[0];
-    }
-
-    if (matchingDefaultLabels.length > 0) {
-        return visibleExplicitUserLabels[0] || null;
-    }
-
-    return visibleExplicitUserLabels[0] || visibleCustomMatches[0] || null;
-};
+import { resolveVisibleBodyPartLabel } from "../utils/bodyPartClassification";
 
 export default function HistoryScreen({
     history,
     muscleEx,
+    exerciseBodyPartOverrides = {},
     onEditHistory,
     onDeleteHistory,
     onDeleteDate,
@@ -134,7 +89,7 @@ export default function HistoryScreen({
         const nextDetailMap = {};
 
         Object.entries(history || {}).forEach(([exName, recs]) => {
-            const label = resolveVisibleLabel(exName, muscleEx, hiddenBodyParts);
+            const label = resolveVisibleBodyPartLabel(exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
             if (!label) return;
 
             (recs || []).forEach((r) => {
@@ -156,11 +111,14 @@ export default function HistoryScreen({
             detailMap: nextDetailMap,
             sortedWeekStats: Object.entries(nextWeekStats).sort((a, b) => b[1] - a[1]),
         };
-    }, [history, hiddenBodyParts, muscleEx, weekEndStr, weekStartStr]);
+    }, [exerciseBodyPartOverrides, history, hiddenBodyParts, muscleEx, weekEndStr, weekStartStr]);
 
     const daySummary = {};
 
     Object.entries(history || {}).forEach(([exName, recs]) => {
+        const label = resolveVisibleBodyPartLabel(exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
+        if (!label) return;
+
         (recs || []).forEach((r) => {
             if (r.date !== selectedDate) return;
 
@@ -173,6 +131,9 @@ export default function HistoryScreen({
 
     const dayDetails = Object.entries(history || {})
         .map(([name, recs]) => {
+            const label = resolveVisibleBodyPartLabel(name, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides });
+            if (!label) return null;
+
             const record = recs.find((r) => r.date === selectedDate);
             if (!record) return null;
 
@@ -190,7 +151,7 @@ export default function HistoryScreen({
 
     const workedLabels = [...new Set(
         Object.keys(daySummary)
-            .map((exName) => resolveVisibleLabel(exName, muscleEx, hiddenBodyParts))
+            .map((exName) => resolveVisibleBodyPartLabel(exName, { muscleEx, hiddenBodyParts, exerciseBodyPartOverrides }))
             .filter(Boolean)
     )];
 

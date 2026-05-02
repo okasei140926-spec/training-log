@@ -37,6 +37,7 @@ import {
     buildBaseExercises,
     getExSetsHelper,
 } from "./utils/workoutHelpers";
+import { getPrimaryDefaultBodyPartLabel } from "./utils/bodyPartClassification";
 
 import { useWorkout } from "./hooks/useWorkout";
 import { useTimer } from "./hooks/useTimer";
@@ -60,6 +61,7 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 const HISTORY_OWNER_KEY = "historyOwnerUserId";
 const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
 const getHistoryDeleteMarkersKey = (userId) => `historyDeleteMarkers_${userId}`;
+const EXERCISE_BODY_PART_OVERRIDES_KEY = "exerciseBodyPartOverrides";
 
 const isPlainObject = (value) =>
     !!value && typeof value === "object" && !Array.isArray(value);
@@ -163,6 +165,10 @@ export default function GymApp() {
     const [customBodyParts, setCustomBodyParts] = useState(() => {
         const saved = load("customBodyParts", []);
         return [...new Set((saved || []).map((part) => String(part || "").trim()).filter(Boolean))];
+    });
+    const [exerciseBodyPartOverrides, setExerciseBodyPartOverrides] = useState(() => {
+        const saved = load(EXERCISE_BODY_PART_OVERRIDES_KEY, {});
+        return isPlainObject(saved) ? saved : {};
     });
     const [hiddenBodyParts, setHiddenBodyParts] = useState(() => {
         const saved = load("hiddenBodyParts", []);
@@ -282,6 +288,7 @@ export default function GymApp() {
         persistHistoryForUser(user?.id, history);
     }, [history, user]);
     useEffect(() => { save("customBodyParts", customBodyParts); }, [customBodyParts]);
+    useEffect(() => { save(EXERCISE_BODY_PART_OVERRIDES_KEY, exerciseBodyPartOverrides); }, [exerciseBodyPartOverrides]);
     useEffect(() => { save("hiddenBodyParts", hiddenBodyParts); }, [hiddenBodyParts]);
 
     useEffect(() => {
@@ -897,6 +904,37 @@ export default function GymApp() {
         });
     };
 
+    const setExerciseOverrideForLabel = useCallback((exerciseName, label) => {
+        const normalizedName = normalizeExerciseName(exerciseName);
+        if (!normalizedName) return;
+
+        const primaryDefaultLabel = getPrimaryDefaultBodyPartLabel(normalizedName);
+
+        setExerciseBodyPartOverrides((prev) => {
+            const next = { ...prev };
+
+            if (!label || label === primaryDefaultLabel) {
+                delete next[normalizedName];
+                return next;
+            }
+
+            next[normalizedName] = label;
+            return next;
+        });
+    }, []);
+
+    const clearExerciseOverrideForLabel = useCallback((exerciseName, label) => {
+        const normalizedName = normalizeExerciseName(exerciseName);
+        if (!normalizedName) return;
+
+        setExerciseBodyPartOverrides((prev) => {
+            if (prev[normalizedName] !== label) return prev;
+            const next = { ...prev };
+            delete next[normalizedName];
+            return next;
+        });
+    }, []);
+
     const addExToSession = (name, labelOverride) => {
         const trimmed = name.trim();
         if (!trimmed) return;
@@ -929,6 +967,8 @@ export default function GymApp() {
 
             return next;
         });
+
+        setExerciseOverrideForLabel(trimmed, label);
     };
 
     const reorderEx = (fromIdx, toIdx) => {
@@ -979,6 +1019,15 @@ export default function GymApp() {
             return next;
         });
 
+        setExerciseBodyPartOverrides((prev) => {
+            const oldKey = normalizeExerciseName(oldEx.name);
+            if (!prev[oldKey]) return prev;
+            const next = { ...prev };
+            next[normalizeExerciseName(trimmed)] = prev[oldKey];
+            delete next[oldKey];
+            return next;
+        });
+
     };
 
     const quickAdd = (name, remove, labelOverride) => {
@@ -996,10 +1045,12 @@ export default function GymApp() {
 
                 if (remove) {
                     next[label] = list.filter((e) => e.name !== name);
+                    clearExerciseOverrideForLabel(name, label);
                 } else {
                     if (!list.find((e) => e.name === name)) {
                         next[label] = [...list, { id: Date.now(), name }];
                     }
+                    setExerciseOverrideForLabel(name, label);
                 }
             });
 
@@ -1497,6 +1548,7 @@ export default function GymApp() {
                     <HistoryScreen
                         history={history}
                         muscleEx={muscleEx}
+                        exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                         hiddenBodyParts={hiddenBodyParts}
                         onEditHistory={handleEditHistory}
                         onDeleteHistory={handleDeleteHistory}
