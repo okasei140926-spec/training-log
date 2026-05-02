@@ -9,31 +9,8 @@ import ManualBestManagerModal from "./modals/ManualBestManagerModal";
 import CustomBodyPartModal from "./modals/CustomBodyPartModal";
 import HistoryExerciseItem from "./history/HistoryExerciseItem";
 
-const EX_TO_LABEL = {};
-Object.entries(SUGGESTIONS).forEach(([label, names]) => {
-    names.forEach((n) => {
-        EX_TO_LABEL[n] = label;
-    });
-});
-
 const normalizeName = (name) =>
     String(name || "").replace(/\s+/g, "").trim();
-
-const resolveDefaultLabel = (exName) => {
-    const normalized = normalizeName(exName);
-
-    // まず SUGGESTIONS の完全一致
-    if (EX_TO_LABEL[exName]) return EX_TO_LABEL[exName];
-
-    // SUGGESTIONS のあいまい一致
-    const suggestionMatch = Object.entries(EX_TO_LABEL).find(([name]) => {
-        const base = normalizeName(name);
-        return base === normalized || base.includes(normalized) || normalized.includes(base);
-    });
-    if (suggestionMatch) return suggestionMatch[1];
-
-    return null;
-};
 
 const matchesExerciseName = (candidateName, exName) => {
     const base = normalizeName(candidateName);
@@ -43,21 +20,39 @@ const matchesExerciseName = (candidateName, exName) => {
 
 const resolveVisibleLabel = (exName, muscleEx = {}, hiddenBodyParts = []) => {
     const hiddenSet = new Set(hiddenBodyParts || []);
+    const matchingDefaultLabels = Object.entries(SUGGESTIONS)
+        .filter(([, names]) => (names || []).some((name) => matchesExerciseName(name, exName)))
+        .map(([label]) => label);
+    const visibleDefaultLabels = matchingDefaultLabels.filter((label) => !hiddenSet.has(label));
 
-    const visibleCustomMatch = Object.entries(muscleEx || {}).find(([label, list]) => {
-        if (!label || hiddenSet.has(label)) return false;
-        return (list || []).some((ex) => {
-            const name = typeof ex === "string" ? ex : ex?.name;
-            return matchesExerciseName(name, exName);
-        });
+    const visibleCustomMatches = Object.entries(muscleEx || {})
+        .filter(([label]) => label && !hiddenSet.has(label))
+        .filter(([, list]) =>
+            (list || []).some((ex) => {
+                const name = typeof ex === "string" ? ex : ex?.name;
+                return matchesExerciseName(name, exName);
+            })
+        )
+        .map(([label]) => label);
+
+    const visibleExplicitUserLabels = visibleCustomMatches.filter((label) => {
+        const defaultsForLabel = SUGGESTIONS[label] || [];
+        return !defaultsForLabel.some((name) => matchesExerciseName(name, exName));
     });
 
-    if (visibleCustomMatch) return visibleCustomMatch[0];
+    if (visibleDefaultLabels.length === 1) {
+        return visibleDefaultLabels[0];
+    }
 
-    const defaultLabel = resolveDefaultLabel(exName);
-    if (!defaultLabel || hiddenSet.has(defaultLabel)) return null;
+    if (visibleDefaultLabels.length > 1) {
+        return visibleExplicitUserLabels[0] || visibleDefaultLabels[0];
+    }
 
-    return defaultLabel;
+    if (matchingDefaultLabels.length > 0) {
+        return visibleExplicitUserLabels[0] || null;
+    }
+
+    return visibleExplicitUserLabels[0] || visibleCustomMatches[0] || null;
 };
 
 export default function HistoryScreen({
