@@ -9,6 +9,7 @@ import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
+import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 
 const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 const BIG3_EXERCISES = [
@@ -66,7 +67,14 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     const [activityFeed, setActivityFeed] = useState([]);
     const [activityFeedHasMore, setActivityFeedHasMore] = useState(false);
     const [activityFeedLoading, setActivityFeedLoading] = useState(false);
+    const [activityFeedAction, setActivityFeedAction] = useState(null);
+    const [activityFeedStatusMessage, setActivityFeedStatusMessage] = useState("");
+    const [shareSessionTarget, setShareSessionTarget] = useState(null);
+    const [sharePhotoRows, setSharePhotoRows] = useState([]);
+    const [sharePhotoUrls, setSharePhotoUrls] = useState({});
+    const [sharePreparingSessionId, setSharePreparingSessionId] = useState(null);
     const activityFeedOffsetRef = useRef(0);
+    const activityFeedStatusTimeoutRef = useRef(null);
     const today = new Date().toISOString().split("T")[0];
     const currentMonthPrefix = today.slice(0, 7);
     const big3SeenStorageKey = "friends_big3_overtake_seen_v1";
@@ -274,12 +282,23 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
         return "";
     }, [isReservedUsername]);
 
+    const showActivityFeedStatusMessage = useCallback((message) => {
+        if (activityFeedStatusTimeoutRef.current) {
+            window.clearTimeout(activityFeedStatusTimeoutRef.current);
+        }
+        setActivityFeedStatusMessage(message);
+        activityFeedStatusTimeoutRef.current = window.setTimeout(() => {
+            setActivityFeedStatusMessage("");
+            activityFeedStatusTimeoutRef.current = null;
+        }, 2200);
+    }, []);
+
     const fetchActivityFeed = useCallback(async ({ reset = false } = {}) => {
         if (!user?.id) {
             setActivityFeed([]);
             activityFeedOffsetRef.current = 0;
             setActivityFeedHasMore(false);
-            return;
+            return false;
         }
 
         const feedUserIds = [...new Set([user.id, ...friendIds])];
@@ -353,6 +372,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             });
             activityFeedOffsetRef.current = offset + items.length;
             setActivityFeedHasMore(items.length === ACTIVITY_FEED_PAGE_SIZE);
+            return true;
         } catch (error) {
             console.error("activity feed fetch failed", error);
             if (reset) {
@@ -360,10 +380,79 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                 activityFeedOffsetRef.current = 0;
                 setActivityFeedHasMore(false);
             }
+            return false;
         } finally {
             setActivityFeedLoading(false);
         }
     }, [friendIds, user?.id]);
+
+    const handleRefreshActivityFeed = useCallback(async () => {
+        if (activityFeedLoading) return;
+        setActivityFeedAction("refresh");
+        setActivityFeedStatusMessage("");
+        const ok = await fetchActivityFeed({ reset: true });
+        setActivityFeedAction(null);
+        showActivityFeedStatusMessage(ok ? "更新しました" : "更新できませんでした");
+    }, [activityFeedLoading, fetchActivityFeed, showActivityFeedStatusMessage]);
+
+    const handleLoadMoreActivityFeed = useCallback(async () => {
+        if (activityFeedLoading) return;
+        setActivityFeedAction("more");
+        await fetchActivityFeed({ reset: false });
+        setActivityFeedAction(null);
+    }, [activityFeedLoading, fetchActivityFeed]);
+
+    const closeShareSessionModal = useCallback(() => {
+        setShareSessionTarget(null);
+        setSharePhotoRows([]);
+        setSharePhotoUrls({});
+        setSharePreparingSessionId(null);
+    }, []);
+
+    const handleOpenSessionShare = useCallback(async (sessionItem) => {
+        if (!user?.id || !sessionItem?.workout_date || sharePreparingSessionId) return;
+
+        setSharePreparingSessionId(sessionItem.id);
+        setSharePhotoRows([]);
+        setSharePhotoUrls({});
+
+        try {
+            const { data, error } = await supabase
+                .from("progress_photos")
+                .select("id, storage_path, workout_date")
+                .eq("user_id", user.id)
+                .eq("workout_date", sessionItem.workout_date);
+
+            if (error) throw error;
+
+            const nextRows = [...(data || [])].sort((a, b) =>
+                String(a.storage_path || "").localeCompare(String(b.storage_path || ""))
+            );
+
+            const signedEntries = await Promise.all(nextRows.map(async (row) => {
+                try {
+                    const { data: signedData, error: signedError } = await supabase
+                        .storage
+                        .from("progress-photos-private")
+                        .createSignedUrl(row.storage_path, 3600);
+                    return signedError ? null : [row.id, signedData?.signedUrl || null];
+                } catch (signedError) {
+                    console.error("session share photo signed url failed", signedError);
+                    return null;
+                }
+            }));
+
+            setSharePhotoRows(nextRows);
+            setSharePhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
+        } catch (error) {
+            console.error("session share photo load failed", error);
+            setSharePhotoRows([]);
+            setSharePhotoUrls({});
+        } finally {
+            setShareSessionTarget(sessionItem);
+            setSharePreparingSessionId(null);
+        }
+    }, [sharePreparingSessionId, user?.id]);
 
     useEffect(() => {
         if (!user) return;
@@ -464,6 +553,14 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
 
         return () => clearInterval(intervalId);
     }, [user, fetchActivityFeed]);
+
+    useEffect(() => {
+        return () => {
+            if (activityFeedStatusTimeoutRef.current) {
+                window.clearTimeout(activityFeedStatusTimeoutRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         if (!user) return;
@@ -702,10 +799,24 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                         <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
                             自分と友達の最近のセッションを表示します
                         </div>
+                        {activityFeedStatusMessage && (
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    marginTop: 6,
+                                    color: activityFeedStatusMessage.includes("できません")
+                                        ? "var(--danger, #dc2626)"
+                                        : "var(--accent)",
+                                    fontWeight: 700,
+                                }}
+                            >
+                                {activityFeedStatusMessage}
+                            </div>
+                        )}
                     </div>
                     <button
                         type="button"
-                        onClick={() => fetchActivityFeed({ reset: true })}
+                        onClick={handleRefreshActivityFeed}
                         disabled={activityFeedLoading}
                         style={{
                             padding: "8px 12px",
@@ -717,7 +828,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                             fontWeight: 700,
                         }}
                     >
-                        更新
+                        {activityFeedLoading && activityFeedAction === "refresh" ? "更新中..." : "更新"}
                     </button>
                 </div>
 
@@ -745,10 +856,30 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                                             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                 {profileName}
                                             </div>
-                                            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
                                                 {formatRelativeTime(item.created_at)} · {item.workout_date}
                                             </div>
                                         </div>
+                                        {item.user_id === user.id && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenSessionShare(item)}
+                                                disabled={Boolean(sharePreparingSessionId)}
+                                                style={{
+                                                    flexShrink: 0,
+                                                    padding: "8px 10px",
+                                                    borderRadius: 12,
+                                                    border: "1px solid var(--border2)",
+                                                    background: "var(--card)",
+                                                    color: "var(--text2)",
+                                                    fontSize: 11,
+                                                    fontWeight: 800,
+                                                    opacity: sharePreparingSessionId && sharePreparingSessionId !== item.id ? 0.7 : 1,
+                                                }}
+                                            >
+                                                {sharePreparingSessionId === item.id ? "準備中..." : "シェア"}
+                                            </button>
+                                        )}
                                     </div>
 
                                     {item.photoUrl && (
@@ -795,7 +926,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                 {activityFeedHasMore && (
                     <button
                         type="button"
-                        onClick={() => fetchActivityFeed({ reset: false })}
+                        onClick={handleLoadMoreActivityFeed}
                         disabled={activityFeedLoading}
                         style={{
                             width: "100%",
@@ -809,7 +940,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                             fontWeight: 700,
                         }}
                     >
-                        {activityFeedLoading ? "読み込み中..." : "もっと見る"}
+                        {activityFeedLoading && activityFeedAction === "more" ? "読み込み中..." : "もっと見る"}
                     </button>
                 )}
             </div>
@@ -1018,6 +1149,29 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                     }}
                 />
             }
+
+            <WorkoutSessionShareModal
+                isOpen={Boolean(shareSessionTarget)}
+                onClose={closeShareSessionModal}
+                workoutDate={shareSessionTarget?.workout_date}
+                sessionPayload={shareSessionTarget ? {
+                    session: {
+                        duration_sec: shareSessionTarget.duration_sec || 0,
+                        summary_json: {
+                            ...(shareSessionTarget.summary || {}),
+                            totalVolume: Number(
+                                shareSessionTarget.summary?.totalVolume
+                                || shareSessionTarget.total_volume
+                                || 0
+                            ),
+                            items: shareSessionTarget.summaryItems || [],
+                        },
+                    },
+                    exercises: shareSessionTarget.summaryItems || [],
+                } : null}
+                photoRows={sharePhotoRows}
+                photoUrls={sharePhotoUrls}
+            />
 
         </div >
     );
