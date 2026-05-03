@@ -1,7 +1,15 @@
 export const S = {
-  root: { minHeight: "100vh", background: "var(--bg)", color: "var(--text)", fontFamily: "'Helvetica Neue', sans-serif", maxWidth: 430, margin: "0 auto", paddingBottom: 110 },
+  root: {
+    minHeight: "100dvh",
+    background: "var(--bg)",
+    color: "var(--text)",
+    fontFamily: "'Helvetica Neue', sans-serif",
+    maxWidth: 430,
+    margin: "0 auto",
+    paddingBottom: "calc(110px + var(--safe-bottom))",
+  },
   header: {
-    padding: "14px 20px 10px",
+    padding: "calc(14px + var(--safe-top)) 20px 10px",
     borderBottom: "1px solid var(--border2)",
     display: "flex",
     justifyContent: "space-between",
@@ -39,7 +47,7 @@ export const S = {
     borderTop: "1px solid var(--border2)",
     boxShadow: "0 -10px 30px rgba(15,23,42,0.08)",
     display: "flex",
-    padding: "12px 0 20px",
+    padding: "12px 0 calc(20px + var(--safe-bottom))",
   },
 };
 
