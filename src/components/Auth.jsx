@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../utils/supabase";
 import {
+  getAppleOAuthDisabledMessage,
   getOAuthErrorMessage,
   getOAuthPendingFailureMessage,
   getOAuthProviderLabel,
   getOAuthRedirectUrl,
+  isAppleOAuthEnabled,
   isNativeApp,
 } from "../utils/oauth";
 
@@ -19,6 +21,8 @@ export default function Auth({ onClose, isDark }) {
   const [sent, setSent] = useState(false);
   const [oauthLoadingProvider, setOauthLoadingProvider] = useState("");
   const oauthTimeoutRef = useRef(null);
+  const oauthResumeCheckTimeoutRef = useRef(null);
+  const oauthStartedAtRef = useRef(0);
   const nativeOauthHandledRef = useRef(false);
 
   const clearOauthPendingState = (nextError = "") => {
@@ -26,10 +30,15 @@ export default function Auth({ onClose, isDark }) {
       window.clearTimeout(oauthTimeoutRef.current);
       oauthTimeoutRef.current = null;
     }
+    if (oauthResumeCheckTimeoutRef.current) {
+      window.clearTimeout(oauthResumeCheckTimeoutRef.current);
+      oauthResumeCheckTimeoutRef.current = null;
+    }
 
     if (nextError) setError(nextError);
     setOauthLoadingProvider("");
     setLoading(false);
+    oauthStartedAtRef.current = 0;
   };
 
   const bg = isDark ? "#1a1a1a" : "#fff";
@@ -75,14 +84,40 @@ export default function Auth({ onClose, isDark }) {
     if (!isNativeApp() || !oauthLoadingProvider) return undefined;
 
     nativeOauthHandledRef.current = false;
+    oauthStartedAtRef.current = Date.now();
     oauthTimeoutRef.current = window.setTimeout(() => {
       if (nativeOauthHandledRef.current) return;
       nativeOauthHandledRef.current = true;
       Browser.close().catch(() => { });
       clearOauthPendingState(getOAuthPendingFailureMessage(oauthLoadingProvider));
-    }, 45000);
+    }, oauthLoadingProvider === "apple" ? 10000 : 45000);
 
     let browserFinishedListener;
+
+    const scheduleResumeCheck = () => {
+      if (nativeOauthHandledRef.current) return;
+      if (oauthResumeCheckTimeoutRef.current) {
+        window.clearTimeout(oauthResumeCheckTimeoutRef.current);
+      }
+
+      oauthResumeCheckTimeoutRef.current = window.setTimeout(() => {
+        if (nativeOauthHandledRef.current) return;
+        if (Date.now() - oauthStartedAtRef.current < 800) return;
+        nativeOauthHandledRef.current = true;
+        Browser.close().catch(() => { });
+        clearOauthPendingState(getOAuthPendingFailureMessage(oauthLoadingProvider));
+      }, 300);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        scheduleResumeCheck();
+      }
+    };
+
+    const handleWindowFocus = () => {
+      scheduleResumeCheck();
+    };
 
     const registerBrowserFinishedListener = async () => {
       browserFinishedListener = await Browser.addListener("browserFinished", () => {
@@ -92,6 +127,8 @@ export default function Auth({ onClose, isDark }) {
       });
     };
 
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
     void registerBrowserFinishedListener();
 
     return () => {
@@ -99,6 +136,12 @@ export default function Auth({ onClose, isDark }) {
         window.clearTimeout(oauthTimeoutRef.current);
         oauthTimeoutRef.current = null;
       }
+      if (oauthResumeCheckTimeoutRef.current) {
+        window.clearTimeout(oauthResumeCheckTimeoutRef.current);
+        oauthResumeCheckTimeoutRef.current = null;
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
       browserFinishedListener?.remove?.();
     };
   }, [oauthLoadingProvider]);
@@ -151,6 +194,13 @@ export default function Auth({ onClose, isDark }) {
 
   const handleOAuth = async (provider) => {
     const providerLabel = getOAuthProviderLabel(provider);
+    if (provider === "apple" && !isAppleOAuthEnabled()) {
+      setError(getAppleOAuthDisabledMessage());
+      setLoading(false);
+      setOauthLoadingProvider("");
+      return;
+    }
+
     setError("");
     setLoading(false);
     nativeOauthHandledRef.current = false;
@@ -271,7 +321,11 @@ export default function Auth({ onClose, isDark }) {
           opacity: loading || oauthLoadingProvider ? 0.7 : 1,
         }}
       >
-        {oauthLoadingProvider === "apple" ? "Appleへ移動中..." : "Appleで続行"}
+        {oauthLoadingProvider === "apple"
+          ? "Appleへ移動中..."
+          : isAppleOAuthEnabled()
+            ? "Appleで続行"
+            : "Appleで続行（準備中）"}
       </button>
       <button
         onClick={() => handleOAuth("google")}

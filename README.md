@@ -76,6 +76,7 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 - `REACT_APP_SUPABASE_URL`
 - `REACT_APP_SUPABASE_ANON_KEY`
 - `REACT_APP_VAPID_PUBLIC_KEY`
+- `REACT_APP_ENABLE_APPLE_OAUTH`
 
 `REACT_APP_VAPID_PUBLIC_KEY` is required at build time. Make sure it is set in Vercel Production before deploying.
 
@@ -97,6 +98,14 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ## OAuth Login Setup
 
 PUMP ではメール/パスワードに加えて、`Googleで続行` と `Appleで続行` を使えます。
+
+Apple ログインは、アプリ側では環境変数で一時的に ON/OFF できます。
+
+- `REACT_APP_ENABLE_APPLE_OAUTH=true`
+  - Apple ボタンを有効化
+- 未設定または `false`
+  - `Appleで続行（準備中）` と表示
+  - 外部ブラウザへ飛ばさず、アプリ内で準備中メッセージを表示
 
 ### Supabase Dashboard
 
@@ -174,6 +183,7 @@ Then set these values in `.env.local`:
 - `REACT_APP_SUPABASE_URL`
 - `REACT_APP_SUPABASE_ANON_KEY`
 - `REACT_APP_VAPID_PUBLIC_KEY`
+- `REACT_APP_ENABLE_APPLE_OAUTH`
 
 Important:
 
