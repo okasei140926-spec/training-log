@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 
 const HEADER_OFFSET = 72;
-const BOTTOM_NAV_OFFSET = 92;
-const FOOTER_SAFE_PADDING = `calc(env(safe-area-inset-bottom, 0px) + ${BOTTOM_NAV_OFFSET}px)`;
+const BOTTOM_NAV_OFFSET = 110;
+const AI_VIEWPORT_HEIGHT = `calc(100dvh - ${HEADER_OFFSET}px - ${BOTTOM_NAV_OFFSET}px - var(--safe-top) - var(--safe-bottom))`;
+const FOOTER_SAFE_PADDING = "calc(8px + var(--safe-bottom))";
 
 const AI_SUGGESTIONS = [
     {
@@ -57,8 +58,8 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                 display: "flex",
                 flexDirection: "column",
                 minHeight: 0,
-                height: `calc(100dvh - ${HEADER_OFFSET}px)`,
-                maxHeight: `calc(100dvh - ${HEADER_OFFSET}px)`,
+                height: AI_VIEWPORT_HEIGHT,
+                maxHeight: AI_VIEWPORT_HEIGHT,
                 overflow: "hidden",
                 background: "var(--bg)",
             }}
@@ -68,7 +69,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                     flex: 1,
                     minHeight: 0,
                     overflowY: "auto",
-                    padding: "20px 20px 28px",
+                    padding: "16px 20px 20px",
                 }}
             >
                 {aiMsgs.map((msg, i) => (
@@ -111,7 +112,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
             <div
                 style={{
                     flexShrink: 0,
-                    padding: "10px 20px 10px",
+                    padding: "8px 20px 8px",
                     borderTop: "1px solid var(--border2)",
                     display: "flex",
                     gap: 6,
