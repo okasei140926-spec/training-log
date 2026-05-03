@@ -37,6 +37,7 @@ import {
     buildBaseExercises,
     getExSetsHelper,
 } from "./utils/workoutHelpers";
+import { buildWorkoutSessionPayloadFromHistory } from "./utils/workoutSessions";
 import { getPrimaryDefaultBodyPartLabel } from "./utils/bodyPartClassification";
 
 import { useWorkout } from "./hooks/useWorkout";
@@ -269,6 +270,7 @@ export default function GymApp() {
     const historySaveQueueRef = useRef(Promise.resolve());
     const pendingWorkoutNotificationRef = useRef(null);
     const historyDeleteMarkersRef = useRef(createEmptyHistoryDeleteMarkers());
+    const pendingWorkoutSessionSyncDatesRef = useRef(new Set());
 
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
@@ -288,6 +290,114 @@ export default function GymApp() {
         latestHistoryRef.current = history;
         historyRevisionRef.current += 1;
     }, [history]);
+
+    const queueWorkoutSessionSync = useCallback((date) => {
+        const normalizedDate = String(date || "").trim();
+        if (!normalizedDate) return;
+        pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
+    }, []);
+
+    const syncWorkoutSessionSnapshot = useCallback(async (userId, historyMap, workoutDate) => {
+        const normalizedDate = String(workoutDate || "").trim();
+        if (!userId || !normalizedDate) return;
+
+        const payload = buildWorkoutSessionPayloadFromHistory(historyMap, normalizedDate);
+        const { data: existingSession, error: existingSessionError } = await supabase
+            .from("workout_sessions")
+            .select("id, started_at")
+            .eq("user_id", userId)
+            .eq("workout_date", normalizedDate)
+            .maybeSingle();
+
+        if (existingSessionError) throw existingSessionError;
+
+        if (!payload) {
+            if (existingSession?.id) {
+                const { error: deleteExercisesError } = await supabase
+                    .from("workout_session_exercises")
+                    .delete()
+                    .eq("session_id", existingSession.id);
+                if (deleteExercisesError) throw deleteExercisesError;
+
+                const { error: deleteSessionError } = await supabase
+                    .from("workout_sessions")
+                    .delete()
+                    .eq("id", existingSession.id);
+                if (deleteSessionError) throw deleteSessionError;
+            }
+            return;
+        }
+
+        let latestPhotoId = null;
+        try {
+            const { data: latestPhotoRows } = await supabase
+                .from("progress_photos")
+                .select("id")
+                .eq("user_id", userId)
+                .eq("workout_date", normalizedDate)
+                .order("created_at", { ascending: false })
+                .limit(1);
+            latestPhotoId = latestPhotoRows?.[0]?.id ?? null;
+        } catch (error) {
+            console.error("workout session latest photo fetch failed", error);
+        }
+
+        const startedAt = existingSession?.started_at || new Date().toISOString();
+        const endedAt = new Date().toISOString();
+        const durationSec = Math.max(
+            0,
+            Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000)
+        );
+
+        const { data: upsertedSession, error: sessionUpsertError } = await supabase
+            .from("workout_sessions")
+            .upsert({
+                user_id: userId,
+                workout_date: normalizedDate,
+                started_at: startedAt,
+                ended_at: endedAt,
+                duration_sec: durationSec,
+                total_volume: payload.session.total_volume,
+                exercise_count: payload.session.exercise_count,
+                summary_json: payload.session.summary_json,
+                photo_id: latestPhotoId,
+                visibility: payload.session.visibility,
+                photo_visibility: payload.session.photo_visibility,
+            }, {
+                onConflict: "user_id,workout_date",
+            })
+            .select("id")
+            .single();
+
+        if (sessionUpsertError) throw sessionUpsertError;
+
+        const sessionId = upsertedSession?.id;
+        if (!sessionId) throw new Error("workout session id is missing");
+
+        const { error: deleteExercisesError } = await supabase
+            .from("workout_session_exercises")
+            .delete()
+            .eq("session_id", sessionId);
+        if (deleteExercisesError) throw deleteExercisesError;
+
+        if (payload.exercises.length > 0) {
+            const { error: insertExercisesError } = await supabase
+                .from("workout_session_exercises")
+                .insert(
+                    payload.exercises.map((exercise) => ({
+                        session_id: sessionId,
+                        exercise_name: exercise.exercise_name,
+                        body_part: exercise.body_part,
+                        set_count: exercise.set_count,
+                        max_weight: exercise.max_weight,
+                        volume: exercise.volume,
+                        best_set_json: exercise.best_set_json,
+                    }))
+                );
+
+            if (insertExercisesError) throw insertExercisesError;
+        }
+    }, []);
 
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
@@ -600,6 +710,22 @@ export default function GymApp() {
                         : reconciledHistory;
                 });
 
+                const pendingSessionSyncDates = Array.from(pendingWorkoutSessionSyncDatesRef.current);
+                pendingWorkoutSessionSyncDatesRef.current = new Set();
+
+                if (pendingSessionSyncDates.length > 0) {
+                    await Promise.all(
+                        pendingSessionSyncDates.map(async (date) => {
+                            try {
+                                await syncWorkoutSessionSnapshot(currentUserId, mergedHistory, date);
+                            } catch (error) {
+                                console.error("workout session sync failed", { error, userId: currentUserId, date });
+                                pendingWorkoutSessionSyncDatesRef.current.add(date);
+                            }
+                        })
+                    );
+                }
+
                 const todayStr = new Date().toISOString().split("T")[0];
                 const shouldSendWorkoutNotification =
                     pendingWorkoutNotification &&
@@ -638,7 +764,7 @@ export default function GymApp() {
             .catch((error) => {
                 console.error("history sync save failed", error);
             });
-    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory]);
+    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot]);
 
     useEffect(() => {
         let isActive = true;
@@ -794,6 +920,7 @@ export default function GymApp() {
             userId: user?.id || null,
             logDate,
         };
+        queueWorkoutSessionSync(logDate);
 
         setHistory((prev) => {
             const nh = { ...prev };
@@ -828,7 +955,7 @@ export default function GymApp() {
 
             return nh;
         });
-    }, [exercises, logData, logDate, getExUnit, todayLabels, user?.id]); // ← 依存配列
+    }, [exercises, logData, logDate, getExUnit, todayLabels, user?.id, queueWorkoutSessionSync]); // ← 依存配列
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
@@ -913,6 +1040,7 @@ export default function GymApp() {
         appendHistoryDeleteMarkers({
             records: [buildHistoryRecordDeleteKey(logDate, targetName)],
         });
+        queueWorkoutSessionSync(logDate);
     };
 
     const setExerciseOverrideForLabel = useCallback((exerciseName, label) => {
@@ -1192,6 +1320,7 @@ export default function GymApp() {
 
             return { ...prev, [exName]: recs };
         });
+        queueWorkoutSessionSync(updatedRecord?.date);
     };
 
     const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
@@ -1251,6 +1380,7 @@ export default function GymApp() {
 
             return { ...prev, [exName]: recs };
         });
+        queueWorkoutSessionSync(recordDate);
 
         // ===== draft側も更新する =====
         const draftDate = load("draft_logDate", "");
@@ -1326,6 +1456,7 @@ export default function GymApp() {
 
             return next;
         });
+        queueWorkoutSessionSync(targetDate);
 
         // その日が今の編集中なら画面上の状態も消す
         if (logDate === targetDate) {

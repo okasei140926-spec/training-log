@@ -5,9 +5,11 @@ import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import PhotoCropModal from "./modals/PhotoCropModal";
 import WorkoutShareModal from "./modals/WorkoutShareModal";
+import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
 import WorkoutPhotoCard from "./log/WorkoutPhotoCard";
+import { buildWorkoutSessionPayloadFromDraft } from "../utils/workoutSessions";
 
 
 import {
@@ -87,6 +89,7 @@ export default function LogScreen({
     const [viewerPhoto, setViewerPhoto] = useState(null);
     const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
     const [showSharePreview, setShowSharePreview] = useState(false);
+    const [showSessionShare, setShowSessionShare] = useState(false);
     const [shareTemplate, setShareTemplate] = useState("cute");
     const editRef = useRef(null);
     const photoInputRef = useRef(null);
@@ -143,6 +146,12 @@ export default function LogScreen({
         };
     }, { prCount: 0, totalVolumeKg: 0 });
     const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
+    const sessionSharePayload = buildWorkoutSessionPayloadFromDraft({
+        exercises,
+        logData,
+        getExUnit,
+        workoutDate: logDate,
+    });
     const fullRecord = exercises
         .map((ex) => {
             const sets = logData[ex.name] || getExSets(ex);
@@ -497,6 +506,8 @@ export default function LogScreen({
                 onDeletePhoto={handlePhotoDelete}
                 onOpenViewer={(row, idx) => setViewerPhoto({ id: row.id, url: photoUrls[row.id], title: `${logDate} の体写真 ${idx + 1}` })}
                 onOpenSharePreview={() => setShowSharePreview(true)}
+                onOpenSessionShare={() => setShowSessionShare(true)}
+                canOpenSessionShare={Boolean(sessionSharePayload)}
             />
 
             {/* Empty State */}
@@ -966,6 +977,17 @@ export default function LogScreen({
                         totalVolumeKg: Math.round(totalVolumeKg),
                     }}
                     fullRecord={fullRecord}
+                />
+            )}
+
+            {showSessionShare && (
+                <WorkoutSessionShareModal
+                    isOpen={showSessionShare}
+                    onClose={() => setShowSessionShare(false)}
+                    workoutDate={logDate}
+                    sessionPayload={sessionSharePayload}
+                    photoRows={photoRows}
+                    photoUrls={photoUrls}
                 />
             )}
 

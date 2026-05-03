@@ -19,6 +19,8 @@ export default function WorkoutPhotoCard({
     onDeletePhoto,
     onOpenViewer,
     onOpenSharePreview,
+    onOpenSessionShare,
+    canOpenSessionShare,
 }) {
     return (
         <div style={{ background: "var(--card)", borderRadius: 20, padding: "12px 14px", marginBottom: 14, border: "1px solid rgba(217, 228, 239, 0.9)", boxShadow: "0 8px 18px rgba(15, 23, 42, 0.04)" }}>
@@ -41,6 +43,23 @@ export default function WorkoutPhotoCard({
 
                 {user ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <button
+                            onClick={onOpenSessionShare}
+                            disabled={!canOpenSessionShare}
+                            style={{
+                                padding: "7px 10px",
+                                borderRadius: 12,
+                                background: "var(--card2)",
+                                border: "1px solid rgba(34, 197, 94, 0.45)",
+                                color: "var(--text2)",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                opacity: canOpenSessionShare ? 1 : 0.6,
+                                boxShadow: "0 6px 14px rgba(34, 197, 94, 0.08)",
+                            }}
+                        >
+                            シェアカード
+                        </button>
                         <button
                             onClick={onOpenSharePreview}
                             disabled={!canOpenSharePreview}

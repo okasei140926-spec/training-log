@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
@@ -26,6 +26,26 @@ const RESERVED_USERNAMES = [
     "運営",
     "管理者",
 ];
+const ACTIVITY_FEED_PAGE_SIZE = 20;
+
+const formatRelativeTime = (value) => {
+    if (!value) return "";
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp)) return "";
+
+    const diffMs = Date.now() - timestamp;
+    const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+    if (diffMinutes < 1) return "たった今";
+    if (diffMinutes < 60) return `${diffMinutes}分前`;
+
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}時間前`;
+
+    const diffDays = Math.round(diffHours / 24);
+    if (diffDays < 7) return `${diffDays}日前`;
+
+    return new Date(value).toLocaleDateString("ja-JP");
+};
 
 export default function FriendsScreen({ history, manualBests = [], onCopyMenu, user, onLogin, onLogout }) {
     const [openDates, setOpenDates] = useState({});
@@ -43,6 +63,10 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     const [myUsername, setMyUsername] = useState("");
     const [seenBig3Overtakes, setSeenBig3Overtakes] = useState({});
     const [visibleBig3OvertakeEvents, setVisibleBig3OvertakeEvents] = useState([]);
+    const [activityFeed, setActivityFeed] = useState([]);
+    const [activityFeedHasMore, setActivityFeedHasMore] = useState(false);
+    const [activityFeedLoading, setActivityFeedLoading] = useState(false);
+    const activityFeedOffsetRef = useRef(0);
     const today = new Date().toISOString().split("T")[0];
     const currentMonthPrefix = today.slice(0, 7);
     const big3SeenStorageKey = "friends_big3_overtake_seen_v1";
@@ -250,6 +274,97 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
         return "";
     }, [isReservedUsername]);
 
+    const fetchActivityFeed = useCallback(async ({ reset = false } = {}) => {
+        if (!user?.id) {
+            setActivityFeed([]);
+            activityFeedOffsetRef.current = 0;
+            setActivityFeedHasMore(false);
+            return;
+        }
+
+        const feedUserIds = [...new Set([user.id, ...friendIds])];
+        const offset = reset ? 0 : activityFeedOffsetRef.current;
+
+        setActivityFeedLoading(true);
+
+        try {
+            const { data: sessions, error: sessionsError } = await supabase
+                .from("workout_sessions")
+                .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
+                .in("user_id", feedUserIds)
+                .order("created_at", { ascending: false })
+                .range(offset, offset + ACTIVITY_FEED_PAGE_SIZE - 1);
+
+            if (sessionsError) throw sessionsError;
+
+            const profileIds = [...new Set((sessions || []).map((session) => session.user_id).filter(Boolean))];
+            const photoIds = [...new Set(
+                (sessions || [])
+                    .filter((session) => session.photo_visibility === "friends" && session.photo_id)
+                    .map((session) => session.photo_id)
+            )];
+
+            const [profilesRes, photosRes] = await Promise.all([
+                profileIds.length
+                    ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
+                    : Promise.resolve({ data: [], error: null }),
+                photoIds.length
+                    ? supabase.from("progress_photos").select("id, storage_path").in("id", photoIds)
+                    : Promise.resolve({ data: [], error: null }),
+            ]);
+
+            if (profilesRes.error) throw profilesRes.error;
+            if (photosRes.error) throw photosRes.error;
+
+            const profileMap = new Map((profilesRes.data || []).map((profile) => [profile.id, profile]));
+            const photoRows = photosRes.data || [];
+            const signedEntries = await Promise.all(photoRows.map(async (row) => {
+                try {
+                    const { data: signedData, error: signedError } = await supabase
+                        .storage
+                        .from("progress-photos-private")
+                        .createSignedUrl(row.storage_path, 3600);
+                    if (signedError) return null;
+                    return [row.id, signedData?.signedUrl || null];
+                } catch (error) {
+                    console.error("activity feed photo signed url failed", error);
+                    return null;
+                }
+            }));
+            const photoUrlMap = new Map(signedEntries.filter(Boolean));
+
+            const items = (sessions || []).map((session) => {
+                const profile = profileMap.get(session.user_id) || {};
+                const summary = session.summary_json || {};
+                const summaryItems = Array.isArray(summary.items) ? summary.items : [];
+
+                return {
+                    ...session,
+                    profile,
+                    summary,
+                    summaryItems,
+                    photoUrl: session.photo_visibility === "friends" ? photoUrlMap.get(session.photo_id) || null : null,
+                };
+            });
+
+            setActivityFeed((prev) => {
+                const next = reset ? items : [...prev, ...items];
+                return next.filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index);
+            });
+            activityFeedOffsetRef.current = offset + items.length;
+            setActivityFeedHasMore(items.length === ACTIVITY_FEED_PAGE_SIZE);
+        } catch (error) {
+            console.error("activity feed fetch failed", error);
+            if (reset) {
+                setActivityFeed([]);
+                activityFeedOffsetRef.current = 0;
+                setActivityFeedHasMore(false);
+            }
+        } finally {
+            setActivityFeedLoading(false);
+        }
+    }, [friendIds, user?.id]);
+
     useEffect(() => {
         if (!user) return;
 
@@ -335,6 +450,20 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
 
         return () => clearInterval(intervalId);
     }, [user, friendIds, fetchTodayActive]);
+
+    useEffect(() => {
+        if (!user) return;
+        fetchActivityFeed({ reset: true });
+    }, [user, friendIds, fetchActivityFeed]);
+
+    useEffect(() => {
+        if (!user) return undefined;
+        const intervalId = setInterval(() => {
+            fetchActivityFeed({ reset: true }).catch(console.error);
+        }, 90000);
+
+        return () => clearInterval(intervalId);
+    }, [user, fetchActivityFeed]);
 
     useEffect(() => {
         if (!user) return;
@@ -563,6 +692,127 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                     </button>
                 </div>
             )}
+
+            <div style={S.sLabel}>アクティビティフィード</div>
+
+            <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>みんなのワークアウト</div>
+                        <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
+                            自分と友達の最近のセッションを表示します
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => fetchActivityFeed({ reset: true })}
+                        disabled={activityFeedLoading}
+                        style={{
+                            padding: "8px 12px",
+                            borderRadius: 12,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card2)",
+                            color: "var(--text2)",
+                            fontSize: 12,
+                            fontWeight: 700,
+                        }}
+                    >
+                        更新
+                    </button>
+                </div>
+
+                {activityFeed.length === 0 && !activityFeedLoading ? (
+                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "18px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center", border: "1px solid rgba(217, 228, 239, 0.9)" }}>
+                        まだ共有されたワークアウトはありません
+                    </div>
+                ) : (
+                    <div style={{ display: "grid", gap: 10 }}>
+                        {activityFeed.map((item) => {
+                            const profileName = item.user_id === user.id
+                                ? getDisplayUsername(myUsername, { isMe: true })
+                                : getDisplayUsername(item.profile?.username);
+
+                            return (
+                                <div key={item.id} style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 18, padding: "14px", border: "1px solid rgba(217, 228, 239, 0.85)" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                        <div style={{ width: 42, height: 42, borderRadius: 21, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
+                                            {item.profile?.avatar1_url
+                                                ? <img src={item.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                                : profileName?.[0]?.toUpperCase()
+                                            }
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {profileName}
+                                            </div>
+                                            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                                                {formatRelativeTime(item.created_at)} · {item.workout_date}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {item.photoUrl && (
+                                        <img
+                                            src={item.photoUrl}
+                                            alt={`${item.workout_date} session`}
+                                            style={{ width: "100%", borderRadius: 14, objectFit: "cover", aspectRatio: "16 / 9", display: "block", marginBottom: 10 }}
+                                        />
+                                    )}
+
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                                        <span style={{ padding: "4px 10px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--info-strong)", fontSize: 11, fontWeight: 700 }}>
+                                            {item.exercise_count}種目
+                                        </span>
+                                        <span style={{ padding: "4px 10px", borderRadius: 999, background: "var(--success-soft)", border: "1px solid var(--success-border)", color: "var(--accent)", fontSize: 11, fontWeight: 700 }}>
+                                            Volume {Math.round(Number(item.total_volume || 0)).toLocaleString("ja-JP")}kg
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: "grid", gap: 6 }}>
+                                        {(item.summaryItems || []).slice(0, 4).map((summaryItem) => (
+                                            <div key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: "var(--text2)" }}>
+                                                <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                    {summaryItem.exercise_name}
+                                                    {summaryItem.body_part ? ` · ${summaryItem.body_part}` : ""}
+                                                </div>
+                                                <div style={{ flexShrink: 0 }}>
+                                                    {summaryItem.set_count}セット / {Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {item.summaryItems.length > 4 && (
+                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                                他 {item.summaryItems.length - 4} 種目
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {activityFeedHasMore && (
+                    <button
+                        type="button"
+                        onClick={() => fetchActivityFeed({ reset: false })}
+                        disabled={activityFeedLoading}
+                        style={{
+                            width: "100%",
+                            marginTop: 12,
+                            padding: "12px 14px",
+                            borderRadius: 14,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card2)",
+                            color: "var(--text2)",
+                            fontSize: 13,
+                            fontWeight: 700,
+                        }}
+                    >
+                        {activityFeedLoading ? "読み込み中..." : "もっと見る"}
+                    </button>
+                )}
+            </div>
 
             <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
 
