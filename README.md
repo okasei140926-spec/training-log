@@ -139,6 +139,19 @@ Supabase ダッシュボード → Table Editor → `notification_events` で通
 - `sent_at` が `null` の場合は配信失敗（デバイスへの到達失敗）
 - 古いイベントは定期的に手動削除してください（現時点で自動クリーンアップなし）
 
+確認SQL:
+
+```sql
+select user_id, type, dedupe_key, payload, sent_at, created_at
+from public.notification_events
+where type = 'workout_like'
+order by created_at desc
+limit 20;
+```
+
+本番 Supabase に `notification_events` が無い場合は、先に
+`supabase/notification_events.sql` を適用してください。
+
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

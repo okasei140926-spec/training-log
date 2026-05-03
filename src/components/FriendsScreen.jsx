@@ -74,6 +74,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [sharePhotoUrls, setSharePhotoUrls] = useState({});
     const [sharePreparingSessionId, setSharePreparingSessionId] = useState(null);
     const [sessionSettingsUpdatingId, setSessionSettingsUpdatingId] = useState(null);
+    const [likePendingMap, setLikePendingMap] = useState({});
     const activityFeedOffsetRef = useRef(0);
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = new Date().toISOString().split("T")[0];
@@ -323,21 +324,27 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     .filter((session) => session.photo_visibility === "friends" && session.photo_id)
                     .map((session) => session.photo_id)
             )];
+            const sessionIds = [...new Set((sessions || []).map((session) => session.id).filter(Boolean))];
 
-            const [profilesRes, photosRes] = await Promise.all([
+            const [profilesRes, photosRes, likesRes] = await Promise.all([
                 profileIds.length
                     ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
                     : Promise.resolve({ data: [], error: null }),
                 photoIds.length
                     ? supabase.from("progress_photos").select("id, storage_path").in("id", photoIds)
                     : Promise.resolve({ data: [], error: null }),
+                sessionIds.length
+                    ? supabase.from("workout_session_likes").select("session_id, user_id").in("session_id", sessionIds)
+                    : Promise.resolve({ data: [], error: null }),
             ]);
 
             if (profilesRes.error) throw profilesRes.error;
             if (photosRes.error) throw photosRes.error;
+            if (likesRes.error) throw likesRes.error;
 
             const profileMap = new Map((profilesRes.data || []).map((profile) => [profile.id, profile]));
             const photoRows = photosRes.data || [];
+            const likeRows = likesRes.data || [];
             const signedEntries = await Promise.all(photoRows.map(async (row) => {
                 try {
                     const { data: signedData, error: signedError } = await supabase
@@ -352,6 +359,16 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 }
             }));
             const photoUrlMap = new Map(signedEntries.filter(Boolean));
+            const likeCountMap = new Map();
+            const likedSessionIds = new Set();
+
+            likeRows.forEach((row) => {
+                if (!row?.session_id) return;
+                likeCountMap.set(row.session_id, (likeCountMap.get(row.session_id) || 0) + 1);
+                if (row.user_id === user.id) {
+                    likedSessionIds.add(row.session_id);
+                }
+            });
 
             const items = (sessions || []).map((session) => {
                 const profile = profileMap.get(session.user_id) || {};
@@ -364,6 +381,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     summary,
                     summaryItems,
                     photoUrl: session.photo_visibility === "friends" ? photoUrlMap.get(session.photo_id) || null : null,
+                    likeCount: likeCountMap.get(session.id) || 0,
+                    likedByMe: likedSessionIds.has(session.id),
                 };
             });
 
@@ -489,6 +508,78 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             setSessionSettingsUpdatingId(null);
         }
     }, [fetchActivityFeed, sessionSettingsUpdatingId, showActivityFeedStatusMessage, user?.id]);
+
+    const handleToggleSessionLike = useCallback(async (sessionId) => {
+        if (!user?.id || !sessionId || likePendingMap[sessionId]) return;
+
+        const currentItem = activityFeed.find((item) => item.id === sessionId);
+        if (!currentItem || currentItem.user_id === user.id) return;
+
+        const previousLiked = Boolean(currentItem.likedByMe);
+        const previousCount = Number(currentItem.likeCount || 0);
+        const optimisticLiked = !previousLiked;
+        const optimisticCount = Math.max(0, previousCount + (optimisticLiked ? 1 : -1));
+
+        setLikePendingMap((prev) => ({ ...prev, [sessionId]: true }));
+        setActivityFeed((prev) => prev.map((item) => (
+            item.id === sessionId
+                ? { ...item, likedByMe: optimisticLiked, likeCount: optimisticCount }
+                : item
+        )));
+
+        try {
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            const accessToken = session?.access_token;
+
+            if (!accessToken) {
+                throw new Error("ログインが必要です");
+            }
+
+            const response = await fetch("/api/toggle-workout-like", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({ sessionId }),
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data?.error || "いいねの更新に失敗しました。");
+            }
+
+            setActivityFeed((prev) => prev.map((item) => (
+                item.id === sessionId
+                    ? {
+                        ...item,
+                        likedByMe: Boolean(data.liked),
+                        likeCount: Number(data.likeCount || 0),
+                    }
+                    : item
+            )));
+        } catch (error) {
+            console.error("toggle workout like failed on client", error);
+            setActivityFeed((prev) => prev.map((item) => (
+                item.id === sessionId
+                    ? {
+                        ...item,
+                        likedByMe: previousLiked,
+                        likeCount: previousCount,
+                    }
+                    : item
+            )));
+            showActivityFeedStatusMessage("いいねを更新できませんでした");
+        } finally {
+            setLikePendingMap((prev) => {
+                const next = { ...prev };
+                delete next[sessionId];
+                return next;
+            });
+        }
+    }, [activityFeed, likePendingMap, showActivityFeedStatusMessage, user?.id]);
 
     useEffect(() => {
         if (!user) return;
@@ -1045,6 +1136,51 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                         {item.summaryItems.length > 4 && (
                                             <div style={{ fontSize: 11, color: "var(--text3)" }}>
                                                 他 {item.summaryItems.length - 4} 種目
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            gap: 10,
+                                            marginTop: 12,
+                                            paddingTop: 10,
+                                            borderTop: "1px solid rgba(217, 228, 239, 0.7)",
+                                        }}
+                                    >
+                                        {item.user_id === user.id ? (
+                                            <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
+                                                ♥ {Number(item.likeCount || 0)}
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleSessionLike(item.id)}
+                                                disabled={Boolean(likePendingMap[item.id])}
+                                                style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: 6,
+                                                    padding: "8px 10px",
+                                                    borderRadius: 12,
+                                                    border: "1px solid var(--border2)",
+                                                    background: item.likedByMe ? "var(--danger-soft, #fee2e2)" : "var(--card)",
+                                                    color: item.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
+                                                    fontSize: 12,
+                                                    fontWeight: 800,
+                                                    opacity: likePendingMap[item.id] ? 0.7 : 1,
+                                                }}
+                                            >
+                                                <span>{item.likedByMe ? "♥" : "♡"}</span>
+                                                <span>{Number(item.likeCount || 0)}</span>
+                                            </button>
+                                        )}
+                                        {likePendingMap[item.id] && (
+                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                                更新中...
                                             </div>
                                         )}
                                     </div>
