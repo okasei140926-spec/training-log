@@ -1,10 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 
 export const NATIVE_OAUTH_REDIRECT_URL = "app.ironlog.traininglog://auth/callback";
-const APPLE_OAUTH_ENABLED = String(process.env.REACT_APP_ENABLE_APPLE_OAUTH || "").trim().toLowerCase() === "true";
 
 export const isNativeApp = () => Capacitor.isNativePlatform();
-export const isAppleOAuthEnabled = () => APPLE_OAUTH_ENABLED;
 
 export const getOAuthRedirectUrl = () =>
   isNativeApp() ? NATIVE_OAUTH_REDIRECT_URL : window.location.origin;
@@ -14,9 +12,6 @@ export const isNativeOAuthCallbackUrl = (url) =>
 
 export const getOAuthProviderLabel = (provider) =>
   provider === "apple" ? "Apple" : "Google";
-
-export const getAppleOAuthDisabledMessage = () =>
-  "Appleログインは現在準備中です。設定が完了したら利用できるようになります。";
 
 export const getOAuthPendingFailureMessage = (provider, reason = "default") => {
   const providerLabel = getOAuthProviderLabel(provider);

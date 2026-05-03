@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../utils/supabase";
 import {
-  getAppleOAuthDisabledMessage,
   getOAuthErrorMessage,
   getOAuthPendingFailureMessage,
   getOAuthProviderLabel,
   getOAuthRedirectUrl,
-  isAppleOAuthEnabled,
   isNativeApp,
 } from "../utils/oauth";
 
@@ -194,13 +192,6 @@ export default function Auth({ onClose, isDark }) {
 
   const handleOAuth = async (provider) => {
     const providerLabel = getOAuthProviderLabel(provider);
-    if (provider === "apple" && !isAppleOAuthEnabled()) {
-      setError(getAppleOAuthDisabledMessage());
-      setLoading(false);
-      setOauthLoadingProvider("");
-      return;
-    }
-
     setError("");
     setLoading(false);
     nativeOauthHandledRef.current = false;
@@ -321,11 +312,7 @@ export default function Auth({ onClose, isDark }) {
           opacity: loading || oauthLoadingProvider ? 0.7 : 1,
         }}
       >
-        {oauthLoadingProvider === "apple"
-          ? "Appleへ移動中..."
-          : isAppleOAuthEnabled()
-            ? "Appleで続行"
-            : "Appleで続行（準備中）"}
+        {oauthLoadingProvider === "apple" ? "Appleへ移動中..." : "Appleで続行"}
       </button>
       <button
         onClick={() => handleOAuth("google")}
