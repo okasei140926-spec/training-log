@@ -73,6 +73,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     const [sharePhotoRows, setSharePhotoRows] = useState([]);
     const [sharePhotoUrls, setSharePhotoUrls] = useState({});
     const [sharePreparingSessionId, setSharePreparingSessionId] = useState(null);
+    const [sessionSettingsUpdatingId, setSessionSettingsUpdatingId] = useState(null);
     const activityFeedOffsetRef = useRef(0);
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = new Date().toISOString().split("T")[0];
@@ -453,6 +454,41 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
             setSharePreparingSessionId(null);
         }
     }, [sharePreparingSessionId, user?.id]);
+
+    const handleUpdateSessionVisibility = useCallback(async (sessionId, patch) => {
+        if (!user?.id || !sessionId || sessionSettingsUpdatingId) return;
+
+        setSessionSettingsUpdatingId(sessionId);
+        setActivityFeedStatusMessage("");
+
+        try {
+            const { error } = await supabase
+                .from("workout_sessions")
+                .update(patch)
+                .eq("id", sessionId)
+                .eq("user_id", user.id);
+
+            if (error) throw error;
+
+            setActivityFeed((prev) => prev.map((item) => (
+                item.id === sessionId
+                    ? {
+                        ...item,
+                        ...patch,
+                        photoUrl: patch.photo_visibility === "hidden" ? null : item.photoUrl,
+                    }
+                    : item
+            )));
+
+            await fetchActivityFeed({ reset: true });
+            showActivityFeedStatusMessage("公開設定を更新しました");
+        } catch (error) {
+            console.error("session visibility update failed", error);
+            showActivityFeedStatusMessage("公開設定を更新できませんでした");
+        } finally {
+            setSessionSettingsUpdatingId(null);
+        }
+    }, [fetchActivityFeed, sessionSettingsUpdatingId, showActivityFeedStatusMessage, user?.id]);
 
     useEffect(() => {
         if (!user) return;
@@ -898,6 +934,101 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                                             Volume {Math.round(Number(item.total_volume || 0)).toLocaleString("ja-JP")}kg
                                         </span>
                                     </div>
+
+                                    {item.user_id === user.id && (
+                                        <div
+                                            style={{
+                                                display: "grid",
+                                                gap: 8,
+                                                marginBottom: 10,
+                                                padding: "10px 12px",
+                                                borderRadius: 14,
+                                                background: "rgba(248, 250, 252, 0.95)",
+                                                border: "1px solid rgba(217, 228, 239, 0.95)",
+                                            }}
+                                        >
+                                            <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text2)" }}>
+                                                公開設定
+                                            </div>
+                                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                                <div style={{ fontSize: 11, color: "var(--text3)", minWidth: 64 }}>セッション</div>
+                                                <button
+                                                    type="button"
+                                                    disabled={sessionSettingsUpdatingId === item.id || item.visibility === "friends"}
+                                                    onClick={() => handleUpdateSessionVisibility(item.id, { visibility: "friends" })}
+                                                    style={{
+                                                        padding: "7px 10px",
+                                                        borderRadius: 999,
+                                                        border: "1px solid var(--border2)",
+                                                        background: item.visibility === "friends" ? "var(--text)" : "var(--card)",
+                                                        color: item.visibility === "friends" ? "var(--bg)" : "var(--text2)",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
+                                                    }}
+                                                >
+                                                    フレンドに公開
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={sessionSettingsUpdatingId === item.id || item.visibility === "private"}
+                                                    onClick={() => handleUpdateSessionVisibility(item.id, { visibility: "private" })}
+                                                    style={{
+                                                        padding: "7px 10px",
+                                                        borderRadius: 999,
+                                                        border: "1px solid var(--border2)",
+                                                        background: item.visibility === "private" ? "var(--text)" : "var(--card)",
+                                                        color: item.visibility === "private" ? "var(--bg)" : "var(--text2)",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
+                                                    }}
+                                                >
+                                                    非公開
+                                                </button>
+                                            </div>
+                                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                                                <div style={{ fontSize: 11, color: "var(--text3)", minWidth: 64 }}>写真</div>
+                                                <button
+                                                    type="button"
+                                                    disabled={sessionSettingsUpdatingId === item.id || item.photo_visibility === "hidden"}
+                                                    onClick={() => handleUpdateSessionVisibility(item.id, { photo_visibility: "hidden" })}
+                                                    style={{
+                                                        padding: "7px 10px",
+                                                        borderRadius: 999,
+                                                        border: "1px solid var(--border2)",
+                                                        background: item.photo_visibility === "hidden" ? "var(--text)" : "var(--card)",
+                                                        color: item.photo_visibility === "hidden" ? "var(--bg)" : "var(--text2)",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
+                                                    }}
+                                                >
+                                                    非表示
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={sessionSettingsUpdatingId === item.id || item.photo_visibility === "friends"}
+                                                    onClick={() => handleUpdateSessionVisibility(item.id, { photo_visibility: "friends" })}
+                                                    style={{
+                                                        padding: "7px 10px",
+                                                        borderRadius: 999,
+                                                        border: "1px solid var(--border2)",
+                                                        background: item.photo_visibility === "friends" ? "var(--text)" : "var(--card)",
+                                                        color: item.photo_visibility === "friends" ? "var(--bg)" : "var(--text2)",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
+                                                    }}
+                                                >
+                                                    フレンドに公開
+                                                </button>
+                                                {sessionSettingsUpdatingId === item.id && (
+                                                    <span style={{ fontSize: 11, color: "var(--text3)" }}>更新中...</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div style={{ display: "grid", gap: 6 }}>
                                         {(item.summaryItems || []).slice(0, 4).map((summaryItem) => (
