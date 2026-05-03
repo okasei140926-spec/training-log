@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "./utils/supabase";
+import { isSupabaseConfigured, missingSupabaseEnvKeys, supabase, supabaseConfigError } from "./utils/supabase";
 import {
     load,
     save,
@@ -141,6 +141,11 @@ export default function GymApp() {
     const [user, setUser] = useState(null);
 
     useEffect(() => {
+        if (!isSupabaseConfigured) {
+            setUser(null);
+            return undefined;
+        }
+
         supabase.auth.getSession().then(({ data: { session } }) => {
             setUser(session?.user ?? null);
         });
@@ -1404,6 +1409,62 @@ export default function GymApp() {
         { id: "friends", icon: "👥", label: "Friends" },
         { id: "ai", icon: "🤖", label: "AI" },
     ];
+
+    if (!isSupabaseConfigured) {
+        return (
+            <div style={{
+                minHeight: "100dvh",
+                background: "var(--bg)",
+                color: "var(--text)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 24,
+            }}>
+                <div style={{
+                    width: "100%",
+                    maxWidth: 520,
+                    background: "var(--card)",
+                    border: "1px solid var(--border2)",
+                    borderRadius: 24,
+                    boxShadow: "var(--shadow-card)",
+                    padding: 24,
+                }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)", letterSpacing: 2, marginBottom: 10 }}>
+                        IRON LOG
+                    </div>
+                    <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 12 }}>
+                        環境変数が不足しています
+                    </div>
+                    <div style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.7, marginBottom: 14 }}>
+                        Capacitor のローカル build では、Vercel 本番の環境変数は自動では入りません。` .env.local ` を作成してから `npm run build` と `npm run cap:sync` を実行してください。
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 8 }}>
+                        不足している項目
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                        {missingSupabaseEnvKeys.map((key) => (
+                            <div key={key} style={{
+                                padding: "10px 12px",
+                                borderRadius: 14,
+                                background: "var(--card2)",
+                                border: "1px solid var(--border2)",
+                                fontFamily: "monospace",
+                                fontSize: 13,
+                            }}>
+                                {key}
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7 }}>
+                        {supabaseConfigError}
+                        <br />
+                        `.env.example` と README の Capacitor セクションを参考に設定してください。
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>

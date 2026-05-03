@@ -90,6 +90,35 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 - `/api/send-inactivity-push` is scheduled by `vercel.json`, so `CRON_SECRET` must be set in Vercel for the cron job to work safely.
 - `CLAUDE_API_KEY` should be configured as a sensitive server-side environment variable only.
 
+## Capacitor Local Build Setup
+
+Capacitor local builds do not automatically receive Vercel Production environment variables.
+
+Before running iOS / Android locally, create a `.env.local` file at the project root:
+
+```bash
+cp .env.example .env.local
+```
+
+Then set these values in `.env.local`:
+
+- `REACT_APP_SUPABASE_URL`
+- `REACT_APP_SUPABASE_ANON_KEY`
+- `REACT_APP_VAPID_PUBLIC_KEY`
+
+Important:
+
+- `.env.local` is intentionally not committed to git
+- only `REACT_APP_` variables are available to the React app at build time
+- after editing `.env.local`, run:
+
+```bash
+npm run build
+npm run cap:sync
+```
+
+If these values are missing, the Capacitor app will show an in-app configuration error screen instead of a blank white screen.
+
 ## Vercel Cron
 
 `vercel.json` に毎日10:00 UTCで `send-inactivity-push` を設定しています。
