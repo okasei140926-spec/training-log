@@ -65,6 +65,31 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/a
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
 
+## Production Environment Variables
+
+### Frontend build-time variables
+
+- `REACT_APP_SUPABASE_URL`
+- `REACT_APP_SUPABASE_ANON_KEY`
+- `REACT_APP_VAPID_PUBLIC_KEY`
+
+`REACT_APP_VAPID_PUBLIC_KEY` is required at build time. Make sure it is set in Vercel Production before deploying.
+
+### Server / API variables
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
+- `CLAUDE_API_KEY`
+- `CRON_SECRET`
+
+### Notes
+
+- Push test notifications, friend notifications, overtake notifications, and inactivity notifications require the VAPID and Supabase server-side keys.
+- `/api/send-inactivity-push` is scheduled by `vercel.json`, so `CRON_SECRET` must be set in Vercel for the cron job to work safely.
+- `CLAUDE_API_KEY` should be configured as a sensitive server-side environment variable only.
+
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
