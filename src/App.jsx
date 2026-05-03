@@ -1492,7 +1492,7 @@ export default function GymApp() {
         return (
             <div className={isDark ? "" : "theme-light"} style={S.root}><style>{css}</style>
                 <div style={S.header}>
-                    <div><div style={S.appLabel}>IRON LOG</div><div style={S.headerTitle}>種目設定</div></div>
+                    <div><div style={S.appLabel}>PUMP</div><div style={S.headerTitle}>種目設定</div></div>
                     <button onClick={() => setScreen("history")} style={S.pillBtn}>完了</button>
                 </div>
                 <div style={{ padding: "20px" }}>
@@ -1562,7 +1562,7 @@ export default function GymApp() {
                     padding: 24,
                 }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)", letterSpacing: 2, marginBottom: 10 }}>
-                        IRON LOG
+                        PUMP
                     </div>
                     <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 12 }}>
                         環境変数が不足しています
@@ -1825,7 +1825,7 @@ export default function GymApp() {
                     }
                     body={
                         pushStatus.permission === "denied"
-                            ? "iPhoneの設定でIRON LOGの通知を許可すると、友達の記録やトレーニングのリマインドを受け取れます。"
+                            ? "iPhoneの設定でPUMPの通知を許可すると、友達の記録やトレーニングのリマインドを受け取れます。"
                             : pushStatus.support.supported
                                 ? "友達の記録や、トレーニングのリマインドをお知らせします。"
                                 : pushStatus.support.message || "この環境では通知を利用できません。"

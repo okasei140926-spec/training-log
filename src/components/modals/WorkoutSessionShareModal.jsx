@@ -89,7 +89,7 @@ export default function WorkoutSessionShareModal({
             });
 
             const shareData = {
-                title: "IRON LOG",
+                title: "PUMP",
                 text: `${dateLabel} のワークアウト`,
                 files: [file],
             };
@@ -275,14 +275,14 @@ export default function WorkoutSessionShareModal({
                                     letterSpacing: 1,
                                 }}
                             >
-                                IRON LOG
+                                PUMP
                             </div>
                         )}
 
                         <div style={{ padding: sizeKey === "story" ? "22px 24px 24px" : "18px 20px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                                 <div>
-                                    <div style={{ fontSize: 11, letterSpacing: 2.4, color: "#64748b", marginBottom: 6 }}>IRON LOG</div>
+                                    <div style={{ fontSize: 11, letterSpacing: 2.4, color: "#64748b", marginBottom: 6 }}>PUMP</div>
                                     <div style={{ fontSize: sizeKey === "story" ? 26 : 22, fontWeight: 900, color: "#0f172a" }}>
                                         {dateLabel}
                                     </div>

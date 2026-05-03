@@ -5,7 +5,7 @@ export default function SummaryModal({ summary, onClose }) {
         const text = `今日のトレーニング完了！💪\n種目数: ${summary.exCount}種目\nセット数: ${summary.setCount}セット${summary.prs.length ? `\nPR更新: ${summary.prs.map(p => p.name).join(", ")}` : ""}\n#IRONLOG #筋トレ`;
         if (navigator.share) {
             try {
-                await navigator.share({ title: "IRON LOG", text });
+                await navigator.share({ title: "PUMP", text });
             } catch { }
         } else {
             try { await navigator.clipboard.writeText(text); } catch { }

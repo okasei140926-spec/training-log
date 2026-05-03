@@ -245,7 +245,7 @@ export default function WorkoutShareModal({
             const shareData = {
                 files: [file],
                 title: shareTitle,
-                    text: "IRON LOG の投稿プレビュー",
+                    text: "PUMP の投稿プレビュー",
             };
 
             if (navigator.canShare && navigator.canShare(shareData) && navigator.share) {

@@ -128,7 +128,7 @@ export default async function handler(req, res) {
     for (const friendId of friendIds) {
       const friendWorkoutResult = await sendPushToUser({
         userId: friendId,
-        title: "IRON LOG",
+        title: "PUMP",
         body: `${actorName}さんが今日のトレーニングを記録しました`,
         url: "/?screen=friends",
         type: "friend_workout",
@@ -173,7 +173,7 @@ export default async function handler(req, res) {
 
         const result = await sendPushToUser({
           userId: friendId,
-          title: "IRON LOG",
+          title: "PUMP",
           body: candidate.body,
           url: "/?screen=friends",
           type: candidate.key === "total" ? "big3_overtake_total" : "big3_overtake_exercise",

@@ -15,7 +15,7 @@ self.addEventListener("push", (event) => {
     payload = { body: event.data?.text?.() || "" };
   }
 
-  const title = payload.title || "IRON LOG";
+  const title = payload.title || "PUMP";
   const options = {
     body: payload.body || "",
     icon: "/app-icon-192.png",

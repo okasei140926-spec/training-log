@@ -3,7 +3,7 @@ import { save } from "../utils/helpers";
 
 const STEPS = [
   {
-    title: "IRON LOGへようこそ 💪",
+    title: "PUMPへようこそ 💪",
     body: "筋トレを記録して、成長を可視化しよう。まず基本的な使い方を案内します。",
     hint: null,
   },

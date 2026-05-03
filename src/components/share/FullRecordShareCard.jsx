@@ -156,7 +156,7 @@ export default function FullRecordShareCard({
 
             <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12 }}>
                 <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
-                    IRON LOG
+                    PUMP
                 </div>
             </div>
         </>

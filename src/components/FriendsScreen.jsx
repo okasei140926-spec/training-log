@@ -235,9 +235,9 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
 
     const handleCopyInvite = async () => {
         const url = `${window.location.origin}?ref=${user.id}`;
-        const text = "一緒にトレーニングを記録しよう！ IRON LOG";
+        const text = "一緒にトレーニングを記録しよう！ PUMP";
         if (navigator.share) {
-            try { await navigator.share({ title: "IRON LOG", text, url }); return; } catch { }
+            try { await navigator.share({ title: "PUMP", text, url }); return; } catch { }
         }
         try { await navigator.clipboard.writeText(url); } catch {
             const el = document.createElement("textarea");

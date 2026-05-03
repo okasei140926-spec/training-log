@@ -83,7 +83,7 @@ export default async function handler(req, res) {
   }
 
   const payload = JSON.stringify({
-    title: "IRON LOG",
+    title: "PUMP",
     body: "通知テストです。記録リマインドやFriends通知に使われます。",
     url: "/",
   });

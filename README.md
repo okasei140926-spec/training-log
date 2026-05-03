@@ -1,3 +1,7 @@
+# PUMP
+
+React / PWA / Capacitor ベースの筋トレ記録アプリです。
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

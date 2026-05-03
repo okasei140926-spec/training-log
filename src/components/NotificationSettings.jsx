@@ -160,7 +160,7 @@ export default function NotificationSettings({ user }) {
         アプリ内通知
       </div>
       <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7, marginBottom: 12 }}>
-        友達の記録通知・3日未記録リマインドをプッシュ通知で受け取れます。iPhoneはホーム画面に追加後、端末の設定でIRON LOGの通知を許可してください。
+        友達の記録通知・3日未記録リマインドをプッシュ通知で受け取れます。iPhoneはホーム画面に追加後、端末の設定でPUMPの通知を許可してください。
       </div>
 
       {!support.supported ? (

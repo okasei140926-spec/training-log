@@ -11,7 +11,7 @@ export default function AppHeader({
     return (
         <div style={S.header}>
             <div>
-                <div style={S.appLabel}>IRON LOG</div>
+                <div style={S.appLabel}>PUMP</div>
                 <div style={S.headerTitle}>{title}</div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>

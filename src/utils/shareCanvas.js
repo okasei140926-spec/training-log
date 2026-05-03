@@ -184,7 +184,7 @@ export async function buildPhotoShareBlob({
     ctx.fillStyle = labelColor;
     ctx.font = "500 22px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
     ctx.textAlign = "right";
-    ctx.fillText("IRON LOG", shellX + shellW - 44, shellY + shellH - 42);
+    ctx.fillText("PUMP", shellX + shellW - 44, shellY + shellH - 42);
     ctx.restore();
 
     return canvasToBlob(canvas);

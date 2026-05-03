@@ -96,7 +96,7 @@ export async function subscribeToPush(vapidPublicKey) {
   }
 
   if (Notification.permission === "denied") {
-    throw createPushError("通知がブロックされています。iPhoneの設定でIRON LOGの通知を許可してください");
+    throw createPushError("通知がブロックされています。iPhoneの設定でPUMPの通知を許可してください");
   }
 
   try {
@@ -254,7 +254,7 @@ export async function enablePushNotificationsForUser(userId) {
       support,
       message:
         nextPermission === "denied"
-          ? "通知がブロックされています。iPhoneの設定でIRON LOGの通知を許可してください"
+          ? "通知がブロックされています。iPhoneの設定でPUMPの通知を許可してください"
           : "通知を許可するとテスト通知を受け取れます。",
     };
   }

@@ -99,7 +99,7 @@ export default function SummaryShareCard({
             <div style={{ display: "flex", justifyContent: renderPhotoUrl ? "space-between" : "flex-end", alignItems: "center", gap: 12 }}>
                 {renderPhotoUrl ? <div /> : null}
                 <div style={{ color: styleSet.brand, fontSize: 11, letterSpacing: 1.4 }}>
-                    IRON LOG
+                    PUMP
                 </div>
             </div>
         </>
