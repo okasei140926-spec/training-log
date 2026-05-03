@@ -48,7 +48,7 @@ const formatRelativeTime = (value) => {
     return new Date(value).toLocaleDateString("ja-JP");
 };
 
-export default function FriendsScreen({ history, manualBests = [], onCopyMenu, user, onLogin, onLogout }) {
+export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, onCopyMenu, user, onLogin, onLogout }) {
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
@@ -579,7 +579,7 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
     useEffect(() => {
         if (!user) return;
         fetchActivityFeed({ reset: true });
-    }, [user, friendIds, fetchActivityFeed]);
+    }, [user, friendIds, fetchActivityFeed, sessionSyncVersion]);
 
     useEffect(() => {
         if (!user) return undefined;

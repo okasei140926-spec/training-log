@@ -261,6 +261,7 @@ export default function GymApp() {
 
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
+    const [sessionSyncVersion, setSessionSyncVersion] = useState(0);
 
     const touchStartX = useRef(null);
     const touchStartY = useRef(null);
@@ -397,6 +398,37 @@ export default function GymApp() {
 
             if (insertExercisesError) throw insertExercisesError;
         }
+    }, []);
+
+    const cleanupWorkoutSessionsForHistory = useCallback(async (userId, historyMap) => {
+        if (!userId) return;
+
+        const activeDates = new Set(
+            Object.values(historyMap || {})
+                .flatMap((records) => (records || []).map((record) => String(record?.date || "").trim()))
+                .filter(Boolean)
+        );
+
+        const { data: existingSessions, error } = await supabase
+            .from("workout_sessions")
+            .select("id, workout_date")
+            .eq("user_id", userId);
+
+        if (error) throw error;
+
+        const staleSessionIds = (existingSessions || [])
+            .filter((session) => !activeDates.has(String(session.workout_date || "").trim()))
+            .map((session) => session.id)
+            .filter(Boolean);
+
+        if (!staleSessionIds.length) return;
+
+        const { error: deleteError } = await supabase
+            .from("workout_sessions")
+            .delete()
+            .in("id", staleSessionIds);
+
+        if (deleteError) throw deleteError;
     }, []);
 
     // ─── Persist ──────────────────────────────────────
@@ -726,6 +758,13 @@ export default function GymApp() {
                     );
                 }
 
+                try {
+                    await cleanupWorkoutSessionsForHistory(currentUserId, mergedHistory);
+                    setSessionSyncVersion((prev) => prev + 1);
+                } catch (error) {
+                    console.error("workout session cleanup failed", { error, userId: currentUserId });
+                }
+
                 const todayStr = new Date().toISOString().split("T")[0];
                 const shouldSendWorkoutNotification =
                     pendingWorkoutNotification &&
@@ -764,7 +803,7 @@ export default function GymApp() {
             .catch((error) => {
                 console.error("history sync save failed", error);
             });
-    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot]);
+    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot, cleanupWorkoutSessionsForHistory]);
 
     useEffect(() => {
         let isActive = true;
@@ -1733,6 +1772,7 @@ export default function GymApp() {
                     <FriendsScreen
                         history={history}
                         manualBests={manualBests}
+                        sessionSyncVersion={sessionSyncVersion}
                         user={user}
                         onLogin={() => setShowAuth(true)}
                         onLogout={async () => {
