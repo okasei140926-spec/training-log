@@ -1,3 +1,5 @@
+import { isCompletedWorkoutSet } from "../../utils/helpers";
+
 export default function SetRow({
     ex,
     set,
@@ -7,6 +9,7 @@ export default function SetRow({
     onCopyDownReps,
 }) {
     const canCopy = idx > 0;
+    const isCompleted = isCompletedWorkoutSet(set);
 
     return (
         <div
@@ -29,8 +32,8 @@ export default function SetRow({
                     width: 24,
                     height: 40,
                     borderRadius: 8,
-                    background: set.done ? "var(--accent)" : "var(--border)",
-                    color: set.done ? "#fff" : "var(--text2)",
+                    background: isCompleted ? "var(--accent)" : "var(--border)",
+                    color: isCompleted ? "#fff" : "var(--text2)",
                     fontSize: 12,
                     fontWeight: 800,
                     alignSelf: "center",

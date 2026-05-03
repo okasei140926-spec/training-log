@@ -67,6 +67,20 @@ export function sanitizeWorkoutSets(sets, options) {
     .filter(Boolean);
 }
 
+export function isCompletedWorkoutSet(set) {
+  if (!set || typeof set !== "object") return false;
+
+  const reps = Number(set.reps);
+  if (!Number.isFinite(reps) || reps <= 0) return false;
+
+  if (set.weight === "BW") {
+    return true;
+  }
+
+  const weight = Number(set.weight);
+  return Number.isFinite(weight) && weight > 0;
+}
+
 export function getRecordSourceSets(record) {
   if (!record || typeof record !== "object") return [];
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { calc1RM, dispW, getBestRmSet, hasMeaningfulPRIncrease, KG_TO_LBS, PR_UPDATE_TOLERANCE_KG } from "../utils/helpers";
+import { calc1RM, dispW, getBestRmSet, hasMeaningfulPRIncrease, isCompletedWorkoutSet, KG_TO_LBS, PR_UPDATE_TOLERANCE_KG } from "../utils/helpers";
 import { supabase } from "../utils/supabase";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
@@ -105,7 +105,7 @@ export default function LogScreen({
 
     const setCount = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
-        return acc + sets.filter(s => s.done).length;
+        return acc + sets.filter((s) => isCompletedWorkoutSet(s)).length;
     }, 0);
     const { prCount, totalVolumeKg } = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
@@ -570,7 +570,7 @@ export default function LogScreen({
                         const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: false });
 
                         if (i !== activeExIdx) {
-                            const doneSetsCount = sets.filter(s => s.done && s.weight && s.reps).length;
+                            const doneSetsCount = sets.filter((s) => isCompletedWorkoutSet(s)).length;
 
                             return (
                                 <SortableExerciseItem key={ex.id} id={ex.id}>
