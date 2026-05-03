@@ -13,6 +13,8 @@ import {
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import AnalyticsScreen from "./components/AnalyticsScreen";
 
 // eslint-disable-next-line no-unused-vars
@@ -50,6 +52,7 @@ import {
     syncPushSubscriptionState,
 } from "./lib/pushNotifications";
 import { normalizeExerciseName } from "./utils/exerciseName";
+import { isNativeApp, isNativeOAuthCallbackUrl } from "./utils/oauth";
 
 
 const EX_TO_LABEL = {};
@@ -141,19 +144,171 @@ export default function GymApp() {
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
 
+    const ensureProfileForUser = useCallback(async (nextUser) => {
+        if (!nextUser?.id) return;
+
+        const { data: existingProfile, error: profileError } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("id", nextUser.id)
+            .maybeSingle();
+
+        if (profileError) throw profileError;
+        if (existingProfile?.id) return;
+
+        const metadata = nextUser.user_metadata || {};
+        const emailPrefix = String(nextUser.email || "").split("@")[0] || "";
+        const baseUsername = String(
+            metadata.user_name ||
+            metadata.preferred_username ||
+            metadata.username ||
+            metadata.full_name ||
+            metadata.name ||
+            emailPrefix ||
+            "pump-user"
+        )
+            .trim()
+            .replace(/\s+/g, "")
+            .slice(0, 20);
+
+        const candidates = [
+            baseUsername,
+            `${baseUsername || "pumpuser"}-${nextUser.id.slice(0, 4)}`,
+            `${baseUsername || "pumpuser"}-${nextUser.id.slice(4, 8)}`,
+        ].filter(Boolean);
+
+        for (const candidate of candidates) {
+            const { error } = await supabase.from("profiles").insert({
+                id: nextUser.id,
+                username: candidate,
+            });
+
+            if (!error) return;
+            if (error.code !== "23505") {
+                throw error;
+            }
+        }
+
+        throw new Error("プロフィールの初期作成に失敗しました。");
+    }, []);
+
+    const connectPendingFriendForUser = useCallback(async (nextUser) => {
+        if (!nextUser?.id) return;
+        const pending = localStorage.getItem("pendingFriendId");
+        if (!pending || pending === nextUser.id) return;
+
+        const { error } = await supabase.from("friendships").upsert({
+            requester_id: nextUser.id,
+            receiver_id: pending,
+            status: "accepted",
+        });
+
+        if (error) throw error;
+        localStorage.removeItem("pendingFriendId");
+    }, []);
+
     useEffect(() => {
         if (!isSupabaseConfigured) {
             setUser(null);
             return undefined;
         }
 
+        let isMounted = true;
+
+        const syncAuthenticatedUser = async (nextUser) => {
+            if (!isMounted) return;
+            setUser(nextUser ?? null);
+
+            if (!nextUser) return;
+
+            setShowAuth(false);
+
+            try {
+                await ensureProfileForUser(nextUser);
+            } catch (error) {
+                console.error("ensure oauth profile failed", error);
+            }
+
+            try {
+                await connectPendingFriendForUser(nextUser);
+            } catch (error) {
+                console.error("connect pending friend failed", error);
+            }
+        };
+
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
+            void syncAuthenticatedUser(session?.user ?? null);
         });
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
+            void syncAuthenticatedUser(session?.user ?? null);
         });
-        return () => subscription.unsubscribe();
+
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
+    }, [connectPendingFriendForUser, ensureProfileForUser]);
+
+    useEffect(() => {
+        if (!isSupabaseConfigured || !isNativeApp()) return undefined;
+
+        let listenerHandle;
+        let isCancelled = false;
+
+        const setupNativeOAuthListener = async () => {
+            listenerHandle = await CapacitorApp.addListener("appUrlOpen", async ({ url }) => {
+                if (!url || !isNativeOAuthCallbackUrl(url)) return;
+
+                try {
+                    const parsedUrl = new URL(url);
+                    const hashParams = new URLSearchParams(String(parsedUrl.hash || "").replace(/^#/, ""));
+                    const searchParams = parsedUrl.searchParams;
+                    const providerError = searchParams.get("error_description")
+                        || hashParams.get("error_description")
+                        || searchParams.get("error")
+                        || hashParams.get("error");
+
+                    if (providerError) {
+                        throw new Error(decodeURIComponent(providerError));
+                    }
+
+                    const accessToken = hashParams.get("access_token");
+                    const refreshToken = hashParams.get("refresh_token");
+
+                    if (accessToken && refreshToken) {
+                        const { error } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken,
+                        });
+                        if (error) throw error;
+                    } else {
+                        const code = searchParams.get("code");
+                        if (code) {
+                            const { error } = await supabase.auth.exchangeCodeForSession(code);
+                            if (error) throw error;
+                        }
+                    }
+                } catch (error) {
+                    console.error("native oauth callback failed", error);
+                    if (!isCancelled) {
+                        window.dispatchEvent(new CustomEvent("pump-oauth-error", {
+                            detail: {
+                                message: `OAuthログインに失敗しました。${error?.message ? ` ${error.message}` : ""}`.trim(),
+                            },
+                        }));
+                    }
+                } finally {
+                    Browser.close().catch(() => { });
+                }
+            });
+        };
+
+        void setupNativeOAuthListener();
+
+        return () => {
+            isCancelled = true;
+            listenerHandle?.remove?.();
+        };
     }, []);
 
     useEffect(() => {

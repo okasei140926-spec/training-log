@@ -94,6 +94,58 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 - `/api/send-inactivity-push` is scheduled by `vercel.json`, so `CRON_SECRET` must be set in Vercel for the cron job to work safely.
 - `CLAUDE_API_KEY` should be configured as a sensitive server-side environment variable only.
 
+## OAuth Login Setup
+
+PUMP ではメール/パスワードに加えて、`Googleで続行` と `Appleで続行` を使えます。
+
+### Supabase Dashboard
+
+`Authentication > Providers` で以下を有効化してください。
+
+- Google
+- Apple
+
+`Authentication > URL Configuration` では、少なくとも次を Redirect URLs に追加してください。
+
+- `https://training-log-mu.vercel.app`
+- `http://localhost:3000`
+- `app.ironlog.traininglog://auth/callback`
+
+### Google Cloud Console
+
+1. OAuth consent screen を設定
+2. OAuth 2.0 Client ID を作成
+3. Authorized redirect URI に **Supabase callback URL** を追加
+
+例:
+
+```text
+https://<your-project-ref>.supabase.co/auth/v1/callback
+```
+
+必要に応じて Authorized JavaScript origins に Web/PWA の origin を追加してください。
+
+### Apple Developer
+
+1. Sign in with Apple を有効化
+2. Service ID / App ID を設定
+3. Return URL に **Supabase callback URL** を追加
+
+例:
+
+```text
+https://<your-project-ref>.supabase.co/auth/v1/callback
+```
+
+### Redirect / Deep Link 方針
+
+- Web / PWA:
+  - `window.location.origin` に戻す
+- Capacitor iOS / Android:
+  - `app.ironlog.traininglog://auth/callback`
+  - iOS は `Info.plist`、Android は `AndroidManifest.xml` で URL scheme を受ける
+  - アプリ側で callback を受けて session を確立する
+
 ## Capacitor Local Build Setup
 
 Capacitor local builds do not automatically receive Vercel Production environment variables.

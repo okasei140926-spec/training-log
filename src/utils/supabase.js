@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { Capacitor } from "@capacitor/core";
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -23,7 +24,12 @@ const noopSubscription = {
 };
 
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      detectSessionInUrl: !Capacitor.isNativePlatform(),
+      flowType: Capacitor.isNativePlatform() ? "pkce" : "implicit",
+    },
+  })
   : {
     auth: {
       getSession: async () => ({ data: { session: null } }),
@@ -33,6 +39,9 @@ export const supabase = isSupabaseConfigured
       signUp: createUnavailableMethod(),
       resetPasswordForEmail: createUnavailableMethod(),
       signInWithPassword: createUnavailableMethod(),
+      signInWithOAuth: createUnavailableMethod(),
+      exchangeCodeForSession: createUnavailableMethod(),
+      setSession: createUnavailableMethod(),
     },
     from: () => {
       throw new Error(supabaseConfigError);
