@@ -20,6 +20,8 @@ body,
   height: 100%;
   overflow: visible;
   -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body,
@@ -38,6 +40,12 @@ option,
   -webkit-user-select: text;
   user-select: text;
   -webkit-touch-callout: default;
+}
+
+input,
+textarea,
+select {
+  font-size: 16px !important;
 }
 
 code {
