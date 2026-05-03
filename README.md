@@ -90,6 +90,22 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 - `/api/send-inactivity-push` is scheduled by `vercel.json`, so `CRON_SECRET` must be set in Vercel for the cron job to work safely.
 - `CLAUDE_API_KEY` should be configured as a sensitive server-side environment variable only.
 
+## Vercel Cron
+
+`vercel.json` に毎日10:00 UTCで `send-inactivity-push` を設定しています。
+
+Vercel ダッシュボード → Settings → Cron Jobs で実行ログを確認できます。
+手動で即時実行したい場合は Cron Jobs 画面の「Run」ボタンを使ってください。
+認証には `Authorization: Bearer <CRON_SECRET>` ヘッダーが必要です。
+
+## notification_events テーブルの確認
+
+Supabase ダッシュボード → Table Editor → `notification_events` で通知送信ログを確認できます。
+
+- `dedupe_key` カラムで重複防止（同一ユーザー・同一イベントは1回のみ）
+- `sent_at` が `null` の場合は配信失敗（デバイスへの到達失敗）
+- 古いイベントは定期的に手動削除してください（現時点で自動クリーンアップなし）
+
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

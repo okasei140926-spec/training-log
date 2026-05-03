@@ -3,7 +3,6 @@ import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
 import { buildHistoryFromWorkoutRows, calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
-import FriendDetailModal from "./modals/FriendDetailModal";
 import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
 import Big3RankingCard from "./friends/Big3RankingCard";
 import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
@@ -29,7 +28,6 @@ const RESERVED_USERNAMES = [
 ];
 
 export default function FriendsScreen({ history, manualBests = [], onCopyMenu, user, onLogin, onLogout }) {
-    const [selectedFriend, setSelectedFriend] = useState(null);
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
@@ -771,15 +769,6 @@ export default function FriendsScreen({ history, manualBests = [], onCopyMenu, u
                 />
             }
 
-            {
-                selectedFriend && (
-                    <FriendDetailModal
-                        friend={selectedFriend}
-                        onClose={() => setSelectedFriend(null)}
-                        onCopyMenu={(exercises) => { onCopyMenu(exercises); setSelectedFriend(null); }}
-                    />
-                )
-            }
         </div >
     );
 }

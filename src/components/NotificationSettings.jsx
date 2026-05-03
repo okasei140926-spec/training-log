@@ -157,10 +157,10 @@ export default function NotificationSettings({ user }) {
       }}
     >
       <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
-        通知設定
+        アプリ内通知
       </div>
       <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7, marginBottom: 12 }}>
-        記録リマインドやFriends通知の基盤です。iPhoneではホーム画面に追加したあとに使えます。
+        友達の記録通知・3日未記録リマインドをプッシュ通知で受け取れます。iPhoneはホーム画面に追加後、端末の設定でIRON LOGの通知を許可してください。
       </div>
 
       {!support.supported ? (
@@ -234,7 +234,7 @@ export default function NotificationSettings({ user }) {
           </div>
 
           <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.7 }}>
-            状態: {enabled ? "通知ON" : permission === "denied" ? "通知拒否中" : "通知OFF"}
+            アプリ内通知: {enabled ? "ON" : permission === "denied" ? "端末で拒否中" : "OFF"}
           </div>
         </>
       )}

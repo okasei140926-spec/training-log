@@ -32,10 +32,6 @@ export function useLogLogic({
         });
     };
 
-    const removeSet = (ex, idx) => {
-        // 今のコードそのまま
-    };
-
     const setField = (ex, idx, field, value) => {
         const key = ex.name;
 
@@ -74,7 +70,6 @@ export function useLogLogic({
 
     return {
         addSet,
-        removeSet,
         setField,
         saveLog,
     };

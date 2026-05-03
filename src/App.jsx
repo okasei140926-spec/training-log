@@ -227,7 +227,6 @@ export default function GymApp() {
 
     const {
         addSet,
-        removeSet,
         setField,
         saveLog,
     } = useLogLogic({
@@ -1487,7 +1486,6 @@ export default function GymApp() {
                             getExSets={getExSets}
                             setField={setField}
                             addSet={addSet}
-                            removeSet={removeSet}
                             removeEx={removeEx}
                             timerLeft={timerLeft}
                             intervalSec={intervalSec}
