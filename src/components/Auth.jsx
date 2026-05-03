@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../utils/supabase";
 import {
+  getAppleOAuthDisabledMessage,
   getOAuthErrorMessage,
   getOAuthPendingFailureMessage,
   getOAuthProviderLabel,
   getOAuthRedirectUrl,
+  isAppleOAuthEnabled,
   isNativeApp,
 } from "../utils/oauth";
 
@@ -22,8 +25,9 @@ export default function Auth({ onClose, isDark }) {
   const oauthResumeCheckTimeoutRef = useRef(null);
   const oauthStartedAtRef = useRef(0);
   const nativeOauthHandledRef = useRef(false);
+  const nativeOauthCleanupRef = useRef(() => { });
 
-  const clearOauthPendingState = (nextError = "") => {
+  const clearOauthPendingState = useCallback((nextError = "") => {
     if (oauthTimeoutRef.current) {
       window.clearTimeout(oauthTimeoutRef.current);
       oauthTimeoutRef.current = null;
@@ -37,7 +41,19 @@ export default function Auth({ onClose, isDark }) {
     setOauthLoadingProvider("");
     setLoading(false);
     oauthStartedAtRef.current = 0;
-  };
+  }, []);
+
+  const stopNativeOAuthWatchers = useCallback(() => {
+    const cleanup = nativeOauthCleanupRef.current;
+    nativeOauthCleanupRef.current = () => { };
+    cleanup?.();
+  }, []);
+
+  const completeNativeOAuth = useCallback((nextError = "") => {
+    nativeOauthHandledRef.current = true;
+    stopNativeOAuthWatchers();
+    clearOauthPendingState(nextError);
+  }, [clearOauthPendingState, stopNativeOAuthWatchers]);
 
   const bg = isDark ? "#1a1a1a" : "#fff";
   const text = isDark ? "#fff" : "#000";
@@ -48,49 +64,40 @@ export default function Auth({ onClose, isDark }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        nativeOauthHandledRef.current = true;
-        clearOauthPendingState("");
+        completeNativeOAuth("");
         onClose();
       }
     });
 
     const handleOAuthError = (event) => {
       const message = event?.detail?.message;
-      nativeOauthHandledRef.current = true;
-      clearOauthPendingState(message || "OAuthログインに失敗しました。");
+      completeNativeOAuth(message || "OAuthログインに失敗しました。");
     };
 
     const handleOAuthComplete = () => {
-      nativeOauthHandledRef.current = true;
-      clearOauthPendingState("");
+      completeNativeOAuth("");
     };
 
     window.addEventListener("pump-oauth-error", handleOAuthError);
     window.addEventListener("pump-oauth-complete", handleOAuthComplete);
     return () => {
-      if (oauthTimeoutRef.current) {
-        window.clearTimeout(oauthTimeoutRef.current);
-        oauthTimeoutRef.current = null;
-      }
+      stopNativeOAuthWatchers();
       subscription?.unsubscribe?.();
       window.removeEventListener("pump-oauth-error", handleOAuthError);
       window.removeEventListener("pump-oauth-complete", handleOAuthComplete);
     };
-  }, [onClose]);
+  }, [completeNativeOAuth, onClose, stopNativeOAuthWatchers]);
 
-  useEffect(() => {
-    if (!isNativeApp() || !oauthLoadingProvider) return undefined;
-
+  const startNativeOAuthWatchers = async (provider) => {
+    stopNativeOAuthWatchers();
     nativeOauthHandledRef.current = false;
     oauthStartedAtRef.current = Date.now();
-    oauthTimeoutRef.current = window.setTimeout(() => {
-      if (nativeOauthHandledRef.current) return;
-      nativeOauthHandledRef.current = true;
-      Browser.close().catch(() => { });
-      clearOauthPendingState(getOAuthPendingFailureMessage(oauthLoadingProvider));
-    }, oauthLoadingProvider === "apple" ? 10000 : 45000);
 
-    let browserFinishedListener;
+    const failWithMessage = (reason = "default") => {
+      if (nativeOauthHandledRef.current) return;
+      Browser.close().catch(() => { });
+      completeNativeOAuth(getOAuthPendingFailureMessage(provider, reason));
+    };
 
     const scheduleResumeCheck = () => {
       if (nativeOauthHandledRef.current) return;
@@ -101,9 +108,7 @@ export default function Auth({ onClose, isDark }) {
       oauthResumeCheckTimeoutRef.current = window.setTimeout(() => {
         if (nativeOauthHandledRef.current) return;
         if (Date.now() - oauthStartedAtRef.current < 800) return;
-        nativeOauthHandledRef.current = true;
-        Browser.close().catch(() => { });
-        clearOauthPendingState(getOAuthPendingFailureMessage(oauthLoadingProvider));
+        failWithMessage();
       }, 300);
     };
 
@@ -117,19 +122,24 @@ export default function Auth({ onClose, isDark }) {
       scheduleResumeCheck();
     };
 
-    const registerBrowserFinishedListener = async () => {
-      browserFinishedListener = await Browser.addListener("browserFinished", () => {
-        if (nativeOauthHandledRef.current) return;
-        nativeOauthHandledRef.current = true;
-        clearOauthPendingState(getOAuthPendingFailureMessage(oauthLoadingProvider, "cancelled"));
-      });
-    };
+    const browserFinishedListener = await Browser.addListener("browserFinished", () => {
+      failWithMessage("cancelled");
+    });
+
+    const appStateListener = await CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) {
+        scheduleResumeCheck();
+      }
+    });
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleWindowFocus);
-    void registerBrowserFinishedListener();
 
-    return () => {
+    oauthTimeoutRef.current = window.setTimeout(() => {
+      failWithMessage();
+    }, provider === "apple" ? 10000 : 45000);
+
+    nativeOauthCleanupRef.current = () => {
       if (oauthTimeoutRef.current) {
         window.clearTimeout(oauthTimeoutRef.current);
         oauthTimeoutRef.current = null;
@@ -141,8 +151,9 @@ export default function Auth({ onClose, isDark }) {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleWindowFocus);
       browserFinishedListener?.remove?.();
+      appStateListener?.remove?.();
     };
-  }, [oauthLoadingProvider]);
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -191,6 +202,13 @@ export default function Auth({ onClose, isDark }) {
   };
 
   const handleOAuth = async (provider) => {
+    if (provider === "apple" && !isAppleOAuthEnabled()) {
+      setError(getAppleOAuthDisabledMessage());
+      setOauthLoadingProvider("");
+      setLoading(false);
+      return;
+    }
+
     const providerLabel = getOAuthProviderLabel(provider);
     setError("");
     setLoading(false);
@@ -198,6 +216,10 @@ export default function Auth({ onClose, isDark }) {
     setOauthLoadingProvider(provider);
 
     try {
+      if (isNativeApp()) {
+        await startNativeOAuthWatchers(provider);
+      }
+
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -216,7 +238,7 @@ export default function Auth({ onClose, isDark }) {
       }
     } catch (e) {
       setError(getOAuthErrorMessage(provider, e));
-      clearOauthPendingState("");
+      completeNativeOAuth("");
     }
   };
 
@@ -312,7 +334,11 @@ export default function Auth({ onClose, isDark }) {
           opacity: loading || oauthLoadingProvider ? 0.7 : 1,
         }}
       >
-        {oauthLoadingProvider === "apple" ? "Appleへ移動中..." : "Appleで続行"}
+        {oauthLoadingProvider === "apple"
+          ? "Appleへ移動中..."
+          : isAppleOAuthEnabled()
+            ? "Appleで続行"
+            : "Appleで続行（準備中）"}
       </button>
       <button
         onClick={() => handleOAuth("google")}

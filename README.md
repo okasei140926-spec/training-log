@@ -99,6 +99,9 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 
 PUMP ではメール/パスワードに加えて、`Googleで続行` と `Appleで続行` を使えます。
 
+Apple ログインは、Apple Developer / Supabase Provider 設定が完了するまでは `REACT_APP_ENABLE_APPLE_OAUTH=false` のままにしてください。
+有効化する時だけ、build 時環境変数で `REACT_APP_ENABLE_APPLE_OAUTH=true` を設定します。
+
 ### Supabase Dashboard
 
 `Authentication > Providers` で以下を有効化してください。
@@ -110,6 +113,8 @@ Apple では少なくとも次を設定してください。
 
 - Apple Client ID
 - Apple Client Secret
+
+未設定のまま `REACT_APP_ENABLE_APPLE_OAUTH=true` にすると、Supabase 側で `Unsupported provider: provider is not enabled` が返る可能性があります。
 
 `Authentication > URL Configuration` では、少なくとも次を Redirect URLs に追加してください。
 
