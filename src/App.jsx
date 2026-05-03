@@ -286,7 +286,13 @@ export default function GymApp() {
                         if (code) {
                             const { error } = await supabase.auth.exchangeCodeForSession(code);
                             if (error) throw error;
+                        } else {
+                            throw new Error("認証結果を受け取れませんでした。");
                         }
+                    }
+
+                    if (!isCancelled) {
+                        window.dispatchEvent(new CustomEvent("pump-oauth-complete"));
                     }
                 } catch (error) {
                     console.error("native oauth callback failed", error);

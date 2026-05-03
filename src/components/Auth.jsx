@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../utils/supabase";
 import {
   getOAuthErrorMessage,
+  getOAuthPendingFailureMessage,
   getOAuthProviderLabel,
   getOAuthRedirectUrl,
   isNativeApp,
@@ -17,6 +18,19 @@ export default function Auth({ onClose, isDark }) {
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [oauthLoadingProvider, setOauthLoadingProvider] = useState("");
+  const oauthTimeoutRef = useRef(null);
+  const nativeOauthHandledRef = useRef(false);
+
+  const clearOauthPendingState = (nextError = "") => {
+    if (oauthTimeoutRef.current) {
+      window.clearTimeout(oauthTimeoutRef.current);
+      oauthTimeoutRef.current = null;
+    }
+
+    if (nextError) setError(nextError);
+    setOauthLoadingProvider("");
+    setLoading(false);
+  };
 
   const bg = isDark ? "#1a1a1a" : "#fff";
   const text = isDark ? "#fff" : "#000";
@@ -27,23 +41,67 @@ export default function Auth({ onClose, isDark }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
+        nativeOauthHandledRef.current = true;
+        clearOauthPendingState("");
         onClose();
       }
     });
 
     const handleOAuthError = (event) => {
       const message = event?.detail?.message;
-      if (message) setError(message);
-      setOauthLoadingProvider("");
-      setLoading(false);
+      nativeOauthHandledRef.current = true;
+      clearOauthPendingState(message || "OAuthログインに失敗しました。");
+    };
+
+    const handleOAuthComplete = () => {
+      nativeOauthHandledRef.current = true;
+      clearOauthPendingState("");
     };
 
     window.addEventListener("pump-oauth-error", handleOAuthError);
+    window.addEventListener("pump-oauth-complete", handleOAuthComplete);
     return () => {
+      if (oauthTimeoutRef.current) {
+        window.clearTimeout(oauthTimeoutRef.current);
+        oauthTimeoutRef.current = null;
+      }
       subscription?.unsubscribe?.();
       window.removeEventListener("pump-oauth-error", handleOAuthError);
+      window.removeEventListener("pump-oauth-complete", handleOAuthComplete);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isNativeApp() || !oauthLoadingProvider) return undefined;
+
+    nativeOauthHandledRef.current = false;
+    oauthTimeoutRef.current = window.setTimeout(() => {
+      if (nativeOauthHandledRef.current) return;
+      nativeOauthHandledRef.current = true;
+      Browser.close().catch(() => { });
+      clearOauthPendingState(getOAuthPendingFailureMessage(oauthLoadingProvider));
+    }, 45000);
+
+    let browserFinishedListener;
+
+    const registerBrowserFinishedListener = async () => {
+      browserFinishedListener = await Browser.addListener("browserFinished", () => {
+        if (nativeOauthHandledRef.current) return;
+        nativeOauthHandledRef.current = true;
+        clearOauthPendingState(getOAuthPendingFailureMessage(oauthLoadingProvider, "cancelled"));
+      });
+    };
+
+    void registerBrowserFinishedListener();
+
+    return () => {
+      if (oauthTimeoutRef.current) {
+        window.clearTimeout(oauthTimeoutRef.current);
+        oauthTimeoutRef.current = null;
+      }
+      browserFinishedListener?.remove?.();
+    };
+  }, [oauthLoadingProvider]);
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -95,6 +153,7 @@ export default function Auth({ onClose, isDark }) {
     const providerLabel = getOAuthProviderLabel(provider);
     setError("");
     setLoading(false);
+    nativeOauthHandledRef.current = false;
     setOauthLoadingProvider(provider);
 
     try {
@@ -116,7 +175,7 @@ export default function Auth({ onClose, isDark }) {
       }
     } catch (e) {
       setError(getOAuthErrorMessage(provider, e));
-      setOauthLoadingProvider("");
+      clearOauthPendingState("");
     }
   };
 

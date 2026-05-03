@@ -105,11 +105,22 @@ PUMP ではメール/パスワードに加えて、`Googleで続行` と `Apple�
 - Google
 - Apple
 
+Apple では少なくとも次を設定してください。
+
+- Apple Client ID
+- Apple Client Secret
+
 `Authentication > URL Configuration` では、少なくとも次を Redirect URLs に追加してください。
 
 - `https://training-log-mu.vercel.app`
 - `http://localhost:3000`
 - `app.ironlog.traininglog://auth/callback`
+
+Supabase callback URL:
+
+```text
+https://ufalvlthvjwyjhzhiowh.supabase.co/auth/v1/callback
+```
 
 ### Google Cloud Console
 
@@ -127,14 +138,16 @@ https://<your-project-ref>.supabase.co/auth/v1/callback
 
 ### Apple Developer
 
-1. Sign in with Apple を有効化
-2. Service ID / App ID を設定
-3. Return URL に **Supabase callback URL** を追加
+1. Apple Developer Program に登録
+2. Sign in with Apple を有効化
+3. App ID / Service ID を設定
+4. Return URL に **Supabase callback URL** を追加
+5. 必要な Client Secret を作成し、Supabase 側に設定
 
 例:
 
 ```text
-https://<your-project-ref>.supabase.co/auth/v1/callback
+https://ufalvlthvjwyjhzhiowh.supabase.co/auth/v1/callback
 ```
 
 ### Redirect / Deep Link 方針

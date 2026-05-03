@@ -13,6 +13,20 @@ export const isNativeOAuthCallbackUrl = (url) =>
 export const getOAuthProviderLabel = (provider) =>
   provider === "apple" ? "Apple" : "Google";
 
+export const getOAuthPendingFailureMessage = (provider, reason = "default") => {
+  const providerLabel = getOAuthProviderLabel(provider);
+
+  if (reason === "cancelled") {
+    return `${providerLabel}ログインを完了できませんでした。画面を閉じた場合は、もう一度お試しください。`;
+  }
+
+  if (provider === "apple") {
+    return "Appleログインを完了できませんでした。Appleログインの設定がまだ完了していない可能性があります。";
+  }
+
+  return `${providerLabel}ログインを完了できませんでした。もう一度お試しください。`;
+};
+
 export const getOAuthErrorMessage = (provider, error) => {
   const providerLabel = getOAuthProviderLabel(provider);
   const rawMessage = String(error?.message || "").trim();
@@ -23,6 +37,16 @@ export const getOAuthErrorMessage = (provider, error) => {
 
   if (rawMessage.includes("popup_closed_by_user")) {
     return `${providerLabel}ログインをキャンセルしました。`;
+  }
+
+  if (
+    rawMessage.includes("invalid_client") ||
+    rawMessage.includes("provider is not enabled") ||
+    rawMessage.includes("unsupported provider") ||
+    rawMessage.includes("client secret") ||
+    rawMessage.includes("redirect_uri_mismatch")
+  ) {
+    return `${providerLabel}ログインの設定がまだ完了していません。管理者設定を確認してください。`;
   }
 
   if (rawMessage.includes("provider is not enabled")) {
