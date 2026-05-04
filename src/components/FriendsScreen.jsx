@@ -5,6 +5,7 @@ import { getBig3ExerciseKey } from "../utils/exerciseName";
 import {
     buildHistoryFromWorkoutRows,
     calc1RM,
+    formatDateKey,
     getRecordSourceSets,
     getValidWorkoutDatesFromHistory,
     hasValidWorkoutOnDate,
@@ -85,12 +86,12 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [likePendingMap, setLikePendingMap] = useState({});
     const activityFeedOffsetRef = useRef(0);
     const activityFeedStatusTimeoutRef = useRef(null);
-    const today = new Date().toISOString().split("T")[0];
+    const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
     const big3SeenStorageKey = "friends_big3_overtake_seen_v1";
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - 7);
-    const thresholdStr = thresholdDate.toISOString().split("T")[0];
+    const thresholdStr = formatDateKey(thresholdDate);
 
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
         return hasValidWorkoutOnDate(workoutData, today);
@@ -378,6 +379,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 .from("workout_sessions")
                 .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
                 .in("user_id", feedUserIds)
+                .eq("workout_date", today)
                 .order("created_at", { ascending: false })
                 .range(offset, offset + ACTIVITY_FEED_PAGE_SIZE - 1);
 
@@ -469,7 +471,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         } finally {
             setActivityFeedLoading(false);
         }
-    }, [friendIds, user?.id]);
+    }, [friendIds, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -689,7 +691,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     useEffect(() => {
         if (!user) return;
         const fetchKudos = async () => {
-            const today = new Date().toISOString().split("T")[0];
+            const today = formatDateKey();
 
             // 自分が送ったkudos
             const { data: sent } = await supabase
@@ -912,14 +914,14 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 </div>
             )}
 
-            <div style={S.sLabel}>アクティビティフィード</div>
+            <div style={S.sLabel}>今日のアクティビティ</div>
 
             <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
                     <div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>みんなのワークアウト</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>みんなの今日のワークアウト</div>
                         <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
-                            自分と友達の最近のセッションを表示します
+                            自分と友達の今日のセッションだけを表示します
                         </div>
                         {activityFeedStatusMessage && (
                             <div
@@ -956,7 +958,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
                 {activityFeed.length === 0 && !activityFeedLoading ? (
                     <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "18px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center", border: "1px solid rgba(217, 228, 239, 0.9)" }}>
-                        まだ共有されたワークアウトはありません
+                        今日はまだ共有されたワークアウトはありません
                     </div>
                 ) : (
                     <div style={{ display: "grid", gap: 10 }}>
@@ -1207,6 +1209,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 )}
             </div>
 
+            <Big3RankingCard ranking={big3Ranking} />
+
             <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
 
             {todayActiveFriends.length > 0 && (
@@ -1235,8 +1239,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             )}
 
             <MonthlyWorkoutRankingCard ranking={monthlyWorkoutRanking} />
-
-            <Big3RankingCard ranking={big3Ranking} />
 
 
             {/* 自分のカード */}
@@ -1326,7 +1328,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                             </div>
                                         )}
                                         <button onClick={async () => {
-                                            const today = new Date().toISOString().split("T")[0];
+                                            const today = formatDateKey();
                                             await supabase.from("kudos").upsert({
                                                 from_user_id: user.id,
                                                 to_user_id: f.id,
