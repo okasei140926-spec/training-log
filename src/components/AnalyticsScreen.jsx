@@ -512,29 +512,25 @@ export default function AnalyticsScreen({
   return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
       {onOpenPhotoCompare && (
-        <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
-            PHOTO COMPARE
+        <div style={{ background: "var(--card)", borderRadius: 18, padding: "13px 14px", border: "1px solid var(--border2)", boxShadow: "var(--shadow-soft)" }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
+            写真比較
           </div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-            写真で変化を確認
-          </div>
-          <div style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.6, marginBottom: 14 }}>
-            体写真の比較はここから開けます。Before / After を見比べて成長を確認できます。
+          <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.5, marginBottom: 10 }}>
+            登録済みの体写真から Before / After を見比べられます。
           </div>
           <button
             type="button"
             onClick={onOpenPhotoCompare}
             style={{
-              width: "100%",
-              padding: "12px 14px",
-              borderRadius: 14,
+              alignSelf: "flex-start",
+              padding: "9px 12px",
+              borderRadius: 12,
               border: "1px solid var(--border2)",
-              background: "linear-gradient(135deg, var(--info-soft), var(--card))",
+              background: "var(--card2)",
               color: "var(--text)",
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: 800,
-              boxShadow: "var(--shadow-soft)",
             }}
           >
             写真比較を開く

@@ -20,7 +20,6 @@ import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 
-const KEY_EXERCISES = ["ベンチプレス", "デッドリフト", "スクワット"];
 const BIG3_EXERCISES = [
     { key: "bench", match: "ベンチプレス", shortLabel: "ベンチ" },
     { key: "squat", match: "スクワット", shortLabel: "スクワット" },
@@ -752,19 +751,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         Object.values(myRecentGrouped).flatMap(d => Object.keys(d))
     ).size;
 
-    const myBests = KEY_EXERCISES.reduce((acc, ex) => {
-        const recs = history[ex];
-        if (recs?.length) {
-            const best = Math.max(...recs.map(r => Math.round(safeCalc1RM(
-                Array.isArray(r.sets) && r.sets.length > 0
-                    ? r.sets
-                    : [{ weight: r.weight, reps: r.reps }]
-            ))));
-            acc[ex] = best;
-        }
-        return acc;
-    }, {});
-
     const todayActiveFriends = friends.filter((f) => todayActiveMap[f.id]);
     const todayActiveLabel = todayActiveFriends.map((f) => getDisplayUsername(f.username)).join("、");
     const myMonthlyWorkoutDays = getValidWorkoutDatesFromHistory(history, {
@@ -1360,34 +1346,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 })
             )}
 
-            < div style={{ ...S.sLabel, marginTop: 20 }}>強さ比較（推定1RM）</div>
-            {
-                KEY_EXERCISES.map(ex => {
-                    const entries = [
-                        { name: getDisplayUsername(myUsername, { isMe: true }), color: "var(--text)", value: myBests[ex] || 0 },
-                        ...friends.map(f => {
-                            const recs = f.history?.[ex];
-                            const value = recs?.length ? Math.max(...recs.map(r => Math.round(safeCalc1RM(
-                                Array.isArray(r.sets) && r.sets.length > 0
-                                    ? r.sets
-                                    : [{ weight: r.weight, reps: r.reps }]
-                            )))) : 0;
-                            return { name: getDisplayUsername(f.username), color: "#4ade80", value };
-                        }),
-                    ].filter(e => e.value > 0);
-                    if (!entries.length) return null;
-                    const maxVal = Math.max(...entries.map(e => e.value));
-                    return (
-                        <div key={ex} style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 10, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, color: "var(--text)" }}>{ex}</div>
-                            {entries.sort((a, b) => b.value - a.value).map((e, i) => (
-                                <CompareBar key={e.name} rank={i + 1} name={e.name} value={e.value} max={maxVal} color={e.color} />
-                            ))}
-                        </div>
-                    );
-                })
-            }
-
             <InviteCard copied={copied} onCopyInvite={handleCopyInvite} />
 
             <NotificationSettings user={user} />
@@ -1448,23 +1406,5 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             />
 
         </div >
-    );
-}
-
-function CompareBar({ rank, name, value, max, color }) {
-    const pct = Math.round((value / max) * 100);
-    return (
-        <div style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ fontSize: 10, color: rank === 1 ? "#FFD700" : "var(--text3)", fontWeight: 800, width: 14 }}>{rank === 1 ? "👑" : `${rank}`}</div>
-                    <div style={{ fontSize: 13, color: "var(--text3)" }}>{name}</div>
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 800, color }}>{value}kg</div>
-            </div>
-            <div style={{ height: 8, borderRadius: 999, background: "var(--info-soft)", overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 4, background: color, width: `${pct}%`, transition: "width 0.5s ease" }} />
-            </div>
-        </div>
     );
 }

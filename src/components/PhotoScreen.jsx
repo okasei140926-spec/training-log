@@ -95,20 +95,11 @@ export default function PhotoScreen({ user }) {
 
     const photoDates = useMemo(() => new Set(Object.keys(photoMap)), [photoMap]);
 
-    const compareDateRows = useMemo(() => {
-        return Object.entries(photoMap)
-            .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-            .map(([, rows]) => rows[0])
-            .filter(Boolean);
-    }, [photoMap]);
-
     const compareBrowseRows = useMemo(() => {
-        return [...compareDateRows].sort((a, b) =>
+        return [...photoRows].sort((a, b) =>
             String(b?.workout_date || "").localeCompare(String(a?.workout_date || ""))
         );
-    }, [compareDateRows]);
-
-    const canCompare = photoRows.length >= 2;
+    }, [photoRows]);
 
     useEffect(() => {
         let isActive = true;
@@ -147,6 +138,7 @@ export default function PhotoScreen({ user }) {
         setSelectedDate(date);
         setSelectedPhotoUrls({});
         setViewerPhoto(null);
+        setSelectedPhotoLoading(false);
 
         if (!dateRows.length) {
             if (user?.id && !photoUploading && !photoDeletingId) {
@@ -369,8 +361,8 @@ export default function PhotoScreen({ user }) {
 
     return (
         <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
-            <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 16 }}>
-                BEFORE / AFTER で変化を見比べる
+            <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 14 }}>
+                REGISTERED PHOTOS
             </div>
 
             {!user ? (
@@ -379,24 +371,15 @@ export default function PhotoScreen({ user }) {
                 </div>
             ) : (
                 <>
-                    {!canCompare ? (
-                        <div style={{ background: "linear-gradient(180deg, #F8FCFF, var(--card))", borderRadius: 18, padding: "24px 18px", border: "1px solid rgba(56, 189, 248, 0.16)", marginBottom: 16 }}>
-                            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 6 }}>
-                                比較には2枚以上の写真が必要です
-                            </div>
-                            <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7 }}>
-                                今日の写真を追加して、変化を残しましょう
-                            </div>
-                        </div>
-                    ) : (
-                        <div style={{ background: "var(--card)", borderRadius: 18, padding: 16, border: "1px solid var(--border2)", marginBottom: 16 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                                <div>
-                                    <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>写真から選んで比較</div>
-                                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                                        代表写真を2枚選んで Before / After を見比べる
-                                    </div>
+                    <div style={{ background: "var(--card)", borderRadius: 18, padding: 16, border: "1px solid var(--border2)", marginBottom: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                            <div>
+                                <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>登録済み写真から比較</div>
+                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
+                                    2枚選ぶと Before / After を見比べられます
                                 </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                 {compareSelection.length > 0 && (
                                     <button
                                         onClick={() => setCompareSelection([])}
@@ -413,85 +396,186 @@ export default function PhotoScreen({ user }) {
                                         選択クリア
                                     </button>
                                 )}
-                            </div>
-
-                            <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, marginBottom: 12 }}>
-                                {compareBrowseRows.map((row) => {
-                                    const isSelected = compareSelection.some((selected) => selected.id === row.id);
-                                    const selectedIndex = compareSelection.findIndex((selected) => selected.id === row.id);
-
-                                    return (
-                                        <button
-                                            key={row.id}
-                                            onClick={() => handleCompareCardSelect(row)}
-                                            style={{
-                                                minWidth: 132,
-                                                background: "var(--card2)",
-                                                borderRadius: 16,
-                                                border: isSelected ? "2px solid var(--accent)" : "1px solid rgba(217, 228, 239, 0.9)",
-                                                padding: 8,
-                                                textAlign: "left",
-                                                boxShadow: isSelected ? "0 10px 24px rgba(34, 197, 94, 0.12)" : "var(--shadow-card)",
-                                            }}
-                                        >
-                                            <div style={{ width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden", background: "var(--card)" }}>
-                                                {comparePreviewUrls[row.id] ? (
-                                                    <img
-                                                        src={comparePreviewUrls[row.id]}
-                                                        alt={row.workout_date}
-                                                        style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
-                                                    />
-                                                ) : (
-                                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 11 }}>
-                                                        読み込み中...
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "var(--text)" }}>
-                                                {formatDateLabel(row.workout_date)}
-                                            </div>
-                                            <div style={{ marginTop: 4, fontSize: 10, color: isSelected ? "var(--accent)" : "var(--text3)", fontWeight: isSelected ? 800 : 600 }}>
-                                                {isSelected ? `${selectedIndex + 1}枚目に選択中` : "タップして選択"}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                                <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                    {compareSelection.length === 0
-                                        ? "2枚選ぶと比較できます"
-                                        : `${compareSelection.length}/2 枚選択中`}
-                                </div>
                                 <button
-                                    onClick={() => openCompareWithRows(compareSelection)}
-                                    disabled={!compareSelectionReady || compareLoading}
+                                    onClick={() => {
+                                        setSelectedDate(todayStr);
+                                        photoInputRef.current?.click();
+                                    }}
+                                    disabled={photoUploading || !!photoDeletingId}
                                     style={{
-                                        padding: "9px 14px",
-                                        borderRadius: 12,
-                                        background: compareSelectionReady ? "linear-gradient(135deg, var(--accent), #4ADE80)" : "var(--card2)",
-                                        border: "1px solid transparent",
-                                        color: compareSelectionReady ? "#fff" : "var(--text4)",
-                                        fontSize: 12,
+                                        padding: "8px 12px",
+                                        borderRadius: 11,
+                                        background: "var(--card2)",
+                                        border: "1px solid var(--border2)",
+                                        color: "var(--text)",
+                                        fontSize: 11,
                                         fontWeight: 800,
-                                        opacity: compareSelectionReady ? 1 : 0.65,
-                                        boxShadow: compareSelectionReady ? "0 10px 22px rgba(34, 197, 94, 0.16)" : "none",
                                     }}
                                 >
-                                    選んだ2枚を比較
+                                    {photoUploading ? "追加中..." : "今日の写真を追加"}
                                 </button>
                             </div>
                         </div>
-                    )}
 
-                    <div style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 16 }}>
-                        <div style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>カレンダーで見る</div>
-                            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                                日付から写真を見返したい時はこちら
+                        {!photoRows.length ? (
+                            <div style={{ background: "linear-gradient(180deg, #F8FCFF, var(--card))", borderRadius: 16, padding: "24px 18px", border: "1px solid rgba(56, 189, 248, 0.16)", textAlign: "center" }}>
+                                <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 6 }}>
+                                    まだ写真がありません
+                                </div>
+                                <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7 }}>
+                                    今日の写真を追加すると、変化を見返せるようになります
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                                    <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                        {compareSelection.length === 0
+                                            ? "まず1枚目を選んでください"
+                                            : compareSelection.length === 1
+                                                ? "もう1枚選択してください"
+                                                : "2枚選択できました"}
+                                    </div>
+                                    <button
+                                        onClick={() => openCompareWithRows(compareSelection)}
+                                        disabled={!compareSelectionReady || compareLoading}
+                                        style={{
+                                            padding: "9px 14px",
+                                            borderRadius: 12,
+                                            background: compareSelectionReady ? "linear-gradient(135deg, var(--accent), #4ADE80)" : "var(--card2)",
+                                            border: "1px solid transparent",
+                                            color: compareSelectionReady ? "#fff" : "var(--text4)",
+                                            fontSize: 12,
+                                            fontWeight: 800,
+                                            opacity: compareSelectionReady ? 1 : 0.65,
+                                            boxShadow: compareSelectionReady ? "0 10px 22px rgba(34, 197, 94, 0.16)" : "none",
+                                        }}
+                                    >
+                                        {compareLoading ? "比較を準備中..." : "選んだ2枚を比較"}
+                                    </button>
+                                </div>
+
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                                    {compareBrowseRows.map((row) => {
+                                        const isSelected = compareSelection.some((selected) => selected.id === row.id);
+                                        const selectedIndex = compareSelection.findIndex((selected) => selected.id === row.id);
+
+                                        return (
+                                            <div
+                                                key={row.id}
+                                                style={{
+                                                    background: "var(--card2)",
+                                                    borderRadius: 16,
+                                                    border: isSelected ? "2px solid var(--accent)" : "1px solid rgba(217, 228, 239, 0.9)",
+                                                    padding: 8,
+                                                    boxShadow: isSelected ? "0 10px 24px rgba(34, 197, 94, 0.12)" : "var(--shadow-card)",
+                                                }}
+                                            >
+                                                <button
+                                                    onClick={() => handleCompareCardSelect(row)}
+                                                    style={{
+                                                        width: "100%",
+                                                        textAlign: "left",
+                                                        background: "transparent",
+                                                        border: "none",
+                                                        padding: 0,
+                                                    }}
+                                                >
+                                                    <div style={{ position: "relative", width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden", background: "var(--card)" }}>
+                                                        {comparePreviewUrls[row.id] ? (
+                                                            <img
+                                                                src={comparePreviewUrls[row.id]}
+                                                                alt={row.workout_date}
+                                                                style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
+                                                            />
+                                                        ) : (
+                                                            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 11 }}>
+                                                                読み込み中...
+                                                            </div>
+                                                        )}
+
+                                                        {isSelected && (
+                                                            <div
+                                                                style={{
+                                                                    position: "absolute",
+                                                                    top: 8,
+                                                                    right: 8,
+                                                                    padding: "4px 8px",
+                                                                    borderRadius: 999,
+                                                                    background: "rgba(17, 24, 39, 0.78)",
+                                                                    color: "#fff",
+                                                                    fontSize: 10,
+                                                                    fontWeight: 800,
+                                                                }}
+                                                            >
+                                                                {selectedIndex + 1}枚目
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "var(--text)" }}>
+                                                        {formatDateLabel(row.workout_date)}
+                                                    </div>
+                                                    <div style={{ marginTop: 4, fontSize: 10, color: isSelected ? "var(--accent)" : "var(--text3)", fontWeight: isSelected ? 800 : 600 }}>
+                                                        {isSelected ? "選択中" : "タップして選択"}
+                                                    </div>
+                                                </button>
+
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
+                                                    <button
+                                                        onClick={() => comparePreviewUrls[row.id] && setViewerPhoto({ id: row.id, url: comparePreviewUrls[row.id], title: `${row.workout_date} の体写真` })}
+                                                        disabled={!comparePreviewUrls[row.id]}
+                                                        style={{
+                                                            padding: "6px 10px",
+                                                            borderRadius: 10,
+                                                            background: "transparent",
+                                                            border: "1px solid var(--border2)",
+                                                            color: "var(--text3)",
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
+                                                            opacity: comparePreviewUrls[row.id] ? 1 : 0.5,
+                                                        }}
+                                                    >
+                                                        拡大
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handlePhotoDelete(row)}
+                                                        disabled={photoDeletingId === row.id}
+                                                        style={{
+                                                            padding: "6px 10px",
+                                                            borderRadius: 10,
+                                                            background: "transparent",
+                                                            border: "1px solid var(--border2)",
+                                                            color: "var(--text3)",
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
+                                                            opacity: photoDeletingId === row.id ? 0.6 : 1,
+                                                        }}
+                                                    >
+                                                        {photoDeletingId === row.id ? "削除中..." : "削除"}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <details style={{ background: "var(--card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 16 }}>
+                        <summary style={{ listStyle: "none", cursor: "pointer" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                                <div>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>日付から追加・管理</div>
+                                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                                        過去日の写真を追加したい時だけ開いてください
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 700 }}>カレンダー</div>
+                            </div>
+                        </summary>
+
+                        <div style={{ marginTop: 14 }}>
 
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                             <button onClick={prevMonth} style={{ background: "none", color: "var(--text2)", fontSize: 24, padding: "4px 10px" }}>‹</button>
@@ -564,7 +648,8 @@ export default function PhotoScreen({ user }) {
                                 );
                             })}
                         </div>
-                    </div>
+                        </div>
+                    </details>
 
                 </>
             )}
