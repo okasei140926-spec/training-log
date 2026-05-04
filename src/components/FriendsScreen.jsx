@@ -18,6 +18,7 @@ import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
+import WorkoutCommentsModal from "./modals/WorkoutCommentsModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 
 const BIG3_EXERCISES = [
@@ -83,6 +84,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [sharePreparingSessionId, setSharePreparingSessionId] = useState(null);
     const [sessionSettingsUpdatingId, setSessionSettingsUpdatingId] = useState(null);
     const [likePendingMap, setLikePendingMap] = useState({});
+    const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const activityFeedOffsetRef = useRef(0);
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = formatDateKey();
@@ -394,7 +396,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             )];
             const sessionIds = [...new Set((sessions || []).map((session) => session.id).filter(Boolean))];
 
-            const [profilesRes, photosRes, likesRes] = await Promise.all([
+            const [profilesRes, photosRes, likesRes, commentsRes] = await Promise.all([
                 profileIds.length
                     ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
                     : Promise.resolve({ data: [], error: null }),
@@ -404,15 +406,20 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 sessionIds.length
                     ? supabase.from("workout_session_likes").select("session_id, user_id").in("session_id", sessionIds)
                     : Promise.resolve({ data: [], error: null }),
+                sessionIds.length
+                    ? supabase.from("workout_session_comments").select("id, session_id").in("session_id", sessionIds)
+                    : Promise.resolve({ data: [], error: null }),
             ]);
 
             if (profilesRes.error) throw profilesRes.error;
             if (photosRes.error) throw photosRes.error;
             if (likesRes.error) throw likesRes.error;
+            if (commentsRes.error) throw commentsRes.error;
 
             const profileMap = new Map((profilesRes.data || []).map((profile) => [profile.id, profile]));
             const photoRows = photosRes.data || [];
             const likeRows = likesRes.data || [];
+            const commentRows = commentsRes.data || [];
             const signedEntries = await Promise.all(photoRows.map(async (row) => {
                 try {
                     const { data: signedData, error: signedError } = await supabase
@@ -429,6 +436,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             const photoUrlMap = new Map(signedEntries.filter(Boolean));
             const likeCountMap = new Map();
             const likedSessionIds = new Set();
+            const commentCountMap = new Map();
 
             likeRows.forEach((row) => {
                 if (!row?.session_id) return;
@@ -436,6 +444,11 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 if (row.user_id === user.id) {
                     likedSessionIds.add(row.session_id);
                 }
+            });
+
+            commentRows.forEach((row) => {
+                if (!row?.session_id) return;
+                commentCountMap.set(row.session_id, (commentCountMap.get(row.session_id) || 0) + 1);
             });
 
             const items = (sessions || []).map((session) => {
@@ -451,6 +464,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     photoUrl: session.photo_visibility === "friends" ? photoUrlMap.get(session.photo_id) || null : null,
                     likeCount: likeCountMap.get(session.id) || 0,
                     likedByMe: likedSessionIds.has(session.id),
+                    commentCount: commentCountMap.get(session.id) || 0,
                 };
             });
 
@@ -498,6 +512,27 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         setSharePhotoRows([]);
         setSharePhotoUrls({});
         setSharePreparingSessionId(null);
+    }, []);
+
+    const handleOpenComments = useCallback((sessionItem) => {
+        setCommentsSessionTarget(sessionItem);
+    }, []);
+
+    const closeCommentsModal = useCallback(() => {
+        setCommentsSessionTarget(null);
+    }, []);
+
+    const handleCommentCountChange = useCallback((sessionId, nextCount) => {
+        setActivityFeed((prev) => prev.map((item) => (
+            item.id === sessionId
+                ? { ...item, commentCount: Number(nextCount || 0) }
+                : item
+        )));
+        setCommentsSessionTarget((prev) => (
+            prev?.id === sessionId
+                ? { ...prev, commentCount: Number(nextCount || 0) }
+                : prev
+        ));
     }, []);
 
     const handleOpenSessionShare = useCallback(async (sessionItem) => {
@@ -1138,15 +1173,37 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                             borderTop: "1px solid rgba(217, 228, 239, 0.7)",
                                         }}
                                     >
-                                        {item.user_id === user.id ? (
-                                            <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
-                                                ♥ {Number(item.likeCount || 0)}
-                                            </div>
-                                        ) : (
+                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                            {item.user_id === user.id ? (
+                                                <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
+                                                    ♥ {Number(item.likeCount || 0)}
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleToggleSessionLike(item.id)}
+                                                    disabled={Boolean(likePendingMap[item.id])}
+                                                    style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: 6,
+                                                        padding: "8px 10px",
+                                                        borderRadius: 12,
+                                                        border: "1px solid var(--border2)",
+                                                        background: item.likedByMe ? "var(--danger-soft, #fee2e2)" : "var(--card)",
+                                                        color: item.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
+                                                        fontSize: 12,
+                                                        fontWeight: 800,
+                                                        opacity: likePendingMap[item.id] ? 0.7 : 1,
+                                                    }}
+                                                >
+                                                    <span>{item.likedByMe ? "♥" : "♡"}</span>
+                                                    <span>{Number(item.likeCount || 0)}</span>
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
-                                                onClick={() => handleToggleSessionLike(item.id)}
-                                                disabled={Boolean(likePendingMap[item.id])}
+                                                onClick={() => handleOpenComments(item)}
                                                 style={{
                                                     display: "inline-flex",
                                                     alignItems: "center",
@@ -1154,17 +1211,16 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                     padding: "8px 10px",
                                                     borderRadius: 12,
                                                     border: "1px solid var(--border2)",
-                                                    background: item.likedByMe ? "var(--danger-soft, #fee2e2)" : "var(--card)",
-                                                    color: item.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
+                                                    background: "var(--card)",
+                                                    color: "var(--text2)",
                                                     fontSize: 12,
                                                     fontWeight: 800,
-                                                    opacity: likePendingMap[item.id] ? 0.7 : 1,
                                                 }}
                                             >
-                                                <span>{item.likedByMe ? "♥" : "♡"}</span>
-                                                <span>{Number(item.likeCount || 0)}</span>
+                                                <span>💬</span>
+                                                <span>{Number(item.commentCount || 0)}</span>
                                             </button>
-                                        )}
+                                        </div>
                                         {likePendingMap[item.id] && (
                                             <div style={{ fontSize: 11, color: "var(--text3)" }}>
                                                 更新中...
@@ -1403,6 +1459,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 } : null}
                 photoRows={sharePhotoRows}
                 photoUrls={sharePhotoUrls}
+            />
+
+            <WorkoutCommentsModal
+                isOpen={Boolean(commentsSessionTarget)}
+                sessionItem={commentsSessionTarget}
+                user={user}
+                myUsername={myUsername}
+                onClose={closeCommentsModal}
+                onCommentCountChange={handleCommentCountChange}
             />
 
         </div >
