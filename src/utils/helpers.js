@@ -114,6 +114,39 @@ export function sanitizeHistoryRecord(record, { allowBodyweight = true } = {}) {
   };
 }
 
+export function hasValidHistoryRecord(record, { allowBodyweight = true } = {}) {
+  return Boolean(sanitizeHistoryRecord(record, { allowBodyweight })?.date);
+}
+
+export function hasValidWorkoutOnDate(historyMap, targetDate) {
+  const normalizedDate = String(targetDate || "").trim();
+  if (!normalizedDate) return false;
+
+  return Object.values(historyMap || {}).some((records) =>
+    (records || []).some((record) => {
+      const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
+      return sanitizedRecord?.date === normalizedDate;
+    })
+  );
+}
+
+export function getValidWorkoutDatesFromHistory(historyMap, { prefix = "", since = "" } = {}) {
+  const validDates = new Set();
+
+  Object.values(historyMap || {}).forEach((records) => {
+    (records || []).forEach((record) => {
+      const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
+      const date = String(sanitizedRecord?.date || "").trim();
+      if (!date) return;
+      if (prefix && !date.startsWith(prefix)) return;
+      if (since && date < since) return;
+      validDates.add(date);
+    });
+  });
+
+  return Array.from(validDates).sort();
+}
+
 export function buildHistoryRecordSignature(record) {
   const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
   if (!sanitizedRecord?.date) return "";

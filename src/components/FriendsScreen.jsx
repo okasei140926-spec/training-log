@@ -2,7 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
-import { buildHistoryFromWorkoutRows, calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
+import {
+    buildHistoryFromWorkoutRows,
+    calc1RM,
+    getRecordSourceSets,
+    getValidWorkoutDatesFromHistory,
+    hasValidWorkoutOnDate,
+    sanitizeHistoryRecord,
+    sanitizeWorkoutSets,
+} from "../utils/helpers";
 import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
 import Big3RankingCard from "./friends/Big3RankingCard";
 import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
@@ -84,31 +92,14 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     thresholdDate.setDate(thresholdDate.getDate() - 7);
     const thresholdStr = thresholdDate.toISOString().split("T")[0];
 
-    const hasValidSet = useCallback((set) => {
-        if (!set) return false;
-        const repsNum = Number(set.reps);
-        const hasValidWeight =
-            set.weight === "BW" ||
-            (set.weight !== "" && set.weight !== null && set.weight !== undefined && Number.isFinite(Number(set.weight)));
-        return hasValidWeight && Number.isFinite(repsNum) && repsNum >= 1;
-    }, []);
-
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
-        return Object.values(workoutData || {}).some((records) =>
-            (records || []).some((record) => {
-                if (!record || record.date !== today) return false;
-                return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true })
-                    .some(hasValidSet);
-            })
-        );
-    }, [hasValidSet, today]);
+        return hasValidWorkoutOnDate(workoutData, today);
+    }, [today]);
 
-    const countMonthlyWorkoutDays = useCallback((rows) => {
-        return new Set(
-            (rows || [])
-                .map((row) => row?.date)
-                .filter((date) => typeof date === "string" && date.startsWith(currentMonthPrefix))
-        ).size;
+    const countMonthlyWorkoutDays = useCallback((historyData) => {
+        return getValidWorkoutDatesFromHistory(historyData, {
+            prefix: currentMonthPrefix,
+        }).length;
     }, [currentMonthPrefix]);
 
     const safeCalc1RM = useCallback((sets) => {
@@ -183,22 +174,18 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         };
     }, []);
 
-    const computeBig3FromWorkoutRows = useCallback((rows) => {
-        return computeBig3FromHistory(buildHistoryFromWorkoutRows(rows));
-    }, [computeBig3FromHistory]);
-
     const buildRecentGrouped = useCallback((historyData) => {
         return Object.entries(historyData || {})
             .flatMap(([name, recs]) =>
                 (recs || []).map((record) => {
-                    const sets = sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
-                    if (!record?.date || !sets.length) return null;
+                    const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
+                    if (!sanitizedRecord?.date || !sanitizedRecord.sets?.length) return null;
 
                     return {
                         name,
-                        date: record.date,
-                        sets,
-                        order: Number.isFinite(Number(record.order)) ? Number(record.order) : 999,
+                        date: sanitizedRecord.date,
+                        sets: sanitizedRecord.sets,
+                        order: Number.isFinite(Number(sanitizedRecord.order)) ? Number(sanitizedRecord.order) : 999,
                     };
                 }).filter(Boolean)
             )
@@ -294,6 +281,84 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             activityFeedStatusTimeoutRef.current = null;
         }, 2200);
     }, []);
+
+    const fetchFriendsData = useCallback(async () => {
+        if (!user) {
+            setFriendIds([]);
+            setFriends([]);
+            setTodayActiveMap({});
+            return false;
+        }
+
+        setLoading(true);
+        try {
+            const { data: friendships, error: friendshipsError } = await supabase
+                .from("friendships")
+                .select("requester_id, receiver_id")
+                .eq("status", "accepted")
+                .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+            if (friendshipsError) throw friendshipsError;
+
+            if (!friendships || friendships.length === 0) {
+                setFriendIds([]);
+                setFriends([]);
+                setTodayActiveMap({});
+                setLoading(false);
+                return true;
+            }
+
+            const nextFriendIds = [...new Set(
+                friendships.map((f) =>
+                    f.requester_id === user.id ? f.receiver_id : f.requester_id
+                )
+            )];
+
+            const [profilesRes, workoutsRes] = await Promise.all([
+                supabase
+                    .from("profiles")
+                    .select("id, username, avatar1_url")
+                    .in("id", nextFriendIds),
+                supabase
+                    .from("workouts")
+                    .select("user_id, date, data")
+                    .in("user_id", nextFriendIds)
+                    .order("date", { ascending: false }),
+            ]);
+
+            const { data: profiles, error: profilesError } = profilesRes;
+            const { data: workouts, error: workoutsError } = workoutsRes;
+
+            if (profilesError) throw profilesError;
+            if (workoutsError) throw workoutsError;
+
+            const workoutRowsMap = new Map();
+            (workouts || []).forEach((workout) => {
+                const current = workoutRowsMap.get(workout.user_id) || [];
+                current.push(workout);
+                workoutRowsMap.set(workout.user_id, current);
+            });
+
+            const friendsWithHistory = (profiles || []).map((p) => ({
+                ...p,
+                workoutRows: workoutRowsMap.get(p.id) || [],
+                history: buildHistoryFromWorkoutRows(workoutRowsMap.get(p.id) || []),
+            }));
+
+            setFriendIds(nextFriendIds);
+            setFriends(friendsWithHistory);
+            await fetchTodayActive(nextFriendIds);
+            return true;
+        } catch (err) {
+            console.error(err);
+            setFriendIds([]);
+            setFriends([]);
+            setTodayActiveMap({});
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchTodayActive, user]);
 
     const fetchActivityFeed = useCallback(async ({ reset = false } = {}) => {
         if (!user?.id) {
@@ -410,10 +475,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         if (activityFeedLoading) return;
         setActivityFeedAction("refresh");
         setActivityFeedStatusMessage("");
-        const ok = await fetchActivityFeed({ reset: true });
+        const [feedOk, friendsOk] = await Promise.all([
+            fetchActivityFeed({ reset: true }),
+            fetchFriendsData(),
+        ]);
         setActivityFeedAction(null);
-        showActivityFeedStatusMessage(ok ? "更新しました" : "更新できませんでした");
-    }, [activityFeedLoading, fetchActivityFeed, showActivityFeedStatusMessage]);
+        showActivityFeedStatusMessage(feedOk && friendsOk ? "更新しました" : "更新できませんでした");
+    }, [activityFeedLoading, fetchActivityFeed, fetchFriendsData, showActivityFeedStatusMessage]);
 
     const handleLoadMoreActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -583,79 +651,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     useEffect(() => {
         if (!user) return;
-
-        const fetchFriends = async () => {
-            setLoading(true);
-            try {
-                const { data: friendships, error: friendshipsError } = await supabase
-                    .from("friendships")
-                    .select("requester_id, receiver_id")
-                    .eq("status", "accepted")
-                    .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
-
-                if (friendshipsError) throw friendshipsError;
-
-                if (!friendships || friendships.length === 0) {
-                    setFriendIds([]);
-                    setFriends([]);
-                    setTodayActiveMap({});
-                    setLoading(false);
-                    return;
-                }
-
-                const friendIds = [...new Set(
-                    friendships.map(f =>
-                        f.requester_id === user.id ? f.receiver_id : f.requester_id
-                    )
-                )];
-
-                const [profilesRes, workoutsRes] = await Promise.all([
-                    supabase
-                        .from("profiles")
-                        .select("id, username, avatar1_url")
-                        .in("id", friendIds),
-
-                    supabase
-                        .from("workouts")
-                        .select("user_id, date, data")
-                        .in("user_id", friendIds)
-                        .order("date", { ascending: false }),
-                ]);
-
-                const { data: profiles, error: profilesError } = profilesRes;
-                const { data: workouts, error: workoutsError } = workoutsRes;
-
-                if (profilesError) throw profilesError;
-                if (workoutsError) throw workoutsError;
-
-                const workoutRowsMap = new Map();
-                (workouts || []).forEach((workout) => {
-                    const current = workoutRowsMap.get(workout.user_id) || [];
-                    current.push(workout);
-                    workoutRowsMap.set(workout.user_id, current);
-                });
-
-                const friendsWithHistory = (profiles || []).map(p => ({
-                    ...p,
-                    workoutRows: workoutRowsMap.get(p.id) || [],
-                    history: buildHistoryFromWorkoutRows(workoutRowsMap.get(p.id) || []),
-                }));
-
-                setFriendIds(friendIds);
-                setFriends(friendsWithHistory);
-                await fetchTodayActive(friendIds);
-            } catch (err) {
-                console.error(err);
-                setFriendIds([]);
-                setFriends([]);
-                setTodayActiveMap({});
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchFriends();
-    }, [user, fetchTodayActive]);
+        fetchFriendsData();
+    }, [user, fetchFriendsData, sessionSyncVersion]);
 
     useEffect(() => {
         if (!user || !friendIds.length) return;
@@ -766,17 +763,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     const todayActiveFriends = friends.filter((f) => todayActiveMap[f.id]);
     const todayActiveLabel = todayActiveFriends.map((f) => getDisplayUsername(f.username)).join("、");
-    const myMonthlyWorkoutDays = new Set(
-        Object.values(history || {})
-            .flatMap((recs) => (recs || []).map((record) => record?.date))
-            .filter((date) => typeof date === "string" && date.startsWith(currentMonthPrefix))
-    ).size;
+    const myMonthlyWorkoutDays = getValidWorkoutDatesFromHistory(history, {
+        prefix: currentMonthPrefix,
+    }).length;
     const monthlyWorkoutRanking = [
         { name: getDisplayUsername(myUsername, { isMe: true }), isMe: true, days: myMonthlyWorkoutDays },
         ...friends.map((friend) => ({
             name: getDisplayUsername(friend.username),
             isMe: false,
-            days: countMonthlyWorkoutDays(friend.workoutRows),
+            days: countMonthlyWorkoutDays(friend.history),
         })),
     ].sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, "ja"));
     const myBig3 = mergeBig3Bests(
@@ -794,7 +789,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             id: friend.id,
             name: getDisplayUsername(friend.username),
             isMe: false,
-            ...computeBig3FromWorkoutRows(friend.workoutRows),
+            ...computeBig3FromHistory(friend.history),
         })),
     ].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ja"));
     const myBig3ByExercise = {
@@ -803,7 +798,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         deadlift: myBig3.deadlift || 0,
     };
     const big3OvertakeEvents = friends.flatMap((friend) => {
-        const friendBig3 = computeBig3FromWorkoutRows(friend.workoutRows);
+        const friendBig3 = computeBig3FromHistory(friend.history);
 
         return BIG3_EXERCISES.flatMap((exercise) => {
             const myValue = myBig3ByExercise[exercise.key] || 0;
