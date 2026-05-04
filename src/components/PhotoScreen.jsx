@@ -7,6 +7,7 @@ import PhotoViewerModal from "./modals/PhotoViewerModal";
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
 const formatDateLabel = (dateString) => String(dateString || "").replace(/-/g, "/");
+const formatMonthLabel = (monthKey) => String(monthKey || "").replace("-", "/");
 
 const getToggledCompareSelection = (selection, row) => {
     if (!row?.id) return selection;
@@ -100,6 +101,43 @@ export default function PhotoScreen({ user }) {
             String(b?.workout_date || "").localeCompare(String(a?.workout_date || ""))
         );
     }, [photoRows]);
+
+    const compareMonthGroups = useMemo(() => {
+        const groups = compareBrowseRows.reduce((acc, row) => {
+            const monthKey = String(row?.workout_date || "").slice(0, 7);
+            if (!monthKey) return acc;
+            if (!acc[monthKey]) acc[monthKey] = [];
+            acc[monthKey].push(row);
+            return acc;
+        }, {});
+
+        return Object.entries(groups).map(([monthKey, rows]) => ({
+            monthKey,
+            rows,
+        }));
+    }, [compareBrowseRows]);
+
+    const [openMonthMap, setOpenMonthMap] = useState({});
+
+    useEffect(() => {
+        setOpenMonthMap((prev) => {
+            const next = {};
+            compareMonthGroups.forEach((group, index) => {
+                if (Object.prototype.hasOwnProperty.call(prev, group.monthKey)) {
+                    next[group.monthKey] = prev[group.monthKey];
+                } else {
+                    next[group.monthKey] = index === 0;
+                }
+            });
+
+            const prevKeys = Object.keys(prev);
+            const nextKeys = Object.keys(next);
+            const changed = prevKeys.length !== nextKeys.length
+                || nextKeys.some((key) => prev[key] !== next[key]);
+
+            return changed ? next : prev;
+        });
+    }, [compareMonthGroups]);
 
     useEffect(() => {
         let isActive = true;
@@ -337,6 +375,13 @@ export default function PhotoScreen({ user }) {
     const monthPhotoCount = [...photoDates].filter((d) => d.startsWith(monthPrefix)).length;
     const compareSelectionReady = compareSelection.length === 2;
 
+    const toggleMonthOpen = (monthKey) => {
+        setOpenMonthMap((prev) => ({
+            ...prev,
+            [monthKey]: !prev[monthKey],
+        }));
+    };
+
     const prevMonth = () => {
         if (month === 0) {
             setYear((y) => y - 1);
@@ -455,105 +500,140 @@ export default function PhotoScreen({ user }) {
                                     </button>
                                 </div>
 
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                                    {compareBrowseRows.map((row) => {
-                                        const isSelected = compareSelection.some((selected) => selected.id === row.id);
-                                        const selectedIndex = compareSelection.findIndex((selected) => selected.id === row.id);
+                                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                    {compareMonthGroups.map((group) => {
+                                        const isOpen = openMonthMap[group.monthKey];
 
                                         return (
-                                            <div
-                                                key={row.id}
-                                                style={{
-                                                    background: "var(--card2)",
-                                                    borderRadius: 16,
-                                                    border: isSelected ? "2px solid var(--accent)" : "1px solid rgba(217, 228, 239, 0.9)",
-                                                    padding: 8,
-                                                    boxShadow: isSelected ? "0 10px 24px rgba(34, 197, 94, 0.12)" : "var(--shadow-card)",
-                                                }}
-                                            >
+                                            <div key={group.monthKey} style={{ background: "var(--card2)", borderRadius: 16, border: "1px solid rgba(217, 228, 239, 0.9)", overflow: "hidden" }}>
                                                 <button
-                                                    onClick={() => handleCompareCardSelect(row)}
+                                                    onClick={() => toggleMonthOpen(group.monthKey)}
                                                     style={{
                                                         width: "100%",
-                                                        textAlign: "left",
+                                                        padding: "12px 14px",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "space-between",
+                                                        gap: 12,
                                                         background: "transparent",
                                                         border: "none",
-                                                        padding: 0,
+                                                        color: "var(--text)",
                                                     }}
                                                 >
-                                                    <div style={{ position: "relative", width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden", background: "var(--card)" }}>
-                                                        {comparePreviewUrls[row.id] ? (
-                                                            <img
-                                                                src={comparePreviewUrls[row.id]}
-                                                                alt={row.workout_date}
-                                                                style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
-                                                            />
-                                                        ) : (
-                                                            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 11 }}>
-                                                                読み込み中...
-                                                            </div>
-                                                        )}
-
-                                                        {isSelected && (
-                                                            <div
-                                                                style={{
-                                                                    position: "absolute",
-                                                                    top: 8,
-                                                                    right: 8,
-                                                                    padding: "4px 8px",
-                                                                    borderRadius: 999,
-                                                                    background: "rgba(17, 24, 39, 0.78)",
-                                                                    color: "#fff",
-                                                                    fontSize: 10,
-                                                                    fontWeight: 800,
-                                                                }}
-                                                            >
-                                                                {selectedIndex + 1}枚目
-                                                            </div>
-                                                        )}
+                                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+                                                        <div style={{ fontSize: 13, fontWeight: 800 }}>{formatMonthLabel(group.monthKey)}</div>
+                                                        <div style={{ fontSize: 11, color: "var(--text3)" }}>{group.rows.length}枚</div>
                                                     </div>
-                                                    <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "var(--text)" }}>
-                                                        {formatDateLabel(row.workout_date)}
-                                                    </div>
-                                                    <div style={{ marginTop: 4, fontSize: 10, color: isSelected ? "var(--accent)" : "var(--text3)", fontWeight: isSelected ? 800 : 600 }}>
-                                                        {isSelected ? "選択中" : "タップして選択"}
+                                                    <div style={{ fontSize: 16, color: "var(--text3)", fontWeight: 800 }}>
+                                                        {isOpen ? "−" : "+"}
                                                     </div>
                                                 </button>
 
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
-                                                    <button
-                                                        onClick={() => comparePreviewUrls[row.id] && setViewerPhoto({ id: row.id, url: comparePreviewUrls[row.id], title: `${row.workout_date} の体写真` })}
-                                                        disabled={!comparePreviewUrls[row.id]}
-                                                        style={{
-                                                            padding: "6px 10px",
-                                                            borderRadius: 10,
-                                                            background: "transparent",
-                                                            border: "1px solid var(--border2)",
-                                                            color: "var(--text3)",
-                                                            fontSize: 11,
-                                                            fontWeight: 700,
-                                                            opacity: comparePreviewUrls[row.id] ? 1 : 0.5,
-                                                        }}
-                                                    >
-                                                        拡大
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handlePhotoDelete(row)}
-                                                        disabled={photoDeletingId === row.id}
-                                                        style={{
-                                                            padding: "6px 10px",
-                                                            borderRadius: 10,
-                                                            background: "transparent",
-                                                            border: "1px solid var(--border2)",
-                                                            color: "var(--text3)",
-                                                            fontSize: 11,
-                                                            fontWeight: 700,
-                                                            opacity: photoDeletingId === row.id ? 0.6 : 1,
-                                                        }}
-                                                    >
-                                                        {photoDeletingId === row.id ? "削除中..." : "削除"}
-                                                    </button>
-                                                </div>
+                                                {isOpen && (
+                                                    <div style={{ padding: "0 10px 10px", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+                                                        {group.rows.map((row) => {
+                                                            const isSelected = compareSelection.some((selected) => selected.id === row.id);
+                                                            const selectedIndex = compareSelection.findIndex((selected) => selected.id === row.id);
+
+                                                            return (
+                                                                <div
+                                                                    key={row.id}
+                                                                    style={{
+                                                                        background: "var(--card)",
+                                                                        borderRadius: 16,
+                                                                        border: isSelected ? "2px solid var(--accent)" : "1px solid rgba(217, 228, 239, 0.9)",
+                                                                        padding: 8,
+                                                                        boxShadow: isSelected ? "0 10px 24px rgba(34, 197, 94, 0.12)" : "var(--shadow-card)",
+                                                                    }}
+                                                                >
+                                                                    <button
+                                                                        onClick={() => handleCompareCardSelect(row)}
+                                                                        style={{
+                                                                            width: "100%",
+                                                                            textAlign: "left",
+                                                                            background: "transparent",
+                                                                            border: "none",
+                                                                            padding: 0,
+                                                                        }}
+                                                                    >
+                                                                        <div style={{ position: "relative", width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden", background: "var(--card2)" }}>
+                                                                            {comparePreviewUrls[row.id] ? (
+                                                                                <img
+                                                                                    src={comparePreviewUrls[row.id]}
+                                                                                    alt={row.workout_date}
+                                                                                    style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
+                                                                                />
+                                                                            ) : (
+                                                                                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text3)", fontSize: 11 }}>
+                                                                                    読み込み中...
+                                                                                </div>
+                                                                            )}
+
+                                                                            {isSelected && (
+                                                                                <div
+                                                                                    style={{
+                                                                                        position: "absolute",
+                                                                                        top: 8,
+                                                                                        right: 8,
+                                                                                        padding: "4px 8px",
+                                                                                        borderRadius: 999,
+                                                                                        background: "rgba(17, 24, 39, 0.78)",
+                                                                                        color: "#fff",
+                                                                                        fontSize: 10,
+                                                                                        fontWeight: 800,
+                                                                                    }}
+                                                                                >
+                                                                                    {selectedIndex + 1}枚目
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "var(--text)" }}>
+                                                                            {formatDateLabel(row.workout_date)}
+                                                                        </div>
+                                                                        <div style={{ marginTop: 4, fontSize: 10, color: isSelected ? "var(--accent)" : "var(--text3)", fontWeight: isSelected ? 800 : 600 }}>
+                                                                            {isSelected ? "選択中" : "タップして選択"}
+                                                                        </div>
+                                                                    </button>
+
+                                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }}>
+                                                                        <button
+                                                                            onClick={() => comparePreviewUrls[row.id] && setViewerPhoto({ id: row.id, url: comparePreviewUrls[row.id], title: `${row.workout_date} の体写真` })}
+                                                                            disabled={!comparePreviewUrls[row.id]}
+                                                                            style={{
+                                                                                padding: "6px 10px",
+                                                                                borderRadius: 10,
+                                                                                background: "transparent",
+                                                                                border: "1px solid var(--border2)",
+                                                                                color: "var(--text3)",
+                                                                                fontSize: 11,
+                                                                                fontWeight: 700,
+                                                                                opacity: comparePreviewUrls[row.id] ? 1 : 0.5,
+                                                                            }}
+                                                                        >
+                                                                            拡大
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handlePhotoDelete(row)}
+                                                                            disabled={photoDeletingId === row.id}
+                                                                            style={{
+                                                                                padding: "6px 10px",
+                                                                                borderRadius: 10,
+                                                                                background: "transparent",
+                                                                                border: "1px solid var(--border2)",
+                                                                                color: "var(--text3)",
+                                                                                fontSize: 11,
+                                                                                fontWeight: 700,
+                                                                                opacity: photoDeletingId === row.id ? 0.6 : 1,
+                                                                            }}
+                                                                        >
+                                                                            {photoDeletingId === row.id ? "削除中..." : "削除"}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}

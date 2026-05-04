@@ -512,28 +512,28 @@ export default function AnalyticsScreen({
   return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
       {onOpenPhotoCompare && (
-        <div style={{ background: "var(--card)", borderRadius: 18, padding: "13px 14px", border: "1px solid var(--border2)", boxShadow: "var(--shadow-soft)" }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
+        <div style={{ background: "var(--card)", borderRadius: 16, padding: "10px 12px", border: "1px solid var(--border2)", boxShadow: "var(--shadow-soft)" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 2 }}>
             写真比較
           </div>
-          <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.5, marginBottom: 10 }}>
-            登録済みの体写真から Before / After を見比べられます。
+          <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.4, marginBottom: 8 }}>
+            Before / Afterを確認
           </div>
           <button
             type="button"
             onClick={onOpenPhotoCompare}
             style={{
               alignSelf: "flex-start",
-              padding: "9px 12px",
-              borderRadius: 12,
+              padding: "7px 10px",
+              borderRadius: 10,
               border: "1px solid var(--border2)",
               background: "var(--card2)",
               color: "var(--text)",
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 800,
             }}
           >
-            写真比較を開く
+            開く
           </button>
         </div>
       )}
