@@ -322,7 +322,7 @@ export default function GymApp() {
         const ref = params.get("ref");
         if (ref) {
             localStorage.setItem("pendingFriendId", ref);
-            setScreen("friends");
+            setScreen("ranking");
             setShowAuth(true);
         }
     }, []);
@@ -356,6 +356,12 @@ export default function GymApp() {
         permission: getNotificationPermission(),
         support: getPushSupportState(),
     });
+
+    useEffect(() => {
+        if (screen === "friends") {
+            setScreen("ranking");
+        }
+    }, [screen]);
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
     const updateTodayLabels = (nextOrUpdater) => {
@@ -1728,16 +1734,17 @@ export default function GymApp() {
     const headerTitle =
         screen === "log" ? "Log"
             : screen === "photos" ? "比較"
-                : screen === "analytics" ? "PR"
-                : screen === "friends" ? "Friends"
-                    : screen === "ai" ? "AI Coach"
+                : screen === "analytics" ? "分析"
+                : screen === "feed" ? "フィード"
+                : screen === "ranking" ? "ランキング"
+                : screen === "ai" ? "AI Coach"
                         : "記録";
 
     const bottomTabs = [
         { id: "history", icon: "📊", label: "記録" },
-        { id: "photos", icon: "📷", label: "比較" },
-        { id: "analytics", icon: "📈", label: "PR" },
-        { id: "friends", icon: "👥", label: "Friends" },
+        { id: "analytics", icon: "📈", label: "分析" },
+        { id: "feed", icon: "📰", label: "フィード" },
+        { id: "ranking", icon: "🏆", label: "ランキング" },
         { id: "ai", icon: "🤖", label: "AI" },
     ];
 
@@ -1920,6 +1927,7 @@ export default function GymApp() {
                         muscleEx={muscleEx}
                         hiddenBodyParts={hiddenBodyParts}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                        onOpenPhotoCompare={() => setScreen("photos")}
                     />
 
                 )}
@@ -1929,8 +1937,9 @@ export default function GymApp() {
                 )}
 
 
-                {screen === "friends" && (
+                {screen === "feed" && (
                     <FriendsScreen
+                        mode="feed"
                         history={history}
                         manualBests={manualBests}
                         sessionSyncVersion={sessionSyncVersion}
@@ -1940,6 +1949,32 @@ export default function GymApp() {
                             await supabase.auth.signOut();
                         }}
 
+                        onCopyMenu={(exs) => {
+                            setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
+                            setLogData(exs.reduce((acc, ex) => ({
+                                ...acc,
+                                [ex.name]: [
+                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                ],
+                            }), {}));
+                            setScreen("log");
+                        }}
+                    />
+                )}
+
+                {screen === "ranking" && (
+                    <FriendsScreen
+                        mode="ranking"
+                        history={history}
+                        manualBests={manualBests}
+                        sessionSyncVersion={sessionSyncVersion}
+                        user={user}
+                        onLogin={() => setShowAuth(true)}
+                        onLogout={async () => {
+                            await supabase.auth.signOut();
+                        }}
                         onCopyMenu={(exs) => {
                             setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
                             setLogData(exs.reduce((acc, ex) => ({

@@ -57,7 +57,7 @@ const formatRelativeTime = (value) => {
     return new Date(value).toLocaleDateString("ja-JP");
 };
 
-export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, onCopyMenu, user, onLogin, onLogout }) {
+export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, onCopyMenu, user, onLogin, onLogout, mode = "all" }) {
     const [openDates, setOpenDates] = useState({});
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
@@ -92,6 +92,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - 7);
     const thresholdStr = formatDateKey(thresholdDate);
+    const showFeedSections = mode !== "ranking";
+    const showRankingSections = mode !== "feed";
 
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
         return hasValidWorkoutOnDate(workoutData, today);
@@ -914,6 +916,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 </div>
             )}
 
+            {showFeedSections && (
+                <>
             <div style={S.sLabel}>今日のアクティビティ</div>
 
             <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
@@ -1208,7 +1212,11 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     </button>
                 )}
             </div>
+                </>
+            )}
 
+            {showRankingSections && (
+                <>
             <Big3RankingCard ranking={big3Ranking} />
 
             <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
@@ -1383,6 +1391,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             <InviteCard copied={copied} onCopyInvite={handleCopyInvite} />
 
             <NotificationSettings user={user} />
+                </>
+            )}
 
             {
                 <EditUsernameModal

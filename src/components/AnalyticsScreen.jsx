@@ -237,6 +237,7 @@ export default function AnalyticsScreen({
   muscleEx = {},
   hiddenBodyParts = [],
   exerciseBodyPartOverrides = {},
+  onOpenPhotoCompare,
 }) {
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
@@ -510,6 +511,37 @@ export default function AnalyticsScreen({
 
   return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+      {onOpenPhotoCompare && (
+        <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
+          <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 10 }}>
+            PHOTO COMPARE
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
+            写真で変化を確認
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.6, marginBottom: 14 }}>
+            体写真の比較はここから開けます。Before / After を見比べて成長を確認できます。
+          </div>
+          <button
+            type="button"
+            onClick={onOpenPhotoCompare}
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              borderRadius: 14,
+              border: "1px solid var(--border2)",
+              background: "linear-gradient(135deg, var(--info-soft), var(--card))",
+              color: "var(--text)",
+              fontSize: 14,
+              fontWeight: 800,
+              boxShadow: "var(--shadow-soft)",
+            }}
+          >
+            写真比較を開く
+          </button>
+        </div>
+      )}
+
       <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
         <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 12 }}>
           BIG3 PR
