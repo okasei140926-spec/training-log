@@ -250,7 +250,6 @@ export default function AnalyticsScreen({
   muscleEx = {},
   hiddenBodyParts = [],
   exerciseBodyPartOverrides = {},
-  onOpenPhotoCompare,
 }) {
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
@@ -675,33 +674,6 @@ export default function AnalyticsScreen({
 
   return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-      {onOpenPhotoCompare && (
-        <div style={{ background: "var(--card)", borderRadius: 14, padding: "8px 10px", border: "1px solid var(--border2)", boxShadow: "var(--shadow-soft)" }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 1 }}>
-            写真比較
-          </div>
-          <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.35, marginBottom: 6 }}>
-            Before / Afterを確認
-          </div>
-          <button
-            type="button"
-            onClick={onOpenPhotoCompare}
-            style={{
-              alignSelf: "flex-start",
-              padding: "6px 9px",
-              borderRadius: 9,
-              border: "1px solid var(--border2)",
-              background: "var(--card2)",
-              color: "var(--text)",
-              fontSize: 10,
-              fontWeight: 800,
-            }}
-          >
-            開く
-          </button>
-        </div>
-      )}
-
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 160px) minmax(0, 1fr)", gap: 12 }}>
         <div
           style={{

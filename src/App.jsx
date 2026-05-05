@@ -29,7 +29,6 @@ import LogScreen from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
 import AIScreen from "./components/AIScreen";
-import PhotoScreen from "./components/PhotoScreen";
 import AppHeader from "./components/layout/AppHeader";
 import BottomNav from "./components/layout/BottomNav";
 import PushPromptModal from "./components/PushPromptModal";
@@ -1970,8 +1969,7 @@ export default function GymApp() {
     // ─── Main render ──────────────────────────────────
     const headerTitle =
         screen === "log" ? "Log"
-            : screen === "photos" ? "比較"
-                : screen === "analytics" ? "分析"
+            : screen === "analytics" ? "分析"
                 : screen === "feed" ? "フィード"
                 : screen === "ranking" ? "ランキング"
                 : screen === "ai" ? "AI Coach"
@@ -2166,13 +2164,8 @@ export default function GymApp() {
                         muscleEx={muscleEx}
                         hiddenBodyParts={hiddenBodyParts}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
-                        onOpenPhotoCompare={() => setScreen("photos")}
                     />
 
-                )}
-
-                {screen === "photos" && (
-                    <PhotoScreen user={user} />
                 )}
 
 

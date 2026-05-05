@@ -1,14 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { calc1RM, dispW, getBestRmSet, hasMeaningfulPRIncrease, isCompletedWorkoutSet, KG_TO_LBS, PR_UPDATE_TOLERANCE_KG } from "../utils/helpers";
-import { supabase } from "../utils/supabase";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
-import PhotoCropModal from "./modals/PhotoCropModal";
-import WorkoutShareModal from "./modals/WorkoutShareModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
-import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
-import WorkoutPhotoCard from "./log/WorkoutPhotoCard";
 import WorkoutElapsedTimer from "./WorkoutElapsedTimer";
 import { buildWorkoutSessionPayloadFromDraft } from "../utils/workoutSessions";
 import { S } from "../utils/styles";
@@ -60,13 +55,12 @@ const roundTo1Decimal = (value) => Math.round(Number(value || 0) * 10) / 10;
 
 
 export default function LogScreen({
-    user,
     manualBests = [],
     customBodyParts = [],
     hiddenBodyParts = [],
     onAddCustomBodyPart,
     onUpdateHiddenBodyParts,
-    todayLabels, dayColor,
+    todayLabels,
     exercises, logData, getExSets, setField, addSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, getPreviousPR, onCopyDown, onCopyDownReps, unit = "kg",
     getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
@@ -84,21 +78,9 @@ export default function LogScreen({
     const [editingName, setEditingName] = useState("");
     const [activeExIdx, setActiveExIdx] = useState(0);
     const [historyTarget, setHistoryTarget] = useState(null);
-    const [photoRows, setPhotoRows] = useState([]);
-    const [photoUrls, setPhotoUrls] = useState({});
-    const [photoLoading, setPhotoLoading] = useState(false);
-    const [photoUploading, setPhotoUploading] = useState(false);
-    const [photoDeletingId, setPhotoDeletingId] = useState(null);
-    const [viewerPhoto, setViewerPhoto] = useState(null);
-    const [pendingPhotoFile, setPendingPhotoFile] = useState(null);
-    const [showSharePreview, setShowSharePreview] = useState(false);
     const [showSessionShare, setShowSessionShare] = useState(false);
-    const [shareTemplate, setShareTemplate] = useState("cute");
     const editRef = useRef(null);
-    const photoInputRef = useRef(null);
 
-    const accentColor = dayColor || "var(--text)";
-    const accentText = dayColor ? "#000" : "var(--bg)";
     const exCount = exercises.length;
 
 
@@ -155,95 +137,6 @@ export default function LogScreen({
         getExUnit,
         workoutDate: logDate,
     });
-    const fullRecord = exercises
-        .map((ex) => {
-            const sets = logData[ex.name] || getExSets(ex);
-            const exUnit = getExUnit ? getExUnit(ex.name) : unit;
-
-            const validSets = sets
-                .map((set, idx) => ({ ...set, setNumber: idx + 1 }))
-                .filter((set) => {
-                    const repsNum = Number(set.reps);
-                    if (!Number.isFinite(repsNum) || repsNum <= 0) return false;
-                    if (set.weight === "BW") return true;
-                    const weightNum = Number(set.weight);
-                    return Number.isFinite(weightNum) && weightNum > 0;
-                });
-
-            if (!validSets.length) return null;
-
-            const comparableSets = validSets
-                .filter((set) => set.weight !== "BW")
-                .map((set) => ({
-                    ...set,
-                    weight: exUnit === "lbs" ? String(Number(set.weight) / KG_TO_LBS) : String(set.weight),
-                }));
-
-            const pastRecords = (history?.[ex.name] || []).filter((record) => record?.date && record.date !== logDate);
-            let pastPr1RM = 0;
-
-            pastRecords.forEach((record) => {
-                const baseSets = Array.isArray(record.sets) && record.sets.length > 0
-                    ? record.sets
-                    : [{ weight: record.weight, reps: record.reps }];
-
-                const validPastSets = baseSets.filter((set) => {
-                    const w = Number(set.weight);
-                    const r = Number(set.reps);
-                    return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
-                });
-
-                const record1RM = calc1RM(validPastSets);
-                if (record1RM > pastPr1RM) {
-                    pastPr1RM = record1RM;
-                }
-            });
-
-            const previousComparableSets = pastRecords.flatMap((record) => {
-                const baseSets = Array.isArray(record.sets) && record.sets.length > 0
-                    ? record.sets
-                    : [{ weight: record.weight, reps: record.reps }];
-
-                return baseSets
-                    .filter((set) => {
-                        const w = Number(set.weight);
-                        const r = Number(set.reps);
-                        return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
-                    })
-                    .map((set) => ({
-                        ...set,
-                        weight: String(set.weight),
-                    }));
-            });
-            const isExercisePR = hasMeaningfulPRIncrease(
-                comparableSets,
-                previousComparableSets,
-                pastPr1RM,
-                PR_UPDATE_TOLERANCE_KG
-            );
-
-            let prSetNumber = null;
-            if (isExercisePR && comparableSets.length > 0) {
-                const topSet = comparableSets.reduce((best, set) => {
-                    const currentScore = calc1RM([set]);
-                    if (!best) return { setNumber: set.setNumber, score: currentScore };
-                    return currentScore >= best.score ? { setNumber: set.setNumber, score: currentScore } : best;
-                }, null);
-                prSetNumber = topSet?.setNumber ?? null;
-            }
-
-            return {
-                name: ex.name,
-                sets: validSets.map((set) => ({
-                    setNumber: set.setNumber,
-                    weightLabel: set.weight === "BW" ? "自重" : `${dispW(set.weight, exUnit)}${exUnit}`,
-                    repsLabel: `${set.reps}rep`,
-                    isPR: prSetNumber === set.setNumber,
-                })),
-            };
-        })
-        .filter(Boolean);
-
     const confirmEdit = (ex) => {
         const trimmed = editingName.trim();
         if (trimmed && trimmed !== ex) onRenameEx(ex.id, trimmed);
@@ -297,181 +190,12 @@ export default function LogScreen({
     const historyTargetUnit = historyTarget && getExUnit
         ? (getExUnit(historyTarget) === "lbs" ? "lbs" : "kg")
         : (unit === "lbs" ? "lbs" : "kg");
-    const photoCount = photoRows.length;
-    const photoLimitReached = photoCount >= 5;
-    const latestPhotoRow = [...photoRows]
-        .reverse()
-        .find((row) => Boolean(photoUrls[row.id]));
-    const latestPhotoUrl = latestPhotoRow ? photoUrls[latestPhotoRow.id] : null;
-    useEffect(() => {
-        let isActive = true;
-
-        const loadPhotos = async () => {
-            if (!user?.id || !logDate) {
-                if (!isActive) return;
-                setPhotoRows([]);
-                setPhotoUrls({});
-                setViewerPhoto(null);
-                setPhotoLoading(false);
-                return;
-            }
-
-            setPhotoLoading(true);
-            setPhotoRows([]);
-            setPhotoUrls({});
-            setViewerPhoto(null);
-
-            const { data, error } = await supabase
-                .from("progress_photos")
-                .select("id, storage_path, workout_date")
-                .eq("user_id", user.id)
-                .eq("workout_date", logDate);
-
-            if (!isActive) return;
-
-            if (error || !data?.length) {
-                setPhotoRows([]);
-                setPhotoUrls({});
-                setViewerPhoto(null);
-                setPhotoLoading(false);
-                return;
-            }
-
-            const nextRows = [...data].sort((a, b) =>
-                String(a.storage_path || "").localeCompare(String(b.storage_path || ""))
-            );
-
-            const signedEntries = await Promise.all(nextRows.map(async (row) => {
-                const { data: signedData, error: signedError } = await supabase
-                    .storage
-                    .from("progress-photos-private")
-                    .createSignedUrl(row.storage_path, 3600);
-                return signedError ? null : [row.id, signedData?.signedUrl || null];
-            }));
-
-            if (!isActive) return;
-
-            setPhotoRows(nextRows);
-            setPhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
-            setPhotoLoading(false);
-        };
-
-        loadPhotos();
-
-        return () => {
-            isActive = false;
-        };
-    }, [user?.id, logDate]);
 
     useEffect(() => {
         if (!exercises.some((ex) => ex.id === reorderMenuId)) {
             setReorderMenuId(null);
         }
     }, [exercises, reorderMenuId]);
-
-    const handlePhotoPick = () => {
-        if (!user?.id || photoUploading || photoDeletingId || photoLimitReached) return;
-        photoInputRef.current?.click();
-    };
-
-    const handlePhotoChange = async (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = "";
-
-        if (!file || !user?.id || !logDate || photoLimitReached) return;
-
-        setPendingPhotoFile(file);
-    };
-
-    const handlePhotoUpload = async ({ blob, extension, mimeType }) => {
-        setPhotoUploading(true);
-
-        try {
-            const ext = extension || "jpg";
-            const storagePath = `${user.id}/${logDate}/progress-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-            const { error: uploadError } = await supabase
-                .storage
-                .from("progress-photos-private")
-                .upload(storagePath, blob, {
-                    contentType: mimeType || "image/jpeg",
-                });
-
-            if (uploadError) throw uploadError;
-
-            const { data: insertedRow, error: insertError } = await supabase
-                .from("progress_photos")
-                .insert({
-                    user_id: user.id,
-                    workout_date: logDate,
-                    storage_path: storagePath,
-                })
-                .select("id, storage_path, workout_date")
-                .single();
-
-            if (insertError) throw insertError;
-
-            const { data: signedData, error: signedError } = await supabase
-                .storage
-                .from("progress-photos-private")
-                .createSignedUrl(storagePath, 3600);
-
-            if (signedError) throw signedError;
-
-            setPhotoRows((prev) =>
-                [...prev, insertedRow].sort((a, b) =>
-                    String(a.storage_path || "").localeCompare(String(b.storage_path || ""))
-                )
-            );
-            setPhotoUrls((prev) => ({
-                ...prev,
-                [insertedRow.id]: signedData?.signedUrl || null,
-            }));
-        } catch (error) {
-            console.error("photo upload failed", error);
-        } finally {
-            setPhotoUploading(false);
-            setPendingPhotoFile(null);
-        }
-    };
-
-    const handlePhotoDelete = async (row) => {
-        if (!user?.id || !logDate || !row?.storage_path || !row?.id || photoDeletingId) return;
-
-        const confirmed = window.confirm("この写真を削除しますか？");
-        if (!confirmed) return;
-
-        setPhotoDeletingId(row.id);
-
-        try {
-            const { error: storageError } = await supabase
-                .storage
-                .from("progress-photos-private")
-                .remove([row.storage_path]);
-
-            if (storageError) throw storageError;
-
-            const { error: dbError } = await supabase
-                .from("progress_photos")
-                .delete()
-                .eq("user_id", user.id)
-                .eq("id", row.id);
-
-            if (dbError) throw dbError;
-
-            setPhotoRows((prev) => prev.filter((photo) => photo.id !== row.id));
-            setPhotoUrls((prev) => {
-                const next = { ...prev };
-                delete next[row.id];
-                return next;
-            });
-            setViewerPhoto((prev) => (prev?.id === row.id ? null : prev));
-        } catch (error) {
-            console.error("photo delete failed", error);
-        } finally {
-            setPhotoDeletingId(null);
-        }
-    };
 
     return (
         <div className="fade-in" style={{ ...S.page, paddingBottom: 200 }}>
@@ -488,32 +212,25 @@ export default function LogScreen({
                 <div style={{ fontSize: 11, color: "var(--text3)" }}>
                     合計 {formattedVolumeKg}kg
                 </div>
+                {sessionSharePayload && (
+                    <button
+                        type="button"
+                        onClick={() => setShowSessionShare(true)}
+                        style={{
+                            marginTop: 10,
+                            padding: "7px 10px",
+                            borderRadius: 10,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card2)",
+                            color: "var(--text)",
+                            fontSize: 12,
+                            fontWeight: 700,
+                        }}
+                    >
+                        シェアカード
+                    </button>
+                )}
             </div>
-
-            <WorkoutPhotoCard
-                user={user}
-                logDate={logDate}
-                photoRows={photoRows}
-                photoUrls={photoUrls}
-                photoLoading={photoLoading}
-                photoUploading={photoUploading}
-                photoDeletingId={photoDeletingId}
-                photoLimitReached={photoLimitReached}
-                photoCount={photoCount}
-                latestPhotoUrl={latestPhotoUrl}
-                canOpenSharePreview={!photoLoading && !photoUploading && !pendingPhotoFile}
-                accentColor={accentColor}
-                accentText={accentText}
-                pendingPhotoFile={pendingPhotoFile}
-                fileInputRef={photoInputRef}
-                onFileChange={handlePhotoChange}
-                onPickPhoto={handlePhotoPick}
-                onDeletePhoto={handlePhotoDelete}
-                onOpenViewer={(row, idx) => setViewerPhoto({ id: row.id, url: photoUrls[row.id], title: `${logDate} の体写真 ${idx + 1}` })}
-                onOpenSharePreview={() => setShowSharePreview(true)}
-                onOpenSessionShare={() => setShowSessionShare(true)}
-                canOpenSessionShare={Boolean(sessionSharePayload)}
-            />
 
             {/* Empty State */}
             {!hasExercises && (
@@ -949,50 +666,12 @@ export default function LogScreen({
                 />
             )}
 
-            {viewerPhoto?.url && (
-                <PhotoViewerModal
-                    imageUrl={viewerPhoto.url}
-                    title={viewerPhoto.title}
-                    onClose={() => setViewerPhoto(null)}
-                />
-            )}
-
-            {pendingPhotoFile && (
-                <PhotoCropModal
-                    file={pendingPhotoFile}
-                    onCancel={() => setPendingPhotoFile(null)}
-                    onConfirm={handlePhotoUpload}
-                />
-            )}
-
-            {showSharePreview && (
-                <WorkoutShareModal
-                    isOpen={showSharePreview}
-                    onClose={() => setShowSharePreview(false)}
-                    template={shareTemplate}
-                    onChangeTemplate={setShareTemplate}
-                    photoRows={photoRows}
-                    photoUrls={photoUrls}
-                    initialPhotoId={latestPhotoRow?.id ?? null}
-                    workoutDate={logDate}
-                    summary={{
-                        exerciseCount: exCount,
-                        setCount,
-                        prCount,
-                        totalVolumeKg: Math.round(totalVolumeKg),
-                    }}
-                    fullRecord={fullRecord}
-                />
-            )}
-
             {showSessionShare && (
                 <WorkoutSessionShareModal
                     isOpen={showSessionShare}
                     onClose={() => setShowSessionShare(false)}
                     workoutDate={logDate}
                     sessionPayload={sessionSharePayload}
-                    photoRows={photoRows}
-                    photoUrls={photoUrls}
                 />
             )}
 
