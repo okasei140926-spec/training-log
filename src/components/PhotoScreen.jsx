@@ -3,6 +3,7 @@ import { supabase } from "../utils/supabase";
 import PhotoCompareModal from "./modals/PhotoCompareModal";
 import PhotoCropModal from "./modals/PhotoCropModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
+import { S } from "../utils/styles";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -405,18 +406,18 @@ export default function PhotoScreen({ user }) {
     for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
     return (
-        <div className="fade-in" style={{ padding: "20px", paddingBottom: 120 }}>
-            <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 14 }}>
-                REGISTERED PHOTOS
+        <div className="fade-in" style={{ ...S.page, paddingBottom: 24 }}>
+            <div style={{ ...S.sLabel, marginBottom: 0 }}>
+                写真比較
             </div>
 
             {!user ? (
-                <div style={{ background: "var(--card)", borderRadius: 18, padding: "24px 18px", border: "1px solid var(--border2)", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+                <div style={{ ...S.sectionCard, textAlign: "center", color: "var(--text3)", fontSize: 13, padding: "24px 18px" }}>
                     ログインすると比較用の体写真を見返せます
                 </div>
             ) : (
                 <>
-                    <div style={{ background: "var(--card)", borderRadius: 18, padding: 16, border: "1px solid var(--border2)", marginBottom: 16 }}>
+                    <div style={{ ...S.sectionCard }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
                             <div>
                                 <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>登録済み写真から比較</div>
@@ -463,7 +464,7 @@ export default function PhotoScreen({ user }) {
                         </div>
 
                         {!photoRows.length ? (
-                            <div style={{ background: "linear-gradient(180deg, #F8FCFF, var(--card))", borderRadius: 16, padding: "24px 18px", border: "1px solid rgba(56, 189, 248, 0.16)", textAlign: "center" }}>
+                            <div style={{ ...S.subtleCard, textAlign: "center", padding: "24px 18px" }}>
                                 <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 6 }}>
                                     まだ写真がありません
                                 </div>
@@ -505,7 +506,7 @@ export default function PhotoScreen({ user }) {
                                         const isOpen = openMonthMap[group.monthKey];
 
                                         return (
-                                            <div key={group.monthKey} style={{ background: "var(--card2)", borderRadius: 16, border: "1px solid rgba(217, 228, 239, 0.9)", overflow: "hidden" }}>
+                                            <div key={group.monthKey} style={{ background: "var(--card2)", borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.1)", overflow: "hidden", boxShadow: "var(--shadow-soft)" }}>
                                                 <button
                                                     onClick={() => toggleMonthOpen(group.monthKey)}
                                                     style={{
@@ -515,9 +516,9 @@ export default function PhotoScreen({ user }) {
                                                         alignItems: "center",
                                                         justifyContent: "space-between",
                                                         gap: 12,
-                                                        background: "transparent",
                                                         border: "none",
                                                         color: "var(--text)",
+                                                        background: "linear-gradient(180deg, var(--card2), var(--card))",
                                                     }}
                                                 >
                                                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>

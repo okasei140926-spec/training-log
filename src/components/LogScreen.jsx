@@ -10,6 +10,7 @@ import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
 import WorkoutPhotoCard from "./log/WorkoutPhotoCard";
 import { buildWorkoutSessionPayloadFromDraft } from "../utils/workoutSessions";
+import { S } from "../utils/styles";
 
 
 import {
@@ -471,18 +472,18 @@ export default function LogScreen({
     };
 
     return (
-        <div className="fade-in" style={{ padding: "20px", paddingBottom: 200 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
-                <div style={{ fontSize: 11, color: "var(--text4)" }}></div>
-            </div>
-
-            <div style={{ fontSize: 11, color: "var(--text4)", marginTop: -10, marginBottom: 16 }}>
-                {exCount}種目 ・ {setCount}セット ・ PR {prCount}件
-            </div>
-
-            <div style={{ fontSize: 11, color: "var(--text3)", marginTop: -10, marginBottom: 16 }}>
-                合計 {formattedVolumeKg}kg
+        <div className="fade-in" style={{ ...S.page, paddingBottom: 200 }}>
+            <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
+                    <div style={{ fontSize: 11, color: "var(--text4)" }}></div>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text4)", marginBottom: 4 }}>
+                    {exCount}種目 ・ {setCount}セット ・ PR {prCount}件
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                    合計 {formattedVolumeKg}kg
+                </div>
             </div>
 
             <WorkoutPhotoCard

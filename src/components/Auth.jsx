@@ -251,8 +251,9 @@ export default function Auth({ onClose, isDark }) {
 
   const btnStyle = {
     width: "100%", padding: 16, borderRadius: 12,
-    background: "#4ade80", border: "none",
-    fontWeight: 700, fontSize: 16, cursor: "pointer", color: "#000",
+    background: "linear-gradient(135deg, var(--accent), var(--accent2))", border: "none",
+    fontWeight: 700, fontSize: 16, cursor: "pointer", color: "#fff",
+    boxShadow: "var(--shadow-soft)",
   };
 
   const secondaryBtnStyle = {
@@ -267,48 +268,56 @@ export default function Auth({ onClose, isDark }) {
 
   if (sent) {
     return (
-      <div style={{ padding: 32, maxWidth: 400, margin: "0 auto", textAlign: "center", background: bg, minHeight: "100vh" }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
-        <h2 style={{ marginBottom: 12, color: text }}>メールを送信しました</h2>
-        <p style={{ color: sub, marginBottom: 32, lineHeight: 1.6 }}>
-          {email} にメールを送りました。<br />
-          {mode === "reset"
-            ? "メール内のリンクからパスワードを再設定してください。"
-            : "メール内のリンクをタップして登録を完了し、ログインしてください。"}
-        </p>
-        <button onClick={() => { setSent(false); setMode("login"); }} style={btnStyle}>
-          ログインへ
-        </button>
+      <div style={{ padding: 24, maxWidth: 430, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center" }}>
+        <div style={{ width: "100%", textAlign: "center", background: bg, border: `1px solid ${border}`, borderRadius: 26, boxShadow: "var(--shadow-card)", padding: 28 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
+          <h2 style={{ marginBottom: 12, color: text }}>メールを送信しました</h2>
+          <p style={{ color: sub, marginBottom: 32, lineHeight: 1.6 }}>
+            {email} にメールを送りました。<br />
+            {mode === "reset"
+              ? "メール内のリンクからパスワードを再設定してください。"
+              : "メール内のリンクをタップして登録を完了し、ログインしてください。"}
+          </p>
+          <button onClick={() => { setSent(false); setMode("login"); }} style={btnStyle}>
+            ログインへ
+          </button>
+        </div>
       </div>
     );
   }
 
   if (mode === "reset") {
     return (
-      <div style={{ padding: 32, maxWidth: 400, margin: "0 auto", background: bg, minHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <button onClick={() => setMode("login")} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: sub }}>←</button>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: sub }}>✕</button>
+      <div style={{ padding: 24, maxWidth: 430, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center" }}>
+        <div style={{ width: "100%", background: bg, border: `1px solid ${border}`, borderRadius: 26, boxShadow: "var(--shadow-card)", padding: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+            <button onClick={() => setMode("login")} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: sub }}>←</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: sub }}>✕</button>
+          </div>
+          <h2 style={{ marginBottom: 8, fontSize: 24, color: text }}>パスワードをリセット</h2>
+          <p style={{ color: sub, marginBottom: 24, fontSize: 14 }}>登録したメールアドレスを入力してください。パスワード再設定用のリンクを送ります。</p>
+          <input placeholder="メールアドレス" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
+          {error && <p style={{ color: "red", marginBottom: 12, fontSize: 14 }}>{error}</p>}
+          <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.7 : 1 }}>
+            {loading ? "送信中..." : "リセットメールを送る"}
+          </button>
         </div>
-        <h2 style={{ marginBottom: 8, fontSize: 24, color: text }}>パスワードをリセット</h2>
-        <p style={{ color: sub, marginBottom: 24, fontSize: 14 }}>登録したメールアドレスを入力してください。パスワード再設定用のリンクを送ります。</p>
-        <input placeholder="メールアドレス" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
-        {error && <p style={{ color: "red", marginBottom: 12, fontSize: 14 }}>{error}</p>}
-        <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.7 : 1 }}>
-          {loading ? "送信中..." : "リセットメールを送る"}
-        </button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 32, maxWidth: 400, margin: "0 auto", background: bg, minHeight: "100vh" }}>
+    <div style={{ padding: 24, maxWidth: 430, margin: "0 auto", minHeight: "100vh", display: "flex", alignItems: "center" }}>
+      <div style={{ width: "100%", background: bg, border: `1px solid ${border}`, borderRadius: 28, boxShadow: "var(--shadow-card)", padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
         <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: sub }}>✕</button>
       </div>
-      <h2 style={{ marginBottom: 24, fontSize: 24, color: text }}>
+      <h2 style={{ marginBottom: 6, fontSize: 24, color: text }}>
         {mode === "login" ? "ログイン" : "新規登録"}
       </h2>
+      <div style={{ color: sub, fontSize: 13, marginBottom: 20 }}>
+        PUMPでトレーニングを記録しましょう
+      </div>
       {mode === "signup" && (
         <input placeholder="ユーザー名" value={username} onChange={e => setUsername(e.target.value)} style={inputStyle} />
       )}
@@ -364,6 +373,7 @@ export default function Auth({ onClose, isDark }) {
       >
         {mode === "login" ? "アカウントをお持ちでない方はこちら" : "すでにアカウントをお持ちの方はこちら"}
       </button>
+      </div>
     </div>
   );
 }

@@ -255,6 +255,7 @@ export default function AnalyticsScreen({
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
   const [activeSummaryKey, setActiveSummaryKey] = useState(null);
+  const [selectedWeeklyBodyPart, setSelectedWeeklyBodyPart] = useState(null);
 
   const resolutionContext = useMemo(
     () => ({
@@ -397,6 +398,7 @@ export default function AnalyticsScreen({
     const validDates = new Set();
     const { startKey, endKey } = getWeekBounds(new Date());
     const weeklyBodyPartMap = {};
+    const weeklyBodyPartDetails = {};
 
     Object.entries(history || {}).forEach(([exerciseName, records]) => {
       (records || []).forEach((record) => {
@@ -410,16 +412,69 @@ export default function AnalyticsScreen({
 
         if (sanitized.date < startKey || sanitized.date > endKey) return;
         weeklyBodyPartMap[bodyPart] = (weeklyBodyPartMap[bodyPart] || 0) + sanitized.sets.length;
+
+        if (!weeklyBodyPartDetails[bodyPart]) {
+          weeklyBodyPartDetails[bodyPart] = {};
+        }
+
+        const detailKey = normalizeExerciseName(exerciseName);
+        if (!weeklyBodyPartDetails[bodyPart][detailKey]) {
+          weeklyBodyPartDetails[bodyPart][detailKey] = {
+            key: `${bodyPart}::${detailKey}`,
+            name: exerciseName,
+            setCount: 0,
+            volume: 0,
+          };
+        }
+
+        weeklyBodyPartDetails[bodyPart][detailKey].setCount += sanitized.sets.length;
+        weeklyBodyPartDetails[bodyPart][detailKey].volume += sanitized.sets.reduce((sum, set) => {
+          const weight = Number(set?.weight);
+          const reps = Number(set?.reps);
+          if (!Number.isFinite(weight) || weight <= 0) return sum;
+          if (!Number.isFinite(reps) || reps <= 0) return sum;
+          return sum + weight * reps;
+        }, 0);
       });
     });
+
+    const weeklyBodyPartItems = Object.fromEntries(
+      Object.entries(weeklyBodyPartDetails).map(([label, exerciseMap]) => [
+        label,
+        Object.values(exerciseMap).sort(
+          (a, b) =>
+            b.setCount - a.setCount ||
+            b.volume - a.volume ||
+            a.name.localeCompare(b.name, "ja")
+        ),
+      ])
+    );
 
     return {
       totalTrainingDays: validDates.size,
       weeklyBodyParts: Object.entries(weeklyBodyPartMap)
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))
         .slice(0, 6),
+      weeklyBodyPartItems,
     };
   }, [history, resolutionContext]);
+
+  const selectedWeeklyBodyPartSummary = useMemo(() => {
+    if (!selectedWeeklyBodyPart) return null;
+    const items = progressInsights.weeklyBodyPartItems?.[selectedWeeklyBodyPart] || [];
+
+    return {
+      title: `${selectedWeeklyBodyPart}の種目`,
+      subtitle: `今週 ${progressInsights.weeklyBodyParts.find(([label]) => label === selectedWeeklyBodyPart)?.[1] || 0}セット`,
+      emptyText: "今週はまだこの部位の記録がありません",
+      items: items.map((item) => ({
+        key: item.key,
+        title: item.name,
+        badge: selectedWeeklyBodyPart,
+        meta: `${item.setCount}セット ・ ${Math.round(item.volume).toLocaleString("ja-JP")}kg`,
+      })),
+    };
+  }, [selectedWeeklyBodyPart, progressInsights]);
 
   const selectedRecords = useMemo(() => {
     if (!selectedExerciseKey) return [];
@@ -680,8 +735,10 @@ export default function AnalyticsScreen({
           {progressInsights.weeklyBodyParts.length > 0 ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {progressInsights.weeklyBodyParts.map(([label, count]) => (
-                <div
+                <button
                   key={label}
+                  type="button"
+                  onClick={() => setSelectedWeeklyBodyPart(label)}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -692,11 +749,12 @@ export default function AnalyticsScreen({
                     border: "1px solid rgba(18, 199, 194, 0.1)",
                     fontSize: 12,
                     color: "var(--text2)",
+                    cursor: "pointer",
                   }}
                 >
                   <span style={{ fontWeight: 700 }}>{label}</span>
                   <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>{count}</span>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -711,12 +769,14 @@ export default function AnalyticsScreen({
         {[weeklySummary, monthlySummary].map((summary) => (
           <div
             key={summary.key}
+            onClick={() => setActiveSummaryKey(summary.group)}
             style={{
               background: "var(--card)",
               borderRadius: 16,
               padding: "10px 11px",
               border: "1px solid var(--border2)",
               boxShadow: "var(--shadow-soft)",
+              cursor: "pointer",
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 2 }}>
@@ -728,7 +788,7 @@ export default function AnalyticsScreen({
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 type="button"
-                onClick={() => setActiveSummaryKey(summary.key)}
+                onClick={() => setActiveSummaryKey(summary.group)}
                 style={{
                   flex: 1,
                   padding: "7px 0",
@@ -744,7 +804,7 @@ export default function AnalyticsScreen({
               </button>
               <button
                 type="button"
-                onClick={() => setActiveSummaryKey(summary.key)}
+                onClick={() => setActiveSummaryKey(summary.group)}
                 style={{
                   flex: 1,
                   padding: "7px 0",
@@ -802,6 +862,112 @@ export default function AnalyticsScreen({
         onClose={() => setActiveSummaryKey(null)}
         summary={activeSummary}
       />
+
+      {selectedWeeklyBodyPartSummary && (
+        <div
+          onClick={() => setSelectedWeeklyBodyPart(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            zIndex: 999,
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 430,
+              background: "var(--card)",
+              borderRadius: 20,
+              padding: "18px 16px 20px",
+              border: "1px solid var(--border2)",
+              maxHeight: "58vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 5,
+                borderRadius: 999,
+                background: "var(--border2)",
+                margin: "0 auto 14px",
+              }}
+            />
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                {selectedWeeklyBodyPartSummary.title}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                {selectedWeeklyBodyPartSummary.subtitle}
+              </div>
+            </div>
+
+            {selectedWeeklyBodyPartSummary.items.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {selectedWeeklyBodyPartSummary.items.map((item) => (
+                  <div
+                    key={item.key}
+                    style={{
+                      background: "linear-gradient(180deg, var(--card2), var(--card))",
+                      borderRadius: 16,
+                      padding: "11px 12px",
+                      border: "1px solid rgba(18, 199, 194, 0.1)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      {item.badge && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            padding: "3px 7px",
+                            borderRadius: 999,
+                            background: "var(--info-soft)",
+                            border: "1px solid var(--info-border)",
+                            color: "var(--accent)",
+                            fontSize: 10,
+                            fontWeight: 800,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
+                        {item.title}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.45 }}>
+                      {item.meta}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div
+                style={{
+                  background: "linear-gradient(180deg, var(--card2), var(--card))",
+                  borderRadius: 18,
+                  padding: "18px 14px",
+                  border: "1px dashed rgba(18, 199, 194, 0.24)",
+                  textAlign: "center",
+                  fontSize: 13,
+                  color: "var(--text2)",
+                  lineHeight: 1.5,
+                }}
+              >
+                {selectedWeeklyBodyPartSummary.emptyText}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

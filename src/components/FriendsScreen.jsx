@@ -887,11 +887,19 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     if (!user) {
         return (
-            <div style={{ padding: 32, textAlign: "center" }}>
-                <p style={{ marginBottom: 24 }}>Friends機能を使うにはログインが必要です</p>
-                <button onClick={onLogin} style={{ padding: "12px 32px", borderRadius: 14, background: "linear-gradient(135deg, var(--accent), #4ADE80)", color: "#fff", border: "1px solid transparent", fontWeight: 700, fontSize: 16, boxShadow: "var(--shadow-soft)" }}>
+            <div style={{ ...S.page, justifyContent: "center", minHeight: "55vh" }}>
+                <div
+                    style={{
+                        ...S.sectionCard,
+                        textAlign: "center",
+                        padding: 24,
+                    }}
+                >
+                <p style={{ marginBottom: 24, color: "var(--text2)", lineHeight: 1.6 }}>Friends機能を使うにはログインが必要です</p>
+                <button onClick={onLogin} style={{ padding: "12px 32px", borderRadius: 14, background: "linear-gradient(135deg, var(--accent), var(--accent2))", color: "#fff", border: "1px solid transparent", fontWeight: 700, fontSize: 16, boxShadow: "var(--shadow-soft)" }}>
                     ログイン / 新規登録
                 </button>
+                </div>
             </div>
         );
     }
@@ -928,10 +936,10 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
 
     return (
-        <div className="fade-in" style={{ padding: "20px" }}>
+        <div className="fade-in" style={{ ...S.page, paddingBottom: 24 }}>
             {user && (
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                    <button onClick={onLogout} style={{ background: "none", border: "1px solid var(--border2)", borderRadius: 8, padding: "6px 12px", fontSize: 13, color: "var(--text2)", cursor: "pointer" }}>
+                    <button onClick={onLogout} style={{ ...S.pillBtn, padding: "8px 14px", fontSize: 12, color: "var(--text2)" }}>
                         ログアウト
                     </button>
                 </div>

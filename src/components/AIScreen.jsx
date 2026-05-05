@@ -62,6 +62,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                 maxHeight: AI_VIEWPORT_HEIGHT,
                 overflow: "hidden",
                 background: "var(--bg)",
+                padding: "0 18px 8px",
             }}
         >
             <div
@@ -69,7 +70,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                     flex: 1,
                     minHeight: 0,
                     overflowY: "auto",
-                    padding: "16px 20px 20px",
+                    padding: "16px 0 20px",
                 }}
             >
                 {aiMsgs.map((msg, i) => (
@@ -112,17 +113,21 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
             <div
                 style={{
                     flexShrink: 0,
-                    padding: "8px 20px 8px",
+                    padding: "8px 12px 10px",
                     borderTop: "1px solid var(--border2)",
                     display: "flex",
                     gap: 6,
                     overflowX: "auto",
-                    background: "var(--bg)",
+                    background: "var(--card)",
+                    borderRadius: 18,
+                    boxShadow: "var(--shadow-soft)",
+                    border: "1px solid rgba(18, 199, 194, 0.08)",
+                    marginBottom: 8,
                 }}
             >
                 {AI_SUGGESTIONS.map(({ label, prompt, mode }) => (
                     <button key={label} onClick={() => handleSuggestion({ prompt, mode })}
-                        style={{ whiteSpace: "nowrap", padding: "8px 13px", borderRadius: 999, background: "var(--card)", color: "var(--text2)", fontSize: 12, fontWeight: 700, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
+                        style={{ whiteSpace: "nowrap", padding: "8px 13px", borderRadius: 999, background: "linear-gradient(180deg, var(--card2), var(--card))", color: "var(--text2)", fontSize: 12, fontWeight: 700, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
                         {label}
                     </button>
                 ))}
@@ -131,16 +136,19 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
             <div
                 style={{
                     flexShrink: 0,
-                    padding: `8px 20px ${FOOTER_SAFE_PADDING}`,
+                    padding: `10px 12px ${FOOTER_SAFE_PADDING}`,
                     display: "flex",
                     gap: 8,
-                    background: "var(--bg)",
+                    background: "var(--card)",
+                    borderRadius: 22,
+                    boxShadow: "var(--shadow-card)",
+                    border: "1px solid rgba(18, 199, 194, 0.08)",
                 }}
             >
                 <input ref={inputRef} value={aiInput} onChange={e => setAiInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleSend()}
                     placeholder="AI Coachに聞く..."
-                    style={{ flex: 1, padding: "13px 16px", borderRadius: 24, background: "var(--card)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 14, boxShadow: "var(--shadow-card)" }} />
+                    style={{ flex: 1, padding: "13px 16px", borderRadius: 24, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 14, boxShadow: "none" }} />
                 <button onClick={() => handleSend()} disabled={aiLoad}
                     style={{ width: 48, height: 48, borderRadius: 24, background: aiLoad ? "var(--border2)" : "linear-gradient(135deg, var(--accent), var(--accent2))", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: aiLoad ? "none" : "var(--shadow-soft)" }}>↑</button>
             </div>
