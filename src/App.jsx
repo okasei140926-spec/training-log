@@ -73,6 +73,7 @@ const getHistoryDeleteMarkersKey = (userId) => `historyDeleteMarkers_${userId}`;
 const EXERCISE_BODY_PART_OVERRIDES_KEY = "exerciseBodyPartOverrides";
 const WORKOUT_STARTED_AT_KEY = "pump_workout_started_at";
 const WORKOUT_STARTED_FOR_DATE_KEY = "pump_workout_started_for_date";
+const WORKOUT_LAST_ACTIVITY_AT_KEY = "pump_workout_last_activity_at";
 
 const isPlainObject = (value) =>
     !!value && typeof value === "object" && !Array.isArray(value);
@@ -440,6 +441,10 @@ export default function GymApp() {
     const [workoutStartedForDate, setWorkoutStartedForDate] = useState(() =>
         String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim()
     );
+    const [workoutLastActivityAt, setWorkoutLastActivityAt] = useState(() => {
+        const lastActivityAt = Number(load(WORKOUT_LAST_ACTIVITY_AT_KEY, null));
+        return Number.isFinite(lastActivityAt) && lastActivityAt > 0 ? lastActivityAt : null;
+    });
     const [workoutElapsedSec, setWorkoutElapsedSec] = useState(0);
 
     const touchStartX = useRef(null);
@@ -451,6 +456,8 @@ export default function GymApp() {
     const pendingWorkoutNotificationRef = useRef(null);
     const historyDeleteMarkersRef = useRef(createEmptyHistoryDeleteMarkers());
     const pendingWorkoutSessionSyncDatesRef = useRef(new Set());
+    const previousWorkoutActivitySignatureRef = useRef("");
+    const previousWorkoutActivityDateRef = useRef("");
 
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
@@ -474,41 +481,69 @@ export default function GymApp() {
     const resetWorkoutElapsedTimer = useCallback(() => {
         setWorkoutStartedAt(null);
         setWorkoutStartedForDate("");
+        setWorkoutLastActivityAt(null);
         setWorkoutElapsedSec(0);
         try {
             localStorage.removeItem(WORKOUT_STARTED_AT_KEY);
             localStorage.removeItem(WORKOUT_STARTED_FOR_DATE_KEY);
+            localStorage.removeItem(WORKOUT_LAST_ACTIVITY_AT_KEY);
         } catch {}
     }, []);
 
-    const startOrResumeWorkoutElapsedTimer = useCallback((targetDate) => {
+    const markWorkoutActivity = useCallback((targetDate) => {
         const normalizedDate = String(targetDate || "").trim();
         if (!normalizedDate) return;
 
+        const now = Date.now();
         const storedStartedAt = Number(load(WORKOUT_STARTED_AT_KEY, null));
         const storedDate = String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim();
+        const nextStartedAt =
+            Number.isFinite(storedStartedAt) && storedStartedAt > 0 && storedDate === normalizedDate
+                ? storedStartedAt
+                : now;
 
-        if (
-            Number.isFinite(storedStartedAt) &&
-            storedStartedAt > 0 &&
-            storedDate === normalizedDate
-        ) {
-            setWorkoutStartedAt(storedStartedAt);
-            setWorkoutStartedForDate(normalizedDate);
-            return;
-        }
-
-        const nextStartedAt = Date.now();
         setWorkoutStartedAt(nextStartedAt);
         setWorkoutStartedForDate(normalizedDate);
+        setWorkoutLastActivityAt(now);
+        setWorkoutElapsedSec(Math.max(0, Math.floor((now - nextStartedAt) / 1000)));
         save(WORKOUT_STARTED_AT_KEY, nextStartedAt);
         save(WORKOUT_STARTED_FOR_DATE_KEY, normalizedDate);
+        save(WORKOUT_LAST_ACTIVITY_AT_KEY, now);
     }, []);
 
     useEffect(() => {
-        if (screen !== "log") return;
-        startOrResumeWorkoutElapsedTimer(logDate);
-    }, [screen, logDate, startOrResumeWorkoutElapsedTimer]);
+        const storedDate = String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim();
+        const storedStartedAt = Number(load(WORKOUT_STARTED_AT_KEY, null));
+        const storedLastActivityAt = Number(load(WORKOUT_LAST_ACTIVITY_AT_KEY, null));
+
+        if (
+            storedDate &&
+            storedDate !== logDate
+        ) {
+            resetWorkoutElapsedTimer();
+            return;
+        }
+
+        if (
+            storedDate === logDate &&
+            Number.isFinite(storedStartedAt) &&
+            storedStartedAt > 0
+        ) {
+            setWorkoutStartedAt(storedStartedAt);
+            setWorkoutStartedForDate(logDate);
+            setWorkoutLastActivityAt(
+                Number.isFinite(storedLastActivityAt) && storedLastActivityAt > 0
+                    ? storedLastActivityAt
+                    : storedStartedAt
+            );
+            return;
+        }
+
+        setWorkoutStartedAt(null);
+        setWorkoutStartedForDate("");
+        setWorkoutLastActivityAt(null);
+        setWorkoutElapsedSec(0);
+    }, [logDate, resetWorkoutElapsedTimer]);
 
     useEffect(() => {
         if (!workoutStartedAt || !workoutStartedForDate) {
@@ -973,20 +1008,27 @@ export default function GymApp() {
                         const shouldPersistWorkoutTiming =
                             hasValidWorkoutForDate &&
                             workoutStartedAt &&
+                            workoutLastActivityAt &&
                             workoutStartedForDate === date;
 
                         const endedAtIso = shouldPersistWorkoutTiming
-                            ? new Date().toISOString()
-                            : existingRow?.ended_at || null;
+                            ? new Date(workoutLastActivityAt).toISOString()
+                            : date === logDate
+                                ? null
+                                : existingRow?.ended_at || null;
                         const startedAtIso = shouldPersistWorkoutTiming
                             ? new Date(workoutStartedAt).toISOString()
-                            : existingRow?.started_at || null;
+                            : date === logDate
+                                ? null
+                                : existingRow?.started_at || null;
                         const durationSec = shouldPersistWorkoutTiming
                             ? Math.max(
                                 0,
-                                Math.floor((new Date(endedAtIso).getTime() - workoutStartedAt) / 1000)
+                                Math.floor((workoutLastActivityAt - workoutStartedAt) / 1000)
                             )
-                            : existingRow?.duration_sec ?? null;
+                            : date === logDate
+                                ? null
+                                : existingRow?.duration_sec ?? null;
 
                         return {
                             user_id: currentUserId,
@@ -1025,15 +1067,18 @@ export default function GymApp() {
                                 const shouldPersistWorkoutTiming =
                                     hasValidWorkoutForDate &&
                                     workoutStartedAt &&
+                                    workoutLastActivityAt &&
                                     workoutStartedForDate === date;
-                                const endedAtIso = shouldPersistWorkoutTiming ? new Date().toISOString() : null;
+                                const endedAtIso = shouldPersistWorkoutTiming
+                                    ? new Date(workoutLastActivityAt).toISOString()
+                                    : null;
                                 const timing = shouldPersistWorkoutTiming
                                     ? {
                                         startedAtIso: new Date(workoutStartedAt).toISOString(),
                                         endedAtIso,
                                         durationSec: Math.max(
                                             0,
-                                            Math.floor((new Date(endedAtIso).getTime() - workoutStartedAt) / 1000)
+                                            Math.floor((workoutLastActivityAt - workoutStartedAt) / 1000)
                                         ),
                                     }
                                     : null;
@@ -1091,7 +1136,7 @@ export default function GymApp() {
             .catch((error) => {
                 console.error("history sync save failed", error);
             });
-    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot, cleanupWorkoutSessionsForHistory, workoutStartedAt, workoutStartedForDate]);
+    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot, cleanupWorkoutSessionsForHistory, workoutStartedAt, workoutStartedForDate, workoutLastActivityAt]);
 
     useEffect(() => {
         let isActive = true;
@@ -1239,6 +1284,77 @@ export default function GymApp() {
     });
 
     const exercises = sessionEx !== null ? sessionEx : baseExercises;
+
+    useEffect(() => {
+        if (screen !== "log") return;
+
+        const activitySignature = JSON.stringify(
+            exercises
+                .map((ex, index) => {
+                    const exUnit = getExUnit(ex.name);
+                    const validSets = sanitizeWorkoutSets(
+                        (logData[ex.name] || []).map((set) => ({
+                            ...set,
+                            weight: storeW(set.weight, exUnit),
+                        })),
+                        { allowBodyweight: true }
+                    );
+
+                    if (!validSets.length) return null;
+
+                    return {
+                        name: ex.name,
+                        order: index,
+                        sets: validSets.map((set) => ({
+                            weight: set.weight === "BW" ? "BW" : Number(set.weight),
+                            reps: Number(set.reps),
+                        })),
+                    };
+                })
+                .filter(Boolean)
+        );
+
+        if (previousWorkoutActivityDateRef.current !== logDate) {
+            previousWorkoutActivityDateRef.current = logDate;
+            previousWorkoutActivitySignatureRef.current = activitySignature;
+            return;
+        }
+
+        if (
+            activitySignature !== "[]" &&
+            activitySignature !== previousWorkoutActivitySignatureRef.current
+        ) {
+            markWorkoutActivity(logDate);
+        }
+
+        previousWorkoutActivitySignatureRef.current = activitySignature;
+    }, [screen, exercises, logData, getExUnit, logDate, markWorkoutActivity]);
+
+    useEffect(() => {
+        const hasValidDraftWorkout = exercises.some((ex) => {
+            const exUnit = getExUnit(ex.name);
+            const validSets = sanitizeWorkoutSets(
+                (logData[ex.name] || []).map((set) => ({
+                    ...set,
+                    weight: storeW(set.weight, exUnit),
+                })),
+                { allowBodyweight: true }
+            );
+            return validSets.length > 0;
+        });
+
+        const hasValidSavedWorkout = hasValidWorkoutOnDate(history, logDate);
+
+        if (
+            workoutStartedForDate === logDate &&
+            !hasValidDraftWorkout &&
+            !hasValidSavedWorkout
+        ) {
+            resetWorkoutElapsedTimer();
+            previousWorkoutActivitySignatureRef.current = "[]";
+            previousWorkoutActivityDateRef.current = logDate;
+        }
+    }, [exercises, getExUnit, history, logData, logDate, resetWorkoutElapsedTimer, workoutStartedForDate]);
 
     // useEffectより前に定義
     const persistCurrentLog = useCallback(() => {
