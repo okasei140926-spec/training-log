@@ -10,6 +10,7 @@ import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
 import {
   PR_UPDATE_TOLERANCE_KG,
   formatDateKey,
+  getBestRmSet,
   hasMeaningfulPRIncrease,
   sanitizeHistoryRecord,
   sanitizeWorkoutSets,
@@ -17,6 +18,7 @@ import {
 import { normalizeExerciseName } from "../utils/exerciseName";
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
+const formatWeight = (value) => `${Math.round(Number(value || 0) * 10) / 10}kg`;
 
 const buildGreetingPrefix = (date) => {
   const hour = date.getHours();
@@ -48,6 +50,8 @@ export default function HistoryScreen({
   const [showCustomBodyPartModal, setShowCustomBodyPartModal] = useState(false);
   const [editingManualBest, setEditingManualBest] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedSummaryKey, setSelectedSummaryKey] = useState(null);
+  const [showAllTodayWorkouts, setShowAllTodayWorkouts] = useState(false);
   const [openExercises, setOpenExercises] = useState({});
 
   const today = new Date();
@@ -92,7 +96,7 @@ export default function HistoryScreen({
   };
 
   useEffect(() => {
-    if (selectedDate) {
+    if (selectedDate || selectedSummaryKey) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -155,8 +159,8 @@ export default function HistoryScreen({
     [resolvedEntries, todayKey]
   );
 
-  const todaySummary = useMemo(() => {
-    const previousSetsMap = {};
+  const previousSetsMap = useMemo(() => {
+    const map = {};
 
     Object.entries(history || {}).forEach(([exerciseName, records]) => {
       (records || []).forEach((record) => {
@@ -171,8 +175,8 @@ export default function HistoryScreen({
         if (!bodyPart) return;
 
         const key = `${bodyPart}::${normalizeExerciseName(exerciseName)}`;
-        if (!previousSetsMap[key]) previousSetsMap[key] = [];
-        previousSetsMap[key].push(...sanitizeWorkoutSets(sanitized.sets, { allowBodyweight: false }));
+        if (!map[key]) map[key] = [];
+        map[key].push(...sanitizeWorkoutSets(sanitized.sets, { allowBodyweight: false }));
       });
     });
 
@@ -181,42 +185,128 @@ export default function HistoryScreen({
       if (!bodyPart || hiddenBodyParts.includes(bodyPart)) return;
 
       const key = `${bodyPart}::${normalizeExerciseName(entry?.exercise_name)}`;
-      if (!previousSetsMap[key]) previousSetsMap[key] = [];
-      previousSetsMap[key].push(
+      if (!map[key]) map[key] = [];
+      map[key].push(
         ...sanitizeWorkoutSets([{ weight: entry.weight, reps: entry.reps }], {
           allowBodyweight: false,
         })
       );
     });
 
-    const prCount = todayEntries.reduce((count, entry) => {
-      const previousSets =
-        previousSetsMap[`${entry.bodyPart}::${normalizeExerciseName(entry.name)}`] || [];
-      return (
-        count +
-        (hasMeaningfulPRIncrease(entry.sets, previousSets, null, PR_UPDATE_TOLERANCE_KG)
-          ? 1
-          : 0)
-      );
-    }, 0);
-
-    return {
-      exerciseCount: todayEntries.length,
-      setCount: todayEntries.reduce((sum, entry) => sum + entry.setCount, 0),
-      totalVolume: Math.round(todayEntries.reduce((sum, entry) => sum + entry.volume, 0)),
-      prCount,
-    };
+    return map;
   }, [
     exerciseBodyPartOverrides,
     hiddenBodyParts,
     history,
     manualBests,
     muscleEx,
-    todayEntries,
     todayKey,
   ]);
 
+  const todayPrEntries = useMemo(
+    () =>
+      todayEntries
+        .map((entry) => {
+          const previousSets =
+            previousSetsMap[`${entry.bodyPart}::${normalizeExerciseName(entry.name)}`] || [];
+          const bestSet = getBestRmSet(entry.sets, { allowBodyweight: false });
+          if (
+            !bestSet ||
+            !hasMeaningfulPRIncrease(entry.sets, previousSets, null, PR_UPDATE_TOLERANCE_KG)
+          ) {
+            return null;
+          }
+
+          return {
+            ...entry,
+            bestSet,
+          };
+        })
+        .filter(Boolean),
+    [todayEntries, previousSetsMap]
+  );
+
+  const todaySummary = useMemo(() => {
+    return {
+      exerciseCount: todayEntries.length,
+      setCount: todayEntries.reduce((sum, entry) => sum + entry.setCount, 0),
+      totalVolume: Math.round(todayEntries.reduce((sum, entry) => sum + entry.volume, 0)),
+      prCount: todayPrEntries.length,
+    };
+  }, [
+    todayEntries,
+    todayPrEntries,
+  ]);
+
   const heroWorkoutCards = todayEntries.slice(0, 3);
+  const visibleTodayWorkouts = showAllTodayWorkouts ? todayEntries : heroWorkoutCards;
+
+  const summaryCards = [
+    { key: "exerciseCount", icon: "🏋️", label: "種目数", value: `${todaySummary.exerciseCount}` },
+    { key: "setCount", icon: "✅", label: "セット数", value: `${todaySummary.setCount}` },
+    { key: "totalVolume", icon: "📈", label: "Volume", value: formatVolume(todaySummary.totalVolume) },
+    { key: "prCount", icon: "🏆", label: "PR更新", value: `${todaySummary.prCount}件` },
+  ];
+
+  const selectedSummary = useMemo(() => {
+    if (!selectedSummaryKey) return null;
+
+    if (selectedSummaryKey === "exerciseCount") {
+      return {
+        title: "今日やった種目",
+        subtitle: `${todaySummary.exerciseCount}種目`,
+        emptyText: "今日はまだ種目を記録していません",
+        items: todayEntries.map((entry) => ({
+          key: entry.id,
+          title: entry.name,
+          badge: entry.bodyPart,
+          meta: `${entry.setCount}セット ・ ${formatVolume(entry.volume)}`,
+        })),
+      };
+    }
+
+    if (selectedSummaryKey === "setCount") {
+      return {
+        title: "今日のセット詳細",
+        subtitle: `合計 ${todaySummary.setCount}セット`,
+        emptyText: "今日はまだセットを記録していません",
+        items: todayEntries.map((entry) => ({
+          key: entry.id,
+          title: entry.name,
+          badge: entry.bodyPart,
+          meta: entry.sets
+            .map((set, index) => `${index + 1}. ${formatWeight(set.weight)} × ${Number(set.reps)}rep`)
+            .join(" / "),
+        })),
+      };
+    }
+
+    if (selectedSummaryKey === "prCount") {
+      return {
+        title: "今日更新したPR",
+        subtitle: `${todaySummary.prCount}件`,
+        emptyText: "今日はまだPR更新がありません",
+        items: todayPrEntries.map((entry) => ({
+          key: `${entry.id}-pr`,
+          title: entry.name,
+          badge: entry.bodyPart,
+          meta: `${formatWeight(entry.bestSet.weight)} × ${Number(entry.bestSet.reps)}rep`,
+        })),
+      };
+    }
+
+    return {
+      title: "今日のVolume",
+      subtitle: formatVolume(todaySummary.totalVolume),
+      emptyText: "今日はまだVolumeがありません",
+      items: todayEntries.map((entry) => ({
+        key: `${entry.id}-volume`,
+        title: entry.name,
+        badge: entry.bodyPart,
+        meta: `${formatVolume(entry.volume)} ・ ${entry.setCount}セット`,
+      })),
+    };
+  }, [selectedSummaryKey, todayEntries, todayPrEntries, todaySummary]);
 
   const dayDetails = useMemo(
     () =>
@@ -318,20 +408,18 @@ export default function HistoryScreen({
           今日のサマリー
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-          {[
-            { icon: "🏋️", label: "種目数", value: `${todaySummary.exerciseCount}` },
-            { icon: "✅", label: "セット数", value: `${todaySummary.setCount}` },
-            { icon: "📈", label: "Volume", value: formatVolume(todaySummary.totalVolume) },
-            { icon: "🏆", label: "PR更新", value: `${todaySummary.prCount}件` },
-          ].map((item) => (
-            <div
-              key={item.label}
+          {summaryCards.map((item) => (
+            <button
+              type="button"
+              key={item.key}
+              onClick={() => setSelectedSummaryKey(item.key)}
               style={{
                 background: "var(--card)",
                 borderRadius: 20,
                 padding: "12px 12px 11px",
                 border: "1px solid rgba(18, 199, 194, 0.12)",
                 boxShadow: "0 12px 28px rgba(15, 94, 99, 0.06)",
+                textAlign: "left",
               }}
             >
               <div style={{ fontSize: 20, marginBottom: 6 }}>{item.icon}</div>
@@ -341,7 +429,7 @@ export default function HistoryScreen({
               <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text)", lineHeight: 1.15 }}>
                 {item.value}
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -383,62 +471,72 @@ export default function HistoryScreen({
         </div>
 
         {heroWorkoutCards.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {heroWorkoutCards.map((entry) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            {visibleTodayWorkouts.map((entry) => (
               <div
                 key={entry.id}
                 style={{
                   background: "linear-gradient(180deg, var(--card2), var(--card))",
                   borderRadius: 17,
-                  padding: "10px 11px",
+                  padding: "9px 10px",
                   border: "1px solid rgba(18, 199, 194, 0.1)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 10,
-                  alignItems: "center",
                 }}
               >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        padding: "3px 7px",
-                        borderRadius: 999,
-                        background: "var(--info-soft)",
-                        border: "1px solid var(--info-border)",
-                        color: "var(--accent)",
-                        fontSize: 10,
-                        fontWeight: 800,
-                      }}
-                    >
-                      {entry.bodyPart}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", lineHeight: 1.25 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      padding: "3px 7px",
+                      borderRadius: 999,
+                      background: "var(--info-soft)",
+                      border: "1px solid var(--info-border)",
+                      color: "var(--accent)",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {entry.bodyPart}
+                  </span>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: "var(--text)",
+                      lineHeight: 1.2,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {entry.name}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2, lineHeight: 1.35 }}>
-                    {entry.setCount}セット ・ 最大{" "}
-                    {entry.maxWeight > 0
-                      ? `${Math.round(entry.maxWeight * 10) / 10}kg`
-                      : "-"}
-                  </div>
                 </div>
-                <div style={{ flexShrink: 0, textAlign: "right" }}>
-                  <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 2 }}>
-                    Volume
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", lineHeight: 1.2 }}>
-                    {formatVolume(entry.volume)}
-                  </div>
+                <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4 }}>
+                  {entry.setCount}セット ・ 最大{" "}
+                  {entry.maxWeight > 0 ? `${Math.round(entry.maxWeight * 10) / 10}kg` : "-"} ・{" "}
+                  {formatVolume(entry.volume)}
                 </div>
               </div>
             ))}
             {todayEntries.length > heroWorkoutCards.length && (
-              <div style={{ fontSize: 11, color: "var(--text3)", textAlign: "center", marginTop: 1 }}>
-                さらに {todayEntries.length - heroWorkoutCards.length} 種目あります
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAllTodayWorkouts((prev) => !prev)}
+                style={{
+                  fontSize: 11,
+                  color: "var(--accent)",
+                  textAlign: "center",
+                  marginTop: 1,
+                  fontWeight: 800,
+                  background: "none",
+                }}
+              >
+                {showAllTodayWorkouts
+                  ? "閉じる"
+                  : `さらに ${todayEntries.length - heroWorkoutCards.length} 種目を見る`}
+              </button>
             )}
           </div>
         ) : (
@@ -809,6 +907,112 @@ export default function HistoryScreen({
                 この日の記録を削除
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {selectedSummary && (
+        <div
+          onClick={() => setSelectedSummaryKey(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            zIndex: 999,
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 430,
+              background: "var(--card)",
+              borderRadius: 20,
+              padding: "18px 16px 20px",
+              border: "1px solid var(--border2)",
+              maxHeight: "58vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 5,
+                borderRadius: 999,
+                background: "var(--border2)",
+                margin: "0 auto 14px",
+              }}
+            />
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                {selectedSummary.title}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                {selectedSummary.subtitle}
+              </div>
+            </div>
+
+            {selectedSummary.items.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {selectedSummary.items.map((item) => (
+                  <div
+                    key={item.key}
+                    style={{
+                      background: "linear-gradient(180deg, var(--card2), var(--card))",
+                      borderRadius: 16,
+                      padding: "11px 12px",
+                      border: "1px solid rgba(18, 199, 194, 0.1)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      {item.badge && (
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            padding: "3px 7px",
+                            borderRadius: 999,
+                            background: "var(--info-soft)",
+                            border: "1px solid var(--info-border)",
+                            color: "var(--accent)",
+                            fontSize: 10,
+                            fontWeight: 800,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
+                        {item.title}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.45 }}>
+                      {item.meta}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div
+                style={{
+                  background: "linear-gradient(180deg, var(--card2), var(--card))",
+                  borderRadius: 18,
+                  padding: "18px 14px",
+                  border: "1px dashed rgba(18, 199, 194, 0.24)",
+                  textAlign: "center",
+                  fontSize: 13,
+                  color: "var(--text2)",
+                  lineHeight: 1.5,
+                }}
+              >
+                {selectedSummary.emptyText}
+              </div>
+            )}
           </div>
         </div>
       )}
