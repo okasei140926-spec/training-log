@@ -6,6 +6,8 @@ import {
     storeW,
     KG_TO_LBS,
     buildHistoryFromWorkoutRows,
+    formatDateKey,
+    hasValidWorkoutOnDate,
     mergeHistoryMaps,
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
@@ -69,6 +71,8 @@ const HISTORY_OWNER_KEY = "historyOwnerUserId";
 const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
 const getHistoryDeleteMarkersKey = (userId) => `historyDeleteMarkers_${userId}`;
 const EXERCISE_BODY_PART_OVERRIDES_KEY = "exerciseBodyPartOverrides";
+const WORKOUT_STARTED_AT_KEY = "pump_workout_started_at";
+const WORKOUT_STARTED_FOR_DATE_KEY = "pump_workout_started_for_date";
 
 const isPlainObject = (value) =>
     !!value && typeof value === "object" && !Array.isArray(value);
@@ -429,6 +433,14 @@ export default function GymApp() {
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
     const [sessionSyncVersion, setSessionSyncVersion] = useState(0);
+    const [workoutStartedAt, setWorkoutStartedAt] = useState(() => {
+        const startedAt = Number(load(WORKOUT_STARTED_AT_KEY, null));
+        return Number.isFinite(startedAt) && startedAt > 0 ? startedAt : null;
+    });
+    const [workoutStartedForDate, setWorkoutStartedForDate] = useState(() =>
+        String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim()
+    );
+    const [workoutElapsedSec, setWorkoutElapsedSec] = useState(0);
 
     const touchStartX = useRef(null);
     const touchStartY = useRef(null);
@@ -459,13 +471,74 @@ export default function GymApp() {
         historyRevisionRef.current += 1;
     }, [history]);
 
+    const resetWorkoutElapsedTimer = useCallback(() => {
+        setWorkoutStartedAt(null);
+        setWorkoutStartedForDate("");
+        setWorkoutElapsedSec(0);
+        try {
+            localStorage.removeItem(WORKOUT_STARTED_AT_KEY);
+            localStorage.removeItem(WORKOUT_STARTED_FOR_DATE_KEY);
+        } catch {}
+    }, []);
+
+    const startOrResumeWorkoutElapsedTimer = useCallback((targetDate) => {
+        const normalizedDate = String(targetDate || "").trim();
+        if (!normalizedDate) return;
+
+        const storedStartedAt = Number(load(WORKOUT_STARTED_AT_KEY, null));
+        const storedDate = String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim();
+
+        if (
+            Number.isFinite(storedStartedAt) &&
+            storedStartedAt > 0 &&
+            storedDate === normalizedDate
+        ) {
+            setWorkoutStartedAt(storedStartedAt);
+            setWorkoutStartedForDate(normalizedDate);
+            return;
+        }
+
+        const nextStartedAt = Date.now();
+        setWorkoutStartedAt(nextStartedAt);
+        setWorkoutStartedForDate(normalizedDate);
+        save(WORKOUT_STARTED_AT_KEY, nextStartedAt);
+        save(WORKOUT_STARTED_FOR_DATE_KEY, normalizedDate);
+    }, []);
+
+    useEffect(() => {
+        if (screen !== "log") return;
+        startOrResumeWorkoutElapsedTimer(logDate);
+    }, [screen, logDate, startOrResumeWorkoutElapsedTimer]);
+
+    useEffect(() => {
+        if (!workoutStartedAt || !workoutStartedForDate) {
+            setWorkoutElapsedSec(0);
+            return undefined;
+        }
+
+        const syncElapsed = () => {
+            const elapsed = Math.max(
+                0,
+                Math.floor((Date.now() - workoutStartedAt) / 1000)
+            );
+            setWorkoutElapsedSec(elapsed);
+        };
+
+        syncElapsed();
+        const timerId = window.setInterval(syncElapsed, 1000);
+
+        return () => {
+            window.clearInterval(timerId);
+        };
+    }, [workoutStartedAt, workoutStartedForDate]);
+
     const queueWorkoutSessionSync = useCallback((date) => {
         const normalizedDate = String(date || "").trim();
         if (!normalizedDate) return;
         pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
     }, []);
 
-    const syncWorkoutSessionSnapshot = useCallback(async (userId, historyMap, workoutDate) => {
+    const syncWorkoutSessionSnapshot = useCallback(async (userId, historyMap, workoutDate, timing = null) => {
         const normalizedDate = String(workoutDate || "").trim();
         if (!userId || !normalizedDate) return;
 
@@ -510,12 +583,14 @@ export default function GymApp() {
             console.error("workout session latest photo fetch failed", error);
         }
 
-        const startedAt = existingSession?.started_at || new Date().toISOString();
-        const endedAt = new Date().toISOString();
-        const durationSec = Math.max(
-            0,
-            Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000)
-        );
+        const startedAt = timing?.startedAtIso || existingSession?.started_at || new Date().toISOString();
+        const endedAt = timing?.endedAtIso || new Date().toISOString();
+        const durationSec = Number.isFinite(timing?.durationSec)
+            ? Math.max(0, Math.floor(timing.durationSec))
+            : Math.max(
+                0,
+                Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000)
+            );
 
         const { data: upsertedSession, error: sessionUpsertError } = await supabase
             .from("workout_sessions")
@@ -864,7 +939,7 @@ export default function GymApp() {
 
                 const { data, error } = await supabase
                     .from("workouts")
-                    .select("date, data")
+                    .select("date, data, started_at, ended_at, duration_sec")
                     .eq("user_id", currentUserId)
                     .order("date", { ascending: true });
 
@@ -882,16 +957,46 @@ export default function GymApp() {
                 const syncDates = [
                     ...new Set([
                         ...(data || []).map((row) => String(row?.date || "")).filter(Boolean),
-                        new Date().toISOString().split("T")[0],
+                        String(logDate || "").trim(),
+                        formatDateKey(new Date()),
                     ]),
                 ];
+                const existingWorkoutRowsByDate = new Map(
+                    (data || []).map((row) => [String(row?.date || "").trim(), row])
+                );
 
                 await supabase.from("workouts").upsert(
-                    syncDates.map((date) => ({
-                        user_id: currentUserId,
-                        date,
-                        data: mergedHistory,
-                    })),
+                    syncDates.map((date) => {
+                        const existingRow = existingWorkoutRowsByDate.get(date);
+                        const hasValidWorkoutForDate =
+                            date === logDate && hasValidWorkoutOnDate(mergedHistory, date);
+                        const shouldPersistWorkoutTiming =
+                            hasValidWorkoutForDate &&
+                            workoutStartedAt &&
+                            workoutStartedForDate === date;
+
+                        const endedAtIso = shouldPersistWorkoutTiming
+                            ? new Date().toISOString()
+                            : existingRow?.ended_at || null;
+                        const startedAtIso = shouldPersistWorkoutTiming
+                            ? new Date(workoutStartedAt).toISOString()
+                            : existingRow?.started_at || null;
+                        const durationSec = shouldPersistWorkoutTiming
+                            ? Math.max(
+                                0,
+                                Math.floor((new Date(endedAtIso).getTime() - workoutStartedAt) / 1000)
+                            )
+                            : existingRow?.duration_sec ?? null;
+
+                        return {
+                            user_id: currentUserId,
+                            date,
+                            data: mergedHistory,
+                            started_at: startedAtIso,
+                            ended_at: endedAtIso,
+                            duration_sec: durationSec,
+                        };
+                    }),
                     { onConflict: "user_id,date" }
                 );
 
@@ -916,7 +1021,23 @@ export default function GymApp() {
                     await Promise.all(
                         pendingSessionSyncDates.map(async (date) => {
                             try {
-                                await syncWorkoutSessionSnapshot(currentUserId, mergedHistory, date);
+                                const hasValidWorkoutForDate = hasValidWorkoutOnDate(mergedHistory, date);
+                                const shouldPersistWorkoutTiming =
+                                    hasValidWorkoutForDate &&
+                                    workoutStartedAt &&
+                                    workoutStartedForDate === date;
+                                const endedAtIso = shouldPersistWorkoutTiming ? new Date().toISOString() : null;
+                                const timing = shouldPersistWorkoutTiming
+                                    ? {
+                                        startedAtIso: new Date(workoutStartedAt).toISOString(),
+                                        endedAtIso,
+                                        durationSec: Math.max(
+                                            0,
+                                            Math.floor((new Date(endedAtIso).getTime() - workoutStartedAt) / 1000)
+                                        ),
+                                    }
+                                    : null;
+                                await syncWorkoutSessionSnapshot(currentUserId, mergedHistory, date, timing);
                             } catch (error) {
                                 console.error("workout session sync failed", { error, userId: currentUserId, date });
                                 pendingWorkoutSessionSyncDatesRef.current.add(date);
@@ -970,7 +1091,7 @@ export default function GymApp() {
             .catch((error) => {
                 console.error("history sync save failed", error);
             });
-    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot, cleanupWorkoutSessionsForHistory]);
+    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot, cleanupWorkoutSessionsForHistory, workoutStartedAt, workoutStartedForDate]);
 
     useEffect(() => {
         let isActive = true;
@@ -1908,6 +2029,7 @@ export default function GymApp() {
                             setTodayLabels={updateTodayLabels}
                             history={history}
                             logDate={logDate}
+                            workoutElapsedSec={workoutElapsedSec}
                             resetSession={() => {
                                 setSessionEx(null);
                                 setLogData({});
@@ -1915,6 +2037,7 @@ export default function GymApp() {
                                 save("draft_sessionEx", null);
                                 save("draft_logData", {});
                                 save("draft_exerciseUnits", {});
+                                resetWorkoutElapsedTimer();
                             }}
                         />
                     </div>

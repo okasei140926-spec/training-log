@@ -9,6 +9,7 @@ import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 import PhotoViewerModal from "./modals/PhotoViewerModal";
 import SetRow from "./log/SetRow";
 import WorkoutPhotoCard from "./log/WorkoutPhotoCard";
+import WorkoutElapsedTimer from "./WorkoutElapsedTimer";
 import { buildWorkoutSessionPayloadFromDraft } from "../utils/workoutSessions";
 import { S } from "../utils/styles";
 
@@ -69,6 +70,7 @@ export default function LogScreen({
     exercises, logData, getExSets, setField, addSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, getPreviousPR, onCopyDown, onCopyDownReps, unit = "kg",
     getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
+    workoutElapsedSec = 0,
 }) {
 
     const hasExercises = exercises.length > 0;
@@ -474,9 +476,11 @@ export default function LogScreen({
     return (
         <div className="fade-in" style={{ ...S.page, paddingBottom: 200 }}>
             <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase" }}>{title}</div>
-                    <div style={{ fontSize: 11, color: "var(--text4)" }}></div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+                    </div>
+                    <WorkoutElapsedTimer elapsedSec={workoutElapsedSec} />
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text4)", marginBottom: 4 }}>
                     {exCount}種目 ・ {setCount}セット ・ PR {prCount}件
