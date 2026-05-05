@@ -621,11 +621,11 @@ export default function AnalyticsScreen({
   return (
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
       {onOpenPhotoCompare && (
-        <div style={{ background: "var(--card)", borderRadius: 16, padding: "10px 12px", border: "1px solid var(--border2)", boxShadow: "var(--shadow-soft)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 2 }}>
+        <div style={{ background: "var(--card)", borderRadius: 14, padding: "8px 10px", border: "1px solid var(--border2)", boxShadow: "var(--shadow-soft)" }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 1 }}>
             写真比較
           </div>
-          <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.4, marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.35, marginBottom: 6 }}>
             Before / Afterを確認
           </div>
           <button
@@ -633,12 +633,12 @@ export default function AnalyticsScreen({
             onClick={onOpenPhotoCompare}
             style={{
               alignSelf: "flex-start",
-              padding: "7px 10px",
-              borderRadius: 10,
+              padding: "6px 9px",
+              borderRadius: 9,
               border: "1px solid var(--border2)",
               background: "var(--card2)",
               color: "var(--text)",
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: 800,
             }}
           >
@@ -713,16 +713,16 @@ export default function AnalyticsScreen({
             key={summary.key}
             style={{
               background: "var(--card)",
-              borderRadius: 18,
-              padding: "12px 13px",
+              borderRadius: 16,
+              padding: "10px 11px",
               border: "1px solid var(--border2)",
               boxShadow: "var(--shadow-soft)",
             }}
           >
-            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 2 }}>
               {summary.title}
             </div>
-            <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.45, marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.35, marginBottom: 8 }}>
               {summary.shortLabel} {summary.workoutCount}回 / Volume {summary.totalVolume.toLocaleString("ja-JP")}kg
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -731,12 +731,12 @@ export default function AnalyticsScreen({
                 onClick={() => setActiveSummaryKey(summary.key)}
                 style={{
                   flex: 1,
-                  padding: "8px 0",
-                  borderRadius: 11,
+                  padding: "7px 0",
+                  borderRadius: 10,
                   border: "1px solid var(--border2)",
                   background: "var(--card2)",
                   color: "var(--text)",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: 800,
                 }}
               >
@@ -747,12 +747,12 @@ export default function AnalyticsScreen({
                 onClick={() => setActiveSummaryKey(summary.key)}
                 style={{
                   flex: 1,
-                  padding: "8px 0",
-                  borderRadius: 11,
+                  padding: "7px 0",
+                  borderRadius: 10,
                   border: "1px solid var(--success-border)",
                   background: "var(--success-soft)",
                   color: "var(--accent)",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: 800,
                 }}
               >

@@ -216,7 +216,7 @@ export default function HistoryScreen({
     todayKey,
   ]);
 
-  const heroWorkoutCards = todayEntries.slice(0, 4);
+  const heroWorkoutCards = todayEntries.slice(0, 3);
 
   const dayDetails = useMemo(
     () =>
@@ -258,18 +258,18 @@ export default function HistoryScreen({
   return (
     <div
       className="fade-in"
-      style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 18 }}
+      style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 14 }}
     >
       <div
         style={{
           background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.88))",
-          borderRadius: 26,
-          padding: "16px 18px",
+          borderRadius: 22,
+          padding: "12px 14px",
           border: "1px solid rgba(18, 199, 194, 0.12)",
           boxShadow: "0 12px 30px rgba(15, 94, 99, 0.08)",
           display: "flex",
           alignItems: "center",
-          gap: 14,
+          gap: 10,
         }}
       >
         {userAvatarUrl ? (
@@ -277,8 +277,8 @@ export default function HistoryScreen({
             src={userAvatarUrl}
             alt="profile"
             style={{
-              width: 50,
-              height: 50,
+              width: 42,
+              height: 42,
               borderRadius: "50%",
               objectFit: "cover",
               flexShrink: 0,
@@ -287,15 +287,15 @@ export default function HistoryScreen({
         ) : (
           <div
             style={{
-              width: 50,
-              height: 50,
+              width: 42,
+              height: 42,
               borderRadius: "50%",
               flexShrink: 0,
               display: "grid",
               placeItems: "center",
               background: "linear-gradient(135deg, #33E1DB, #12C7C2)",
               color: "#fff",
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: 800,
               boxShadow: "0 10px 22px rgba(18, 199, 194, 0.18)",
             }}
@@ -304,20 +304,20 @@ export default function HistoryScreen({
           </div>
         )}
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text)" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", lineHeight: 1.25 }}>
             {userName ? `${greetingPrefix}、${userName}さん！` : `${greetingPrefix}！`}
           </div>
-          <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2, lineHeight: 1.35 }}>
             今日も最高のトレーニングを。
           </div>
         </div>
       </div>
 
       <div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>
+        <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
           今日のサマリー
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
           {[
             { icon: "🏋️", label: "種目数", value: `${todaySummary.exerciseCount}` },
             { icon: "✅", label: "セット数", value: `${todaySummary.setCount}` },
@@ -328,17 +328,17 @@ export default function HistoryScreen({
               key={item.label}
               style={{
                 background: "var(--card)",
-                borderRadius: 24,
-                padding: "16px 16px 14px",
+                borderRadius: 20,
+                padding: "12px 12px 11px",
                 border: "1px solid rgba(18, 199, 194, 0.12)",
                 boxShadow: "0 12px 28px rgba(15, 94, 99, 0.06)",
               }}
             >
-              <div style={{ fontSize: 24, marginBottom: 10 }}>{item.icon}</div>
-              <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>
+              <div style={{ fontSize: 20, marginBottom: 6 }}>{item.icon}</div>
+              <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 2 }}>
                 {item.label}
               </div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text)", lineHeight: 1.15 }}>
                 {item.value}
               </div>
             </div>
@@ -349,8 +349,8 @@ export default function HistoryScreen({
       <div
         style={{
           background: "var(--card)",
-          borderRadius: 26,
-          padding: "18px 18px 16px",
+          borderRadius: 22,
+          padding: "14px 14px 12px",
           border: "1px solid rgba(18, 199, 194, 0.12)",
           boxShadow: "0 12px 30px rgba(15, 94, 99, 0.06)",
         }}
@@ -361,10 +361,10 @@ export default function HistoryScreen({
             justifyContent: "space-between",
             alignItems: "center",
             gap: 12,
-            marginBottom: 14,
+            marginBottom: 10,
           }}
         >
-          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)" }}>
+          <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)" }}>
             今日のワークアウト
           </div>
           <button
@@ -373,7 +373,7 @@ export default function HistoryScreen({
             style={{
               background: "none",
               color: "var(--accent)",
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 800,
               padding: 0,
             }}
@@ -383,42 +383,42 @@ export default function HistoryScreen({
         </div>
 
         {heroWorkoutCards.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {heroWorkoutCards.map((entry) => (
               <div
                 key={entry.id}
                 style={{
                   background: "linear-gradient(180deg, var(--card2), var(--card))",
-                  borderRadius: 20,
-                  padding: "14px 14px 13px",
+                  borderRadius: 17,
+                  padding: "10px 11px",
                   border: "1px solid rgba(18, 199, 194, 0.1)",
                   display: "flex",
                   justifyContent: "space-between",
-                  gap: 12,
+                  gap: 10,
                   alignItems: "center",
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                     <span
                       style={{
                         display: "inline-flex",
-                        padding: "4px 8px",
+                        padding: "3px 7px",
                         borderRadius: 999,
                         background: "var(--info-soft)",
                         border: "1px solid var(--info-border)",
                         color: "var(--accent)",
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: 800,
                       }}
                     >
                       {entry.bodyPart}
                     </span>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", lineHeight: 1.25 }}>
                     {entry.name}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2, lineHeight: 1.35 }}>
                     {entry.setCount}セット ・ 最大{" "}
                     {entry.maxWeight > 0
                       ? `${Math.round(entry.maxWeight * 10) / 10}kg`
@@ -426,17 +426,17 @@ export default function HistoryScreen({
                   </div>
                 </div>
                 <div style={{ flexShrink: 0, textAlign: "right" }}>
-                  <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4 }}>
+                  <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 2 }}>
                     Volume
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", lineHeight: 1.2 }}>
                     {formatVolume(entry.volume)}
                   </div>
                 </div>
               </div>
             ))}
             {todayEntries.length > heroWorkoutCards.length && (
-              <div style={{ fontSize: 12, color: "var(--text3)", textAlign: "center", marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: "var(--text3)", textAlign: "center", marginTop: 1 }}>
                 さらに {todayEntries.length - heroWorkoutCards.length} 種目あります
               </div>
             )}
@@ -445,16 +445,16 @@ export default function HistoryScreen({
           <div
             style={{
               background: "linear-gradient(180deg, var(--card2), var(--card))",
-              borderRadius: 20,
-              padding: "24px 18px",
+              borderRadius: 18,
+              padding: "18px 14px",
               border: "1px dashed rgba(18, 199, 194, 0.24)",
               textAlign: "center",
             }}
           >
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", marginBottom: 6 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
               今日のワークアウトはまだありません
             </div>
-            <div style={{ fontSize: 13, color: "var(--text2)" }}>
+            <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.45 }}>
               下のボタンから、今日のトレーニングを記録しましょう。
             </div>
           </div>
@@ -466,11 +466,11 @@ export default function HistoryScreen({
         onClick={() => onLogForDate(todayKey)}
         style={{
           width: "100%",
-          padding: "18px 20px",
+          padding: "15px 18px",
           borderRadius: 999,
           background: "linear-gradient(135deg, #12C7C2 0%, #33E1DB 100%)",
           color: "#fff",
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: 800,
           boxShadow: "0 16px 30px rgba(18, 199, 194, 0.24)",
           display: "flex",
@@ -479,7 +479,7 @@ export default function HistoryScreen({
           gap: 10,
         }}
       >
-        <span style={{ fontSize: 22, lineHeight: 1 }}>＋</span>
+        <span style={{ fontSize: 20, lineHeight: 1 }}>＋</span>
         <span>ワークアウトを記録</span>
       </button>
 
@@ -496,23 +496,23 @@ export default function HistoryScreen({
           style={{
             listStyle: "none",
             cursor: "pointer",
-            padding: "16px 18px",
-            fontSize: 15,
+            padding: "14px 16px",
+            fontSize: 14,
             fontWeight: 800,
             color: "var(--text)",
           }}
         >
           カレンダーを見る
         </summary>
-        <div style={{ padding: "0 18px 18px" }}>
-          <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 12 }}>
+        <div style={{ padding: "0 16px 16px" }}>
+          <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
             過去日の記録確認や編集もここからできます
           </div>
           <div
             style={{
               background: "linear-gradient(180deg, var(--card2), var(--card))",
-              borderRadius: 20,
-              padding: 16,
+              borderRadius: 18,
+              padding: 14,
               border: "1px solid rgba(18, 199, 194, 0.08)",
             }}
           >
@@ -540,8 +540,8 @@ export default function HistoryScreen({
       <div
         style={{
           background: "var(--card)",
-          borderRadius: 22,
-          padding: "14px 16px",
+          borderRadius: 18,
+          padding: "12px 14px",
           border: "1px solid rgba(18, 199, 194, 0.08)",
           boxShadow: "0 10px 22px rgba(15, 94, 99, 0.05)",
           display: "flex",
@@ -550,19 +550,19 @@ export default function HistoryScreen({
           gap: 12,
         }}
       >
-        <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>
+        <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.45 }}>
           移行用に、過去の自己ベストだけ先に登録できます
         </div>
         <button
           onClick={() => setShowManualBestManager(true)}
           disabled={!user}
           style={{
-            padding: "9px 12px",
-            borderRadius: 14,
+            padding: "8px 11px",
+            borderRadius: 12,
             background: "var(--card2)",
             border: "1px solid var(--border2)",
             color: "var(--text)",
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 800,
             opacity: user ? 1 : 0.6,
           }}
