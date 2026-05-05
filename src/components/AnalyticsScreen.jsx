@@ -3,6 +3,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
+import { buildTrainingSummary } from "../utils/trainingSummary";
+import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 
 const PERIODS = [
   { label: "1ヶ月", days: 30 },
@@ -241,6 +243,7 @@ export default function AnalyticsScreen({
 }) {
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
+  const [activeSummaryKey, setActiveSummaryKey] = useState(null);
 
   const resolutionContext = useMemo(
     () => ({
@@ -311,6 +314,34 @@ export default function AnalyticsScreen({
   }, [historyBestMap, manualBestMap]);
 
   const selectedExercise = selectedExerciseKey ? prData.itemMap[selectedExerciseKey] || null : null;
+  const weeklySummary = useMemo(
+    () =>
+      buildTrainingSummary({
+        history,
+        period: "weekly",
+        muscleEx,
+        hiddenBodyParts,
+        exerciseBodyPartOverrides,
+      }),
+    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
+  );
+  const monthlySummary = useMemo(
+    () =>
+      buildTrainingSummary({
+        history,
+        period: "monthly",
+        muscleEx,
+        hiddenBodyParts,
+        exerciseBodyPartOverrides,
+      }),
+    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
+  );
+  const activeSummary =
+    activeSummaryKey === "weekly"
+      ? weeklySummary
+      : activeSummaryKey === "monthly"
+        ? monthlySummary
+        : null;
 
   const selectedRecords = useMemo(() => {
     if (!selectedExerciseKey) return [];
@@ -538,6 +569,62 @@ export default function AnalyticsScreen({
         </div>
       )}
 
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+        {[weeklySummary, monthlySummary].map((summary) => (
+          <div
+            key={summary.key}
+            style={{
+              background: "var(--card)",
+              borderRadius: 18,
+              padding: "12px 13px",
+              border: "1px solid var(--border2)",
+              boxShadow: "var(--shadow-soft)",
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
+              {summary.title}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.45, marginBottom: 10 }}>
+              {summary.shortLabel} {summary.workoutCount}回 / Volume {summary.totalVolume.toLocaleString("ja-JP")}kg
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setActiveSummaryKey(summary.key)}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 11,
+                  border: "1px solid var(--border2)",
+                  background: "var(--card2)",
+                  color: "var(--text)",
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}
+              >
+                見る
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSummaryKey(summary.key)}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 11,
+                  border: "1px solid var(--success-border)",
+                  background: "var(--success-soft)",
+                  color: "var(--accent)",
+                  fontSize: 11,
+                  fontWeight: 800,
+                }}
+              >
+                シェア
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
         <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 12 }}>
           BIG3 PR
@@ -571,6 +658,12 @@ export default function AnalyticsScreen({
           </div>
         ))}
       </div>
+
+      <TrainingSummaryModal
+        isOpen={Boolean(activeSummary)}
+        onClose={() => setActiveSummaryKey(null)}
+        summary={activeSummary}
+      />
     </div>
   );
 }
