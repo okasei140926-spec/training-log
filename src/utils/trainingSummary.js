@@ -41,12 +41,20 @@ const getMonthRange = (today = new Date()) => {
 };
 
 const resolvePeriodMeta = (period, today = new Date()) => {
-  if (period === "monthly") {
-    const { start, end } = getMonthRange(today);
+  if (period === "monthly" || period === "this_month" || period === "last_month") {
+    const currentRange = getMonthRange(today);
+    const offsetMonths = period === "last_month" ? -1 : 0;
+    const start = new Date(
+      currentRange.start.getFullYear(),
+      currentRange.start.getMonth() + offsetMonths,
+      1
+    );
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
     return {
-      key: "monthly",
+      key: period === "last_month" ? "last_month" : "this_month",
+      group: "monthly",
       title: "月間サマリー",
-      shortLabel: "今月",
+      shortLabel: period === "last_month" ? "先月" : "今月",
       shareLabel: "Monthly Summary",
       start,
       end,
@@ -54,11 +62,19 @@ const resolvePeriodMeta = (period, today = new Date()) => {
     };
   }
 
-  const { start, end } = getWeekRange(today);
+  const currentRange = getWeekRange(today);
+  const start = new Date(currentRange.start);
+  const end = new Date(currentRange.end);
+  if (period === "last_week") {
+    start.setDate(start.getDate() - 7);
+    end.setDate(end.getDate() - 7);
+  }
+
   return {
-    key: "weekly",
+    key: period === "last_week" ? "last_week" : "this_week",
+    group: "weekly",
     title: "週間サマリー",
-    shortLabel: "今週",
+    shortLabel: period === "last_week" ? "先週" : "今週",
     shareLabel: "Weekly Summary",
     start,
     end,

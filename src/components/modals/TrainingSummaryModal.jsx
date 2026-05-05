@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
 import TrainingSummaryShareCard from "../share/TrainingSummaryShareCard";
 
@@ -25,18 +25,51 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   const [sizeKey, setSizeKey] = useState("square");
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef(null);
+  const [selectedSummaryKey, setSelectedSummaryKey] = useState(null);
+
+  const summaryOptions = useMemo(() => {
+    if (!summary?.group) return [];
+    if (summary.group === "weekly") {
+      return [
+        { key: "this_week", label: "今週" },
+        { key: "last_week", label: "先週" },
+      ];
+    }
+    if (summary.group === "monthly") {
+      return [
+        { key: "this_month", label: "今月" },
+        { key: "last_month", label: "先月" },
+      ];
+    }
+    return [];
+  }, [summary?.group]);
+
+  const summaryMap = useMemo(() => {
+    if (!summary) return {};
+    return {
+      [summary.key]: summary,
+      ...(summary.relatedSummaries || {}),
+    };
+  }, [summary]);
+
+  const activeSummary = summaryMap[selectedSummaryKey] || summary;
 
   const detailItems = useMemo(
     () => [
-      { label: "トレーニング回数", value: `${summary?.workoutCount || 0}回` },
-      { label: "総ボリューム", value: formatVolume(summary?.totalVolume || 0) },
-      { label: "実施種目数", value: `${summary?.exerciseCount || 0}種目` },
-      { label: "最多部位", value: summary?.topBodyPart || "なし" },
-      { label: "PR更新", value: `${summary?.prUpdateCount || 0}件` },
-      { label: "ストリーク", value: `${summary?.streak || 0}日` },
+      { label: "トレーニング回数", value: `${activeSummary?.workoutCount || 0}回` },
+      { label: "総ボリューム", value: formatVolume(activeSummary?.totalVolume || 0) },
+      { label: "実施種目数", value: `${activeSummary?.exerciseCount || 0}種目` },
+      { label: "最多部位", value: activeSummary?.topBodyPart || "なし" },
+      { label: "PR更新", value: `${activeSummary?.prUpdateCount || 0}件` },
+      { label: "ストリーク", value: `${activeSummary?.streak || 0}日` },
     ],
-    [summary]
+    [activeSummary]
   );
+
+  useEffect(() => {
+    if (!isOpen || !summary) return;
+    setSelectedSummaryKey(summary.key);
+  }, [isOpen, summary]);
 
   if (!isOpen || !summary) return null;
 
@@ -58,13 +91,13 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
 
       const file = new File(
         [blob],
-        `pump-${summary.key}-${summary.startKey}-${sizeKey}.png`,
+        `pump-${activeSummary.key}-${activeSummary.startKey}-${sizeKey}.png`,
         { type: "image/png" }
       );
 
       const shareData = {
         title: "PUMP",
-        text: `${summary.shareLabel} ${summary.rangeLabel}`,
+        text: `${activeSummary.shareLabel} ${activeSummary.rangeLabel}`,
         files: [file],
       };
 
@@ -122,10 +155,10 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
         >
           <div>
             <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-              {summary.title}
+              {activeSummary.title}
             </div>
             <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
-              {summary.rangeLabel}
+              {activeSummary.rangeLabel}
             </div>
           </div>
           <button
@@ -136,6 +169,31 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             ×
           </button>
         </div>
+
+        {summaryOptions.length > 0 && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            {summaryOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setSelectedSummaryKey(option.key)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  border: "1px solid var(--border2)",
+                  background:
+                    selectedSummaryKey === option.key ? "var(--text)" : "var(--card2)",
+                  color:
+                    selectedSummaryKey === option.key ? "var(--bg)" : "var(--text2)",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div
           style={{
@@ -177,9 +235,9 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10 }}>
             種目ハイライト
           </div>
-          {summary.highlights?.length ? (
+          {activeSummary.highlights?.length ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {summary.highlights.map((item) => (
+              {activeSummary.highlights.map((item) => (
                 <div
                   key={item.key}
                   style={{
@@ -249,7 +307,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
         </div>
 
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-          <TrainingSummaryShareCard ref={cardRef} summary={summary} sizeKey={sizeKey} />
+          <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} />
         </div>
 
         <button

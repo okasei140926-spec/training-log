@@ -314,27 +314,67 @@ export default function AnalyticsScreen({
   }, [historyBestMap, manualBestMap]);
 
   const selectedExercise = selectedExerciseKey ? prData.itemMap[selectedExerciseKey] || null : null;
-  const weeklySummary = useMemo(
+  const thisWeekSummary = useMemo(
     () =>
       buildTrainingSummary({
         history,
-        period: "weekly",
+        period: "this_week",
         muscleEx,
         hiddenBodyParts,
         exerciseBodyPartOverrides,
       }),
     [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
   );
-  const monthlySummary = useMemo(
+  const lastWeekSummary = useMemo(
     () =>
       buildTrainingSummary({
         history,
-        period: "monthly",
+        period: "last_week",
         muscleEx,
         hiddenBodyParts,
         exerciseBodyPartOverrides,
       }),
     [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
+  );
+  const thisMonthSummary = useMemo(
+    () =>
+      buildTrainingSummary({
+        history,
+        period: "this_month",
+        muscleEx,
+        hiddenBodyParts,
+        exerciseBodyPartOverrides,
+      }),
+    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
+  );
+  const lastMonthSummary = useMemo(
+    () =>
+      buildTrainingSummary({
+        history,
+        period: "last_month",
+        muscleEx,
+        hiddenBodyParts,
+        exerciseBodyPartOverrides,
+      }),
+    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
+  );
+  const weeklySummary = useMemo(
+    () => ({
+      ...thisWeekSummary,
+      relatedSummaries: {
+        last_week: lastWeekSummary,
+      },
+    }),
+    [thisWeekSummary, lastWeekSummary]
+  );
+  const monthlySummary = useMemo(
+    () => ({
+      ...thisMonthSummary,
+      relatedSummaries: {
+        last_month: lastMonthSummary,
+      },
+    }),
+    [thisMonthSummary, lastMonthSummary]
   );
   const activeSummary =
     activeSummaryKey === "weekly"
