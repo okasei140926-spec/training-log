@@ -68,41 +68,41 @@ export const css = `
     --nav-bg: #0f0f0fee;
     --input-bg: #242424;
     --btn-secondary: #2a2a2a;
-    --accent: #22C55E;
-    --accent2: #38BDF8;
+    --accent: #12C7C2;
+    --accent2: #33E1DB;
     --shadow-card: 0 10px 28px rgba(0,0,0,0.28);
-    --shadow-soft: 0 8px 20px rgba(56,189,248,0.12);
-    --success-soft: rgba(34, 197, 94, 0.14);
-    --success-border: rgba(34, 197, 94, 0.3);
-    --info-soft: rgba(56, 189, 248, 0.14);
-    --info-border: rgba(56, 189, 248, 0.28);
-    --focus-ring: 0 0 0 4px rgba(56, 189, 248, 0.16);
+    --shadow-soft: 0 8px 20px rgba(18,199,194,0.14);
+    --success-soft: rgba(18, 199, 194, 0.14);
+    --success-border: rgba(18, 199, 194, 0.3);
+    --info-soft: rgba(51, 225, 219, 0.14);
+    --info-border: rgba(51, 225, 219, 0.28);
+    --focus-ring: 0 0 0 4px rgba(51, 225, 219, 0.18);
   }
   .theme-light {
-    --bg: #F8FAFC;
+    --bg: #F3F5F7;
     --card: #ffffff;
-    --card2: #F8FBFF;
+    --card2: #F8FBFB;
     --card-modal: #ffffff;
     --border: #86EFAC;
-    --border2: #D9E4EF;
-    --border3: #C6D5E3;
-    --text: #0F172A;
-    --text2: #64748B;
-    --text3: #94A3B8;
-    --text4: #B1BFCD;
-    --text5: #CBD5E1;
+    --border2: #D8E6E8;
+    --border3: #C7D8DA;
+    --text: #0A3F44;
+    --text2: #5D7A7E;
+    --text3: #8BA4A8;
+    --text4: #A9BDC0;
+    --text5: #C8D5D8;
     --nav-bg: rgba(255,255,255,0.92);
     --input-bg: #FFFFFF;
-    --btn-secondary: #F1F5F9;
-    --accent: #22C55E;
-    --accent2: #38BDF8;
-    --shadow-card: 0 10px 28px rgba(15,23,42,0.06);
-    --shadow-soft: 0 10px 24px rgba(56,189,248,0.10);
-    --success-soft: #ECFDF5;
-    --success-border: #BBF7D0;
-    --info-soft: #E0F2FE;
-    --info-border: #BAE6FD;
-    --focus-ring: 0 0 0 4px rgba(56, 189, 248, 0.16);
+    --btn-secondary: #EEF5F6;
+    --accent: #12C7C2;
+    --accent2: #33E1DB;
+    --shadow-card: 0 10px 28px rgba(15,94,99,0.08);
+    --shadow-soft: 0 12px 24px rgba(18,199,194,0.14);
+    --success-soft: #E8FCFB;
+    --success-border: #BFEFED;
+    --info-soft: #ECFCFD;
+    --info-border: #C4F3F2;
+    --focus-ring: 0 0 0 4px rgba(51, 225, 219, 0.2);
   }
   * { box-sizing: border-box; }
   input { outline: none; }

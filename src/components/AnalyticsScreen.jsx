@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
+import { calc1RM, formatDateKey, getRecordSourceSets, sanitizeHistoryRecord, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 import { buildTrainingSummary } from "../utils/trainingSummary";
@@ -233,6 +233,17 @@ const buildChartData = (records = [], period) => {
     }));
 };
 
+const getWeekBounds = (today = new Date()) => {
+  const base = new Date(today);
+  base.setHours(0, 0, 0, 0);
+  const diffToMonday = base.getDay() === 0 ? -6 : 1 - base.getDay();
+  const start = new Date(base);
+  start.setDate(base.getDate() + diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { startKey: formatDateKey(start), endKey: formatDateKey(end) };
+};
+
 export default function AnalyticsScreen({
   history,
   manualBests = [],
@@ -382,6 +393,33 @@ export default function AnalyticsScreen({
       : activeSummaryKey === "monthly"
         ? monthlySummary
         : null;
+  const progressInsights = useMemo(() => {
+    const validDates = new Set();
+    const { startKey, endKey } = getWeekBounds(new Date());
+    const weeklyBodyPartMap = {};
+
+    Object.entries(history || {}).forEach(([exerciseName, records]) => {
+      (records || []).forEach((record) => {
+        const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+        if (!sanitized?.date || !sanitized.sets?.length) return;
+
+        const bodyPart = resolveAnalyticsBodyPart(sanitized, exerciseName, resolutionContext);
+        if (!bodyPart) return;
+
+        validDates.add(sanitized.date);
+
+        if (sanitized.date < startKey || sanitized.date > endKey) return;
+        weeklyBodyPartMap[bodyPart] = (weeklyBodyPartMap[bodyPart] || 0) + sanitized.sets.length;
+      });
+    });
+
+    return {
+      totalTrainingDays: validDates.size,
+      weeklyBodyParts: Object.entries(weeklyBodyPartMap)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"))
+        .slice(0, 6),
+    };
+  }, [history, resolutionContext]);
 
   const selectedRecords = useMemo(() => {
     if (!selectedExerciseKey) return [];
@@ -608,6 +646,66 @@ export default function AnalyticsScreen({
           </button>
         </div>
       )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 160px) minmax(0, 1fr)", gap: 12 }}>
+        <div
+          style={{
+            background: "var(--card)",
+            borderRadius: 18,
+            padding: "14px 14px 12px",
+            border: "1px solid rgba(18, 199, 194, 0.1)",
+            boxShadow: "var(--shadow-soft)",
+          }}
+        >
+          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
+            累計トレーニング日数
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "var(--text)" }}>
+            {progressInsights.totalTrainingDays}日
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "var(--card)",
+            borderRadius: 18,
+            padding: "14px 14px 12px",
+            border: "1px solid rgba(18, 199, 194, 0.1)",
+            boxShadow: "var(--shadow-soft)",
+          }}
+        >
+          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10 }}>
+            今週の部位別セット数
+          </div>
+          {progressInsights.weeklyBodyParts.length > 0 ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {progressInsights.weeklyBodyParts.map(([label, count]) => (
+                <div
+                  key={label}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    background: "var(--card2)",
+                    border: "1px solid rgba(18, 199, 194, 0.1)",
+                    fontSize: 12,
+                    color: "var(--text2)",
+                  }}
+                >
+                  <span style={{ fontWeight: 700 }}>{label}</span>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--text3)" }}>
+              今週のセット記録はまだありません
+            </div>
+          )}
+        </div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
         {[weeklySummary, monthlySummary].map((summary) => (
