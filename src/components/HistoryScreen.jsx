@@ -28,13 +28,6 @@ const formatWeight = (value, unit = "kg") => {
 const formatSetDisplay = (weight, reps, unit = "kg") =>
   `${formatWeight(weight, unit)} × ${Number(reps)}rep`;
 
-const buildGreetingPrefix = (date) => {
-  const hour = date.getHours();
-  if (hour < 11) return "おはよう";
-  if (hour < 18) return "こんにちは";
-  return "おつかれさま";
-};
-
 export default function HistoryScreen({
   history,
   muscleEx,
@@ -64,29 +57,7 @@ export default function HistoryScreen({
   const [showAllTodayWorkouts, setShowAllTodayWorkouts] = useState(false);
   const [openExercises, setOpenExercises] = useState({});
 
-  const today = new Date();
-  const todayKey = formatDateKey(today);
-
-  const userName = useMemo(() => {
-    const metadata = user?.user_metadata || {};
-    const emailPrefix = String(user?.email || "").split("@")[0] || "";
-    return String(
-      metadata.user_name ||
-        metadata.preferred_username ||
-        metadata.username ||
-        metadata.full_name ||
-        metadata.name ||
-        emailPrefix ||
-        ""
-    ).trim();
-  }, [user]);
-
-  const userAvatarUrl = useMemo(() => {
-    const metadata = user?.user_metadata || {};
-    return metadata.avatar_url || metadata.picture || metadata.photo_url || "";
-  }, [user]);
-
-  const greetingPrefix = buildGreetingPrefix(today);
+  const todayKey = formatDateKey(new Date());
 
   const openManualBestModalForCreate = () => {
     setShowManualBestManager(false);
@@ -371,59 +342,6 @@ export default function HistoryScreen({
       className="fade-in"
       style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 14 }}
     >
-      <div
-        style={{
-          background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.88))",
-          borderRadius: 22,
-          padding: "12px 14px",
-          border: "1px solid rgba(18, 199, 194, 0.12)",
-          boxShadow: "0 12px 30px rgba(15, 94, 99, 0.08)",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
-        {userAvatarUrl ? (
-          <img
-            src={userAvatarUrl}
-            alt="profile"
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: "50%",
-              objectFit: "cover",
-              flexShrink: 0,
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: "50%",
-              flexShrink: 0,
-              display: "grid",
-              placeItems: "center",
-              background: "linear-gradient(135deg, #33E1DB, #12C7C2)",
-              color: "#fff",
-              fontSize: 16,
-              fontWeight: 800,
-              boxShadow: "0 10px 22px rgba(18, 199, 194, 0.18)",
-            }}
-          >
-            {userName ? userName.slice(0, 1).toUpperCase() : "P"}
-          </div>
-        )}
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", lineHeight: 1.25 }}>
-            {`${greetingPrefix}！`}
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2, lineHeight: 1.35 }}>
-            今日も最高のトレーニングを。
-          </div>
-        </div>
-      </div>
-
       <div>
         <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
           今日のサマリー
