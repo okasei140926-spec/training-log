@@ -9,6 +9,7 @@ import HistoryExerciseItem from "./history/HistoryExerciseItem";
 import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
 import {
   PR_UPDATE_TOLERANCE_KG,
+  dispW,
   formatDateKey,
   getBestRmSet,
   hasMeaningfulPRIncrease,
@@ -18,7 +19,14 @@ import {
 import { normalizeExerciseName } from "../utils/exerciseName";
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
-const formatWeight = (value) => `${Math.round(Number(value || 0) * 10) / 10}kg`;
+const formatWeight = (value, unit = "kg") => {
+  if (value === "BW") return "自重";
+  const displayed = dispW(value, unit);
+  if (!displayed) return "-";
+  return `${displayed}${unit}`;
+};
+const formatSetDisplay = (weight, reps, unit = "kg") =>
+  `${formatWeight(weight, unit)} × ${Number(reps)}rep`;
 
 const buildGreetingPrefix = (date) => {
   const hour = date.getHours();
@@ -34,6 +42,8 @@ export default function HistoryScreen({
   onEditHistory,
   onDeleteHistory,
   onDeleteDate,
+  unit = "kg",
+  getExUnit,
   onLogForDate,
   user,
   manualBests = [],
@@ -275,7 +285,14 @@ export default function HistoryScreen({
           title: entry.name,
           badge: entry.bodyPart,
           meta: entry.sets
-            .map((set, index) => `${index + 1}. ${formatWeight(set.weight)} × ${Number(set.reps)}rep`)
+            .map(
+              (set, index) =>
+                `${index + 1}. ${formatSetDisplay(
+                  set.weight,
+                  set.reps,
+                  (getExUnit ? getExUnit(entry.name) : unit) || "kg"
+                )}`
+            )
             .join(" / "),
         })),
       };
@@ -290,7 +307,11 @@ export default function HistoryScreen({
           key: `${entry.id}-pr`,
           title: entry.name,
           badge: entry.bodyPart,
-          meta: `${formatWeight(entry.bestSet.weight)} × ${Number(entry.bestSet.reps)}rep`,
+          meta: formatSetDisplay(
+            entry.bestSet.weight,
+            entry.bestSet.reps,
+            (getExUnit ? getExUnit(entry.name) : unit) || "kg"
+          ),
         })),
       };
     }
@@ -306,7 +327,7 @@ export default function HistoryScreen({
         meta: `${formatVolume(entry.volume)} ・ ${entry.setCount}セット`,
       })),
     };
-  }, [selectedSummaryKey, todayEntries, todayPrEntries, todaySummary]);
+  }, [selectedSummaryKey, todayEntries, todayPrEntries, todaySummary, getExUnit, unit]);
 
   const dayDetails = useMemo(
     () =>
@@ -395,7 +416,7 @@ export default function HistoryScreen({
         )}
         <div>
           <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", lineHeight: 1.25 }}>
-            {userName ? `${greetingPrefix}、${userName}さん！` : `${greetingPrefix}！`}
+            {`${greetingPrefix}！`}
           </div>
           <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 2, lineHeight: 1.35 }}>
             今日も最高のトレーニングを。
@@ -515,7 +536,12 @@ export default function HistoryScreen({
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4 }}>
                   {entry.setCount}セット ・ 最大{" "}
-                  {entry.maxWeight > 0 ? `${Math.round(entry.maxWeight * 10) / 10}kg` : "-"} ・{" "}
+                  {entry.maxWeight > 0
+                    ? formatWeight(
+                        entry.maxWeight,
+                        (getExUnit ? getExUnit(entry.name) : unit) || "kg"
+                      )
+                    : "-"} ・{" "}
                   {formatVolume(entry.volume)}
                 </div>
               </div>

@@ -2000,6 +2000,7 @@ export default function GymApp() {
                         onDeleteHistory={handleDeleteHistory}
                         onDeleteDate={deleteAllHistoryForDate}
                         unit={unit}
+                        getExUnit={getExUnit}
                         onLogForDate={handleCalendarDayOpen}
                         user={user}
                         manualBests={manualBests}
