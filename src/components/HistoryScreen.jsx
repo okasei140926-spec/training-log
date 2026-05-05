@@ -104,7 +104,7 @@ export default function HistoryScreen({
     return () => {
       document.body.style.overflow = "";
     };
-  }, [selectedDate]);
+  }, [selectedDate, selectedSummaryKey]);
 
   const resolvedEntries = useMemo(() => {
     return Object.entries(history || {})
