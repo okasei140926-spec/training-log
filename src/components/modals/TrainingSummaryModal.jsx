@@ -149,102 +149,127 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(15, 23, 42, 0.72)",
         zIndex: 360,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         justifyContent: "center",
-        padding: 20,
+        padding:
+          "calc(16px + var(--safe-top, 0px)) 12px calc(12px + var(--safe-bottom, 0px))",
+        boxSizing: "border-box",
       }}
-      onClick={onClose}
     >
       <div
+        onClick={onClose}
         style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(15, 23, 42, 0.72)",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
           width: "100%",
           maxWidth: 440,
-          maxHeight: "min(88vh, 840px)",
-          overflowY: "auto",
+          maxHeight:
+            "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
           background: "var(--card-modal)",
           borderRadius: 24,
-          padding: "20px 20px calc(20px + var(--safe-bottom, 0px))",
-          boxSizing: "border-box",
-          overscrollBehavior: "contain",
-          WebkitOverflowScrolling: "touch",
-          touchAction: "auto",
+          boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
+          overflow: "hidden",
         }}
         onClick={(event) => event.stopPropagation()}
       >
         <div
           style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
-            marginBottom: 14,
+            maxHeight:
+              "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
+            overflowY: "auto",
+            padding: "18px 16px calc(24px + var(--safe-bottom, 0px))",
+            boxSizing: "border-box",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-y",
           }}
         >
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-              {activeSummary.title}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
-              {activeSummary.rangeLabel}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 20 }}
-          >
-            ×
-          </button>
-        </div>
-
-        {summaryOptions.length > 0 && (
           <div
             style={{
               display: "flex",
-              gap: 8,
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
               marginBottom: 14,
-              padding: 4,
-              borderRadius: 999,
-              background: "rgba(18, 199, 194, 0.05)",
-              border: "1px solid rgba(18, 199, 194, 0.10)",
-              width: "fit-content",
             }}
           >
-            {summaryOptions.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setSelectedSummaryKey(option.key)}
-                style={{
-                  minWidth: 76,
-                  padding: "9px 14px",
-                  borderRadius: 999,
-                  border:
-                    selectedSummaryKey === option.key
-                      ? "1px solid rgba(15, 94, 99, 0.18)"
-                      : "1px solid rgba(18, 199, 194, 0.10)",
-                  background:
-                    selectedSummaryKey === option.key
-                      ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                      : "var(--card)",
-                  color:
-                    selectedSummaryKey === option.key ? "#fff" : "var(--text2)",
-                  fontSize: 12,
-                  fontWeight: 800,
-                  boxShadow:
-                    selectedSummaryKey === option.key
-                      ? "0 10px 22px rgba(15, 94, 99, 0.14)"
-                      : "none",
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                {activeSummary.title}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
+                {activeSummary.rangeLabel}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text3)",
+                fontSize: 20,
+                lineHeight: 1,
+                padding: 2,
+              }}
+            >
+              ×
+            </button>
           </div>
-        )}
+
+          {summaryOptions.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginBottom: 14,
+                padding: 4,
+                borderRadius: 999,
+                background: "rgba(18, 199, 194, 0.05)",
+                border: "1px solid rgba(18, 199, 194, 0.10)",
+                width: "fit-content",
+              }}
+            >
+              {summaryOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setSelectedSummaryKey(option.key)}
+                  style={{
+                    minWidth: 76,
+                    padding: "9px 14px",
+                    borderRadius: 999,
+                    border:
+                      selectedSummaryKey === option.key
+                        ? "1px solid rgba(15, 94, 99, 0.18)"
+                        : "1px solid rgba(18, 199, 194, 0.10)",
+                    background:
+                      selectedSummaryKey === option.key
+                        ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                        : "var(--card)",
+                    color:
+                      selectedSummaryKey === option.key ? "#fff" : "var(--text2)",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    boxShadow:
+                      selectedSummaryKey === option.key
+                        ? "0 10px 22px rgba(15, 94, 99, 0.14)"
+                        : "none",
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
 
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {Object.values(CARD_PRESETS).map((preset) => (
@@ -268,7 +293,14 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           ))}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: 14,
+            overflowX: "hidden",
+          }}
+        >
           <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} />
         </div>
 
@@ -290,6 +322,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
         >
           {sharing ? "画像を作成中..." : "シェア画像を作成"}
         </button>
+        </div>
       </div>
     </div>
   );
