@@ -329,6 +329,11 @@ export default function HistoryScreen({
     todayPrEntries,
   ]);
 
+  const todayWorkedBodyParts = useMemo(
+    () => [...new Set(todayEntries.map((entry) => entry.bodyPart).filter(Boolean))],
+    [todayEntries]
+  );
+
   const heroWorkoutCards = todayEntries.slice(0, 3);
   const visibleTodayWorkouts = showAllTodayWorkouts ? todayEntries : heroWorkoutCards;
 
@@ -489,8 +494,62 @@ export default function HistoryScreen({
       style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 14 }}
     >
       <div>
-        <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-          今日のサマリー
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginBottom: 8,
+          }}
+        >
+          <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", flexShrink: 0 }}>
+            今日のサマリー
+          </div>
+          {todayWorkedBodyParts.length > 0 && (
+            <div
+              style={{
+                minWidth: 0,
+                flex: 1,
+                display: "flex",
+                justifyContent: "flex-end",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  overflowX: "auto",
+                  whiteSpace: "nowrap",
+                  paddingBottom: 2,
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
+                }}
+              >
+                {todayWorkedBodyParts.map((bodyPart) => (
+                  <span
+                    key={bodyPart}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "4px 9px",
+                      borderRadius: 999,
+                      background: "rgba(18, 199, 194, 0.08)",
+                      border: "1px solid rgba(18, 199, 194, 0.16)",
+                      color: "var(--accent-strong, var(--accent))",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {bodyPart}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
           {summaryCards.map((item) => (
