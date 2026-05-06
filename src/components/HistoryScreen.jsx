@@ -492,7 +492,13 @@ export default function HistoryScreen({
   return (
     <div
       className="fade-in"
-      style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 14 }}
+      style={{
+        padding: "18px",
+        paddingTop: hasTodayWorkout ? "18px" : "30px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+      }}
     >
       {hasTodayWorkout && (
         <>
@@ -703,6 +709,36 @@ export default function HistoryScreen({
             </div>
           </div>
         </>
+      )}
+
+      {!hasTodayWorkout && (
+        <div
+          style={{
+            background: "var(--card)",
+            borderRadius: 22,
+            padding: "16px 16px 14px",
+            border: "1px solid rgba(18, 199, 194, 0.12)",
+            boxShadow: "0 12px 30px rgba(15, 94, 99, 0.06)",
+            marginTop: 2,
+          }}
+        >
+          <div
+            style={{
+              background: "linear-gradient(180deg, var(--card2), var(--card))",
+              borderRadius: 18,
+              padding: "22px 16px",
+              border: "1px dashed rgba(18, 199, 194, 0.24)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 6 }}>
+              今日のワークアウトはまだありません
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.5 }}>
+              まずは今日のトレーニングを記録しましょう。
+            </div>
+          </div>
+        </div>
       )}
 
       <button
