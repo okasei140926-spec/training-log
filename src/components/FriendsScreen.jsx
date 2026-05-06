@@ -28,10 +28,6 @@ const RESERVED_USERNAMES = [
     "管理者",
 ];
 const ACTIVITY_FEED_PAGE_SIZE = 20;
-const FEED_TABS = [
-    { key: "today", label: "今日" },
-    { key: "weekly", label: "週間" },
-];
 const RANKING_TABS = [
     { key: "big3", label: "BIG3" },
     { key: "consistency", label: "継続" },
@@ -41,13 +37,6 @@ const RANKING_TABS = [
 const parseDateKey = (value) => {
     if (!value) return new Date();
     return new Date(`${String(value).slice(0, 10)}T00:00:00`);
-};
-
-const getMondayKey = (dateInput = new Date()) => {
-    const date = parseDateKey(dateInput);
-    const day = (date.getDay() + 6) % 7;
-    date.setDate(date.getDate() - day);
-    return formatDateKey(date);
 };
 
 const shiftDateKey = (dateKey, days) => {
@@ -98,7 +87,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [sessionSettingsUpdatingId, setSessionSettingsUpdatingId] = useState(null);
     const [likePendingMap, setLikePendingMap] = useState({});
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
-    const [feedTab, setFeedTab] = useState("today");
     const [rankingTab, setRankingTab] = useState("big3");
     const [activityOverview, setActivityOverview] = useState({
         sharedCount: 0,
@@ -110,7 +98,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
-    const currentWeekStart = getMondayKey(today);
     const recentSevenStart = shiftDateKey(today, -6);
     const showFeedSections = mode !== "ranking";
     const showRankingSections = mode !== "feed";
@@ -377,13 +364,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 .in("user_id", feedUserIds)
                 .order("created_at", { ascending: false });
 
-            if (feedTab === "weekly") {
-                sessionsQuery = sessionsQuery
-                    .gte("workout_date", currentWeekStart)
-                    .lte("workout_date", today);
-            } else {
-                sessionsQuery = sessionsQuery.eq("workout_date", today);
-            }
+            sessionsQuery = sessionsQuery
+                .gte("workout_date", recentSevenStart)
+                .lte("workout_date", today);
 
             const { data: sessions, error: sessionsError } = await sessionsQuery
                 .range(offset, offset + ACTIVITY_FEED_PAGE_SIZE - 1);
@@ -491,7 +474,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         } finally {
             setActivityFeedLoading(false);
         }
-    }, [currentWeekStart, feedTab, friendIds, today, user?.id]);
+    }, [friendIds, recentSevenStart, today, user?.id]);
 
     const fetchActivityOverview = useCallback(async () => {
         if (!user?.id) {
@@ -507,16 +490,17 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         const feedUserIds = [...new Set([user.id, ...friendIds])];
 
         try {
-            const { data: todaySessions, error } = await supabase
+            const { data: recentSessions, error } = await supabase
                 .from("workout_sessions")
                 .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
                 .in("user_id", feedUserIds)
-                .eq("workout_date", today)
+                .gte("workout_date", recentSevenStart)
+                .lte("workout_date", today)
                 .order("created_at", { ascending: false });
 
             if (error) throw error;
 
-            const selfSessionRow = (todaySessions || []).find((session) => session.user_id === user.id) || null;
+            const selfSessionRow = (recentSessions || []).find((session) => session.user_id === user.id && session.workout_date === today) || null;
             const selfSession = selfSessionRow
                 ? {
                     ...selfSessionRow,
@@ -524,10 +508,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     summaryItems: Array.isArray(selfSessionRow.summary_json?.items) ? selfSessionRow.summary_json.items : [],
                 }
                 : null;
-            const sharedSessions = (todaySessions || []).filter((session) => (
+            const sharedSessions = (recentSessions || []).filter((session) => (
                 session.user_id === user.id ? session.visibility === "friends" : true
             ));
-            const activeFriendCount = Object.values(todayActiveMap || {}).filter(Boolean).length;
+            const activeFriendCount = new Set(
+                sharedSessions
+                    .filter((session) => session.user_id !== user.id)
+                    .map((session) => session.user_id)
+                    .filter(Boolean)
+            ).size;
 
             setActivityOverview({
                 sharedCount: sharedSessions.length,
@@ -540,7 +529,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             console.error("activity overview fetch failed", error);
             return false;
         }
-    }, [friendIds, today, todayActiveMap, user?.id]);
+    }, [friendIds, recentSevenStart, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -800,9 +789,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     }, [user]);
 
     const hasTodayRecord = hasTodayWorkoutRecord(history);
-    const todayActiveFriends = friends.filter((friend) => todayActiveMap[friend.id]);
-    const todayActiveLabel = todayActiveFriends.map((friend) => getDisplayUsername(friend.username)).join("、");
-
     const myBig3 = mergeBig3Bests(
         computeBig3FromHistory(history),
         computeBig3FromManualBests(manualBests)
@@ -991,28 +977,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     }, [activityOverview.selfSession, fetchActivityFeed, fetchActivityOverview, handleOpenSessionShare, onOpenRecord, showActivityFeedStatusMessage, user?.id]);
 
     const handleViewOwnTodayPost = useCallback(() => {
-        if (feedTab !== "today") {
-            setFeedTab("today");
-            window.setTimeout(() => {
-                activityOverview.selfSession?.id && document.getElementById(`feed-session-${activityOverview.selfSession.id}`)?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "center",
-                });
-            }, 120);
-            return;
-        }
-
         if (activityOverview.selfSession?.id) {
             document.getElementById(`feed-session-${activityOverview.selfSession.id}`)?.scrollIntoView({
                 behavior: "smooth",
                 block: "center",
             });
         }
-    }, [activityOverview.selfSession, feedTab]);
+    }, [activityOverview.selfSession]);
 
-    const activityHeadline = activityOverview.activeFriendCount > 0
-        ? `友達 ${activityOverview.activeFriendCount}人がトレーニング済み`
-        : "まだ友達の投稿はありません";
+    const activityHeadline = `直近7日で ${activityOverview.sharedCount}件 の投稿`;
     const activitySubline = !hasTodayRecord
         ? "あなたはまだ今日の記録がありません"
         : activityOverview.selfShared
@@ -1021,20 +994,20 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     const feedEmptyState = !hasTodayRecord
         ? {
-            title: "今日はまだ静かです",
+            title: "まだ投稿はありません",
             body: "友達のワークアウトが投稿されるとここに表示されます。まずは今日のトレーニングを記録してみましょう。",
             action: "ワークアウトを記録",
             onClick: onOpenRecord,
         }
         : activityOverview.selfShared
             ? {
-                title: feedTab === "weekly" ? "今週の投稿はまだ少なめです" : "今日はまだ静かです",
+                title: "まだ投稿はありません",
                 body: "あなたの投稿はシェア済みです。友達のワークアウトが投稿されるとここに並びます。",
                 action: "今日の投稿を見る",
                 onClick: handleViewOwnTodayPost,
             }
             : {
-                title: "今日はまだ静かです",
+                title: "まだ投稿はありません",
                 body: "あなたの今日の記録をシェアして、フィードを動かしましょう。",
                 action: "今日の記録をシェア",
                 onClick: handleShareTodayRecord,
@@ -1082,60 +1055,38 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     >
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
                             <div>
-                                <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>今日のアクティビティ</div>
+                                <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>最近のアクティビティ</div>
                                 <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 4 }}>
                                     {activityHeadline}
                                 </div>
                                 <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
                                     {activitySubline}
                                 </div>
-                                {todayActiveLabel && (
+                                {activityOverview.activeFriendCount > 0 && (
                                     <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
-                                        {todayActiveLabel}
+                                        友達 {activityOverview.activeFriendCount}人が直近7日で投稿しています
                                     </div>
                                 )}
                             </div>
                             <div
                                 style={{
-                                    padding: "8px 10px",
+                                    padding: "8px 12px",
                                     borderRadius: 14,
-                                    background: activityOverview.selfShared ? "var(--success-soft)" : "rgba(18, 199, 194, 0.06)",
+                                    background: "rgba(18, 199, 194, 0.06)",
                                     border: "1px solid var(--border2)",
                                     fontSize: 12,
                                     fontWeight: 800,
-                                    color: activityOverview.selfShared ? "var(--accent)" : "var(--text2)",
+                                    color: "var(--text2)",
                                     flexShrink: 0,
                                 }}
                             >
-                                共有 {activityOverview.sharedCount}件
+                                投稿 {activityOverview.sharedCount}件
                             </div>
                         </div>
 
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-                                {FEED_TABS.map((tab) => {
-                                    const selected = feedTab === tab.key;
-                                    return (
-                                        <button
-                                            key={tab.key}
-                                            type="button"
-                                            onClick={() => setFeedTab(tab.key)}
-                                            style={{
-                                                padding: "10px 18px",
-                                                borderRadius: 999,
-                                                border: selected ? "1px solid transparent" : "1px solid var(--border2)",
-                                                background: selected ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
-                                                color: selected ? "#fff" : "var(--text2)",
-                                                fontSize: 13,
-                                                fontWeight: 800,
-                                                flexShrink: 0,
-                                                boxShadow: selected ? "0 12px 26px rgba(18, 199, 194, 0.18)" : "none",
-                                            }}
-                                        >
-                                            {tab.label}
-                                        </button>
-                                    );
-                                })}
+                            <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
+                                新しい投稿順に表示しています
                             </div>
                             <button
                                 type="button"
@@ -1328,16 +1279,16 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                         {summaryItem.exercise_name}
                                                     </div>
                                                     <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-                                                        {Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × {summaryItem.set_count}セット
-                                                    </div>
+                                                    {Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × {summaryItem.set_count}セット
                                                 </div>
-                                            ))}
-                                            {item.summaryItems.length > 3 && (
-                                                <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                                    他 {item.summaryItems.length - 3} 種目
-                                                </div>
-                                            )}
-                                        </div>
+                                            </div>
+                                        ))}
+                                        {item.summaryItems.length > 3 && (
+                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                                +{item.summaryItems.length - 3}種目
+                                            </div>
+                                        )}
+                                    </div>
 
                                         {item.user_id === user.id && (
                                             <div
