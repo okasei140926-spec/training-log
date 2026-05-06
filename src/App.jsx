@@ -2197,6 +2197,7 @@ export default function GymApp() {
                         sessionSyncVersion={sessionSyncVersion}
                         user={user}
                         onLogin={() => setShowAuth(true)}
+                        onOpenRecord={() => setScreen("history")}
                         onLogout={async () => {
                             await supabase.auth.signOut();
                         }}
@@ -2224,6 +2225,7 @@ export default function GymApp() {
                         sessionSyncVersion={sessionSyncVersion}
                         user={user}
                         onLogin={() => setShowAuth(true)}
+                        onOpenRecord={() => setScreen("history")}
                         onLogout={async () => {
                             await supabase.auth.signOut();
                         }}

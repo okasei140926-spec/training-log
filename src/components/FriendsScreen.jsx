@@ -9,23 +9,14 @@ import {
     getRecordSourceSets,
     getValidWorkoutDatesFromHistory,
     hasValidWorkoutOnDate,
-    sanitizeHistoryRecord,
     sanitizeWorkoutSets,
 } from "../utils/helpers";
-import MonthlyWorkoutRankingCard from "./friends/MonthlyWorkoutRankingCard";
-import Big3RankingCard from "./friends/Big3RankingCard";
-import Big3OvertakeAlerts from "./friends/Big3OvertakeAlerts";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
 import WorkoutCommentsModal from "./modals/WorkoutCommentsModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 
-const BIG3_EXERCISES = [
-    { key: "bench", match: "ベンチプレス", shortLabel: "ベンチ" },
-    { key: "squat", match: "スクワット", shortLabel: "スクワット" },
-    { key: "deadlift", match: "デッドリフト", shortLabel: "デッド" },
-];
 const RESERVED_USERNAMES = [
     "あなた",
     "自分",
@@ -37,6 +28,33 @@ const RESERVED_USERNAMES = [
     "管理者",
 ];
 const ACTIVITY_FEED_PAGE_SIZE = 20;
+const FEED_TABS = [
+    { key: "today", label: "今日" },
+    { key: "weekly", label: "週間" },
+];
+const RANKING_TABS = [
+    { key: "big3", label: "BIG3" },
+    { key: "consistency", label: "継続" },
+    { key: "monthly", label: "今月" },
+];
+
+const parseDateKey = (value) => {
+    if (!value) return new Date();
+    return new Date(`${String(value).slice(0, 10)}T00:00:00`);
+};
+
+const getMondayKey = (dateInput = new Date()) => {
+    const date = parseDateKey(dateInput);
+    const day = (date.getDay() + 6) % 7;
+    date.setDate(date.getDate() - day);
+    return formatDateKey(date);
+};
+
+const shiftDateKey = (dateKey, days) => {
+    const date = parseDateKey(dateKey);
+    date.setDate(date.getDate() + days);
+    return formatDateKey(date);
+};
 
 const formatRelativeTime = (value) => {
     if (!value) return "";
@@ -57,8 +75,7 @@ const formatRelativeTime = (value) => {
     return new Date(value).toLocaleDateString("ja-JP");
 };
 
-export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, onCopyMenu, user, onLogin, onLogout, mode = "all" }) {
-    const [openDates, setOpenDates] = useState({});
+export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, user, onLogin, onLogout, onOpenRecord, mode = "all" }) {
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
     const [friendIds, setFriendIds] = useState([]);
@@ -68,11 +85,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [usernameError, setUsernameError] = useState("");
     const [avatarUrl, setAvatarUrl] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [kudos, setKudos] = useState({});
-    const [receivedKudos, setReceivedKudos] = useState([]);
     const [myUsername, setMyUsername] = useState("");
-    const [seenBig3Overtakes, setSeenBig3Overtakes] = useState({});
-    const [visibleBig3OvertakeEvents, setVisibleBig3OvertakeEvents] = useState([]);
     const [activityFeed, setActivityFeed] = useState([]);
     const [activityFeedHasMore, setActivityFeedHasMore] = useState(false);
     const [activityFeedLoading, setActivityFeedLoading] = useState(false);
@@ -85,14 +98,20 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [sessionSettingsUpdatingId, setSessionSettingsUpdatingId] = useState(null);
     const [likePendingMap, setLikePendingMap] = useState({});
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
+    const [feedTab, setFeedTab] = useState("today");
+    const [rankingTab, setRankingTab] = useState("big3");
+    const [activityOverview, setActivityOverview] = useState({
+        sharedCount: 0,
+        activeFriendCount: 0,
+        selfShared: false,
+        selfSession: null,
+    });
     const activityFeedOffsetRef = useRef(0);
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
-    const big3SeenStorageKey = "friends_big3_overtake_seen_v1";
-    const thresholdDate = new Date();
-    thresholdDate.setDate(thresholdDate.getDate() - 7);
-    const thresholdStr = formatDateKey(thresholdDate);
+    const currentWeekStart = getMondayKey(today);
+    const recentSevenStart = shiftDateKey(today, -6);
     const showFeedSections = mode !== "ranking";
     const showRankingSections = mode !== "feed";
 
@@ -177,32 +196,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             total: merged.bench + merged.squat + merged.deadlift,
         };
     }, []);
-
-    const buildRecentGrouped = useCallback((historyData) => {
-        return Object.entries(historyData || {})
-            .flatMap(([name, recs]) =>
-                (recs || []).map((record) => {
-                    const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
-                    if (!sanitizedRecord?.date || !sanitizedRecord.sets?.length) return null;
-
-                    return {
-                        name,
-                        date: sanitizedRecord.date,
-                        sets: sanitizedRecord.sets,
-                        order: Number.isFinite(Number(sanitizedRecord.order)) ? Number(sanitizedRecord.order) : 999,
-                    };
-                }).filter(Boolean)
-            )
-            .filter((record) => record.date >= thresholdStr)
-            .reduce((acc, record) => {
-                if (!acc[record.date]) acc[record.date] = {};
-                acc[record.date][record.name] = {
-                    sets: record.sets,
-                    order: record.order,
-                };
-                return acc;
-            }, {});
-    }, [thresholdStr]);
 
     const fetchTodayActive = useCallback(async (ids) => {
         if (!user || !ids.length) {
@@ -378,23 +371,35 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         setActivityFeedLoading(true);
 
         try {
-            const { data: sessions, error: sessionsError } = await supabase
+            let sessionsQuery = supabase
                 .from("workout_sessions")
                 .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
                 .in("user_id", feedUserIds)
-                .eq("workout_date", today)
-                .order("created_at", { ascending: false })
+                .order("created_at", { ascending: false });
+
+            if (feedTab === "weekly") {
+                sessionsQuery = sessionsQuery
+                    .gte("workout_date", currentWeekStart)
+                    .lte("workout_date", today);
+            } else {
+                sessionsQuery = sessionsQuery.eq("workout_date", today);
+            }
+
+            const { data: sessions, error: sessionsError } = await sessionsQuery
                 .range(offset, offset + ACTIVITY_FEED_PAGE_SIZE - 1);
 
             if (sessionsError) throw sessionsError;
+            const visibleSessions = (sessions || []).filter(
+                (session) => session.user_id !== user.id || session.visibility === "friends"
+            );
 
-            const profileIds = [...new Set((sessions || []).map((session) => session.user_id).filter(Boolean))];
+            const profileIds = [...new Set(visibleSessions.map((session) => session.user_id).filter(Boolean))];
             const photoIds = [...new Set(
-                (sessions || [])
+                visibleSessions
                     .filter((session) => session.photo_visibility === "friends" && session.photo_id)
                     .map((session) => session.photo_id)
             )];
-            const sessionIds = [...new Set((sessions || []).map((session) => session.id).filter(Boolean))];
+            const sessionIds = [...new Set(visibleSessions.map((session) => session.id).filter(Boolean))];
 
             const [profilesRes, photosRes, likesRes, commentsRes] = await Promise.all([
                 profileIds.length
@@ -451,7 +456,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 commentCountMap.set(row.session_id, (commentCountMap.get(row.session_id) || 0) + 1);
             });
 
-            const items = (sessions || []).map((session) => {
+            const items = visibleSessions.map((session) => {
                 const profile = profileMap.get(session.user_id) || {};
                 const summary = session.summary_json || {};
                 const summaryItems = Array.isArray(summary.items) ? summary.items : [];
@@ -473,7 +478,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 return next.filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index);
             });
             activityFeedOffsetRef.current = offset + items.length;
-            setActivityFeedHasMore(items.length === ACTIVITY_FEED_PAGE_SIZE);
+            setActivityFeedHasMore(visibleSessions.length === ACTIVITY_FEED_PAGE_SIZE);
             return true;
         } catch (error) {
             console.error("activity feed fetch failed", error);
@@ -486,7 +491,56 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         } finally {
             setActivityFeedLoading(false);
         }
-    }, [friendIds, today, user?.id]);
+    }, [currentWeekStart, feedTab, friendIds, today, user?.id]);
+
+    const fetchActivityOverview = useCallback(async () => {
+        if (!user?.id) {
+            setActivityOverview({
+                sharedCount: 0,
+                activeFriendCount: 0,
+                selfShared: false,
+                selfSession: null,
+            });
+            return false;
+        }
+
+        const feedUserIds = [...new Set([user.id, ...friendIds])];
+
+        try {
+            const { data: todaySessions, error } = await supabase
+                .from("workout_sessions")
+                .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
+                .in("user_id", feedUserIds)
+                .eq("workout_date", today)
+                .order("created_at", { ascending: false });
+
+            if (error) throw error;
+
+            const selfSessionRow = (todaySessions || []).find((session) => session.user_id === user.id) || null;
+            const selfSession = selfSessionRow
+                ? {
+                    ...selfSessionRow,
+                    summary: selfSessionRow.summary_json || {},
+                    summaryItems: Array.isArray(selfSessionRow.summary_json?.items) ? selfSessionRow.summary_json.items : [],
+                }
+                : null;
+            const sharedSessions = (todaySessions || []).filter((session) => (
+                session.user_id === user.id ? session.visibility === "friends" : true
+            ));
+            const activeFriendCount = Object.values(todayActiveMap || {}).filter(Boolean).length;
+
+            setActivityOverview({
+                sharedCount: sharedSessions.length,
+                activeFriendCount,
+                selfShared: Boolean(selfSession && selfSession.visibility === "friends"),
+                selfSession,
+            });
+            return true;
+        } catch (error) {
+            console.error("activity overview fetch failed", error);
+            return false;
+        }
+    }, [friendIds, today, todayActiveMap, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -496,9 +550,10 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             fetchActivityFeed({ reset: true }),
             fetchFriendsData(),
         ]);
+        await fetchActivityOverview();
         setActivityFeedAction(null);
         showActivityFeedStatusMessage(feedOk && friendsOk ? "更新しました" : "更新できませんでした");
-    }, [activityFeedLoading, fetchActivityFeed, fetchFriendsData, showActivityFeedStatusMessage]);
+    }, [activityFeedLoading, fetchActivityFeed, fetchActivityOverview, fetchFriendsData, showActivityFeedStatusMessage]);
 
     const handleLoadMoreActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -606,6 +661,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             )));
 
             await fetchActivityFeed({ reset: true });
+            await fetchActivityOverview();
             showActivityFeedStatusMessage("公開設定を更新しました");
         } catch (error) {
             console.error("session visibility update failed", error);
@@ -613,7 +669,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         } finally {
             setSessionSettingsUpdatingId(null);
         }
-    }, [fetchActivityFeed, sessionSettingsUpdatingId, showActivityFeedStatusMessage, user?.id]);
+    }, [fetchActivityFeed, fetchActivityOverview, sessionSettingsUpdatingId, showActivityFeedStatusMessage, user?.id]);
 
     const handleToggleSessionLike = useCallback(async (sessionId) => {
         if (!user?.id || !sessionId || likePendingMap[sessionId]) return;
@@ -726,31 +782,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     useEffect(() => {
         if (!user) return;
-        const fetchKudos = async () => {
-            const today = formatDateKey();
-
-            // 自分が送ったkudos
-            const { data: sent } = await supabase
-                .from("kudos")
-                .select("to_user_id")
-                .eq("from_user_id", user.id)
-                .eq("date", today);
-
-            // 自分がもらったkudos
-            const { data: received } = await supabase
-                .from("kudos")
-                .select("from_user_id, profiles(username)")
-                .eq("to_user_id", user.id)
-                .eq("date", today);
-
-            const sentMap = {};
-            (sent || []).forEach(k => { sentMap[k.to_user_id] = true; });
-            setKudos(sentMap);
-            setReceivedKudos(received || []);
-        };
-        fetchKudos();
-    }, [user]);
-
+        fetchActivityOverview();
+    }, [user, fetchActivityOverview, sessionSyncVersion, todayActiveMap]);
 
     useEffect(() => {
         if (!user) return;
@@ -760,45 +793,16 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 .select("avatar1_url, username")
                 .eq("id", user.id)
                 .single();
-            if (data?.avatar1_url) setAvatarUrl(data.avatar1_url);
-            if (data?.username) setMyUsername(data.username);
+            setAvatarUrl(data?.avatar1_url || null);
+            setMyUsername(data?.username || "");
         };
         fetchProfile();
     }, [user]);
 
-    useEffect(() => {
-        try {
-            const raw = window.localStorage.getItem(big3SeenStorageKey);
-            setSeenBig3Overtakes(raw ? JSON.parse(raw) : {});
-        } catch (error) {
-            console.error("failed to load big3 overtake seen map", error);
-            setSeenBig3Overtakes({});
-        }
-    }, []);
+    const hasTodayRecord = hasTodayWorkoutRecord(history);
+    const todayActiveFriends = friends.filter((friend) => todayActiveMap[friend.id]);
+    const todayActiveLabel = todayActiveFriends.map((friend) => getDisplayUsername(friend.username)).join("、");
 
-    // 自分の直近データ
-    const myRecentGrouped = buildRecentGrouped(history);
-
-    const myRecentDates = Object.keys(myRecentGrouped).sort((a, b) => b.localeCompare(a));
-    const activeRecently = myRecentDates.length > 0;
-    const activeToday = myRecentDates.includes(today);
-    const myTotalExCount = new Set(
-        Object.values(myRecentGrouped).flatMap(d => Object.keys(d))
-    ).size;
-
-    const todayActiveFriends = friends.filter((f) => todayActiveMap[f.id]);
-    const todayActiveLabel = todayActiveFriends.map((f) => getDisplayUsername(f.username)).join("、");
-    const myMonthlyWorkoutDays = getValidWorkoutDatesFromHistory(history, {
-        prefix: currentMonthPrefix,
-    }).length;
-    const monthlyWorkoutRanking = [
-        { name: getDisplayUsername(myUsername, { isMe: true }), isMe: true, days: myMonthlyWorkoutDays },
-        ...friends.map((friend) => ({
-            name: getDisplayUsername(friend.username),
-            isMe: false,
-            days: countMonthlyWorkoutDays(friend.history),
-        })),
-    ].sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, "ja"));
     const myBig3 = mergeBig3Bests(
         computeBig3FromHistory(history),
         computeBig3FromManualBests(manualBests)
@@ -808,82 +812,235 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             id: user?.id || "me",
             name: getDisplayUsername(myUsername, { isMe: true }),
             isMe: true,
-            ...myBig3,
+            bench: myBig3.bench || 0,
+            squat: myBig3.squat || 0,
+            deadlift: myBig3.deadlift || 0,
+            value: myBig3.total || 0,
+        },
+        ...friends.map((friend) => {
+            const bests = computeBig3FromHistory(friend.history);
+            return {
+                id: friend.id,
+                name: getDisplayUsername(friend.username),
+                isMe: false,
+                bench: bests.bench || 0,
+                squat: bests.squat || 0,
+                deadlift: bests.deadlift || 0,
+                value: bests.total || 0,
+            };
+        }),
+    ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
+
+    const recentSevenRanking = [
+        {
+            id: user?.id || "me",
+            name: getDisplayUsername(myUsername, { isMe: true }),
+            isMe: true,
+            value: getValidWorkoutDatesFromHistory(history, { since: recentSevenStart }).length,
         },
         ...friends.map((friend) => ({
             id: friend.id,
             name: getDisplayUsername(friend.username),
             isMe: false,
-            ...computeBig3FromHistory(friend.history),
+            value: getValidWorkoutDatesFromHistory(friend.history, { since: recentSevenStart }).length,
         })),
-    ].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "ja"));
-    const myBig3ByExercise = {
-        bench: myBig3.bench || 0,
-        squat: myBig3.squat || 0,
-        deadlift: myBig3.deadlift || 0,
-    };
-    const big3OvertakeEvents = friends.flatMap((friend) => {
-        const friendBig3 = computeBig3FromHistory(friend.history);
+    ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
-        return BIG3_EXERCISES.flatMap((exercise) => {
-            const myValue = myBig3ByExercise[exercise.key] || 0;
-            const friendValue = friendBig3[exercise.key] || 0;
-            if (!(friendValue > myValue && myValue > 0)) return [];
+    const monthlyWorkoutRanking = [
+        {
+            id: user?.id || "me",
+            name: getDisplayUsername(myUsername, { isMe: true }),
+            isMe: true,
+            value: getValidWorkoutDatesFromHistory(history, { prefix: currentMonthPrefix }).length,
+        },
+        ...friends.map((friend) => ({
+            id: friend.id,
+            name: getDisplayUsername(friend.username),
+            isMe: false,
+            value: countMonthlyWorkoutDays(friend.history),
+        })),
+    ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
-                return [{
-                    type: "big3_overtake",
-                    friendId: friend.id,
-                    friendName: getDisplayUsername(friend.username),
-                    exercise: exercise.key,
-                    exerciseLabel: exercise.match,
-                    friendValue,
-                myValue,
-                seenKey: `${friend.id}:${exercise.key}:${friendValue}:${myValue}`,
-            }];
-        });
-    });
-    const unseenBig3OvertakeEvents = big3OvertakeEvents
-        .filter((event) => !seenBig3Overtakes[event.seenKey])
-        .slice(0, 3);
-    const sortedFriends = [...friends]
-        .map((friend, index) => ({ friend, index }))
-        .sort((a, b) => {
-            const activeDiff = Number(Boolean(todayActiveMap[b.friend.id])) - Number(Boolean(todayActiveMap[a.friend.id]));
-            if (activeDiff !== 0) return activeDiff;
-            return a.index - b.index;
-        })
-        .map(({ friend }) => friend);
-
-    useEffect(() => {
-        if (!unseenBig3OvertakeEvents.length) return;
-        setVisibleBig3OvertakeEvents(unseenBig3OvertakeEvents);
-    }, [unseenBig3OvertakeEvents]);
-
-    useEffect(() => {
-        if (!visibleBig3OvertakeEvents.length) return;
-
-        setSeenBig3Overtakes((prev) => {
-            const next = { ...prev };
-            let changed = false;
-
-            visibleBig3OvertakeEvents.forEach((event) => {
-                if (!next[event.seenKey]) {
-                    next[event.seenKey] = true;
-                    changed = true;
+    const rankingConfig = {
+        big3: {
+            label: "BIG3",
+            emptyValue: "0kg",
+            unit: "kg",
+            description: "BIG3合計ランキング",
+            data: big3Ranking,
+            detailLabel: (entry) => `ベンチ ${entry.bench} / スクワット ${entry.squat} / デッド ${entry.deadlift}`,
+            metricLabel: (entry) => `${entry.value}kg`,
+            mySummary: (rankIndex, myEntry, aboveEntry) => {
+                if (!myEntry) return null;
+                if (rankIndex === 0) {
+                    return {
+                        headline: "あなたは 1位",
+                        metric: `BIG3 ${myEntry.value}kg`,
+                        note: "今のところトップです",
+                    };
                 }
-            });
+                return {
+                    headline: `あなたは ${rankIndex + 1}位`,
+                    metric: `BIG3 ${myEntry.value}kg`,
+                    note: `${rankIndex}位まであと${Math.max(0, aboveEntry.value - myEntry.value)}kg`,
+                };
+            },
+        },
+        consistency: {
+            label: "継続",
+            emptyValue: "0日",
+            unit: "日",
+            description: "直近7日ランキング",
+            data: recentSevenRanking,
+            detailLabel: () => "直近7日のトレーニング日数",
+            metricLabel: (entry) => `${entry.value}日`,
+            mySummary: (rankIndex, myEntry, aboveEntry) => {
+                if (!myEntry) return null;
+                if (rankIndex === 0) {
+                    return {
+                        headline: "あなたは 1位",
+                        metric: `${myEntry.value}日`,
+                        note: myEntry.value > 0 ? "この調子で継続中" : "まずは1回記録してみましょう",
+                    };
+                }
+                return {
+                    headline: `あなたは ${rankIndex + 1}位`,
+                    metric: `${myEntry.value}日`,
+                    note: `${rankIndex}位まであと${Math.max(0, aboveEntry.value - myEntry.value)}日`,
+                };
+            },
+        },
+        monthly: {
+            label: "今月",
+            emptyValue: "0回",
+            unit: "回",
+            description: "今月のワークアウト回数ランキング",
+            data: monthlyWorkoutRanking,
+            detailLabel: () => `${currentMonthPrefix}のワークアウト回数`,
+            metricLabel: (entry) => `${entry.value}回`,
+            mySummary: (rankIndex, myEntry, aboveEntry) => {
+                if (!myEntry) return null;
+                if (rankIndex === 0) {
+                    return {
+                        headline: "あなたは 1位",
+                        metric: `${myEntry.value}回`,
+                        note: myEntry.value > 0 ? "今月トップです" : "まだ今月の記録はありません",
+                    };
+                }
+                return {
+                    headline: `あなたは ${rankIndex + 1}位`,
+                    metric: `${myEntry.value}回`,
+                    note: `${rankIndex}位まであと${Math.max(0, aboveEntry.value - myEntry.value)}回`,
+                };
+            },
+        },
+    };
 
-            if (!changed) return prev;
+    const activeRanking = rankingConfig[rankingTab];
+    const myRankingIndex = activeRanking?.data.findIndex((entry) => entry.isMe) ?? -1;
+    const myRankingEntry = myRankingIndex >= 0 ? activeRanking.data[myRankingIndex] : null;
+    const aboveRankingEntry = myRankingIndex > 0 ? activeRanking.data[myRankingIndex - 1] : null;
+    const myRankingSummary = activeRanking?.mySummary?.(myRankingIndex, myRankingEntry, aboveRankingEntry) || null;
 
+    const getSessionSetCount = useCallback((item) => {
+        const summary = item.summary || {};
+        if (Number.isFinite(Number(summary.setCount))) return Number(summary.setCount);
+        return (item.summaryItems || []).reduce((sum, exercise) => sum + Number(exercise.set_count || 0), 0);
+    }, []);
+
+    const getSessionBodyParts = useCallback((item) => {
+        return [...new Set(
+            (item.summaryItems || [])
+                .map((summaryItem) => String(summaryItem.body_part || "").trim())
+                .filter(Boolean)
+        )];
+    }, []);
+
+    const getSessionPrCount = useCallback((item) => {
+        const summary = item.summary || {};
+        return Math.max(0, Number(summary.prCount || 0));
+    }, []);
+
+    const handleShareTodayRecord = useCallback(async () => {
+        if (!user?.id) return;
+        const selfSession = activityOverview.selfSession;
+
+        if (!selfSession) {
+            onOpenRecord?.();
+            return;
+        }
+
+        if (selfSession.visibility !== "friends") {
             try {
-                window.localStorage.setItem(big3SeenStorageKey, JSON.stringify(next));
+                const { error } = await supabase
+                    .from("workout_sessions")
+                    .update({ visibility: "friends" })
+                    .eq("id", selfSession.id)
+                    .eq("user_id", user.id);
+                if (error) throw error;
+                await fetchActivityFeed({ reset: true });
+                await fetchActivityOverview();
             } catch (error) {
-                console.error("failed to persist big3 overtake seen map", error);
+                console.error("share today record failed", error);
+                showActivityFeedStatusMessage("今日の記録をシェアできませんでした");
+                return;
             }
+        }
 
-            return next;
-        });
-    }, [big3SeenStorageKey, visibleBig3OvertakeEvents]);
+        await handleOpenSessionShare({ ...selfSession, visibility: "friends" });
+    }, [activityOverview.selfSession, fetchActivityFeed, fetchActivityOverview, handleOpenSessionShare, onOpenRecord, showActivityFeedStatusMessage, user?.id]);
+
+    const handleViewOwnTodayPost = useCallback(() => {
+        if (feedTab !== "today") {
+            setFeedTab("today");
+            window.setTimeout(() => {
+                activityOverview.selfSession?.id && document.getElementById(`feed-session-${activityOverview.selfSession.id}`)?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
+            }, 120);
+            return;
+        }
+
+        if (activityOverview.selfSession?.id) {
+            document.getElementById(`feed-session-${activityOverview.selfSession.id}`)?.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+            });
+        }
+    }, [activityOverview.selfSession, feedTab]);
+
+    const activityHeadline = activityOverview.activeFriendCount > 0
+        ? `友達 ${activityOverview.activeFriendCount}人がトレーニング済み`
+        : "まだ友達の投稿はありません";
+    const activitySubline = !hasTodayRecord
+        ? "あなたはまだ今日の記録がありません"
+        : activityOverview.selfShared
+            ? "あなたは今日の記録をシェア済みです"
+            : "あなたはまだ今日の記録をシェアしていません";
+
+    const feedEmptyState = !hasTodayRecord
+        ? {
+            title: "今日はまだ静かです",
+            body: "友達のワークアウトが投稿されるとここに表示されます。まずは今日のトレーニングを記録してみましょう。",
+            action: "ワークアウトを記録",
+            onClick: onOpenRecord,
+        }
+        : activityOverview.selfShared
+            ? {
+                title: feedTab === "weekly" ? "今週の投稿はまだ少なめです" : "今日はまだ静かです",
+                body: "あなたの投稿はシェア済みです。友達のワークアウトが投稿されるとここに並びます。",
+                action: "今日の投稿を見る",
+                onClick: handleViewOwnTodayPost,
+            }
+            : {
+                title: "今日はまだ静かです",
+                body: "あなたの今日の記録をシェアして、フィードを動かしましょう。",
+                action: "今日の記録をシェア",
+                onClick: handleShareTodayRecord,
+            };
+
+    const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
 
     if (!user) {
         return (
@@ -903,64 +1060,107 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             </div>
         );
     }
-
-
-    const renderDateAccordion = (id, date, exMap) => {
-        const dateKey = `${id}-${date}`;
-        const isOpen = openDates[dateKey] === true;
-        return (
-            <div key={date} style={{ marginBottom: 6 }}>
-                <button onClick={() => setOpenDates(p => ({ ...p, [dateKey]: !isOpen }))}
-                    style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "8px 10px", background: "linear-gradient(135deg, var(--success-soft), var(--card))", borderRadius: 12, border: "1px solid var(--success-border)", marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text2)" }}>{date === today ? "今日" : date}</div>
-                    <div style={{ fontSize: 11, color: "var(--text3)" }}>{isOpen ? "▲" : "▼"}</div>
-                </button>
-                {isOpen && Object.entries(exMap)
-                    .sort(([, a], [, b]) => (a.order ?? 999) - (b.order ?? 999))
-                    .map(([name, val]) => {
-                        const sets = Array.isArray(val) ? val : (val.sets || []);
-                        return (
-                            <div key={name} style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 14, padding: "8px 12px", marginBottom: 6, border: "1px solid rgba(186, 230, 253, 0.6)" }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>{name}</div>
-                                {sets.map((s, i) => (
-                                    <div key={i} style={{ fontSize: 12, color: "var(--text2)", marginBottom: 2 }}>
-                                        {i + 1} {s.weight === "BW" ? "自重" : `${s.weight}kg`} × {s.reps}rep
-                                    </div>
-                                ))}
-                            </div>
-                        );
-                    })}
-            </div>
-        );
-    };
-
-
     return (
-        <div className="fade-in" style={{ ...S.page, paddingBottom: 24 }}>
-            {user && (
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                    <button onClick={onLogout} style={{ ...S.pillBtn, padding: "8px 14px", fontSize: 12, color: "var(--text2)" }}>
-                        ログアウト
-                    </button>
-                </div>
-            )}
+        <div className="fade-in" style={{ ...S.page, paddingBottom: 120 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                <button onClick={onLogout} style={{ ...S.pillBtn, padding: "8px 14px", fontSize: 12, color: "var(--text2)" }}>
+                    ログアウト
+                </button>
+            </div>
 
             {showFeedSections && (
                 <>
-            <div style={S.sLabel}>今日のアクティビティ</div>
-
-            <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                    <div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>みんなの今日のワークアウト</div>
-                        <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
-                            自分と友達の今日のセッションだけを表示します
+                    <div
+                        style={{
+                            background: "var(--card)",
+                            borderRadius: 22,
+                            padding: 18,
+                            marginBottom: 14,
+                            border: "1px solid var(--border2)",
+                            boxShadow: "var(--shadow-card)",
+                        }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
+                            <div>
+                                <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>今日のアクティビティ</div>
+                                <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 4 }}>
+                                    {activityHeadline}
+                                </div>
+                                <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
+                                    {activitySubline}
+                                </div>
+                                {todayActiveLabel && (
+                                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
+                                        {todayActiveLabel}
+                                    </div>
+                                )}
+                            </div>
+                            <div
+                                style={{
+                                    padding: "8px 10px",
+                                    borderRadius: 14,
+                                    background: activityOverview.selfShared ? "var(--success-soft)" : "rgba(18, 199, 194, 0.06)",
+                                    border: "1px solid var(--border2)",
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    color: activityOverview.selfShared ? "var(--accent)" : "var(--text2)",
+                                    flexShrink: 0,
+                                }}
+                            >
+                                共有 {activityOverview.sharedCount}件
+                            </div>
                         </div>
+
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+                            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+                                {FEED_TABS.map((tab) => {
+                                    const selected = feedTab === tab.key;
+                                    return (
+                                        <button
+                                            key={tab.key}
+                                            type="button"
+                                            onClick={() => setFeedTab(tab.key)}
+                                            style={{
+                                                padding: "10px 18px",
+                                                borderRadius: 999,
+                                                border: selected ? "1px solid transparent" : "1px solid var(--border2)",
+                                                background: selected ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+                                                color: selected ? "#fff" : "var(--text2)",
+                                                fontSize: 13,
+                                                fontWeight: 800,
+                                                flexShrink: 0,
+                                                boxShadow: selected ? "0 12px 26px rgba(18, 199, 194, 0.18)" : "none",
+                                            }}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleRefreshActivityFeed}
+                                disabled={activityFeedLoading}
+                                style={{
+                                    padding: "10px 14px",
+                                    borderRadius: 14,
+                                    border: "1px solid var(--border2)",
+                                    background: "var(--card2)",
+                                    color: "var(--text2)",
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    flexShrink: 0,
+                                }}
+                            >
+                                {activityFeedLoading && activityFeedAction === "refresh" ? "更新中..." : "更新"}
+                            </button>
+                        </div>
+
                         {activityFeedStatusMessage && (
                             <div
                                 style={{
                                     fontSize: 11,
-                                    marginTop: 6,
+                                    marginTop: 10,
                                     color: activityFeedStatusMessage.includes("できません")
                                         ? "var(--danger, #dc2626)"
                                         : "var(--accent)",
@@ -971,108 +1171,184 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                             </div>
                         )}
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleRefreshActivityFeed}
-                        disabled={activityFeedLoading}
-                        style={{
-                            padding: "8px 12px",
-                            borderRadius: 12,
-                            border: "1px solid var(--border2)",
-                            background: "var(--card2)",
-                            color: "var(--text2)",
-                            fontSize: 12,
-                            fontWeight: 700,
-                        }}
-                    >
-                        {activityFeedLoading && activityFeedAction === "refresh" ? "更新中..." : "更新"}
-                    </button>
-                </div>
 
-                {activityFeed.length === 0 && !activityFeedLoading ? (
-                    <div style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 16, padding: "18px 16px", color: "var(--text3)", fontSize: 13, textAlign: "center", border: "1px solid rgba(217, 228, 239, 0.9)" }}>
-                        今日はまだ共有されたワークアウトはありません
-                    </div>
-                ) : (
-                    <div style={{ display: "grid", gap: 10 }}>
-                        {activityFeed.map((item) => {
-                            const profileName = item.user_id === user.id
-                                ? getDisplayUsername(myUsername, { isMe: true })
-                                : getDisplayUsername(item.profile?.username);
+                    {activityFeed.length === 0 && !activityFeedLoading ? (
+                        <div
+                            style={{
+                                ...S.sectionCard,
+                                padding: 22,
+                                textAlign: "center",
+                                marginBottom: 14,
+                            }}
+                        >
+                            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 8 }}>
+                                {feedEmptyState.title}
+                            </div>
+                            <div style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.7, marginBottom: 18 }}>
+                                {feedEmptyState.body}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => feedEmptyState.onClick?.()}
+                                style={{
+                                    padding: "14px 22px",
+                                    borderRadius: 16,
+                                    border: "1px solid transparent",
+                                    background: "linear-gradient(135deg, #12C7C2, #33E1DB)",
+                                    color: "#fff",
+                                    fontSize: 14,
+                                    fontWeight: 900,
+                                    boxShadow: "0 16px 28px rgba(18, 199, 194, 0.18)",
+                                }}
+                            >
+                                {feedEmptyState.action}
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{ display: "grid", gap: 14, marginBottom: 14 }}>
+                            {activityFeed.map((item) => {
+                                const profileName = item.user_id === user.id
+                                    ? getDisplayUsername(myUsername, { isMe: true })
+                                    : getDisplayUsername(item.profile?.username);
+                                const bodyParts = getSessionBodyParts(item);
+                                const setCount = getSessionSetCount(item);
+                                const prCount = getSessionPrCount(item);
 
-                            return (
-                                <div key={item.id} style={{ background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 18, padding: "14px", border: "1px solid rgba(217, 228, 239, 0.85)" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                                        <div style={{ width: 42, height: 42, borderRadius: 21, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
-                                            {item.profile?.avatar1_url
-                                                ? <img src={item.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                                : profileName?.[0]?.toUpperCase()
-                                            }
-                                        </div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                {profileName}
+                                return (
+                                    <div
+                                        key={item.id}
+                                        id={`feed-session-${item.id}`}
+                                        style={{
+                                            background: "var(--card)",
+                                            borderRadius: 22,
+                                            padding: 16,
+                                            border: "1px solid var(--border2)",
+                                            boxShadow: "var(--shadow-card)",
+                                        }}
+                                    >
+                                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                                            <div style={{ width: 46, height: 46, borderRadius: 23, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
+                                                {item.profile?.avatar1_url
+                                                    ? <img src={item.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                                    : profileName?.[0]?.toUpperCase()
+                                                }
                                             </div>
-                                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                                                {formatRelativeTime(item.created_at)} · {item.workout_date}
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                    {profileName}
+                                                </div>
+                                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
+                                                    {formatRelativeTime(item.created_at)}
+                                                </div>
+                                                {bodyParts.length > 0 && (
+                                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 7 }}>
+                                                        {bodyParts.map((bodyPart) => (
+                                                            <span
+                                                                key={`${item.id}-${bodyPart}`}
+                                                                style={{
+                                                                    padding: "4px 9px",
+                                                                    borderRadius: 999,
+                                                                    background: "rgba(18, 199, 194, 0.06)",
+                                                                    border: "1px solid rgba(18, 199, 194, 0.14)",
+                                                                    color: "var(--text2)",
+                                                                    fontSize: 11,
+                                                                    fontWeight: 700,
+                                                                }}
+                                                            >
+                                                                {bodyPart}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
+                                            {item.user_id === user.id && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenSessionShare(item)}
+                                                    disabled={Boolean(sharePreparingSessionId)}
+                                                    style={{
+                                                        flexShrink: 0,
+                                                        padding: "9px 12px",
+                                                        borderRadius: 14,
+                                                        border: "1px solid var(--border2)",
+                                                        background: "var(--card2)",
+                                                        color: "var(--text2)",
+                                                        fontSize: 12,
+                                                        fontWeight: 800,
+                                                        opacity: sharePreparingSessionId && sharePreparingSessionId !== item.id ? 0.7 : 1,
+                                                    }}
+                                                >
+                                                    {sharePreparingSessionId === item.id ? "準備中..." : "シェア"}
+                                                </button>
+                                            )}
                                         </div>
+
+                                        {item.photoUrl && (
+                                            <img
+                                                src={item.photoUrl}
+                                                alt={`${item.workout_date} session`}
+                                                style={{ width: "100%", borderRadius: 16, objectFit: "cover", aspectRatio: "16 / 9", display: "block", marginBottom: 14 }}
+                                            />
+                                        )}
+
+                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
+                                            {[
+                                                { label: "Volume", value: `${Math.round(Number(item.total_volume || 0)).toLocaleString("ja-JP")}kg` },
+                                                { label: "セット数", value: `${setCount}` },
+                                                { label: "種目数", value: `${item.exercise_count}` },
+                                                { label: "PR", value: `${prCount}件` },
+                                            ].map((stat) => (
+                                                <div
+                                                    key={`${item.id}-${stat.label}`}
+                                                    style={{
+                                                        padding: "11px 12px",
+                                                        borderRadius: 16,
+                                                        background: "linear-gradient(180deg, rgba(18, 199, 194, 0.05), rgba(18, 199, 194, 0.015))",
+                                                        border: "1px solid rgba(18, 199, 194, 0.12)",
+                                                    }}
+                                                >
+                                                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", letterSpacing: 0.4 }}>{stat.label}</div>
+                                                    <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginTop: 4 }}>{stat.value}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div style={{ display: "grid", gap: 8 }}>
+                                            {(item.summaryItems || []).slice(0, 3).map((summaryItem) => (
+                                                <div
+                                                    key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`}
+                                                    style={{
+                                                        padding: "11px 12px",
+                                                        borderRadius: 16,
+                                                        background: "var(--card2)",
+                                                        border: "1px solid rgba(217, 228, 239, 0.9)",
+                                                    }}
+                                                >
+                                                    <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
+                                                        {summaryItem.exercise_name}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                                                        {Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × {summaryItem.set_count}セット
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {item.summaryItems.length > 3 && (
+                                                <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                                    他 {item.summaryItems.length - 3} 種目
+                                                </div>
+                                            )}
+                                        </div>
+
                                         {item.user_id === user.id && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleOpenSessionShare(item)}
-                                                disabled={Boolean(sharePreparingSessionId)}
+                                            <div
                                                 style={{
-                                                    flexShrink: 0,
-                                                    padding: "8px 10px",
-                                                    borderRadius: 12,
-                                                    border: "1px solid var(--border2)",
-                                                    background: "var(--card)",
-                                                    color: "var(--text2)",
-                                                    fontSize: 11,
-                                                    fontWeight: 800,
-                                                    opacity: sharePreparingSessionId && sharePreparingSessionId !== item.id ? 0.7 : 1,
+                                                    display: "flex",
+                                                    flexWrap: "wrap",
+                                                    gap: 8,
+                                                    marginTop: 12,
+                                                    marginBottom: 6,
                                                 }}
                                             >
-                                                {sharePreparingSessionId === item.id ? "準備中..." : "シェア"}
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {item.photoUrl && (
-                                        <img
-                                            src={item.photoUrl}
-                                            alt={`${item.workout_date} session`}
-                                            style={{ width: "100%", borderRadius: 14, objectFit: "cover", aspectRatio: "16 / 9", display: "block", marginBottom: 10 }}
-                                        />
-                                    )}
-
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-                                        <span style={{ padding: "4px 10px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--info-strong)", fontSize: 11, fontWeight: 700 }}>
-                                            {item.exercise_count}種目
-                                        </span>
-                                        <span style={{ padding: "4px 10px", borderRadius: 999, background: "var(--success-soft)", border: "1px solid var(--success-border)", color: "var(--accent)", fontSize: 11, fontWeight: 700 }}>
-                                            Volume {Math.round(Number(item.total_volume || 0)).toLocaleString("ja-JP")}kg
-                                        </span>
-                                    </div>
-
-                                    {item.user_id === user.id && (
-                                        <div
-                                            style={{
-                                                display: "grid",
-                                                gap: 8,
-                                                marginBottom: 10,
-                                                padding: "10px 12px",
-                                                borderRadius: 14,
-                                                background: "rgba(248, 250, 252, 0.95)",
-                                                border: "1px solid rgba(217, 228, 239, 0.95)",
-                                            }}
-                                        >
-                                            <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text2)" }}>
-                                                公開設定
-                                            </div>
-                                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                                                <div style={{ fontSize: 11, color: "var(--text3)", minWidth: 64 }}>セッション</div>
                                                 <button
                                                     type="button"
                                                     disabled={sessionSettingsUpdatingId === item.id || item.visibility === "friends"}
@@ -1085,7 +1361,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                         color: item.visibility === "friends" ? "var(--bg)" : "var(--text2)",
                                                         fontSize: 11,
                                                         fontWeight: 700,
-                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
                                                     }}
                                                 >
                                                     フレンドに公開
@@ -1102,349 +1377,336 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                         color: item.visibility === "private" ? "var(--bg)" : "var(--text2)",
                                                         fontSize: 11,
                                                         fontWeight: 700,
-                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
                                                     }}
                                                 >
                                                     非公開
                                                 </button>
                                             </div>
-                                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                                                <div style={{ fontSize: 11, color: "var(--text3)", minWidth: 64 }}>写真</div>
-                                                <button
-                                                    type="button"
-                                                    disabled={sessionSettingsUpdatingId === item.id || item.photo_visibility === "hidden"}
-                                                    onClick={() => handleUpdateSessionVisibility(item.id, { photo_visibility: "hidden" })}
-                                                    style={{
-                                                        padding: "7px 10px",
-                                                        borderRadius: 999,
-                                                        border: "1px solid var(--border2)",
-                                                        background: item.photo_visibility === "hidden" ? "var(--text)" : "var(--card)",
-                                                        color: item.photo_visibility === "hidden" ? "var(--bg)" : "var(--text2)",
-                                                        fontSize: 11,
-                                                        fontWeight: 700,
-                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
-                                                    }}
-                                                >
-                                                    非表示
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    disabled={sessionSettingsUpdatingId === item.id || item.photo_visibility === "friends"}
-                                                    onClick={() => handleUpdateSessionVisibility(item.id, { photo_visibility: "friends" })}
-                                                    style={{
-                                                        padding: "7px 10px",
-                                                        borderRadius: 999,
-                                                        border: "1px solid var(--border2)",
-                                                        background: item.photo_visibility === "friends" ? "var(--text)" : "var(--card)",
-                                                        color: item.photo_visibility === "friends" ? "var(--bg)" : "var(--text2)",
-                                                        fontSize: 11,
-                                                        fontWeight: 700,
-                                                        opacity: sessionSettingsUpdatingId === item.id ? 0.7 : 1,
-                                                    }}
-                                                >
-                                                    フレンドに公開
-                                                </button>
-                                                {sessionSettingsUpdatingId === item.id && (
-                                                    <span style={{ fontSize: 11, color: "var(--text3)" }}>更新中...</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div style={{ display: "grid", gap: 6 }}>
-                                        {(item.summaryItems || []).slice(0, 4).map((summaryItem) => (
-                                            <div key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, color: "var(--text2)" }}>
-                                                <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                    {summaryItem.exercise_name}
-                                                    {summaryItem.body_part ? ` · ${summaryItem.body_part}` : ""}
-                                                </div>
-                                                <div style={{ flexShrink: 0 }}>
-                                                    {summaryItem.set_count}セット / {Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {item.summaryItems.length > 4 && (
-                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                                他 {item.summaryItems.length - 4} 種目
-                                            </div>
                                         )}
-                                    </div>
 
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent: "space-between",
-                                            alignItems: "center",
-                                            gap: 10,
-                                            marginTop: 12,
-                                            paddingTop: 10,
-                                            borderTop: "1px solid rgba(217, 228, 239, 0.7)",
-                                        }}
-                                    >
-                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                            {item.user_id === user.id ? (
-                                                <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
-                                                    ♥ {Number(item.likeCount || 0)}
-                                                </div>
-                                            ) : (
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                gap: 10,
+                                                marginTop: 14,
+                                                paddingTop: 12,
+                                                borderTop: "1px solid rgba(217, 228, 239, 0.75)",
+                                            }}
+                                        >
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                                {item.user_id === user.id ? (
+                                                    <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 800 }}>
+                                                        ♥ {Number(item.likeCount || 0)}
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleSessionLike(item.id)}
+                                                        disabled={Boolean(likePendingMap[item.id])}
+                                                        style={{
+                                                            display: "inline-flex",
+                                                            alignItems: "center",
+                                                            gap: 6,
+                                                            padding: "9px 12px",
+                                                            borderRadius: 14,
+                                                            border: "1px solid var(--border2)",
+                                                            background: item.likedByMe ? "var(--danger-soft, #fee2e2)" : "var(--card2)",
+                                                            color: item.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
+                                                            fontSize: 12,
+                                                            fontWeight: 800,
+                                                            opacity: likePendingMap[item.id] ? 0.7 : 1,
+                                                        }}
+                                                    >
+                                                        <span>{item.likedByMe ? "♥" : "♡"}</span>
+                                                        <span>{Number(item.likeCount || 0)}</span>
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleToggleSessionLike(item.id)}
-                                                    disabled={Boolean(likePendingMap[item.id])}
+                                                    onClick={() => handleOpenComments(item)}
                                                     style={{
                                                         display: "inline-flex",
                                                         alignItems: "center",
                                                         gap: 6,
-                                                        padding: "8px 10px",
-                                                        borderRadius: 12,
+                                                        padding: "9px 12px",
+                                                        borderRadius: 14,
                                                         border: "1px solid var(--border2)",
-                                                        background: item.likedByMe ? "var(--danger-soft, #fee2e2)" : "var(--card)",
-                                                        color: item.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
+                                                        background: "var(--card2)",
+                                                        color: "var(--text2)",
                                                         fontSize: 12,
                                                         fontWeight: 800,
-                                                        opacity: likePendingMap[item.id] ? 0.7 : 1,
                                                     }}
                                                 >
-                                                    <span>{item.likedByMe ? "♥" : "♡"}</span>
-                                                    <span>{Number(item.likeCount || 0)}</span>
+                                                    <span>💬</span>
+                                                    <span>{Number(item.commentCount || 0)}</span>
                                                 </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => handleOpenComments(item)}
-                                                style={{
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    gap: 6,
-                                                    padding: "8px 10px",
-                                                    borderRadius: 12,
-                                                    border: "1px solid var(--border2)",
-                                                    background: "var(--card)",
-                                                    color: "var(--text2)",
-                                                    fontSize: 12,
-                                                    fontWeight: 800,
-                                                }}
-                                            >
-                                                <span>💬</span>
-                                                <span>{Number(item.commentCount || 0)}</span>
-                                            </button>
-                                        </div>
-                                        {likePendingMap[item.id] && (
-                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                                更新中...
                                             </div>
-                                        )}
+                                            {likePendingMap[item.id] && (
+                                                <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                                    更新中...
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {activityFeedHasMore && (
+                        <button
+                            type="button"
+                            onClick={handleLoadMoreActivityFeed}
+                            disabled={activityFeedLoading}
+                            style={{
+                                width: "100%",
+                                marginBottom: 14,
+                                padding: "12px 14px",
+                                borderRadius: 14,
+                                border: "1px solid var(--border2)",
+                                background: "var(--card2)",
+                                color: "var(--text2)",
+                                fontSize: 13,
+                                fontWeight: 700,
+                            }}
+                        >
+                            {activityFeedLoading && activityFeedAction === "more" ? "読み込み中..." : "もっと見る"}
+                        </button>
+                    )}
+
+                    <div style={{ display: "grid", gap: 12 }}>
+                        <div
+                            style={{
+                                background: "var(--card)",
+                                borderRadius: 20,
+                                padding: 16,
+                                border: "1px solid var(--border2)",
+                                boxShadow: "var(--shadow-card)",
+                            }}
+                        >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                    <div
+                                        style={{
+                                            width: 42,
+                                            height: 42,
+                                            borderRadius: 21,
+                                            background: "linear-gradient(135deg, var(--accent2), #7DD3FC)",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            fontSize: 14,
+                                            fontWeight: 900,
+                                            color: "#fff",
+                                            overflow: "hidden",
+                                            cursor: "pointer",
+                                        }}
+                                        onClick={() => document.getElementById("friends-avatar-input")?.click()}
+                                    >
+                                        {avatarUrl
+                                            ? <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                            : profileInitial
+                                        }
+                                        <input
+                                            id="friends-avatar-input"
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: "none" }}
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                const ext = file.name.split(".").pop();
+                                                const path = `${user.id}.${ext}`;
+                                                await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
+                                                const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(path);
+                                                await supabase.from("profiles").update({ avatar1_url: publicUrl }).eq("id", user.id);
+                                                setAvatarUrl(publicUrl);
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
+                                            {getDisplayUsername(myUsername, { isMe: true })}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                                            友達と記録をつなげよう
+                                        </div>
                                     </div>
                                 </div>
-                            );
-                        })}
-                    </div>
-                )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setUsernameError("");
+                                        setShowEditName(true);
+                                    }}
+                                    style={{
+                                        padding: "8px 12px",
+                                        borderRadius: 12,
+                                        border: "1px solid var(--border2)",
+                                        background: "var(--card2)",
+                                        color: "var(--text2)",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                    }}
+                                >
+                                    名前を編集
+                                </button>
+                            </div>
+                        </div>
 
-                {activityFeedHasMore && (
-                    <button
-                        type="button"
-                        onClick={handleLoadMoreActivityFeed}
-                        disabled={activityFeedLoading}
-                        style={{
-                            width: "100%",
-                            marginTop: 12,
-                            padding: "12px 14px",
-                            borderRadius: 14,
-                            border: "1px solid var(--border2)",
-                            background: "var(--card2)",
-                            color: "var(--text2)",
-                            fontSize: 13,
-                            fontWeight: 700,
-                        }}
-                    >
-                        {activityFeedLoading && activityFeedAction === "more" ? "読み込み中..." : "もっと見る"}
-                    </button>
-                )}
-            </div>
+                        <InviteCard copied={copied} onCopyInvite={handleCopyInvite} />
+                        <NotificationSettings user={user} />
+                    </div>
                 </>
             )}
 
             {showRankingSections && (
                 <>
-            <Big3RankingCard ranking={big3Ranking} />
+                    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2, marginBottom: 14 }}>
+                        {RANKING_TABS.map((tab) => {
+                            const selected = rankingTab === tab.key;
+                            return (
+                                <button
+                                    key={tab.key}
+                                    type="button"
+                                    onClick={() => setRankingTab(tab.key)}
+                                    style={{
+                                        padding: "11px 18px",
+                                        borderRadius: 999,
+                                        border: selected ? "1px solid transparent" : "1px solid var(--border2)",
+                                        background: selected ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+                                        color: selected ? "#fff" : "var(--text2)",
+                                        fontSize: 13,
+                                        fontWeight: 800,
+                                        flexShrink: 0,
+                                        boxShadow: selected ? "0 12px 26px rgba(18, 199, 194, 0.18)" : "none",
+                                    }}
+                                >
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
 
-            <div style={S.sLabel}>最近のアクティビティ（7日間）</div>
-
-            {todayActiveFriends.length > 0 && (
-                <div
-                    style={{
-                        background: "linear-gradient(135deg, var(--success-soft), var(--card))",
-                        border: "1px solid var(--success-border)",
-                        borderRadius: 16,
-                        padding: "12px 14px",
-                        marginBottom: 12,
-                        fontSize: 13,
-                        color: "var(--text)",
-                        boxShadow: "var(--shadow-card)",
-                    }}
-                >
-                    {todayActiveLabel}が今日トレーニングを記録しています！
-                </div>
-            )}
-
-            <Big3OvertakeAlerts events={visibleBig3OvertakeEvents} />
-
-            {receivedKudos.length > 0 && (
-                <div style={{ background: "linear-gradient(135deg, var(--info-soft), var(--card))", border: "1px solid var(--info-border)", borderRadius: 16, padding: "12px 14px", marginBottom: 12, fontSize: 13, color: "var(--text)", boxShadow: "var(--shadow-card)" }}>
-                    🔥 {receivedKudos.map(k => getDisplayUsername(k.profiles?.username)).join("、")}から今日クドスをもらった！
-                </div>
-            )}
-
-            <MonthlyWorkoutRankingCard ranking={monthlyWorkoutRanking} />
-
-
-            {/* 自分のカード */}
-            <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", position: "relative", boxShadow: "var(--shadow-card)" }}>
-                <button onClick={() => {
-                    setUsernameError("");
-                    setShowEditName(true);
-                }} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", cursor: "pointer", color: "var(--text3)", padding: 4 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                </button>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: activeRecently ? 14 : 0 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg, var(--accent2), #7DD3FC)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden", cursor: "pointer", position: "relative", boxShadow: "var(--shadow-soft)" }}
-                        onClick={() => document.getElementById("avatar-input").click()}>
-                        {avatarUrl
-                            ? <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            : "YOU"
-                        }
-                        <input id="avatar-input" type="file" accept="image/*" style={{ display: "none" }}
-                            onChange={async (e) => {
-                                const file = e.target.files[0];
-                                if (!file) return;
-                                const ext = file.name.split(".").pop();
-                                const path = `${user.id}.${ext}`;
-                                await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
-                                const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(path);
-                                await supabase.from("profiles").update({ avatar1_url: publicUrl }).eq("id", user.id);
-                                setAvatarUrl(publicUrl);
+                    {myRankingSummary && (
+                        <div
+                            style={{
+                                background: "var(--card)",
+                                borderRadius: 22,
+                                padding: 18,
+                                marginBottom: 14,
+                                border: "1px solid var(--border2)",
+                                boxShadow: "var(--shadow-card)",
                             }}
-
-                        />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{getDisplayUsername(myUsername, { isMe: true })}</div>
-                            {activeToday && <div style={{ padding: "2px 8px", borderRadius: 10, background: "var(--success-soft)", border: "1px solid var(--success-border)", fontSize: 10, color: "var(--accent)", fontWeight: 700 }}>完了 ✓</div>}
-                        </div>
-                        <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
-                            {activeRecently ? `直近7日 ${myTotalExCount}種目` : "直近7日の記録なし"}
-                        </div>
-                    </div>
-                </div>
-                {myRecentDates.map(date => renderDateAccordion("me", date, myRecentGrouped[date]))}
-            </div>
-
-            {/* 友達カード */}
-            {loading ? (
-                <div style={{ textAlign: "center", padding: 32, color: "var(--text2)", fontSize: 14 }}>読み込み中...</div>
-            ) : friends.length === 0 ? (
-                <div style={{ textAlign: "center", padding: 32, color: "var(--text2)", fontSize: 14 }}>
-                    まだ友達がいません。招待リンクを送ろう！
-                </div>
-            ) : (
-                sortedFriends.map(f => {
-                    const friendHistory = f.history || {};
-                    const friendGrouped = buildRecentGrouped(friendHistory);
-                    const friendDates = Object.keys(friendGrouped).sort((a, b) => b.localeCompare(a));
-                    const friendExCount = new Set(Object.values(friendGrouped).flatMap(d => Object.keys(d))).size;
-
-                    return (
-                        <div key={f.id} style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: friendDates.length ? 14 : 0 }}>
-                                <div style={{ width: 44, height: 44, borderRadius: 22, background: "linear-gradient(135deg, var(--accent), #4ADE80)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#fff", flexShrink: 0, overflow: "hidden", boxShadow: "var(--shadow-soft)" }}>
-                                    {f.avatar1_url
-                                        ? <img src={f.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                        : getDisplayUsername(f.username)?.[0]?.toUpperCase()
-                                    }
-                                </div>
-                                <div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>@{getDisplayUsername(f.username)}</div>
-                                        {todayActiveMap[f.id] && (
-                                            <div
-                                                style={{
-                                                    padding: "2px 8px",
-                                                    borderRadius: 10,
-                                                    background: "var(--success-soft)",
-                                                    border: "1px solid var(--success-border)",
-                                                    fontSize: 10,
-                                                    color: "var(--accent)",
-                                                    fontWeight: 700,
-                                                }}
-                                            >
-                                                🟢 今日記録あり
-                                            </div>
-                                        )}
-                                        <button onClick={async () => {
-                                            const today = formatDateKey();
-                                            await supabase.from("kudos").upsert({
-                                                from_user_id: user.id,
-                                                to_user_id: f.id,
-                                                date: today,
-                                            });
-                                            setKudos(p => ({ ...p, [f.id]: true }));
-                                        }} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", opacity: kudos[f.id] ? 0.4 : 1 }}>
-                                            🔥
-                                        </button>
-                                    </div>
-
-                                    <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>直近7日 {friendExCount}種目</div>
-                                </div>
+                        >
+                            <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
+                                Your Rank
                             </div>
-                            {friendDates.length === 0
-                                ? <div style={{ fontSize: 12, color: "var(--text3)" }}>直近7日間の記録なし</div>
-                                : friendDates.map(date => renderDateAccordion(f.id, date, friendGrouped[date]))
-                            }
+                            <div style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", marginBottom: 6 }}>
+                                {myRankingSummary.headline}
+                            </div>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--accent)", marginBottom: 6 }}>
+                                {myRankingSummary.metric}
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text2)" }}>
+                                {myRankingSummary.note}
+                            </div>
                         </div>
-                    );
-                })
-            )}
+                    )}
 
-            <InviteCard copied={copied} onCopyInvite={handleCopyInvite} />
+                    <div
+                        style={{
+                            background: "var(--card)",
+                            borderRadius: 22,
+                            padding: 16,
+                            border: "1px solid var(--border2)",
+                            boxShadow: "var(--shadow-card)",
+                        }}
+                    >
+                        <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>
+                            {activeRanking.description}
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 14 }}>
+                            自分の位置と友達との差をチェック
+                        </div>
 
-            <NotificationSettings user={user} />
+                        {loading ? (
+                            <div style={{ textAlign: "center", padding: 26, color: "var(--text2)", fontSize: 14 }}>読み込み中...</div>
+                        ) : (
+                            <div style={{ display: "grid", gap: 10 }}>
+                                {activeRanking.data.map((entry, index) => (
+                                    <div
+                                        key={`${rankingTab}-${entry.id}`}
+                                        style={{
+                                            padding: index === 0 ? "14px 14px 13px" : "12px 14px",
+                                            borderRadius: 18,
+                                            background: entry.isMe
+                                                ? "linear-gradient(180deg, rgba(18, 199, 194, 0.07), rgba(18, 199, 194, 0.02))"
+                                                : "linear-gradient(180deg, var(--card2), var(--card))",
+                                            border: index === 0
+                                                ? "1px solid rgba(18, 199, 194, 0.22)"
+                                                : entry.isMe
+                                                    ? "1px solid rgba(18, 199, 194, 0.2)"
+                                                    : "1px solid rgba(217, 228, 239, 0.9)",
+                                            boxShadow: index === 0 ? "0 12px 26px rgba(18, 199, 194, 0.14)" : "none",
+                                            opacity: entry.value > 0 ? 1 : 0.78,
+                                        }}
+                                    >
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                                <div style={{ minWidth: 32, fontSize: 12, fontWeight: 900, color: index === 0 ? "#C26B1E" : "var(--text3)" }}>
+                                                    {index + 1}位
+                                                </div>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontSize: 14, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                        {entry.name}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)" }}>
+                                                {activeRanking.metricLabel(entry)}
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>
+                                            {activeRanking.detailLabel(entry)}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </>
             )}
 
-            {
-                <EditUsernameModal
-                    isOpen={showEditName}
-                    value={newUsername}
-                    error={usernameError}
-                    onChange={(nextValue) => {
-                        setNewUsername(nextValue);
-                        if (usernameError) setUsernameError("");
-                    }}
-                    onSave={async () => {
-                        const trimmed = newUsername.trim();
-                        const errorMessage = validateUsername(trimmed);
-                        if (errorMessage) {
-                            setUsernameError(errorMessage);
-                            return;
-                        }
-                        await supabase.from("profiles").update({ username: trimmed }).eq("id", user.id);
-                        setMyUsername(trimmed);
-                        setUsernameError("");
-                        setShowEditName(false);
-                        setNewUsername("");
-                    }}
-                    onCancel={() => {
-                        setShowEditName(false);
-                        setNewUsername("");
-                        setUsernameError("");
-                    }}
-                />
-            }
+            <EditUsernameModal
+                isOpen={showEditName}
+                value={newUsername}
+                error={usernameError}
+                onChange={(nextValue) => {
+                    setNewUsername(nextValue);
+                    if (usernameError) setUsernameError("");
+                }}
+                onSave={async () => {
+                    const trimmed = newUsername.trim();
+                    const errorMessage = validateUsername(trimmed);
+                    if (errorMessage) {
+                        setUsernameError(errorMessage);
+                        return;
+                    }
+                    await supabase.from("profiles").update({ username: trimmed }).eq("id", user.id);
+                    setMyUsername(trimmed);
+                    setUsernameError("");
+                    setShowEditName(false);
+                    setNewUsername("");
+                }}
+                onCancel={() => {
+                    setShowEditName(false);
+                    setNewUsername("");
+                    setUsernameError("");
+                }}
+            />
 
             <WorkoutSessionShareModal
                 isOpen={Boolean(shareSessionTarget)}
