@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { calc1RM, getRecordSourceSets, sanitizeHistoryRecord, sanitizeWorkoutSets } from "../utils/helpers";
+import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 import { buildTrainingSummary } from "../utils/trainingSummary";
@@ -247,6 +247,7 @@ export default function AnalyticsScreen({
   const [overviewScope, setOverviewScope] = useState("weekly");
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
   const [showBodyPartBreakdown, setShowBodyPartBreakdown] = useState(false);
+  const [showAllBodyPartPr, setShowAllBodyPartPr] = useState(false);
 
   const resolutionContext = useMemo(
     () => ({
@@ -385,26 +386,6 @@ export default function AnalyticsScreen({
       : activeSummaryKey === "monthly"
         ? monthlySummary
         : null;
-  const progressInsights = useMemo(() => {
-    const validDates = new Set();
-
-    Object.entries(history || {}).forEach(([exerciseName, records]) => {
-      (records || []).forEach((record) => {
-        const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
-        if (!sanitized?.date || !sanitized.sets?.length) return;
-
-        const bodyPart = resolveAnalyticsBodyPart(sanitized, exerciseName, resolutionContext);
-        if (!bodyPart) return;
-
-        validDates.add(sanitized.date);
-      });
-    });
-
-    return {
-      totalTrainingDays: validDates.size,
-    };
-  }, [history, resolutionContext]);
-
   useEffect(() => {
     const labels = prData.groupedByBodyPart.map((group) => group.bodyPart);
     if (!labels.length) {
@@ -433,6 +414,7 @@ export default function AnalyticsScreen({
   const hasOverviewTrendData = overviewTrend.some((item) => Number(item.volume) > 0);
   const prUpdatePreview = (overviewSummary?.prUpdates || []).slice(0, 3);
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
+  const selectedPrPreview = selectedPrGroup ? selectedPrGroup.items.slice(0, 3) : [];
   const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
   const overviewBodyPartPreview = overviewBodyPartStats.slice(0, 3);
 
@@ -887,12 +869,12 @@ export default function AnalyticsScreen({
         )}
       </div>
 
-      <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+      <div style={{ background: "var(--card)", borderRadius: 22, padding: 16, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>詳細サマリー</div>
-            <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-              シェア画像の生成や、今週 / 先週、今月 / 先月の切替はこちら
+            <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text)" }}>詳細サマリー</div>
+            <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 3 }}>
+              先週 / 先月の確認やシェア画像生成はこちら
             </div>
           </div>
         </div>
@@ -903,14 +885,14 @@ export default function AnalyticsScreen({
               style={{
                 background: "linear-gradient(180deg, var(--card2), var(--card))",
                 borderRadius: 18,
-                padding: "12px 12px 11px",
+                padding: "11px 11px 10px",
                 border: "1px solid rgba(18, 199, 194, 0.10)",
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 3 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 2 }}>
                 {summary.title}
               </div>
-              <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.5, marginBottom: 10 }}>
+              <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.45, marginBottom: 8 }}>
                 {summary.shortLabel} {summary.workoutCount}回 / Volume {summary.totalVolume.toLocaleString("ja-JP")}kg
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -919,12 +901,12 @@ export default function AnalyticsScreen({
                   onClick={() => setActiveSummaryKey(summary.group)}
                   style={{
                     flex: 1,
-                    padding: "8px 0",
+                    padding: "7px 0",
                     borderRadius: 12,
                     border: "1px solid rgba(18, 199, 194, 0.12)",
                     background: "var(--card)",
                     color: "var(--text)",
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: 800,
                   }}
                 >
@@ -935,12 +917,12 @@ export default function AnalyticsScreen({
                   onClick={() => setActiveSummaryKey(summary.group)}
                   style={{
                     flex: 1,
-                    padding: "8px 0",
+                    padding: "7px 0",
                     borderRadius: 12,
                     border: "1px solid var(--success-border)",
                     background: "var(--success-soft)",
                     color: "var(--accent)",
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: 800,
                   }}
                 >
@@ -970,8 +952,27 @@ export default function AnalyticsScreen({
       </div>
 
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>
-          部位別PR
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+            部位別PR
+          </div>
+          {selectedPrGroup && selectedPrGroup.items.length > 3 && (
+            <button
+              type="button"
+              onClick={() => setShowAllBodyPartPr(true)}
+              style={{
+                padding: "7px 12px",
+                borderRadius: 999,
+                border: "1px solid rgba(18, 199, 194, 0.12)",
+                background: "var(--card2)",
+                color: "var(--accent)",
+                fontSize: 11,
+                fontWeight: 800,
+              }}
+            >
+              すべて見る
+            </button>
+          )}
         </div>
         {prData.groupedByBodyPart.length > 0 ? (
           <>
@@ -1001,7 +1002,7 @@ export default function AnalyticsScreen({
 
             {selectedPrGroup && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {selectedPrGroup.items.map((item) => (
+                {selectedPrPreview.map((item) => (
                   <div key={item.key}>
                     {renderPRCard(item)}
                   </div>
@@ -1014,23 +1015,6 @@ export default function AnalyticsScreen({
             まだPRデータがありません
           </div>
         )}
-      </div>
-
-      <div
-        style={{
-          background: "var(--card)",
-          borderRadius: 18,
-          padding: "14px 14px 12px",
-          border: "1px solid rgba(18, 199, 194, 0.10)",
-          boxShadow: "var(--shadow-soft)",
-        }}
-      >
-        <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>
-          累計トレーニング日数
-        </div>
-        <div style={{ fontSize: 30, fontWeight: 800, color: "var(--text)" }}>
-          {progressInsights.totalTrainingDays}日
-        </div>
       </div>
 
       {onOpenPhotoCompare && (
@@ -1065,6 +1049,61 @@ export default function AnalyticsScreen({
         onClose={() => setActiveSummaryKey(null)}
         summary={activeSummary}
       />
+
+      {showAllBodyPartPr && selectedPrGroup && (
+        <div
+          onClick={() => setShowAllBodyPartPr(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            zIndex: 999,
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 430,
+              background: "var(--card)",
+              borderRadius: 20,
+              padding: "18px 16px 20px",
+              border: "1px solid var(--border2)",
+              maxHeight: "65vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 5,
+                borderRadius: 999,
+                background: "var(--border2)",
+                margin: "0 auto 14px",
+              }}
+            />
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                {selectedPrGroup.bodyPart}の部位別PR
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                全{selectedPrGroup.items.length}件
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {selectedPrGroup.items.map((item) => (
+                <div key={`all-${item.key}`}>
+                  {renderPRCard(item)}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showBodyPartBreakdown && (
         <div

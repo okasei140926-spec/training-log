@@ -12,6 +12,7 @@ import {
   dispW,
   formatDateKey,
   getBestRmSet,
+  getValidWorkoutDatesFromHistory,
   hasMeaningfulPRIncrease,
   sanitizeHistoryRecord,
   sanitizeWorkoutSets,
@@ -329,6 +330,11 @@ export default function HistoryScreen({
     todayPrEntries,
   ]);
 
+  const totalTrainingDays = useMemo(
+    () => getValidWorkoutDatesFromHistory(history || {}).length,
+    [history]
+  );
+
   const todayWorkedBodyParts = useMemo(
     () => [...new Set(todayEntries.map((entry) => entry.bodyPart).filter(Boolean))],
     [todayEntries]
@@ -341,7 +347,8 @@ export default function HistoryScreen({
   const summaryCards = [
     { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
     { key: "setCount", label: "セット数", value: `${todaySummary.setCount}` },
-    { key: "duration", label: "時間", value: formatDurationValue(todaySummary.durationSec) },
+    { key: "exerciseCount", label: "種目数", value: `${todaySummary.exerciseCount}` },
+    { key: "trainingDays", label: "継続", value: `${totalTrainingDays}日目` },
   ];
 
   const selectedSummary = useMemo(() => {
@@ -430,6 +437,24 @@ export default function HistoryScreen({
       };
     }
 
+    if (selectedSummaryKey === "trainingDays") {
+      return {
+        title: "累計トレーニング日数",
+        subtitle: `${totalTrainingDays}日目`,
+        emptyText: "まだ有効なトレーニング記録がありません",
+        items:
+          totalTrainingDays > 0
+            ? [
+                {
+                  key: "total-training-days",
+                  title: "累計トレーニング日数",
+                  meta: `${totalTrainingDays}日目`,
+                },
+              ]
+            : [],
+      };
+    }
+
     return {
       title: "今日のボリューム",
       subtitle: formatVolume(todaySummary.totalVolume),
@@ -446,6 +471,7 @@ export default function HistoryScreen({
     todayEntries,
     todayPrEntries,
     todaySummary,
+    totalTrainingDays,
     todayWorkoutLastActivityAt,
     todayWorkoutStartedAt,
     getExUnit,
@@ -560,7 +586,7 @@ export default function HistoryScreen({
                 </div>
               )}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
               {summaryCards.map((item) => (
                 <button
                   type="button"
@@ -570,7 +596,7 @@ export default function HistoryScreen({
                     background: "var(--card)",
                     borderRadius: 18,
                     padding: "12px 11px 10px",
-                    minHeight: 92,
+                    minHeight: 84,
                     border: "1px solid rgba(18, 199, 194, 0.10)",
                     boxShadow: "0 8px 18px rgba(15, 94, 99, 0.05)",
                     textAlign: "left",
@@ -584,7 +610,7 @@ export default function HistoryScreen({
                   </div>
                   <div
                     style={{
-                      fontSize: item.key === "totalVolume" ? 16 : 21,
+                      fontSize: item.key === "totalVolume" ? 16 : 20,
                       fontWeight: 800,
                       color: "var(--text)",
                       lineHeight: 1.05,
