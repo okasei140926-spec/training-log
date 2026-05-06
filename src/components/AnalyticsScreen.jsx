@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Bar, BarChart, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
@@ -19,8 +19,22 @@ const BIG3_EXERCISES = [
   { key: "squat", label: "スクワット" },
   { key: "deadlift", label: "デッドリフト" },
 ];
+const BODY_PART_CHART_COLORS = {
+  胸: "#12C7C2",
+  背中: "#0F5E63",
+  四頭: "#33E1DB",
+  ハムストリングス: "#50BFA5",
+  尻: "#3B82F6",
+  肩: "#8B5CF6",
+  二頭: "#F59E0B",
+  三頭: "#EF4444",
+  腹筋: "#14B8A6",
+  その他: "#94A3B8",
+};
 
 const formatDate = (date) => (date ? date.replace(/-/g, "/") : null);
+const getBodyPartDisplayLabel = (bodyPart) =>
+  bodyPart === "ハムストリングス" ? "ハム" : bodyPart;
 
 const buildValidSets = (record) =>
   sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
@@ -414,13 +428,14 @@ export default function AnalyticsScreen({
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
   const selectedPrPreview = selectedPrGroup ? selectedPrGroup.items.slice(0, 3) : [];
   const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
-  const overviewBodyPartChart = overviewBodyPartStats.slice(0, 6).map((item) => ({
-    label: item.bodyPart,
+  const overviewBodyPartChart = overviewBodyPartStats.map((item) => ({
+    label: getBodyPartDisplayLabel(item.bodyPart),
     sets: item.sets,
+    fill: BODY_PART_CHART_COLORS[item.bodyPart] || "#12C7C2",
   }));
   const totalOverviewSets = overviewBodyPartStats.reduce((sum, item) => sum + item.sets, 0);
 
-  const renderOverviewMetric = (label, value, accent = null) => (
+  const renderOverviewMetric = (label, value, accent = null, { accentColor = "var(--accent)" } = {}) => (
     <div
       key={label}
       style={{
@@ -434,7 +449,7 @@ export default function AnalyticsScreen({
       <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>{value}</div>
       {accent && (
-        <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, marginTop: 6 }}>
+        <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, marginTop: 6 }}>
           {accent}
         </div>
       )}
@@ -689,8 +704,9 @@ export default function AnalyticsScreen({
             label: "PR更新",
             value: `${overviewSummary.prUpdateCount}件`,
             accent: overviewSummary.prUpdateCount > 0 ? "この期間の更新数" : null,
+            accentColor: "var(--text3)",
           },
-        ].map((item) => renderOverviewMetric(item.label, item.value, item.accent))}
+        ].map((item) => renderOverviewMetric(item.label, item.value, item.accent, { accentColor: item.accentColor }))}
       </div>
 
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
@@ -723,23 +739,24 @@ export default function AnalyticsScreen({
             <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700, marginBottom: 10 }}>
               合計 {totalOverviewSets}セット
             </div>
-            <ResponsiveContainer width="100%" height={Math.max(220, overviewBodyPartChart.length * 38)}>
-              <BarChart data={overviewBodyPartChart} layout="vertical" margin={{ top: 6, right: 8, left: 2, bottom: 2 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" horizontal={false} />
+            <ResponsiveContainer width="100%" height={Math.max(250, Math.min(360, 160 + overviewBodyPartChart.length * 18))}>
+              <BarChart data={overviewBodyPartChart} margin={{ top: 10, right: 10, left: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" vertical={false} />
                 <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fill: "var(--text3)" }}
-                  allowDecimals={false}
-                />
-                <YAxis
                   dataKey="label"
                   type="category"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: "var(--text2)", fontWeight: 700 }}
-                  width={84}
+                  tick={{ fontSize: 11, fill: "var(--text2)", fontWeight: 700 }}
+                  interval={0}
+                />
+                <YAxis
+                  type="number"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: "var(--text3)" }}
+                  width={34}
+                  allowDecimals={false}
                 />
                 <Tooltip
                   contentStyle={{
@@ -754,10 +771,13 @@ export default function AnalyticsScreen({
                 />
                 <Bar
                   dataKey="sets"
-                  radius={[999, 999, 999, 999]}
-                  fill="#12C7C2"
-                  background={{ fill: "rgba(18, 199, 194, 0.10)", radius: 999 }}
-                />
+                  radius={[10, 10, 0, 0]}
+                  background={{ fill: "rgba(18, 199, 194, 0.08)", radius: 10 }}
+                >
+                  {overviewBodyPartChart.map((item) => (
+                    <Cell key={item.label} fill={item.fill} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </>
