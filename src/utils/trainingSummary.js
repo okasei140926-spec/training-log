@@ -50,7 +50,11 @@ const resolvePeriodMeta = (period, today = new Date()) => {
       currentRange.start.getMonth() + offsetMonths,
       1
     );
-    const end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    const fullEnd = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+    const isCurrentMonth = period !== "last_month";
+    const end = isCurrentMonth
+      ? new Date(Math.min(fullEnd.getTime(), startOfDay(today).getTime()))
+      : fullEnd;
     return {
       key: period === "last_month" ? "last_month" : "this_month",
       group: "monthly",
@@ -69,6 +73,8 @@ const resolvePeriodMeta = (period, today = new Date()) => {
   if (period === "last_week") {
     start.setDate(start.getDate() - 7);
     end.setDate(end.getDate() - 7);
+  } else {
+    end.setTime(Math.min(end.getTime(), startOfDay(today).getTime()));
   }
 
   return {
@@ -290,6 +296,8 @@ export function buildTrainingSummary({
 
   const topBodyPart = Object.values(bodyPartStats)
     .sort((a, b) => b.sets - a.sets || b.volume - a.volume || a.bodyPart.localeCompare(b.bodyPart, "ja"))[0] || null;
+  const sortedBodyPartStats = Object.values(bodyPartStats)
+    .sort((a, b) => b.sets - a.sets || b.volume - a.volume || a.bodyPart.localeCompare(b.bodyPart, "ja"));
 
   const highlights = Object.values(exerciseStats)
     .sort((a, b) => b.volume - a.volume || b.setCount - a.setCount || a.exerciseName.localeCompare(b.exerciseName, "ja"))
@@ -332,6 +340,7 @@ export function buildTrainingSummary({
     totalVolume,
     exerciseCount: exerciseKeys.length,
     topBodyPart: topBodyPart?.bodyPart || "なし",
+    bodyPartStats: sortedBodyPartStats,
     prUpdateCount,
     streak: computeLongestStreak(workoutDates),
     highlights,
