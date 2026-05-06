@@ -7,9 +7,6 @@ const CARD_PRESETS = {
   story: { key: "story", label: "9:16" },
 };
 
-const formatVolume = (value) =>
-  `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
-
 const downloadBlob = (blob, fileName) => {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -53,18 +50,6 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   }, [summary]);
 
   const activeSummary = summaryMap[selectedSummaryKey] || summary;
-
-  const detailItems = useMemo(
-    () => [
-      { label: "トレーニング回数", value: `${activeSummary?.workoutCount || 0}回` },
-      { label: "総ボリューム", value: formatVolume(activeSummary?.totalVolume || 0) },
-      { label: "実施種目数", value: `${activeSummary?.exerciseCount || 0}種目` },
-      { label: "最多部位", value: activeSummary?.topBodyPart || "なし" },
-      { label: "PR更新", value: `${activeSummary?.prUpdateCount || 0}件` },
-      { label: "ストリーク", value: `${activeSummary?.streak || 0}日` },
-    ],
-    [activeSummary]
-  );
 
   useEffect(() => {
     if (!isOpen || !summary) return;
@@ -139,7 +124,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           overflowY: "auto",
           background: "var(--card-modal)",
           borderRadius: 24,
-          padding: 20,
+          padding: "20px 20px calc(20px + var(--safe-bottom, 0px))",
           boxSizing: "border-box",
         }}
         onClick={(event) => event.stopPropagation()}
@@ -195,96 +180,6 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           </div>
         )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 8,
-            marginBottom: 16,
-          }}
-        >
-          {detailItems.map((item) => (
-            <div
-              key={item.label}
-              style={{
-                background: "var(--card2)",
-                borderRadius: 16,
-                border: "1px solid var(--border2)",
-                padding: "12px 14px",
-              }}
-            >
-              <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
-                {item.label}
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-                {item.value}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div
-          style={{
-            background: "var(--card2)",
-            borderRadius: 18,
-            border: "1px solid var(--border2)",
-            padding: "14px 14px 12px",
-            marginBottom: 16,
-          }}
-        >
-          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 10 }}>
-            種目ハイライト
-          </div>
-          {activeSummary.highlights?.length ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {activeSummary.highlights.map((item) => (
-                <div
-                  key={item.key}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    padding: "10px 12px",
-                    borderRadius: 14,
-                    background: "var(--card)",
-                    border: "1px solid rgba(255,255,255,0.04)",
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 800,
-                        color: "var(--text)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {item.exerciseName}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
-                      {item.bodyPart} ・ {item.setCount}セット
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--accent)" }}>
-                      {formatVolume(item.volume)}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
-                      最大 {Math.round(Number(item.maxWeight || 0) * 10) / 10 || 0}kg
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: "var(--text3)" }}>
-              この期間のハイライト種目はまだありません
-            </div>
-          )}
-        </div>
-
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {Object.values(CARD_PRESETS).map((preset) => (
             <button
@@ -294,11 +189,12 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
               style={{
                 padding: "8px 12px",
                 borderRadius: 999,
-                border: "1px solid var(--border2)",
-                background: sizeKey === preset.key ? "var(--text)" : "var(--card2)",
-                color: sizeKey === preset.key ? "var(--bg)" : "var(--text2)",
+                border: "1px solid rgba(18, 199, 194, 0.12)",
+                background: sizeKey === preset.key ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+                color: sizeKey === preset.key ? "#fff" : "var(--text2)",
                 fontSize: 12,
                 fontWeight: 700,
+                boxShadow: sizeKey === preset.key ? "0 10px 22px rgba(15, 94, 99, 0.12)" : "none",
               }}
             >
               {preset.label}
