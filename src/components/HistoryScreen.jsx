@@ -19,6 +19,10 @@ import {
 import { normalizeExerciseName } from "../utils/exerciseName";
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
+const WORKOUT_STARTED_AT_KEY = "pump_workout_started_at";
+const WORKOUT_STARTED_FOR_DATE_KEY = "pump_workout_started_for_date";
+const WORKOUT_LAST_ACTIVITY_AT_KEY = "pump_workout_last_activity_at";
+
 const formatWeight = (value, unit = "kg") => {
   if (value === "BW") return "自重";
   const displayed = dispW(value, unit);
@@ -27,6 +31,24 @@ const formatWeight = (value, unit = "kg") => {
 };
 const formatSetDisplay = (weight, reps, unit = "kg") =>
   `${formatWeight(weight, unit)} × ${Number(reps)}rep`;
+const formatDurationValue = (seconds) => {
+  const totalSec = Math.max(0, Math.floor(Number(seconds) || 0));
+  const totalMin = Math.floor(totalSec / 60);
+  const hours = Math.floor(totalMin / 60);
+  const minutes = totalMin % 60;
+
+  if (hours <= 0) return `${totalMin}分`;
+  return `${hours}時間${minutes}分`;
+};
+const formatTimeStamp = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 export default function HistoryScreen({
   history,
@@ -56,6 +78,9 @@ export default function HistoryScreen({
   const [selectedSummaryKey, setSelectedSummaryKey] = useState(null);
   const [showAllTodayWorkouts, setShowAllTodayWorkouts] = useState(false);
   const [openExercises, setOpenExercises] = useState({});
+  const [todayWorkoutStartedAt, setTodayWorkoutStartedAt] = useState(null);
+  const [todayWorkoutLastActivityAt, setTodayWorkoutLastActivityAt] = useState(null);
+  const [todayWorkoutDurationSec, setTodayWorkoutDurationSec] = useState(0);
 
   const todayKey = formatDateKey(new Date());
 
@@ -86,6 +111,89 @@ export default function HistoryScreen({
       document.body.style.overflow = "";
     };
   }, [selectedDate, selectedSummaryKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyTodayWorkoutTiming = (payload = {}) => {
+      if (cancelled) return;
+      setTodayWorkoutStartedAt(payload.startedAt || null);
+      setTodayWorkoutLastActivityAt(payload.lastActivityAt || null);
+      setTodayWorkoutDurationSec(Math.max(0, Math.floor(Number(payload.durationSec) || 0)));
+    };
+
+    const syncFromSources = async () => {
+      const savedDate = localStorage.getItem(WORKOUT_STARTED_FOR_DATE_KEY);
+      const savedStartedAtRaw = Number(localStorage.getItem(WORKOUT_STARTED_AT_KEY));
+      const savedLastActivityAtRaw = Number(localStorage.getItem(WORKOUT_LAST_ACTIVITY_AT_KEY));
+
+      if (
+        savedDate === todayKey &&
+        Number.isFinite(savedStartedAtRaw) &&
+        savedStartedAtRaw > 0 &&
+        Number.isFinite(savedLastActivityAtRaw) &&
+        savedLastActivityAtRaw >= savedStartedAtRaw
+      ) {
+        applyTodayWorkoutTiming({
+          startedAt: new Date(savedStartedAtRaw).toISOString(),
+          lastActivityAt: new Date(savedLastActivityAtRaw).toISOString(),
+          durationSec: Math.floor((savedLastActivityAtRaw - savedStartedAtRaw) / 1000),
+        });
+        return;
+      }
+
+      if (!user?.id) {
+        applyTodayWorkoutTiming();
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("workouts")
+        .select("started_at, ended_at, duration_sec")
+        .eq("user_id", user.id)
+        .eq("date", todayKey)
+        .maybeSingle();
+
+      if (error) {
+        console.error(error);
+        applyTodayWorkoutTiming();
+        return;
+      }
+
+      applyTodayWorkoutTiming({
+        startedAt: data?.started_at || null,
+        lastActivityAt: data?.ended_at || null,
+        durationSec: data?.duration_sec || 0,
+      });
+    };
+
+    syncFromSources();
+
+    const intervalId = window.setInterval(() => {
+      const savedDate = localStorage.getItem(WORKOUT_STARTED_FOR_DATE_KEY);
+      const savedStartedAtRaw = Number(localStorage.getItem(WORKOUT_STARTED_AT_KEY));
+      const savedLastActivityAtRaw = Number(localStorage.getItem(WORKOUT_LAST_ACTIVITY_AT_KEY));
+
+      if (
+        savedDate === todayKey &&
+        Number.isFinite(savedStartedAtRaw) &&
+        savedStartedAtRaw > 0 &&
+        Number.isFinite(savedLastActivityAtRaw) &&
+        savedLastActivityAtRaw >= savedStartedAtRaw
+      ) {
+        applyTodayWorkoutTiming({
+          startedAt: new Date(savedStartedAtRaw).toISOString(),
+          lastActivityAt: new Date(savedLastActivityAtRaw).toISOString(),
+          durationSec: Math.floor((savedLastActivityAtRaw - savedStartedAtRaw) / 1000),
+        });
+      }
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [todayKey, user?.id]);
 
   const resolvedEntries = useMemo(() => {
     return Object.entries(history || {})
@@ -212,10 +320,12 @@ export default function HistoryScreen({
       exerciseCount: todayEntries.length,
       setCount: todayEntries.reduce((sum, entry) => sum + entry.setCount, 0),
       totalVolume: Math.round(todayEntries.reduce((sum, entry) => sum + entry.volume, 0)),
+      durationSec: todayWorkoutDurationSec,
       prCount: todayPrEntries.length,
     };
   }, [
     todayEntries,
+    todayWorkoutDurationSec,
     todayPrEntries,
   ]);
 
@@ -225,11 +335,39 @@ export default function HistoryScreen({
   const summaryCards = [
     { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
     { key: "setCount", label: "セット数", value: `${todaySummary.setCount}` },
-    { key: "exerciseCount", label: "種目数", value: `${todaySummary.exerciseCount}` },
+    { key: "duration", label: "時間", value: formatDurationValue(todaySummary.durationSec) },
   ];
 
   const selectedSummary = useMemo(() => {
     if (!selectedSummaryKey) return null;
+
+    if (selectedSummaryKey === "duration") {
+      const hasDuration = todaySummary.durationSec > 0;
+      return {
+        title: "今日のトレーニング時間",
+        subtitle: formatDurationValue(todaySummary.durationSec),
+        emptyText: "今日はまだ時間データがありません",
+        items: hasDuration
+          ? [
+              {
+                key: "workout-duration",
+                title: "合計時間",
+                meta: formatDurationValue(todaySummary.durationSec),
+              },
+              {
+                key: "workout-started-at",
+                title: "開始",
+                meta: formatTimeStamp(todayWorkoutStartedAt),
+              },
+              {
+                key: "workout-last-activity-at",
+                title: "最終入力",
+                meta: formatTimeStamp(todayWorkoutLastActivityAt),
+              },
+            ]
+          : [],
+      };
+    }
 
     if (selectedSummaryKey === "exerciseCount") {
       return {
@@ -297,7 +435,16 @@ export default function HistoryScreen({
         meta: `${formatVolume(entry.volume)} ・ ${entry.setCount}セット`,
       })),
     };
-  }, [selectedSummaryKey, todayEntries, todayPrEntries, todaySummary, getExUnit, unit]);
+  }, [
+    selectedSummaryKey,
+    todayEntries,
+    todayPrEntries,
+    todaySummary,
+    todayWorkoutLastActivityAt,
+    todayWorkoutStartedAt,
+    getExUnit,
+    unit,
+  ]);
 
   const dayDetails = useMemo(
     () =>
