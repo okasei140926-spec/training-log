@@ -45,10 +45,6 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "自分の投稿にはいいねできません。" });
     }
 
-    if (sessionRow.visibility !== "friends") {
-      return res.status(403).json({ error: "この投稿にはいいねできません。" });
-    }
-
     const acceptedFriendIds = await getAcceptedFriendIds(user.id);
     if (!acceptedFriendIds.includes(sessionRow.user_id)) {
       return res.status(403).json({ error: "この投稿にはいいねできません。" });

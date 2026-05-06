@@ -21,8 +21,7 @@ using (
       and (
         auth.uid() = ws.user_id
         or (
-          ws.visibility = 'friends'
-          and exists (
+          exists (
             select 1
             from public.friendships f
             where f.status = 'accepted'
@@ -48,7 +47,6 @@ with check (
     from public.workout_sessions ws
     where ws.id = workout_session_likes.session_id
       and ws.user_id <> auth.uid()
-      and ws.visibility = 'friends'
       and exists (
         select 1
         from public.friendships f

@@ -56,8 +56,7 @@ to authenticated
 using (
   auth.uid() = user_id
   or (
-    visibility = 'friends'
-    and exists (
+    exists (
       select 1
       from public.friendships f
       where f.status = 'accepted'
@@ -104,8 +103,7 @@ using (
       and (
         auth.uid() = ws.user_id
         or (
-          ws.visibility = 'friends'
-          and exists (
+          exists (
             select 1
             from public.friendships f
             where f.status = 'accepted'
@@ -118,6 +116,10 @@ using (
       )
   )
 );
+
+update public.workout_sessions
+set visibility = 'friends'
+where visibility <> 'friends';
 
 drop policy if exists "workout_session_exercises_insert_own_parent" on public.workout_session_exercises;
 create policy "workout_session_exercises_insert_own_parent"

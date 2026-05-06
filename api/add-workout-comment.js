@@ -70,10 +70,6 @@ export default async function handler(req, res) {
     const isOwnSession = sessionRow.user_id === user.id;
 
     if (!isOwnSession) {
-      if (sessionRow.visibility !== "friends") {
-        return res.status(403).json({ error: "この投稿にはコメントできません。" });
-      }
-
       const acceptedFriendIds = await getAcceptedFriendIds(user.id);
       if (!acceptedFriendIds.includes(sessionRow.user_id)) {
         return res.status(403).json({ error: "この投稿にはコメントできません。" });
@@ -122,7 +118,7 @@ export default async function handler(req, res) {
 
     if (countError) throw countError;
 
-    if (!isOwnSession && sessionRow.visibility === "friends") {
+    if (!isOwnSession) {
       try {
         const { data: commenterProfile, error: commenterProfileError } = await adminSupabase
           .from("profiles")

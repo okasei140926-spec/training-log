@@ -72,8 +72,7 @@ using (
       and (
         auth.uid() = ws.user_id
         or (
-          ws.visibility = 'friends'
-          and exists (
+          exists (
             select 1
             from public.friendships f
             where f.status = 'accepted'
@@ -101,8 +100,7 @@ with check (
       and (
         ws.user_id = auth.uid()
         or (
-          ws.visibility = 'friends'
-          and exists (
+          exists (
             select 1
             from public.friendships f
             where f.status = 'accepted'

@@ -84,7 +84,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [sharePhotoRows, setSharePhotoRows] = useState([]);
     const [sharePhotoUrls, setSharePhotoUrls] = useState({});
     const [sharePreparingSessionId, setSharePreparingSessionId] = useState(null);
-    const [sessionSettingsUpdatingId, setSessionSettingsUpdatingId] = useState(null);
     const [likePendingMap, setLikePendingMap] = useState({});
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
@@ -372,9 +371,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 .range(offset, offset + ACTIVITY_FEED_PAGE_SIZE - 1);
 
             if (sessionsError) throw sessionsError;
-            const visibleSessions = (sessions || []).filter(
-                (session) => session.user_id === user.id || session.visibility === "friends"
-            );
+            const visibleSessions = sessions || [];
 
             const profileIds = [...new Set(visibleSessions.map((session) => session.user_id).filter(Boolean))];
             const photoIds = [...new Set(
@@ -508,9 +505,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     summaryItems: Array.isArray(selfSessionRow.summary_json?.items) ? selfSessionRow.summary_json.items : [],
                 }
                 : null;
-            const sharedSessions = (recentSessions || []).filter((session) => (
-                session.user_id === user.id ? session.visibility === "friends" : true
-            ));
+            const sharedSessions = recentSessions || [];
             const activeFriendCount = new Set(
                 sharedSessions
                     .filter((session) => session.user_id !== user.id)
@@ -521,7 +516,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             setActivityOverview({
                 sharedCount: sharedSessions.length,
                 activeFriendCount,
-                selfShared: Boolean(selfSession && selfSession.visibility === "friends"),
+                selfShared: Boolean(selfSession),
                 selfSession,
             });
             return true;
@@ -623,42 +618,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             setSharePreparingSessionId(null);
         }
     }, [sharePreparingSessionId, user?.id]);
-
-    const handleUpdateSessionVisibility = useCallback(async (sessionId, patch) => {
-        if (!user?.id || !sessionId || sessionSettingsUpdatingId) return;
-
-        setSessionSettingsUpdatingId(sessionId);
-        setActivityFeedStatusMessage("");
-
-        try {
-            const { error } = await supabase
-                .from("workout_sessions")
-                .update(patch)
-                .eq("id", sessionId)
-                .eq("user_id", user.id);
-
-            if (error) throw error;
-
-            setActivityFeed((prev) => prev.map((item) => (
-                item.id === sessionId
-                    ? {
-                        ...item,
-                        ...patch,
-                        photoUrl: patch.photo_visibility === "hidden" ? null : item.photoUrl,
-                    }
-                    : item
-            )));
-
-            await fetchActivityFeed({ reset: true });
-            await fetchActivityOverview();
-            showActivityFeedStatusMessage("公開設定を更新しました");
-        } catch (error) {
-            console.error("session visibility update failed", error);
-            showActivityFeedStatusMessage("公開設定を更新できませんでした");
-        } finally {
-            setSessionSettingsUpdatingId(null);
-        }
-    }, [fetchActivityFeed, fetchActivityOverview, sessionSettingsUpdatingId, showActivityFeedStatusMessage, user?.id]);
 
     const handleToggleSessionLike = useCallback(async (sessionId) => {
         if (!user?.id || !sessionId || likePendingMap[sessionId]) return;
@@ -956,25 +915,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             return;
         }
 
-        if (selfSession.visibility !== "friends") {
-            try {
-                const { error } = await supabase
-                    .from("workout_sessions")
-                    .update({ visibility: "friends" })
-                    .eq("id", selfSession.id)
-                    .eq("user_id", user.id);
-                if (error) throw error;
-                await fetchActivityFeed({ reset: true });
-                await fetchActivityOverview();
-            } catch (error) {
-                console.error("share today record failed", error);
-                showActivityFeedStatusMessage("今日の記録をシェアできませんでした");
-                return;
-            }
-        }
-
-        await handleOpenSessionShare({ ...selfSession, visibility: "friends" });
-    }, [activityOverview.selfSession, fetchActivityFeed, fetchActivityOverview, handleOpenSessionShare, onOpenRecord, showActivityFeedStatusMessage, user?.id]);
+        await handleOpenSessionShare(selfSession);
+    }, [activityOverview.selfSession, handleOpenSessionShare, onOpenRecord, user?.id]);
 
     const handleViewOwnTodayPost = useCallback(() => {
         if (activityOverview.selfSession?.id) {
@@ -1191,7 +1133,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                 <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
                                                     {formatRelativeTime(item.created_at)}
                                                 </div>
-                                                {bodyParts.length > 0 && (
+                                {bodyParts.length > 0 && (
                                                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 7 }}>
                                                         {bodyParts.map((bodyPart) => (
                                                             <span
@@ -1213,21 +1155,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                 )}
                                             </div>
                                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                                                {item.user_id === user.id && item.visibility !== "friends" && (
-                                                    <span
-                                                        style={{
-                                                            padding: "6px 9px",
-                                                            borderRadius: 999,
-                                                            background: "rgba(15, 94, 99, 0.08)",
-                                                            border: "1px solid rgba(15, 94, 99, 0.14)",
-                                                            color: "var(--text2)",
-                                                            fontSize: 11,
-                                                            fontWeight: 800,
-                                                        }}
-                                                    >
-                                                        未公開
-                                                    </span>
-                                                )}
                                                 {item.user_id === user.id && (
                                                     <button
                                                         type="button"
@@ -1245,7 +1172,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                             opacity: sharePreparingSessionId && sharePreparingSessionId !== item.id ? 0.7 : 1,
                                                         }}
                                                     >
-                                                        {sharePreparingSessionId === item.id ? "準備中..." : item.visibility === "friends" ? "シェア" : "公開する"}
+                                                        {sharePreparingSessionId === item.id ? "準備中..." : "シェア"}
                                                     </button>
                                                 )}
                                             </div>
@@ -1306,51 +1233,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                             </div>
                                         )}
                                     </div>
-
-                                        {item.user_id === user.id && (
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    flexWrap: "wrap",
-                                                    gap: 8,
-                                                    marginTop: 12,
-                                                    marginBottom: 6,
-                                                }}
-                                            >
-                                                <button
-                                                    type="button"
-                                                    disabled={sessionSettingsUpdatingId === item.id || item.visibility === "friends"}
-                                                    onClick={() => handleUpdateSessionVisibility(item.id, { visibility: "friends" })}
-                                                    style={{
-                                                        padding: "7px 10px",
-                                                        borderRadius: 999,
-                                                        border: "1px solid var(--border2)",
-                                                        background: item.visibility === "friends" ? "var(--text)" : "var(--card)",
-                                                        color: item.visibility === "friends" ? "var(--bg)" : "var(--text2)",
-                                                        fontSize: 11,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    フレンドに公開
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    disabled={sessionSettingsUpdatingId === item.id || item.visibility === "private"}
-                                                    onClick={() => handleUpdateSessionVisibility(item.id, { visibility: "private" })}
-                                                    style={{
-                                                        padding: "7px 10px",
-                                                        borderRadius: 999,
-                                                        border: "1px solid var(--border2)",
-                                                        background: item.visibility === "private" ? "var(--text)" : "var(--card)",
-                                                        color: item.visibility === "private" ? "var(--bg)" : "var(--text2)",
-                                                        fontSize: 11,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    非公開
-                                                </button>
-                                            </div>
-                                        )}
 
                                         <div
                                             style={{
