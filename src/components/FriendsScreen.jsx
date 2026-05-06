@@ -373,7 +373,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
             if (sessionsError) throw sessionsError;
             const visibleSessions = (sessions || []).filter(
-                (session) => session.user_id !== user.id || session.visibility === "friends"
+                (session) => session.user_id === user.id || session.visibility === "friends"
             );
 
             const profileIds = [...new Set(visibleSessions.map((session) => session.user_id).filter(Boolean))];
@@ -1212,26 +1212,43 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                     </div>
                                                 )}
                                             </div>
-                                            {item.user_id === user.id && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleOpenSessionShare(item)}
-                                                    disabled={Boolean(sharePreparingSessionId)}
-                                                    style={{
-                                                        flexShrink: 0,
-                                                        padding: "9px 12px",
-                                                        borderRadius: 14,
-                                                        border: "1px solid var(--border2)",
-                                                        background: "var(--card2)",
-                                                        color: "var(--text2)",
-                                                        fontSize: 12,
-                                                        fontWeight: 800,
-                                                        opacity: sharePreparingSessionId && sharePreparingSessionId !== item.id ? 0.7 : 1,
-                                                    }}
-                                                >
-                                                    {sharePreparingSessionId === item.id ? "準備中..." : "シェア"}
-                                                </button>
-                                            )}
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                                {item.user_id === user.id && item.visibility !== "friends" && (
+                                                    <span
+                                                        style={{
+                                                            padding: "6px 9px",
+                                                            borderRadius: 999,
+                                                            background: "rgba(15, 94, 99, 0.08)",
+                                                            border: "1px solid rgba(15, 94, 99, 0.14)",
+                                                            color: "var(--text2)",
+                                                            fontSize: 11,
+                                                            fontWeight: 800,
+                                                        }}
+                                                    >
+                                                        未公開
+                                                    </span>
+                                                )}
+                                                {item.user_id === user.id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenSessionShare(item)}
+                                                        disabled={Boolean(sharePreparingSessionId)}
+                                                        style={{
+                                                            flexShrink: 0,
+                                                            padding: "9px 12px",
+                                                            borderRadius: 14,
+                                                            border: "1px solid var(--border2)",
+                                                            background: "var(--card2)",
+                                                            color: "var(--text2)",
+                                                            fontSize: 12,
+                                                            fontWeight: 800,
+                                                            opacity: sharePreparingSessionId && sharePreparingSessionId !== item.id ? 0.7 : 1,
+                                                        }}
+                                                    >
+                                                        {sharePreparingSessionId === item.id ? "準備中..." : item.visibility === "friends" ? "シェア" : "公開する"}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
 
                                         {item.photoUrl && (
