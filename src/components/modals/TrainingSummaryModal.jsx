@@ -22,6 +22,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   const [sizeKey, setSizeKey] = useState("square");
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef(null);
+  const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
   const [selectedSummaryKey, setSelectedSummaryKey] = useState(null);
 
   const summaryOptions = useMemo(() => {
@@ -55,6 +56,47 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
     if (!isOpen || !summary) return;
     setSelectedSummaryKey(summary.key);
   }, [isOpen, summary]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollTop = window.scrollY || window.pageYOffset || 0;
+    const scrollLock = scrollLockRef.current;
+
+    scrollLock.top = scrollTop;
+    scrollLock.body = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      touchAction: body.style.touchAction,
+    };
+    scrollLock.html = {
+      overflow: html.style.overflow,
+      overscrollBehavior: html.style.overscrollBehavior,
+    };
+
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollTop}px`;
+    body.style.width = "100%";
+    body.style.touchAction = "none";
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.overflow = scrollLock.body.overflow || "";
+      body.style.position = scrollLock.body.position || "";
+      body.style.top = scrollLock.body.top || "";
+      body.style.width = scrollLock.body.width || "";
+      body.style.touchAction = scrollLock.body.touchAction || "";
+      html.style.overflow = scrollLock.html.overflow || "";
+      html.style.overscrollBehavior = scrollLock.html.overscrollBehavior || "";
+      window.scrollTo(0, scrollLock.top || 0);
+    };
+  }, [isOpen]);
 
   if (!isOpen || !summary) return null;
 
@@ -126,6 +168,9 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           borderRadius: 24,
           padding: "20px 20px calc(20px + var(--safe-bottom, 0px))",
           boxSizing: "border-box",
+          overscrollBehavior: "contain",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "auto",
         }}
         onClick={(event) => event.stopPropagation()}
       >

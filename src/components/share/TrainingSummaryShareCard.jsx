@@ -102,16 +102,33 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
         {summary.trend.length > 0 ? (
           <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: sizeKey === "story" ? 136 : 92 }}>
             {summary.trend.map((item) => (
-              <div key={item.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                <div
-                  style={{
-                    width: "100%",
-                    height: `${Math.max((item.volume / maxTrend) * 100, 8)}%`,
-                    borderRadius: 999,
-                    background: "linear-gradient(180deg, #FB923C 0%, #F97316 100%)",
-                    boxShadow: "0 8px 20px rgba(249,115,22,0.22)",
-                  }}
-                />
+              <div
+                key={item.date}
+                style={{
+                  flex: 1,
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  gap: 6,
+                }}
+              >
+                <div style={{ width: "100%", flex: 1, display: "flex", alignItems: "flex-end" }}>
+                  <div
+                    style={{
+                      width: "100%",
+                      height: `${Math.max((item.volume / maxTrend) * 100, 8)}%`,
+                      borderRadius: 999,
+                      background:
+                        item.volume > 0
+                          ? "linear-gradient(180deg, #FB923C 0%, #F97316 100%)"
+                          : "rgba(255,255,255,0.08)",
+                      boxShadow:
+                        item.volume > 0 ? "0 8px 20px rgba(249,115,22,0.22)" : "none",
+                    }}
+                  />
+                </div>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.72)" }}>{item.label}</div>
               </div>
             ))}
