@@ -35,6 +35,7 @@ export default function AddExModal({
     onUpdateHiddenBodyParts,
 }) {
     const inputRef = useRef(null);
+    const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
     const longPressRef = useRef({
         timer: null,
         triggered: false,
@@ -56,11 +57,38 @@ export default function AddExModal({
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 50);
         if (isFree && tabLabels.length > 0) setActiveTab(tabLabels[0]);
+        const body = document.body;
+        const html = document.documentElement;
+        const scrollLock = scrollLockRef.current;
+        scrollLockRef.current.top = window.scrollY || window.pageYOffset || 0;
+        scrollLockRef.current.body = {
+            overflow: body.style.overflow,
+            position: body.style.position,
+            top: body.style.top,
+            width: body.style.width,
+            touchAction: body.style.touchAction,
+        };
+        scrollLockRef.current.html = {
+            overflow: html.style.overflow,
+            overscrollBehavior: html.style.overscrollBehavior,
+        };
 
-        // ここを追加
-        document.body.style.overflow = 'hidden';
+        body.style.overflow = "hidden";
+        body.style.position = "fixed";
+        body.style.top = `-${scrollLockRef.current.top}px`;
+        body.style.width = "100%";
+        body.style.touchAction = "none";
+        html.style.overflow = "hidden";
+        html.style.overscrollBehavior = "none";
         return () => {
-            document.body.style.overflow = '';
+            body.style.overflow = scrollLock.body.overflow || "";
+            body.style.position = scrollLock.body.position || "";
+            body.style.top = scrollLock.body.top || "";
+            body.style.width = scrollLock.body.width || "";
+            body.style.touchAction = scrollLock.body.touchAction || "";
+            html.style.overflow = scrollLock.html.overflow || "";
+            html.style.overscrollBehavior = scrollLock.html.overscrollBehavior || "";
+            window.scrollTo(0, scrollLock.top || 0);
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -256,16 +284,21 @@ export default function AddExModal({
     );
 
     return (
-        <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 9999, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}
+        <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 9999, display: "flex", flexDirection: "column", justifyContent: "flex-end", overscrollBehavior: "none", touchAction: "none" }}
             onClick={onClose}>
             <div style={{
                 width: "100%",
                 background: "var(--card-modal)",
                 borderRadius: "20px 20px 0 0",
                 padding: "20px 18px 0 18px",
-                maxHeight: "75vh",
+                height: "min(76dvh, 700px)",
+                maxHeight: "min(76dvh, 700px)",
+                minHeight: "min(76dvh, 700px)",
                 display: "flex",
-                flexDirection: "column"
+                flexDirection: "column",
+                boxSizing: "border-box",
+                overscrollBehavior: "contain",
+                touchAction: "auto",
             }}
                 onClick={e => e.stopPropagation()}>
 
@@ -328,7 +361,7 @@ export default function AddExModal({
                 )}
 
                 {/* 種目リスト（スクロール） */}
-                <div style={{ overflowY: "auto", flex: 1, paddingBottom: 6 }}>
+                <div style={{ overflowY: "auto", flex: 1, minHeight: 0, paddingBottom: 6, overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
                     {isFree && <SuggestionList items={freeItems} />}
 
                     {!isFree && grouped.map(group => (
@@ -340,7 +373,7 @@ export default function AddExModal({
                 </div>
 
                 {/* 入力欄＋ボタン（固定） */}
-                <div style={{ flexShrink: 0, paddingBottom: 24, paddingTop: 6 }}>
+                <div style={{ flexShrink: 0, paddingBottom: "calc(24px + var(--safe-bottom, 0px))", paddingTop: 6, background: "var(--card-modal)" }}>
                     <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 8, textTransform: "uppercase" }}>
                         リストにない種目
                     </div>

@@ -425,7 +425,6 @@ export default function AnalyticsScreen({
   );
 
   const overviewSummary = overviewScope === "monthly" ? monthlySummary : weeklySummary;
-  const prUpdatePreview = (overviewSummary?.prUpdates || []).slice(0, 3);
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
   const selectedPrPreview = selectedPrGroup ? selectedPrGroup.items.slice(0, 3) : [];
   const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
@@ -509,24 +508,19 @@ export default function AnalyticsScreen({
           },
         ],
       },
-      pr: {
-        title: "PR更新詳細",
+      sets: {
+        title: "セット数詳細",
         rangeLabel: overviewSummary.rangeLabel,
-        empty: overviewSummary.prUpdateCount <= 0,
-        summaryRows: [{ label: "PR更新", value: `${overviewSummary.prUpdateCount}件` }],
+        empty: (overviewSummary.totalSets || 0) <= 0,
+        summaryRows: [{ label: "合計セット数", value: `${overviewSummary.totalSets || 0}セット` }],
         sections: [
           {
-            title: "更新一覧",
-            items: (overviewSummary.prUpdates || []).map((item) => ({
-              key: `pr-${item.key}-${item.date}`,
+            title: "種目別",
+            items: (overviewSummary.exerciseStats || []).map((item) => ({
+              key: `sets-${item.key}`,
               title: item.exerciseName,
-              meta: `1RM ${item.estimated1RM}kg / ${item.weight}kg × ${item.reps}rep`,
-              value: `+${item.diffKg}kg`,
-              actionLabel: "詳細",
-              onAction: () => {
-                setSelectedOverviewMetric(null);
-                setSelectedExerciseKey(item.key);
-              },
+              meta: `${item.bodyPart}・${Math.round(item.volume).toLocaleString("ja-JP")}kg`,
+              value: `${item.setCount}セット`,
             })),
           },
         ],
@@ -819,7 +813,7 @@ export default function AnalyticsScreen({
             key: "workouts",
             label: "トレーニング",
             value: `${overviewSummary.workoutCount}回`,
-            accent: `${totalOverviewSets}セット`,
+            accent: overviewSummary.shortLabel,
           },
           {
             key: "exercises",
@@ -828,11 +822,10 @@ export default function AnalyticsScreen({
             accent: null,
           },
           {
-            key: "pr",
-            label: "PR更新",
-            value: `${overviewSummary.prUpdateCount}件`,
-            accent: overviewSummary.prUpdateCount > 0 ? "この期間の更新数" : null,
-            accentColor: "var(--text3)",
+            key: "sets",
+            label: "セット数",
+            value: `${totalOverviewSets}セット`,
+            accent: null,
           },
         ].map((item) => renderOverviewMetric(item.key, item.label, item.value, item.accent, { accentColor: item.accentColor }))}
       </div>
@@ -923,66 +916,6 @@ export default function AnalyticsScreen({
             }}
           >
             まだデータがありません
-          </div>
-        )}
-      </div>
-
-      <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>PR更新</div>
-          {overviewSummary.prUpdateCount > 0 && (
-            <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
-              {overviewSummary.prUpdateCount}件
-            </div>
-          )}
-        </div>
-
-        {prUpdatePreview.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {prUpdatePreview.map((item) => (
-              <button
-                key={`${item.key}-${item.date}`}
-                type="button"
-                onClick={() => setSelectedExerciseKey(item.key)}
-                style={{
-                  width: "100%",
-                  textAlign: "left",
-                  background: "linear-gradient(180deg, var(--card2), var(--card))",
-                  borderRadius: 18,
-                  padding: "12px 14px",
-                  border: "1px solid rgba(18, 199, 194, 0.10)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  alignItems: "center",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 4 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>{item.exerciseName}</div>
-                    <span style={{ padding: "3px 8px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 10, fontWeight: 800 }}>
-                      {item.bodyPart}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                    1RM {item.estimated1RM}kg
-                    {item.weight > 0 && item.reps > 0 ? ` ・ ${item.weight}kg × ${item.reps}rep` : ""}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "var(--accent)" }}>
-                    +{item.diffKg}kg
-                  </div>
-                  <div style={{ marginTop: 5, display: "inline-flex", padding: "4px 9px", borderRadius: 999, background: "var(--success-soft)", border: "1px solid var(--success-border)", color: "var(--accent)", fontSize: 10, fontWeight: 800 }}>
-                    NEW PR
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.6 }}>
-            この期間のPR更新はありません
           </div>
         )}
       </div>
