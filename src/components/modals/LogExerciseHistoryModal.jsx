@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { calc1RM, dispW } from "../../utils/helpers";
 
 const normalizeRecord = (record) => {
@@ -33,6 +34,12 @@ const normalizeRecord = (record) => {
 
 const formatWeight = (weight, unit) =>
   weight === "BW" ? "自重" : `${dispW(weight, unit)}${unit}`;
+const formatShortDate = (date) => {
+  if (!date || typeof date !== "string") return "";
+  const parts = date.split("-");
+  if (parts.length !== 3) return date;
+  return `${parts[1]}/${parts[2]}`;
+};
 
 export default function LogExerciseHistoryModal({
   exName,
@@ -129,6 +136,13 @@ export default function LogExerciseHistoryModal({
       };
     })
     : [];
+
+  const chartLabelIndexes = useMemo(() => {
+    if (!canShowChart || chartPoints.length === 0) return new Set();
+    const lastIndex = chartPoints.length - 1;
+    const middleIndex = Math.floor(lastIndex / 2);
+    return new Set([0, middleIndex, lastIndex]);
+  }, [canShowChart, chartPoints.length]);
 
   const chartPolyline = chartPoints.map((point) => `${point.x},${point.y}`).join(" ");
 
@@ -334,18 +348,20 @@ export default function LogExerciseHistoryModal({
                       </g>
                     ))}
 
-                    {chartPoints.map((point, idx) => (
-                      <text
-                        key={`label-${point.date}-${idx}`}
-                        x={point.x}
-                        y={chartHeight - 8}
-                        textAnchor="middle"
-                        fontSize="9"
-                        fill="var(--text3)"
-                      >
-                        {point.date.slice(5)}
-                      </text>
-                    ))}
+                    {chartPoints.map((point, idx) =>
+                      chartLabelIndexes.has(idx) ? (
+                        <text
+                          key={`label-${point.date}-${idx}`}
+                          x={point.x}
+                          y={chartHeight - 8}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fill="var(--text3)"
+                        >
+                          {formatShortDate(point.date)}
+                        </text>
+                      ) : null
+                    )}
                   </svg>
                 ) : (
                   <div
