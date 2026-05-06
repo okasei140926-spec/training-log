@@ -596,7 +596,45 @@ export default function AnalyticsScreen({
     </button>
   );
 
-  const renderPRCard = (item, { compact = false } = {}) => {
+  useEffect(() => {
+    if (!showAllBodyPartPr) return undefined;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollTop = window.scrollY || window.pageYOffset || 0;
+    const previousBody = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      touchAction: body.style.touchAction,
+    };
+    const previousHtml = {
+      overflow: html.style.overflow,
+      overscrollBehavior: html.style.overscrollBehavior,
+    };
+
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollTop}px`;
+    body.style.width = "100%";
+    body.style.touchAction = "none";
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+
+    return () => {
+      body.style.overflow = previousBody.overflow || "";
+      body.style.position = previousBody.position || "";
+      body.style.top = previousBody.top || "";
+      body.style.width = previousBody.width || "";
+      body.style.touchAction = previousBody.touchAction || "";
+      html.style.overflow = previousHtml.overflow || "";
+      html.style.overscrollBehavior = previousHtml.overscrollBehavior || "";
+      window.scrollTo(0, scrollTop);
+    };
+  }, [showAllBodyPartPr]);
+
+  const renderPRCard = (item, { compact = false, hideEstimated1RM = false } = {}) => {
     const sharedStyle = {
       width: "100%",
       textAlign: "left",
@@ -626,9 +664,11 @@ export default function AnalyticsScreen({
           <div style={{ fontSize: compact ? 11 : 13, fontWeight: 700, color: "var(--text)" }}>
             {item.displayName || item.name}
           </div>
-          <div style={{ fontSize: compact ? 22 : 15, fontWeight: 800, color: "var(--text)" }}>
-            {item.estimated1RM}kg
-          </div>
+          {!hideEstimated1RM && (
+            <div style={{ fontSize: compact ? 22 : 15, fontWeight: 800, color: "var(--text)" }}>
+              {item.estimated1RM}kg
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, color: "var(--text2)" }}>
           <span>{item.weight}kg × {item.reps}rep</span>
@@ -1327,13 +1367,13 @@ export default function AnalyticsScreen({
                 全{selectedPrGroup.items.length}件
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {selectedPrGroup.items.map((item) => (
-                <div key={`all-${item.key}`}>
-                  {renderPRCard(item)}
-                </div>
-              ))}
-            </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {selectedPrGroup.items.map((item) => (
+                  <div key={`all-${item.key}`}>
+                    {renderPRCard(item, { hideEstimated1RM: true })}
+                  </div>
+                ))}
+              </div>
           </div>
         </div>
       )}
