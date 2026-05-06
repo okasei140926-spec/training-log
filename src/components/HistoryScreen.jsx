@@ -336,6 +336,7 @@ export default function HistoryScreen({
 
   const heroWorkoutCards = todayEntries.slice(0, 3);
   const visibleTodayWorkouts = showAllTodayWorkouts ? todayEntries : heroWorkoutCards;
+  const hasTodayWorkout = todayEntries.length > 0;
 
   const summaryCards = [
     { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
@@ -493,231 +494,216 @@ export default function HistoryScreen({
       className="fade-in"
       style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 14 }}
     >
-      <div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            marginBottom: 8,
-          }}
-        >
-          <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", flexShrink: 0 }}>
-            今日のサマリー
-          </div>
-          {todayWorkedBodyParts.length > 0 && (
+      {hasTodayWorkout && (
+        <>
+          <div>
             <div
               style={{
-                minWidth: 0,
-                flex: 1,
                 display: "flex",
-                justifyContent: "flex-end",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  overflowX: "auto",
-                  whiteSpace: "nowrap",
-                  paddingBottom: 2,
-                  scrollbarWidth: "none",
-                  msOverflowStyle: "none",
-                }}
-              >
-                {todayWorkedBodyParts.map((bodyPart) => (
-                  <span
-                    key={bodyPart}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "4px 9px",
-                      borderRadius: 999,
-                      background: "rgba(18, 199, 194, 0.08)",
-                      border: "1px solid rgba(18, 199, 194, 0.16)",
-                      color: "var(--accent-strong, var(--accent))",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      lineHeight: 1,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {bodyPart}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-          {summaryCards.map((item) => (
-            <button
-              type="button"
-              key={item.key}
-              onClick={() => setSelectedSummaryKey(item.key)}
-              style={{
-                background: "var(--card)",
-                borderRadius: 18,
-                padding: "12px 11px 10px",
-                minHeight: 92,
-                border: "1px solid rgba(18, 199, 194, 0.10)",
-                boxShadow: "0 8px 18px rgba(15, 94, 99, 0.05)",
-                textAlign: "left",
-                display: "flex",
-                flexDirection: "column",
+                alignItems: "center",
                 justifyContent: "space-between",
+                gap: 10,
+                marginBottom: 8,
               }}
             >
-              <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.2 }}>
-                {item.label}
+              <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", flexShrink: 0 }}>
+                今日のサマリー
               </div>
-              <div
-                style={{
-                  fontSize: item.key === "totalVolume" ? 16 : 21,
-                  fontWeight: 800,
-                  color: "var(--text)",
-                  lineHeight: 1.05,
-                  letterSpacing: item.key === "totalVolume" ? -0.2 : 0,
-                }}
-              >
-                {item.value}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div
-        style={{
-          background: "var(--card)",
-          borderRadius: 22,
-          padding: "14px 14px 12px",
-          border: "1px solid rgba(18, 199, 194, 0.12)",
-          boxShadow: "0 12px 30px rgba(15, 94, 99, 0.06)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 10,
-          }}
-        >
-          <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)" }}>
-            今日のワークアウト
-          </div>
-          <button
-            type="button"
-            onClick={() => onLogForDate(todayKey)}
-            style={{
-              background: "none",
-              color: "var(--accent)",
-              fontSize: 12,
-              fontWeight: 800,
-              padding: 0,
-            }}
-          >
-            編集
-          </button>
-        </div>
-
-        {heroWorkoutCards.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            {visibleTodayWorkouts.map((entry) => (
-              <div
-                key={entry.id}
-                style={{
-                  background: "linear-gradient(180deg, var(--card2), var(--card))",
-                  borderRadius: 17,
-                  padding: "9px 10px",
-                  border: "1px solid rgba(18, 199, 194, 0.1)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      padding: "3px 7px",
-                      borderRadius: 999,
-                      background: "var(--info-soft)",
-                      border: "1px solid var(--info-border)",
-                      color: "var(--accent)",
-                      fontSize: 10,
-                      fontWeight: 800,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {entry.bodyPart}
-                  </span>
+              {todayWorkedBodyParts.length > 0 && (
+                <div
+                  style={{
+                    minWidth: 0,
+                    flex: 1,
+                    display: "flex",
+                    justifyContent: "flex-end",
+                  }}
+                >
                   <div
                     style={{
-                      fontSize: 14,
-                      fontWeight: 800,
-                      color: "var(--text)",
-                      lineHeight: 1.2,
-                      minWidth: 0,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      display: "flex",
+                      gap: 6,
+                      overflowX: "auto",
                       whiteSpace: "nowrap",
+                      paddingBottom: 2,
+                      scrollbarWidth: "none",
+                      msOverflowStyle: "none",
                     }}
                   >
-                    {entry.name}
+                    {todayWorkedBodyParts.map((bodyPart) => (
+                      <span
+                        key={bodyPart}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "4px 9px",
+                          borderRadius: 999,
+                          background: "rgba(18, 199, 194, 0.08)",
+                          border: "1px solid rgba(18, 199, 194, 0.16)",
+                          color: "var(--accent-strong, var(--accent))",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          lineHeight: 1,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {bodyPart}
+                      </span>
+                    ))}
                   </div>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4 }}>
-                  {entry.setCount}セット ・ 最大{" "}
-                  {entry.maxWeight > 0
-                    ? formatWeight(
-                        entry.maxWeight,
-                        (getExUnit ? getExUnit(entry.name) : unit) || "kg"
-                      )
-                    : "-"} ・{" "}
-                  {formatVolume(entry.volume)}
-                </div>
-              </div>
-            ))}
-            {todayEntries.length > heroWorkoutCards.length && (
-              <button
-                type="button"
-                onClick={() => setShowAllTodayWorkouts((prev) => !prev)}
-                style={{
-                  fontSize: 11,
-                  color: "var(--accent)",
-                  textAlign: "center",
-                  marginTop: 1,
-                  fontWeight: 800,
-                  background: "none",
-                }}
-              >
-                {showAllTodayWorkouts
-                  ? "閉じる"
-                  : `さらに ${todayEntries.length - heroWorkoutCards.length} 種目を見る`}
-              </button>
-            )}
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+              {summaryCards.map((item) => (
+                <button
+                  type="button"
+                  key={item.key}
+                  onClick={() => setSelectedSummaryKey(item.key)}
+                  style={{
+                    background: "var(--card)",
+                    borderRadius: 18,
+                    padding: "12px 11px 10px",
+                    minHeight: 92,
+                    border: "1px solid rgba(18, 199, 194, 0.10)",
+                    boxShadow: "0 8px 18px rgba(15, 94, 99, 0.05)",
+                    textAlign: "left",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.2 }}>
+                    {item.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: item.key === "totalVolume" ? 16 : 21,
+                      fontWeight: 800,
+                      color: "var(--text)",
+                      lineHeight: 1.05,
+                      letterSpacing: item.key === "totalVolume" ? -0.2 : 0,
+                    }}
+                  >
+                    {item.value}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
-        ) : (
+
           <div
             style={{
-              background: "linear-gradient(180deg, var(--card2), var(--card))",
-              borderRadius: 18,
-              padding: "18px 14px",
-              border: "1px dashed rgba(18, 199, 194, 0.24)",
-              textAlign: "center",
+              background: "var(--card)",
+              borderRadius: 22,
+              padding: "14px 14px 12px",
+              border: "1px solid rgba(18, 199, 194, 0.12)",
+              boxShadow: "0 12px 30px rgba(15, 94, 99, 0.06)",
             }}
           >
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
-              今日のワークアウトはまだありません
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 10,
+              }}
+            >
+              <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)" }}>
+                今日のワークアウト
+              </div>
+              <button
+                type="button"
+                onClick={() => onLogForDate(todayKey)}
+                style={{
+                  background: "none",
+                  color: "var(--accent)",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: 0,
+                }}
+              >
+                編集
+              </button>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.45 }}>
-              下のボタンから、今日のトレーニングを記録しましょう。
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {visibleTodayWorkouts.map((entry) => (
+                <div
+                  key={entry.id}
+                  style={{
+                    background: "linear-gradient(180deg, var(--card2), var(--card))",
+                    borderRadius: 17,
+                    padding: "9px 10px",
+                    border: "1px solid rgba(18, 199, 194, 0.1)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, minWidth: 0 }}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        padding: "3px 7px",
+                        borderRadius: 999,
+                        background: "var(--info-soft)",
+                        border: "1px solid var(--info-border)",
+                        color: "var(--accent)",
+                        fontSize: 10,
+                        fontWeight: 800,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {entry.bodyPart}
+                    </span>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: "var(--text)",
+                        lineHeight: 1.2,
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {entry.name}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4 }}>
+                    {entry.setCount}セット ・ 最大{" "}
+                    {entry.maxWeight > 0
+                      ? formatWeight(
+                          entry.maxWeight,
+                          (getExUnit ? getExUnit(entry.name) : unit) || "kg"
+                        )
+                      : "-"} ・{" "}
+                    {formatVolume(entry.volume)}
+                  </div>
+                </div>
+              ))}
+              {todayEntries.length > heroWorkoutCards.length && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllTodayWorkouts((prev) => !prev)}
+                  style={{
+                    fontSize: 11,
+                    color: "var(--accent)",
+                    textAlign: "center",
+                    marginTop: 1,
+                    fontWeight: 800,
+                    background: "none",
+                  }}
+                >
+                  {showAllTodayWorkouts
+                    ? "閉じる"
+                    : `さらに ${todayEntries.length - heroWorkoutCards.length} 種目を見る`}
+                </button>
+              )}
             </div>
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <button
         type="button"
@@ -738,7 +724,7 @@ export default function HistoryScreen({
         }}
       >
         <span style={{ fontSize: 20, lineHeight: 1 }}>＋</span>
-        <span>ワークアウトを記録</span>
+        <span>{hasTodayWorkout ? "追加で記録" : "ワークアウトを記録"}</span>
       </button>
 
       <details
