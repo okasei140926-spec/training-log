@@ -202,15 +202,35 @@ export default function LogScreen({
             <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 3, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+                        <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2.5, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 700 }}>{title}</div>
                     </div>
                     <WorkoutElapsedTimer elapsedSec={workoutElapsedSec} />
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text4)", marginBottom: 4 }}>
-                    {exCount}種目 ・ {setCount}セット ・ PR {prCount}件
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                    {[
+                        `${exCount}種目`,
+                        `${setCount}セット`,
+                        `PR ${prCount}件`,
+                    ].map((item) => (
+                        <div
+                            key={item}
+                            style={{
+                                padding: "4px 8px",
+                                borderRadius: 999,
+                                background: "rgba(18, 199, 194, 0.08)",
+                                border: "1px solid rgba(18, 199, 194, 0.14)",
+                                color: "var(--text2)",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                lineHeight: 1.2,
+                            }}
+                        >
+                            {item}
+                        </div>
+                    ))}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                    合計 {formattedVolumeKg}kg
+                <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 700 }}>
+                    合計Volume <span style={{ color: "var(--text)", fontSize: 14 }}>{formattedVolumeKg}kg</span>
                 </div>
                 {sessionSharePayload && (
                     <button
@@ -242,7 +262,6 @@ export default function LogScreen({
                     paddingTop: 80,
                     gap: 12
                 }}>
-                    <div style={{ fontSize: 40 }}>💪</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>
                         今日のトレーニングを始めよう
                     </div>
@@ -335,7 +354,7 @@ export default function LogScreen({
                                                         {ex.name}
                                                     </div>
                                                     <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
-                                                        {doneSetsCount > 0 ? `${doneSetsCount}セット完了` : "タップして開始"}
+                                                        {doneSetsCount > 0 ? `${doneSetsCount}セット完了` : "未入力"}
                                                     </div>
                                                 </div>
 
@@ -349,7 +368,7 @@ export default function LogScreen({
                                                         style={{
                                                             background: "none",
                                                             border: "none",
-                                                            padding: "6px 8px",
+                                                            padding: "6px 10px",
                                                             color: "var(--text3)",
                                                             fontSize: 18,
                                                         }}
@@ -447,7 +466,7 @@ export default function LogScreen({
                                                 )}
                                             </div>
 
-                                            <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
+                                            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                                                 <button
                                                     type="button"
                                                     onClick={(e) => {
@@ -457,7 +476,7 @@ export default function LogScreen({
                                                     style={{
                                                         background: "none",
                                                         border: "none",
-                                                        padding: "6px 8px",
+                                                        padding: "6px 10px",
                                                         color: "var(--text3)",
                                                         fontSize: 18,
                                                     }}
@@ -468,7 +487,7 @@ export default function LogScreen({
                                                 {onToggleExUnit && (
                                                     <button
                                                         onClick={() => onToggleExUnit(ex.name)}
-                                                        style={{ padding: "3px 9px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: "1px solid var(--border2)", background: exUnit !== unit ? "var(--text)" : "var(--card2)", color: exUnit !== unit ? "var(--bg)" : "var(--text2)" }}
+                                                        style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: "1px solid var(--border2)", background: exUnit !== unit ? "var(--text)" : "var(--card2)", color: exUnit !== unit ? "var(--bg)" : "var(--text2)" }}
                                                     >
                                                         {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
                                                     </button>
@@ -480,7 +499,7 @@ export default function LogScreen({
                                                         setHistoryTarget(ex.name);
                                                     }}
                                                     style={{
-                                                        padding: "3px 9px",
+                                                        padding: "4px 10px",
                                                         borderRadius: 10,
                                                         fontSize: 11,
                                                         fontWeight: 700,
@@ -491,7 +510,7 @@ export default function LogScreen({
                                                 >
                                                     履歴
                                                 </button>
-                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 8px" }}>×</button>
+                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 10px" }}>×</button>
                                             </div>
                                         </div>
 

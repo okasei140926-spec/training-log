@@ -30,14 +30,17 @@ export default function SetRow({
                     alignItems: "center",
                     justifyContent: "center",
                     width: 24,
-                    height: 40,
-                    borderRadius: 8,
-                    background: isCompleted ? "var(--accent)" : "var(--border)",
-                    color: isCompleted ? "#fff" : "var(--text2)",
-                    fontSize: 12,
+                    height: 36,
+                    borderRadius: 9,
+                    background: isCompleted
+                        ? "rgba(18, 199, 194, 0.14)"
+                        : "rgba(18, 199, 194, 0.08)",
+                    color: isCompleted ? "#0F5E63" : "var(--text2)",
+                    fontSize: 11,
                     fontWeight: 800,
                     alignSelf: "center",
-                    border: "none",
+                    border: "1px solid rgba(18, 199, 194, 0.14)",
+                    boxShadow: "0 6px 14px rgba(15, 94, 99, 0.04)",
                 }}
             >
                 {idx + 1}

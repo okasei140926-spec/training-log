@@ -1981,7 +1981,7 @@ export default function GymApp() {
 
     // ─── Main render ──────────────────────────────────
     const headerTitle =
-        screen === "log" ? "Log"
+        screen === "log" ? "ワークアウト記録"
             : screen === "analytics" ? "分析"
                 : screen === "feed" ? "フィード"
                 : screen === "ranking" ? "ランキング"

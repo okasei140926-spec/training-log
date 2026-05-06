@@ -22,10 +22,11 @@ export default function WorkoutElapsedTimer({ elapsedSec = 0 }) {
         fontWeight: 700,
         lineHeight: 1,
         boxShadow: "0 8px 18px rgba(15, 94, 99, 0.08)",
+        whiteSpace: "nowrap",
       }}
     >
       <span style={{ fontSize: 12 }}>⏱</span>
-      <span>{pad2(minutes)}:{pad2(seconds)}経過</span>
+      <span>経過時間 {pad2(minutes)}:{pad2(seconds)}</span>
     </div>
   );
 }
