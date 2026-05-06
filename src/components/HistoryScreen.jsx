@@ -18,12 +18,13 @@ import {
   sanitizeWorkoutSets,
 } from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
+import {
+  computeWorkoutDisplayElapsedSec,
+  getWorkoutTimerPersistence,
+  readWorkoutTimerState,
+} from "../utils/workoutTimer";
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
-const WORKOUT_STARTED_AT_KEY = "pump_workout_started_at";
-const WORKOUT_STARTED_FOR_DATE_KEY = "pump_workout_started_for_date";
-const WORKOUT_LAST_ACTIVITY_AT_KEY = "pump_workout_last_activity_at";
-
 const formatWeight = (value, unit = "kg") => {
   if (value === "BW") return "自重";
   const displayed = dispW(value, unit);
@@ -136,21 +137,17 @@ export default function HistoryScreen({
     };
 
     const syncFromSources = async () => {
-      const savedDate = localStorage.getItem(WORKOUT_STARTED_FOR_DATE_KEY);
-      const savedStartedAtRaw = Number(localStorage.getItem(WORKOUT_STARTED_AT_KEY));
-      const savedLastActivityAtRaw = Number(localStorage.getItem(WORKOUT_LAST_ACTIVITY_AT_KEY));
+      const storedWorkoutTimer = readWorkoutTimerState();
+      const liveWorkoutTiming =
+        storedWorkoutTimer.startedForDate === todayKey
+          ? getWorkoutTimerPersistence(storedWorkoutTimer)
+          : null;
 
-      if (
-        savedDate === todayKey &&
-        Number.isFinite(savedStartedAtRaw) &&
-        savedStartedAtRaw > 0 &&
-        Number.isFinite(savedLastActivityAtRaw) &&
-        savedLastActivityAtRaw >= savedStartedAtRaw
-      ) {
+      if (liveWorkoutTiming) {
         applyTodayWorkoutTiming({
-          startedAt: new Date(savedStartedAtRaw).toISOString(),
-          lastActivityAt: new Date(savedLastActivityAtRaw).toISOString(),
-          durationSec: Math.floor((savedLastActivityAtRaw - savedStartedAtRaw) / 1000),
+          startedAt: liveWorkoutTiming.startedAtIso,
+          lastActivityAt: liveWorkoutTiming.endedAtIso,
+          durationSec: computeWorkoutDisplayElapsedSec(storedWorkoutTimer),
         });
         return;
       }
@@ -183,21 +180,17 @@ export default function HistoryScreen({
     syncFromSources();
 
     const intervalId = window.setInterval(() => {
-      const savedDate = localStorage.getItem(WORKOUT_STARTED_FOR_DATE_KEY);
-      const savedStartedAtRaw = Number(localStorage.getItem(WORKOUT_STARTED_AT_KEY));
-      const savedLastActivityAtRaw = Number(localStorage.getItem(WORKOUT_LAST_ACTIVITY_AT_KEY));
+      const storedWorkoutTimer = readWorkoutTimerState();
+      const liveWorkoutTiming =
+        storedWorkoutTimer.startedForDate === todayKey
+          ? getWorkoutTimerPersistence(storedWorkoutTimer)
+          : null;
 
-      if (
-        savedDate === todayKey &&
-        Number.isFinite(savedStartedAtRaw) &&
-        savedStartedAtRaw > 0 &&
-        Number.isFinite(savedLastActivityAtRaw) &&
-        savedLastActivityAtRaw >= savedStartedAtRaw
-      ) {
+      if (liveWorkoutTiming) {
         applyTodayWorkoutTiming({
-          startedAt: new Date(savedStartedAtRaw).toISOString(),
-          lastActivityAt: new Date(savedLastActivityAtRaw).toISOString(),
-          durationSec: Math.floor((savedLastActivityAtRaw - savedStartedAtRaw) / 1000),
+          startedAt: liveWorkoutTiming.startedAtIso,
+          lastActivityAt: liveWorkoutTiming.endedAtIso,
+          durationSec: computeWorkoutDisplayElapsedSec(storedWorkoutTimer),
         });
       }
     }, 1000);
@@ -369,7 +362,7 @@ export default function HistoryScreen({
     if (selectedSummaryKey === "duration") {
       const hasDuration = todaySummary.durationSec > 0;
       return {
-        title: "今日のトレーニング時間",
+        title: "今日のワークアウト時間",
         subtitle: formatDurationValue(todaySummary.durationSec),
         emptyText: "今日はまだ時間データがありません",
         items: hasDuration

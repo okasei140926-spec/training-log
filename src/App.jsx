@@ -55,6 +55,18 @@ import {
 } from "./lib/pushNotifications";
 import { normalizeExerciseName } from "./utils/exerciseName";
 import { isNativeApp, isNativeOAuthCallbackUrl } from "./utils/oauth";
+import {
+    clearWorkoutTimerState,
+    computeWorkoutDisplayElapsedSec,
+    createEmptyWorkoutTimerState,
+    getWorkoutResumePromptState,
+    getWorkoutTimerPersistence,
+    getWorkoutTimerStatus,
+    normalizeStoredSeconds,
+    normalizeWorkoutTimerState,
+    persistWorkoutTimerState,
+    readWorkoutTimerState,
+} from "./utils/workoutTimer";
 
 
 const EX_TO_LABEL = {};
@@ -71,10 +83,6 @@ const HISTORY_OWNER_KEY = "historyOwnerUserId";
 const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
 const getHistoryDeleteMarkersKey = (userId) => `historyDeleteMarkers_${userId}`;
 const EXERCISE_BODY_PART_OVERRIDES_KEY = "exerciseBodyPartOverrides";
-const WORKOUT_STARTED_AT_KEY = "pump_workout_started_at";
-const WORKOUT_STARTED_FOR_DATE_KEY = "pump_workout_started_for_date";
-const WORKOUT_LAST_ACTIVITY_AT_KEY = "pump_workout_last_activity_at";
-
 const isPlainObject = (value) =>
     !!value && typeof value === "object" && !Array.isArray(value);
 
@@ -435,18 +443,20 @@ export default function GymApp() {
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
     const [sessionSyncVersion, setSessionSyncVersion] = useState(0);
-    const [workoutStartedAt, setWorkoutStartedAt] = useState(() => {
-        const startedAt = Number(load(WORKOUT_STARTED_AT_KEY, null));
-        return Number.isFinite(startedAt) && startedAt > 0 ? startedAt : null;
-    });
-    const [workoutStartedForDate, setWorkoutStartedForDate] = useState(() =>
-        String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim()
+    const initialWorkoutTimerState = readWorkoutTimerState();
+    const [workoutStartedAt, setWorkoutStartedAt] = useState(initialWorkoutTimerState.startedAt);
+    const [workoutStartedForDate, setWorkoutStartedForDate] = useState(initialWorkoutTimerState.startedForDate);
+    const [workoutLastActivityAt, setWorkoutLastActivityAt] = useState(initialWorkoutTimerState.lastActivityAt);
+    const [workoutPausedDurationSec, setWorkoutPausedDurationSec] = useState(initialWorkoutTimerState.pausedDurationSec);
+    const [workoutPauseStartedAt, setWorkoutPauseStartedAt] = useState(initialWorkoutTimerState.pauseStartedAt);
+    const [workoutIsPaused, setWorkoutIsPaused] = useState(initialWorkoutTimerState.isPaused);
+    const [workoutIsFinished, setWorkoutIsFinished] = useState(initialWorkoutTimerState.isFinished);
+    const [workoutFinishedAt, setWorkoutFinishedAt] = useState(initialWorkoutTimerState.finishedAt);
+    const [workoutElapsedSec, setWorkoutElapsedSec] = useState(() =>
+        computeWorkoutDisplayElapsedSec(initialWorkoutTimerState)
     );
-    const [workoutLastActivityAt, setWorkoutLastActivityAt] = useState(() => {
-        const lastActivityAt = Number(load(WORKOUT_LAST_ACTIVITY_AT_KEY, null));
-        return Number.isFinite(lastActivityAt) && lastActivityAt > 0 ? lastActivityAt : null;
-    });
-    const [workoutElapsedSec, setWorkoutElapsedSec] = useState(0);
+    const [showWorkoutResumePrompt, setShowWorkoutResumePrompt] = useState(false);
+    const [workoutResumePromptReason, setWorkoutResumePromptReason] = useState("");
 
     const touchStartX = useRef(null);
     const touchStartY = useRef(null);
@@ -459,6 +469,8 @@ export default function GymApp() {
     const pendingWorkoutSessionSyncDatesRef = useRef(new Set());
     const previousWorkoutActivitySignatureRef = useRef("");
     const previousWorkoutActivityDateRef = useRef("");
+    const workoutPromptDismissedSignatureRef = useRef("");
+    const workoutTimerStateRef = useRef(initialWorkoutTimerState);
 
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
@@ -491,94 +503,247 @@ export default function GymApp() {
         historyRevisionRef.current += 1;
     }, [history]);
 
-    const resetWorkoutElapsedTimer = useCallback(() => {
-        setWorkoutStartedAt(null);
-        setWorkoutStartedForDate("");
-        setWorkoutLastActivityAt(null);
-        setWorkoutElapsedSec(0);
-        try {
-            localStorage.removeItem(WORKOUT_STARTED_AT_KEY);
-            localStorage.removeItem(WORKOUT_STARTED_FOR_DATE_KEY);
-            localStorage.removeItem(WORKOUT_LAST_ACTIVITY_AT_KEY);
-        } catch {}
+    const applyWorkoutTimerState = useCallback((nextState) => {
+        const normalizedState = normalizeWorkoutTimerState(nextState);
+        workoutTimerStateRef.current = normalizedState;
+        setWorkoutStartedAt(normalizedState.startedAt);
+        setWorkoutStartedForDate(normalizedState.startedForDate);
+        setWorkoutLastActivityAt(normalizedState.lastActivityAt);
+        setWorkoutPausedDurationSec(normalizedState.pausedDurationSec);
+        setWorkoutPauseStartedAt(normalizedState.pauseStartedAt);
+        setWorkoutIsPaused(normalizedState.isPaused);
+        setWorkoutIsFinished(normalizedState.isFinished);
+        setWorkoutFinishedAt(normalizedState.finishedAt);
+        setWorkoutElapsedSec(computeWorkoutDisplayElapsedSec(normalizedState));
+
+        if (normalizedState.startedAt) {
+            persistWorkoutTimerState(normalizedState);
+        } else {
+            clearWorkoutTimerState();
+        }
     }, []);
+
+    const resetWorkoutElapsedTimer = useCallback(() => {
+        workoutPromptDismissedSignatureRef.current = "";
+        setShowWorkoutResumePrompt(false);
+        setWorkoutResumePromptReason("");
+        applyWorkoutTimerState(createEmptyWorkoutTimerState());
+    }, [applyWorkoutTimerState]);
+
+    const continueWorkoutTimer = useCallback((options = {}) => {
+        const { treatGapAsPause = false, redirectToWorkoutDate = false } = options;
+        const currentState = workoutTimerStateRef.current;
+        if (!currentState?.startedAt || !currentState.startedForDate) return;
+
+        const now = Date.now();
+        let nextPausedDurationSec = currentState.pausedDurationSec;
+
+        if (currentState.isPaused && currentState.pauseStartedAt) {
+            nextPausedDurationSec += normalizeStoredSeconds(
+                Math.floor((now - currentState.pauseStartedAt) / 1000)
+            );
+        } else if (currentState.isFinished && currentState.finishedAt) {
+            nextPausedDurationSec += normalizeStoredSeconds(
+                Math.floor((now - currentState.finishedAt) / 1000)
+            );
+        } else if (treatGapAsPause && currentState.lastActivityAt) {
+            nextPausedDurationSec += normalizeStoredSeconds(
+                Math.floor((now - currentState.lastActivityAt) / 1000)
+            );
+        }
+
+        applyWorkoutTimerState({
+            ...currentState,
+            pausedDurationSec: nextPausedDurationSec,
+            pauseStartedAt: null,
+            isPaused: false,
+            isFinished: false,
+            finishedAt: null,
+        });
+
+        if (
+            redirectToWorkoutDate &&
+            currentState.startedForDate &&
+            currentState.startedForDate !== logDate
+        ) {
+            setLogDate(currentState.startedForDate);
+        }
+    }, [applyWorkoutTimerState, logDate]);
+
+    const pauseWorkoutTimer = useCallback(() => {
+        const currentState = workoutTimerStateRef.current;
+        if (!currentState?.startedAt || currentState.isPaused || currentState.isFinished) return;
+
+        applyWorkoutTimerState({
+            ...currentState,
+            isPaused: true,
+            pauseStartedAt: Date.now(),
+        });
+    }, [applyWorkoutTimerState]);
+
+    const finishWorkoutTimer = useCallback((endedAt = Date.now()) => {
+        const currentState = workoutTimerStateRef.current;
+        if (!currentState?.startedAt || !currentState.startedForDate) return;
+        const nextPausedDurationSec =
+            currentState.isPaused && currentState.pauseStartedAt
+                ? currentState.pausedDurationSec + normalizeStoredSeconds(
+                    Math.floor((endedAt - currentState.pauseStartedAt) / 1000)
+                )
+                : currentState.pausedDurationSec;
+
+        applyWorkoutTimerState({
+            ...currentState,
+            pausedDurationSec: nextPausedDurationSec,
+            isPaused: false,
+            pauseStartedAt: null,
+            isFinished: true,
+            finishedAt: endedAt,
+        });
+    }, [applyWorkoutTimerState]);
+
+    const startWorkoutTimerIfNeeded = useCallback((targetDate, options = {}) => {
+        const { markAsActivity = true } = options;
+        const normalizedDate = String(targetDate || "").trim();
+        if (!normalizedDate) return;
+
+        const now = Date.now();
+        const currentState = workoutTimerStateRef.current;
+
+        if (
+            currentState?.startedAt &&
+            currentState.startedForDate === normalizedDate
+        ) {
+            if (currentState.isPaused || currentState.isFinished) {
+                continueWorkoutTimer();
+            }
+
+            if (markAsActivity) {
+                applyWorkoutTimerState({
+                    ...workoutTimerStateRef.current,
+                    lastActivityAt: now,
+                });
+            }
+            return;
+        }
+
+        applyWorkoutTimerState({
+            startedAt: now,
+            startedForDate: normalizedDate,
+            lastActivityAt: markAsActivity ? now : null,
+            pausedDurationSec: 0,
+            pauseStartedAt: null,
+            isPaused: false,
+            isFinished: false,
+            finishedAt: null,
+        });
+    }, [applyWorkoutTimerState, continueWorkoutTimer]);
 
     const markWorkoutActivity = useCallback((targetDate) => {
         const normalizedDate = String(targetDate || "").trim();
         if (!normalizedDate) return;
 
-        const now = Date.now();
-        const storedStartedAt = Number(load(WORKOUT_STARTED_AT_KEY, null));
-        const storedDate = String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim();
-        const nextStartedAt =
-            Number.isFinite(storedStartedAt) && storedStartedAt > 0 && storedDate === normalizedDate
-                ? storedStartedAt
-                : now;
-
-        setWorkoutStartedAt(nextStartedAt);
-        setWorkoutStartedForDate(normalizedDate);
-        setWorkoutLastActivityAt(now);
-        setWorkoutElapsedSec(Math.max(0, Math.floor((now - nextStartedAt) / 1000)));
-        save(WORKOUT_STARTED_AT_KEY, nextStartedAt);
-        save(WORKOUT_STARTED_FOR_DATE_KEY, normalizedDate);
-        save(WORKOUT_LAST_ACTIVITY_AT_KEY, now);
-    }, []);
+        startWorkoutTimerIfNeeded(normalizedDate, { markAsActivity: true });
+    }, [startWorkoutTimerIfNeeded]);
 
     useEffect(() => {
-        const storedDate = String(load(WORKOUT_STARTED_FOR_DATE_KEY, "") || "").trim();
-        const storedStartedAt = Number(load(WORKOUT_STARTED_AT_KEY, null));
-        const storedLastActivityAt = Number(load(WORKOUT_LAST_ACTIVITY_AT_KEY, null));
-
-        if (
-            storedDate &&
-            storedDate !== logDate
-        ) {
-            resetWorkoutElapsedTimer();
-            return;
-        }
-
-        if (
-            storedDate === logDate &&
-            Number.isFinite(storedStartedAt) &&
-            storedStartedAt > 0
-        ) {
-            setWorkoutStartedAt(storedStartedAt);
-            setWorkoutStartedForDate(logDate);
-            setWorkoutLastActivityAt(
-                Number.isFinite(storedLastActivityAt) && storedLastActivityAt > 0
-                    ? storedLastActivityAt
-                    : storedStartedAt
-            );
-            return;
-        }
-
-        setWorkoutStartedAt(null);
-        setWorkoutStartedForDate("");
-        setWorkoutLastActivityAt(null);
-        setWorkoutElapsedSec(0);
-    }, [logDate, resetWorkoutElapsedTimer]);
+        applyWorkoutTimerState(readWorkoutTimerState());
+    }, [applyWorkoutTimerState]);
 
     useEffect(() => {
-        if (!workoutStartedAt || !workoutStartedForDate) {
+        const currentState = workoutTimerStateRef.current;
+        if (!currentState?.startedAt || !currentState.startedForDate) {
             setWorkoutElapsedSec(0);
             return undefined;
         }
 
         const syncElapsed = () => {
-            const elapsed = Math.max(
-                0,
-                Math.floor((Date.now() - workoutStartedAt) / 1000)
+            setWorkoutElapsedSec(
+                computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current, Date.now())
             );
-            setWorkoutElapsedSec(elapsed);
         };
 
         syncElapsed();
+        if (currentState.isPaused || currentState.isFinished) {
+            return undefined;
+        }
+
         const timerId = window.setInterval(syncElapsed, 1000);
 
         return () => {
             window.clearInterval(timerId);
         };
-    }, [workoutStartedAt, workoutStartedForDate]);
+    }, [
+        workoutFinishedAt,
+        workoutIsFinished,
+        workoutIsPaused,
+        workoutLastActivityAt,
+        workoutPauseStartedAt,
+        workoutPausedDurationSec,
+        workoutStartedAt,
+        workoutStartedForDate,
+    ]);
+
+    useEffect(() => {
+        if (screen !== "log") {
+            setShowWorkoutResumePrompt(false);
+            setWorkoutResumePromptReason("");
+            return;
+        }
+
+        const promptState = getWorkoutResumePromptState(workoutTimerStateRef.current, logDate);
+        if (
+            promptState.shouldPrompt &&
+            workoutPromptDismissedSignatureRef.current !== promptState.signature
+        ) {
+            setWorkoutResumePromptReason(promptState.reason);
+            setShowWorkoutResumePrompt(true);
+            return;
+        }
+
+        setShowWorkoutResumePrompt(false);
+        setWorkoutResumePromptReason("");
+    }, [
+        logDate,
+        screen,
+        workoutFinishedAt,
+        workoutIsFinished,
+        workoutIsPaused,
+        workoutLastActivityAt,
+        workoutPauseStartedAt,
+        workoutPausedDurationSec,
+        workoutStartedAt,
+        workoutStartedForDate,
+    ]);
+
+    const workoutTimerStatus = getWorkoutTimerStatus(workoutTimerStateRef.current);
+
+    const handleContinuePreviousWorkout = useCallback(() => {
+        const promptState = getWorkoutResumePromptState(workoutTimerStateRef.current, logDate);
+        workoutPromptDismissedSignatureRef.current = promptState.signature;
+        continueWorkoutTimer({
+            treatGapAsPause: true,
+            redirectToWorkoutDate: promptState.dateChanged,
+        });
+        setShowWorkoutResumePrompt(false);
+        setWorkoutResumePromptReason("");
+    }, [continueWorkoutTimer, logDate]);
+
+    const handleFinishPreviousWorkout = useCallback(() => {
+        const currentState = workoutTimerStateRef.current;
+        if (!currentState?.startedAt) return;
+
+        const promptState = getWorkoutResumePromptState(currentState, logDate);
+        workoutPromptDismissedSignatureRef.current = promptState.signature;
+        const endedAt =
+            currentState.pauseStartedAt ||
+            currentState.lastActivityAt ||
+            currentState.finishedAt ||
+            currentState.startedAt;
+
+        finishWorkoutTimer(endedAt);
+        setShowWorkoutResumePrompt(false);
+        setWorkoutResumePromptReason("");
+    }, [finishWorkoutTimer, logDate]);
 
     const queueWorkoutSessionSync = useCallback((date) => {
         const normalizedDate = String(date || "").trim();
@@ -1021,24 +1186,19 @@ export default function GymApp() {
                         const shouldPersistWorkoutTiming =
                             hasValidWorkoutForDate &&
                             workoutStartedAt &&
-                            workoutLastActivityAt &&
                             workoutStartedForDate === date;
+                        const workoutTiming = shouldPersistWorkoutTiming
+                            ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
+                            : null;
 
-                        const endedAtIso = shouldPersistWorkoutTiming
-                            ? new Date(workoutLastActivityAt).toISOString()
-                            : date === logDate
-                                ? null
-                                : existingRow?.ended_at || null;
-                        const startedAtIso = shouldPersistWorkoutTiming
-                            ? new Date(workoutStartedAt).toISOString()
-                            : date === logDate
-                                ? null
-                                : existingRow?.started_at || null;
-                        const durationSec = shouldPersistWorkoutTiming
-                            ? Math.max(
-                                0,
-                                Math.floor((workoutLastActivityAt - workoutStartedAt) / 1000)
-                            )
+                        const endedAtIso = workoutTiming?.endedAtIso ?? (
+                            date === logDate ? null : existingRow?.ended_at || null
+                        );
+                        const startedAtIso = workoutTiming?.startedAtIso ?? (
+                            date === logDate ? null : existingRow?.started_at || null
+                        );
+                        const durationSec = Number.isFinite(workoutTiming?.durationSec)
+                            ? workoutTiming.durationSec
                             : date === logDate
                                 ? null
                                 : existingRow?.duration_sec ?? null;
@@ -1080,20 +1240,9 @@ export default function GymApp() {
                                 const shouldPersistWorkoutTiming =
                                     hasValidWorkoutForDate &&
                                     workoutStartedAt &&
-                                    workoutLastActivityAt &&
                                     workoutStartedForDate === date;
-                                const endedAtIso = shouldPersistWorkoutTiming
-                                    ? new Date(workoutLastActivityAt).toISOString()
-                                    : null;
                                 const timing = shouldPersistWorkoutTiming
-                                    ? {
-                                        startedAtIso: new Date(workoutStartedAt).toISOString(),
-                                        endedAtIso,
-                                        durationSec: Math.max(
-                                            0,
-                                            Math.floor((workoutLastActivityAt - workoutStartedAt) / 1000)
-                                        ),
-                                    }
+                                    ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
                                     : null;
                                 await syncWorkoutSessionSnapshot(currentUserId, mergedHistory, date, timing);
                             } catch (error) {
@@ -1149,7 +1298,24 @@ export default function GymApp() {
             .catch((error) => {
                 console.error("history sync save failed", error);
             });
-    }, [history, user, historySyncReady, logDate, screen, pruneHistoryDeleteMarkersForHistory, syncWorkoutSessionSnapshot, cleanupWorkoutSessionsForHistory, workoutStartedAt, workoutStartedForDate, workoutLastActivityAt]);
+    }, [
+        history,
+        user,
+        historySyncReady,
+        logDate,
+        screen,
+        pruneHistoryDeleteMarkersForHistory,
+        syncWorkoutSessionSnapshot,
+        cleanupWorkoutSessionsForHistory,
+        workoutFinishedAt,
+        workoutIsFinished,
+        workoutIsPaused,
+        workoutLastActivityAt,
+        workoutPauseStartedAt,
+        workoutPausedDurationSec,
+        workoutStartedAt,
+        workoutStartedForDate,
+    ]);
 
     useEffect(() => {
         let isActive = true;
@@ -1536,6 +1702,7 @@ export default function GymApp() {
 
         const label = labelOverride || todayLabels[0];
         if (!label) return;
+        let didAddExercise = false;
 
         const ex = {
             id: Date.now() + (Math.random() * 1000 | 0),
@@ -1548,6 +1715,7 @@ export default function GymApp() {
             const current = p !== null ? p : [...baseExercises];
             if (current.find((e) => e.name === trimmed)) return current;
 
+            didAddExercise = true;
             const next = [...current, ex];
             save("draft_sessionEx", next);
             save("draft_logDate", logDate);
@@ -1566,6 +1734,10 @@ export default function GymApp() {
         });
 
         setExerciseOverrideForLabel(trimmed, label);
+
+        if (didAddExercise) {
+            startWorkoutTimerIfNeeded(logDate, { markAsActivity: true });
+        }
     };
 
     const reorderEx = (fromIdx, toIdx) => {
@@ -2117,6 +2289,18 @@ export default function GymApp() {
                             touchStartY.current = null;
                         }}
                     >
+                        {(() => {
+                            const showCurrentLogWorkoutTimer =
+                                workoutStartedForDate === logDate ||
+                                (showWorkoutResumePrompt && workoutStartedForDate === logDate);
+                            const displayedWorkoutTimerStatus = showCurrentLogWorkoutTimer
+                                ? workoutTimerStatus
+                                : "idle";
+                            const displayedWorkoutElapsedSec = showCurrentLogWorkoutTimer
+                                ? workoutElapsedSec
+                                : 0;
+
+                            return (
                         <LogScreen
                             user={user}
                             manualBests={manualBests}
@@ -2158,7 +2342,16 @@ export default function GymApp() {
                             setTodayLabels={updateTodayLabels}
                             history={history}
                             logDate={logDate}
-                            workoutElapsedSec={workoutElapsedSec}
+                            workoutElapsedSec={displayedWorkoutElapsedSec}
+                            workoutTimerStatus={displayedWorkoutTimerStatus}
+                            onPauseWorkoutTimer={pauseWorkoutTimer}
+                            onResumeWorkoutTimer={() => continueWorkoutTimer()}
+                            onFinishWorkoutTimer={() => finishWorkoutTimer()}
+                            onResetWorkoutTimer={resetWorkoutElapsedTimer}
+                            showWorkoutResumePrompt={showWorkoutResumePrompt}
+                            workoutResumePromptReason={workoutResumePromptReason}
+                            onFinishPreviousWorkout={handleFinishPreviousWorkout}
+                            onContinuePreviousWorkout={handleContinuePreviousWorkout}
                             resetSession={() => {
                                 setSessionEx(null);
                                 setLogData({});
@@ -2169,6 +2362,8 @@ export default function GymApp() {
                                 resetWorkoutElapsedTimer();
                             }}
                         />
+                            );
+                        })()}
                     </div>
                 )}
 
