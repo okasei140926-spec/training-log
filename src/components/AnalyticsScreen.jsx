@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
@@ -262,6 +262,7 @@ export default function AnalyticsScreen({
   const [selectedOverviewMetric, setSelectedOverviewMetric] = useState(null);
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
   const [showAllBodyPartPr, setShowAllBodyPartPr] = useState(false);
+  const screenScrollRef = useRef(null);
 
   const resolutionContext = useMemo(
     () => ({
@@ -634,6 +635,27 @@ export default function AnalyticsScreen({
     };
   }, [showAllBodyPartPr]);
 
+  useEffect(() => {
+    if (!selectedExerciseKey) return;
+
+    const scrollToTop = () => {
+      window.scrollTo(0, 0);
+      if (document.scrollingElement) {
+        document.scrollingElement.scrollTop = 0;
+      }
+      if (screenScrollRef.current) {
+        screenScrollRef.current.scrollTop = 0;
+      }
+    };
+
+    const firstFrame = requestAnimationFrame(() => {
+      scrollToTop();
+      requestAnimationFrame(scrollToTop);
+    });
+
+    return () => cancelAnimationFrame(firstFrame);
+  }, [selectedExerciseKey]);
+
   const renderPRCard = (item, { compact = false, hideEstimated1RM = false } = {}) => {
     const sharedStyle = {
       width: "100%",
@@ -690,7 +712,7 @@ export default function AnalyticsScreen({
 
   if (selectedExercise) {
     return (
-      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div ref={screenScrollRef} style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
         <button
           onClick={() => setSelectedExerciseKey(null)}
           style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--text2)", fontSize: 14, cursor: "pointer", padding: 0 }}
@@ -821,7 +843,7 @@ export default function AnalyticsScreen({
   }
 
   return (
-    <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+    <div ref={screenScrollRef} style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
       <div
         style={{
           display: "inline-flex",

@@ -23,11 +23,27 @@ const sortLabelsByPriority = (labels = []) =>
   });
 
 export const getDefaultBodyPartLabels = (exName) =>
-  sortLabelsByPriority(
-    Object.entries(SUGGESTIONS)
-      .filter(([, names]) => (names || []).some((name) => matchesExerciseName(name, exName)))
-      .map(([label]) => label)
-  );
+  (() => {
+    const normalized = normalizeName(exName);
+    const exactLabels = [];
+    const fuzzyLabels = [];
+
+    Object.entries(SUGGESTIONS).forEach(([label, names]) => {
+      const entries = names || [];
+      const hasExact = entries.some((name) => normalizeName(name) === normalized);
+      if (hasExact) {
+        exactLabels.push(label);
+        return;
+      }
+
+      const hasFuzzy = entries.some((name) => matchesExerciseName(name, exName));
+      if (hasFuzzy) {
+        fuzzyLabels.push(label);
+      }
+    });
+
+    return sortLabelsByPriority(exactLabels.length > 0 ? exactLabels : fuzzyLabels);
+  })();
 
 export const getPrimaryDefaultBodyPartLabel = (exName) =>
   getDefaultBodyPartLabels(exName)[0] || null;
@@ -77,10 +93,12 @@ export const resolveRecordBodyPartLabel = (
   const overrideLabel = getOverrideLabel(exName, exerciseBodyPartOverrides, []);
   if (overrideLabel) return overrideLabel;
 
+  const visibleCustomLabels = getVisibleCustomBodyPartLabels(exName, muscleEx, []);
+  if (visibleCustomLabels.length === 1) return visibleCustomLabels[0];
+
   const defaultLabels = getDefaultBodyPartLabels(exName);
   if (defaultLabels.length > 0) return defaultLabels[0];
 
-  const visibleCustomLabels = getVisibleCustomBodyPartLabels(exName, muscleEx, []);
   return visibleCustomLabels[0] || null;
 };
 
