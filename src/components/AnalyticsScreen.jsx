@@ -259,6 +259,7 @@ export default function AnalyticsScreen({
   const [period, setPeriod] = useState(90);
   const [activeSummaryKey, setActiveSummaryKey] = useState(null);
   const [overviewScope, setOverviewScope] = useState("weekly");
+  const [selectedOverviewMetric, setSelectedOverviewMetric] = useState(null);
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
   const [showBodyPartBreakdown, setShowBodyPartBreakdown] = useState(false);
   const [showAllBodyPartPr, setShowAllBodyPartPr] = useState(false);
@@ -434,9 +435,117 @@ export default function AnalyticsScreen({
     fill: BODY_PART_CHART_COLORS[item.bodyPart] || "#12C7C2",
   }));
   const totalOverviewSets = overviewBodyPartStats.reduce((sum, item) => sum + item.sets, 0);
+  const overviewMetricDetails = useMemo(
+    () => ({
+      volume: {
+        title: "Volume詳細",
+        rangeLabel: overviewSummary.rangeLabel,
+        empty: overviewSummary.totalVolume <= 0,
+        summaryRows: [
+          { label: "合計", value: `${overviewSummary.totalVolume.toLocaleString("ja-JP")}kg` },
+          {
+            label: "平均",
+            value:
+              overviewSummary.workoutCount > 0
+                ? `${Math.round(overviewSummary.totalVolume / overviewSummary.workoutCount).toLocaleString("ja-JP")}kg / 回`
+                : "0kg / 回",
+          },
+        ],
+        sections: [
+          {
+            title: "日別",
+            items: (overviewSummary.dailyStats || []).slice().reverse().map((item) => ({
+              key: `day-${item.date}`,
+              title: formatDate(item.date),
+              meta: `${item.setCount}セット`,
+              value: `${item.volume.toLocaleString("ja-JP")}kg`,
+            })),
+          },
+          {
+            title: "種目別",
+            items: (overviewSummary.exerciseStats || []).slice(0, 8).map((item) => ({
+              key: `exercise-${item.key}`,
+              title: item.exerciseName,
+              meta: `${item.bodyPart}・${item.setCount}セット`,
+              value: `${Math.round(item.volume).toLocaleString("ja-JP")}kg`,
+            })),
+          },
+        ],
+      },
+      workouts: {
+        title: "トレーニング詳細",
+        rangeLabel: overviewSummary.rangeLabel,
+        empty: overviewSummary.workoutCount <= 0,
+        summaryRows: [
+          { label: "回数", value: `${overviewSummary.workoutCount}回` },
+          { label: "セット", value: `${overviewSummary.totalSets || 0}セット` },
+        ],
+        sections: [
+          {
+            title: "実施日",
+            items: (overviewSummary.dailyStats || []).slice().reverse().map((item) => ({
+              key: `workout-${item.date}`,
+              title: formatDate(item.date),
+              meta: `${item.bodyParts.join("・") || "未分類"} / ${item.setCount}セット`,
+              value: `${item.volume.toLocaleString("ja-JP")}kg`,
+            })),
+          },
+        ],
+      },
+      exercises: {
+        title: "種目数詳細",
+        rangeLabel: overviewSummary.rangeLabel,
+        empty: overviewSummary.exerciseCount <= 0,
+        summaryRows: [{ label: "実施種目数", value: `${overviewSummary.exerciseCount}種目` }],
+        sections: [
+          {
+            title: "種目一覧",
+            items: (overviewSummary.exerciseStats || []).map((item) => ({
+              key: `exercise-list-${item.key}`,
+              title: item.exerciseName,
+              meta: `${item.bodyPart}・${item.setCount}セット`,
+              value: `${Math.round(item.volume).toLocaleString("ja-JP")}kg`,
+            })),
+          },
+        ],
+      },
+      pr: {
+        title: "PR更新詳細",
+        rangeLabel: overviewSummary.rangeLabel,
+        empty: overviewSummary.prUpdateCount <= 0,
+        summaryRows: [{ label: "PR更新", value: `${overviewSummary.prUpdateCount}件` }],
+        sections: [
+          {
+            title: "更新一覧",
+            items: (overviewSummary.prUpdates || []).map((item) => ({
+              key: `pr-${item.key}-${item.date}`,
+              title: item.exerciseName,
+              meta: `1RM ${item.estimated1RM}kg / ${item.weight}kg × ${item.reps}rep`,
+              value: `+${item.diffKg}kg`,
+              actionLabel: "詳細",
+              onAction: () => {
+                setSelectedOverviewMetric(null);
+                setSelectedExerciseKey(item.key);
+              },
+            })),
+          },
+        ],
+      },
+    }),
+    [overviewSummary]
+  );
+  const activeOverviewMetric = selectedOverviewMetric ? overviewMetricDetails[selectedOverviewMetric] || null : null;
 
-  const renderOverviewMetric = (label, value, accent = null, { accentColor = "var(--accent)" } = {}) => (
-    <div
+  const renderOverviewMetric = (
+    key,
+    label,
+    value,
+    accent = null,
+    { accentColor = "var(--accent)" } = {}
+  ) => (
+    <button
+      type="button"
+      onClick={() => setSelectedOverviewMetric(key)}
       key={label}
       style={{
         background: "var(--card)",
@@ -444,8 +553,23 @@ export default function AnalyticsScreen({
         padding: "14px 14px 12px",
         border: "1px solid rgba(18, 199, 194, 0.10)",
         boxShadow: "var(--shadow-soft)",
+        textAlign: "left",
+        position: "relative",
+        cursor: "pointer",
       }}
     >
+      <div
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          fontSize: 11,
+          color: "var(--text3)",
+          fontWeight: 800,
+        }}
+      >
+        詳細
+      </div>
       <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>{value}</div>
       {accent && (
@@ -453,7 +577,7 @@ export default function AnalyticsScreen({
           {accent}
         </div>
       )}
-    </div>
+    </button>
   );
 
   const renderPRCard = (item, { compact = false } = {}) => {
@@ -686,27 +810,31 @@ export default function AnalyticsScreen({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
         {[
           {
+            key: "volume",
             label: "Volume",
             value: `${overviewSummary.totalVolume.toLocaleString("ja-JP")}kg`,
             accent: overviewSummary.shortLabel,
           },
           {
+            key: "workouts",
             label: "トレーニング",
             value: `${overviewSummary.workoutCount}回`,
             accent: `${totalOverviewSets}セット`,
           },
           {
+            key: "exercises",
             label: "種目数",
             value: `${overviewSummary.exerciseCount}種目`,
             accent: null,
           },
           {
+            key: "pr",
             label: "PR更新",
             value: `${overviewSummary.prUpdateCount}件`,
             accent: overviewSummary.prUpdateCount > 0 ? "この期間の更新数" : null,
             accentColor: "var(--text3)",
           },
-        ].map((item) => renderOverviewMetric(item.label, item.value, item.accent, { accentColor: item.accentColor }))}
+        ].map((item) => renderOverviewMetric(item.key, item.label, item.value, item.accent, { accentColor: item.accentColor }))}
       </div>
 
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
@@ -1039,6 +1167,179 @@ export default function AnalyticsScreen({
         onClose={() => setActiveSummaryKey(null)}
         summary={activeSummary}
       />
+
+      {activeOverviewMetric && (
+        <div
+          onClick={() => setSelectedOverviewMetric(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            zIndex: 999,
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 430,
+              background: "var(--card)",
+              borderRadius: 20,
+              padding: "18px 16px calc(20px + var(--safe-bottom, 0px))",
+              border: "1px solid var(--border2)",
+              maxHeight: "70vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 5,
+                borderRadius: 999,
+                background: "var(--border2)",
+                margin: "0 auto 14px",
+              }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                  {activeOverviewMetric.title}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                  {activeOverviewMetric.rangeLabel}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOverviewMetric(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--text3)",
+                  fontSize: 20,
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {activeOverviewMetric.summaryRows?.length > 0 && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: activeOverviewMetric.summaryRows.length > 1 ? "repeat(2, minmax(0, 1fr))" : "1fr",
+                  gap: 8,
+                  marginBottom: 16,
+                }}
+              >
+                {activeOverviewMetric.summaryRows.map((row) => (
+                  <div
+                    key={row.label}
+                    style={{
+                      background: "linear-gradient(180deg, var(--card2), var(--card))",
+                      borderRadius: 16,
+                      padding: "12px 13px",
+                      border: "1px solid rgba(18, 199, 194, 0.10)",
+                    }}
+                  >
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>
+                      {row.label}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                      {row.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeOverviewMetric.empty ? (
+              <div
+                style={{
+                  background: "linear-gradient(180deg, var(--card2), var(--card))",
+                  borderRadius: 18,
+                  padding: "18px 14px",
+                  border: "1px dashed rgba(18, 199, 194, 0.24)",
+                  textAlign: "center",
+                  fontSize: 13,
+                  color: "var(--text2)",
+                  lineHeight: 1.5,
+                }}
+              >
+                まだデータがありません
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {activeOverviewMetric.sections?.map((section) => (
+                  <div key={section.title}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)", marginBottom: 8 }}>
+                      {section.title}
+                    </div>
+                    {section.items?.length ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {section.items.map((item) => (
+                          <div
+                            key={item.key}
+                            style={{
+                              background: "linear-gradient(180deg, var(--card2), var(--card))",
+                              borderRadius: 16,
+                              padding: "11px 12px",
+                              border: "1px solid rgba(18, 199, 194, 0.10)",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: item.meta || item.onAction ? 4 : 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", minWidth: 0 }}>
+                                {item.title}
+                              </div>
+                              <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", flexShrink: 0 }}>
+                                {item.value}
+                              </div>
+                            </div>
+                            {(item.meta || item.onAction) && (
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                                <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.45 }}>
+                                  {item.meta}
+                                </div>
+                                {item.onAction && (
+                                  <button
+                                    type="button"
+                                    onClick={item.onAction}
+                                    style={{
+                                      padding: "6px 10px",
+                                      borderRadius: 999,
+                                      border: "1px solid rgba(18, 199, 194, 0.12)",
+                                      background: "var(--card)",
+                                      color: "var(--accent)",
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {item.actionLabel || "詳細"}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 13, color: "var(--text2)" }}>
+                        まだデータがありません
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showAllBodyPartPr && selectedPrGroup && (
         <div

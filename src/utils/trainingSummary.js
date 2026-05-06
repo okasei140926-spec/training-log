@@ -242,6 +242,7 @@ export function buildTrainingSummary({
 
   const bodyPartStats = {};
   const exerciseStats = {};
+  const dailyStats = {};
   const prePeriodBestMap = {};
   const periodBestMap = {};
   const periodBestRecordMap = {};
@@ -256,11 +257,31 @@ export function buildTrainingSummary({
   });
 
   periodEntries.forEach((entry) => {
+    if (!dailyStats[entry.date]) {
+      dailyStats[entry.date] = {
+        date: entry.date,
+        setCount: 0,
+        volume: 0,
+        bodyParts: new Set(),
+        exerciseMap: {},
+      };
+    }
     if (!bodyPartStats[entry.bodyPart]) {
       bodyPartStats[entry.bodyPart] = { bodyPart: entry.bodyPart, sets: 0, volume: 0 };
     }
     bodyPartStats[entry.bodyPart].sets += entry.setCount;
     bodyPartStats[entry.bodyPart].volume += entry.volume;
+
+    dailyStats[entry.date].setCount += entry.setCount;
+    dailyStats[entry.date].volume += entry.volume;
+    dailyStats[entry.date].bodyParts.add(entry.bodyPart);
+    dailyStats[entry.date].exerciseMap[entry.key] = {
+      key: entry.key,
+      exerciseName: entry.exerciseName,
+      bodyPart: entry.bodyPart,
+      setCount: entry.setCount,
+      volume: entry.volume,
+    };
 
     if (!exerciseStats[entry.key]) {
       exerciseStats[entry.key] = {
@@ -298,10 +319,22 @@ export function buildTrainingSummary({
     .sort((a, b) => b.sets - a.sets || b.volume - a.volume || a.bodyPart.localeCompare(b.bodyPart, "ja"))[0] || null;
   const sortedBodyPartStats = Object.values(bodyPartStats)
     .sort((a, b) => b.sets - a.sets || b.volume - a.volume || a.bodyPart.localeCompare(b.bodyPart, "ja"));
+  const sortedExerciseStats = Object.values(exerciseStats)
+    .sort((a, b) => b.volume - a.volume || b.setCount - a.setCount || a.exerciseName.localeCompare(b.exerciseName, "ja"));
+  const sortedDailyStats = Object.values(dailyStats)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((item) => ({
+      date: item.date,
+      setCount: item.setCount,
+      volume: Math.round(item.volume),
+      exerciseCount: Object.keys(item.exerciseMap).length,
+      bodyParts: [...item.bodyParts].sort((a, b) => a.localeCompare(b, "ja")),
+      exercises: Object.values(item.exerciseMap).sort(
+        (a, b) => b.volume - a.volume || b.setCount - a.setCount || a.exerciseName.localeCompare(b.exerciseName, "ja")
+      ),
+    }));
 
-  const highlights = Object.values(exerciseStats)
-    .sort((a, b) => b.volume - a.volume || b.setCount - a.setCount || a.exerciseName.localeCompare(b.exerciseName, "ja"))
-    .slice(0, 3);
+  const highlights = sortedExerciseStats.slice(0, 3);
 
   const prUpdateCount = Object.keys(periodBestMap).reduce((count, key) => {
     const periodBest = periodBestMap[key] || 0;
@@ -337,10 +370,13 @@ export function buildTrainingSummary({
     startKey,
     endKey,
     workoutCount: workoutDates.length,
+    totalSets: periodEntries.reduce((sum, entry) => sum + entry.setCount, 0),
     totalVolume,
     exerciseCount: exerciseKeys.length,
     topBodyPart: topBodyPart?.bodyPart || "なし",
     bodyPartStats: sortedBodyPartStats,
+    exerciseStats: sortedExerciseStats,
+    dailyStats: sortedDailyStats,
     prUpdateCount,
     streak: computeLongestStreak(workoutDates),
     highlights,
