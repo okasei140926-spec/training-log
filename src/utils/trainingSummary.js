@@ -10,6 +10,7 @@ import {
 } from "./bodyPartClassification";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 const startOfDay = (date) => {
   const next = new Date(date);
@@ -91,6 +92,25 @@ const sumVolume = (sets = []) =>
     return sum + weight * reps;
   }, 0);
 
+const getBestSetForEstimated1RM = (sets = []) =>
+  (sets || []).reduce((best, set) => {
+    const weight = Number(set?.weight);
+    const reps = Number(set?.reps);
+    if (!Number.isFinite(weight) || weight <= 0) return best;
+    if (!Number.isFinite(reps) || reps <= 0) return best;
+
+    const estimated1RM = calc1RM([set]);
+    if (!best || estimated1RM > best.estimated1RM) {
+      return {
+        weight,
+        reps,
+        estimated1RM,
+      };
+    }
+
+    return best;
+  }, null);
+
 const getMaxWeight = (sets = []) =>
   sets.reduce((max, set) => {
     const weight = Number(set?.weight);
@@ -98,19 +118,30 @@ const getMaxWeight = (sets = []) =>
     return Math.max(max, weight);
   }, 0);
 
-const buildDateVolumeTrend = (entries = []) => {
+const buildDateVolumeTrend = (entries = [], meta) => {
   const grouped = entries.reduce((acc, entry) => {
     acc[entry.date] = (acc[entry.date] || 0) + entry.volume;
     return acc;
   }, {});
 
-  return Object.entries(grouped)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, volume]) => ({
-      date,
-      label: date.slice(5).replace("-", "/"),
-      volume: Math.round(volume),
-    }));
+  const points = [];
+  const cursor = new Date(meta.start);
+  const end = new Date(meta.end);
+
+  while (cursor <= end) {
+    const key = formatDateKey(cursor);
+    points.push({
+      date: key,
+      label:
+        meta.group === "weekly"
+          ? WEEKDAY_LABELS[cursor.getDay()]
+          : key.slice(5).replace("-", "/"),
+      volume: Math.round(grouped[key] || 0),
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return points;
 };
 
 const computeLongestStreak = (dates = []) => {
@@ -172,6 +203,7 @@ const buildEntries = ({
         setCount: sanitized.sets.length,
         volume,
         bestRM,
+        bestSet: getBestSetForEstimated1RM(sanitized.sets),
         maxWeight,
       });
     });
@@ -206,6 +238,7 @@ export function buildTrainingSummary({
   const exerciseStats = {};
   const prePeriodBestMap = {};
   const periodBestMap = {};
+  const periodBestRecordMap = {};
 
   allEntries.forEach((entry) => {
     if (!prePeriodBestMap[entry.key]) prePeriodBestMap[entry.key] = 0;
@@ -238,6 +271,21 @@ export function buildTrainingSummary({
     exerciseStats[entry.key].volume += entry.volume;
     exerciseStats[entry.key].maxWeight = Math.max(exerciseStats[entry.key].maxWeight, entry.maxWeight);
     periodBestMap[entry.key] = Math.max(periodBestMap[entry.key] || 0, entry.bestRM || 0);
+
+    if (
+      entry.bestRM > 0 &&
+      (!periodBestRecordMap[entry.key] || entry.bestRM > periodBestRecordMap[entry.key].estimated1RM)
+    ) {
+      periodBestRecordMap[entry.key] = {
+        key: entry.key,
+        exerciseName: entry.exerciseName,
+        bodyPart: entry.bodyPart,
+        estimated1RM: Math.round(entry.bestRM),
+        weight: entry.bestSet?.weight || 0,
+        reps: entry.bestSet?.reps || 0,
+        date: entry.date,
+      };
+    }
   });
 
   const topBodyPart = Object.values(bodyPartStats)
@@ -256,6 +304,26 @@ export function buildTrainingSummary({
     return count;
   }, 0);
 
+  const prUpdates = Object.keys(periodBestRecordMap)
+    .map((key) => {
+      const record = periodBestRecordMap[key];
+      const previousBest = prePeriodBestMap[key] || 0;
+      const diffKg = record.estimated1RM - previousBest;
+      if (diffKg <= PR_UPDATE_TOLERANCE_KG) return null;
+
+      return {
+        ...record,
+        diffKg: Math.round(diffKg * 10) / 10,
+      };
+    })
+    .filter(Boolean)
+    .sort(
+      (a, b) =>
+        b.diffKg - a.diffKg ||
+        b.estimated1RM - a.estimated1RM ||
+        a.exerciseName.localeCompare(b.exerciseName, "ja")
+    );
+
   return {
     ...meta,
     startKey,
@@ -267,6 +335,7 @@ export function buildTrainingSummary({
     prUpdateCount,
     streak: computeLongestStreak(workoutDates),
     highlights,
-    trend: buildDateVolumeTrend(periodEntries),
+    trend: buildDateVolumeTrend(periodEntries, meta),
+    prUpdates,
   };
 }

@@ -18,6 +18,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import AnalyticsScreen from "./components/AnalyticsScreen";
+import PhotoScreen from "./components/PhotoScreen";
 
 // eslint-disable-next-line no-unused-vars
 import Auth from "./components/Auth";
@@ -1983,6 +1984,7 @@ export default function GymApp() {
     const headerTitle =
         screen === "log" ? "ワークアウト記録"
             : screen === "analytics" ? "分析"
+                : screen === "photos" ? "写真比較"
                 : screen === "feed" ? "フィード"
                 : screen === "ranking" ? "ランキング"
                 : screen === "ai" ? "AI Coach"
@@ -2177,8 +2179,13 @@ export default function GymApp() {
                         muscleEx={muscleEx}
                         hiddenBodyParts={hiddenBodyParts}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                        onOpenPhotoCompare={() => setScreen("photos")}
                     />
 
+                )}
+
+                {screen === "photos" && (
+                    <PhotoScreen user={user} />
                 )}
 
 
@@ -2280,7 +2287,7 @@ export default function GymApp() {
                     />
                 )}
 
-                <BottomNav tabs={bottomTabs} activeTab={screen} onSelectTab={setScreen} />
+                <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen} onSelectTab={setScreen} />
 
                 {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
                 <SummaryModal
