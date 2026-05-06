@@ -230,10 +230,23 @@ export default function AddExModal({
                             onTap: () => handleQuick(key),
                             onLongPress: () => hideSuggestion(activeTab, key),
                         })}
-                        style={{ width: "100%", padding: "13px 16px", borderRadius: 10, background: "var(--card2)", border: "1px solid var(--border)", color: isAdded ? "var(--text2)" : "var(--text)", fontSize: 14, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ textDecoration: isAdded ? "line-through" : "none" }}>{key}</span>
+                        style={{
+                            width: "100%",
+                            padding: "13px 16px",
+                            borderRadius: 12,
+                            background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(18,199,194,0.03))",
+                            border: "1px solid rgba(18, 199, 194, 0.12)",
+                            color: isAdded ? "var(--text2)" : "var(--text)",
+                            fontSize: 14,
+                            textAlign: "left",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            boxShadow: "0 6px 14px rgba(15, 94, 99, 0.03)"
+                        }}>
+                        <span style={{ textDecoration: isAdded ? "line-through" : "none", opacity: isAdded ? 0.78 : 1 }}>{key}</span>
                         {isAdded
-                            ? <span style={{ color: "#4ade80", fontSize: 16, fontWeight: 700 }}>✓</span>
+                            ? <span style={{ color: "rgba(18, 199, 194, 0.82)", fontSize: 16, fontWeight: 700 }}>✓</span>
                             : <span style={{ color: "var(--text3)", fontSize: 14 }}>＋</span>
                         }
                     </button>
@@ -271,9 +284,21 @@ export default function AddExModal({
                                         onLongPress: () => hideBodyPart(label),
                                     })}
                                     style={{
-                                        padding: "6px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, flexShrink: 0, border: "none",
-                                        background: activeTab === label ? "var(--text)" : "var(--card2)",
-                                        color: activeTab === label ? "var(--bg)" : "var(--text2)"
+                                        padding: "7px 14px",
+                                        borderRadius: 20,
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        flexShrink: 0,
+                                        border: activeTab === label
+                                            ? "1px solid rgba(15, 94, 99, 0.18)"
+                                            : "1px solid rgba(18, 199, 194, 0.10)",
+                                        background: activeTab === label
+                                            ? "linear-gradient(135deg, #0F5E63 0%, #12C7C2 100%)"
+                                            : "rgba(18, 199, 194, 0.06)",
+                                        color: activeTab === label ? "#FFFFFF" : "#0F5E63",
+                                        boxShadow: activeTab === label
+                                            ? "0 8px 18px rgba(18, 199, 194, 0.18)"
+                                            : "none"
                                     }}>
                                     {label}
                                 </button>
@@ -320,13 +345,26 @@ export default function AddExModal({
                         style={{ width: "100%", padding: "14px 16px", borderRadius: 12, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 16, marginBottom: 12, boxSizing: "border-box" }} />
                     <div style={{ display: "flex", gap: 10 }}>
                         <button onClick={onClose} style={{ flex: 1, padding: "13px", borderRadius: 12, background: "var(--card2)", color: "var(--text2)", fontSize: 15, border: "none" }}>閉じる</button>
-                        <button onClick={handleManual}
+                        <button
+                            onClick={handleManual}
+                            disabled={!name.trim()}
                             style={{
-                                flex: 2, padding: "13px", borderRadius: 12, fontSize: 15, fontWeight: 800, border: "none",
-                                background: name.trim() ? "var(--text)" : "var(--border2)",
-                                color: name.trim() ? "var(--bg)" : "var(--text3)"
+                                flex: 2,
+                                padding: "13px",
+                                borderRadius: 12,
+                                fontSize: 15,
+                                fontWeight: 800,
+                                border: "none",
+                                background: name.trim()
+                                    ? "linear-gradient(135deg, #0F5E63 0%, #12C7C2 100%)"
+                                    : "rgba(18, 199, 194, 0.12)",
+                                color: name.trim() ? "#FFFFFF" : "rgba(15, 94, 99, 0.45)",
+                                boxShadow: name.trim()
+                                    ? "0 10px 22px rgba(18, 199, 194, 0.22)"
+                                    : "none",
+                                opacity: name.trim() ? 1 : 0.9
                             }}>
-                            追加
+                            手動で追加
                         </button>
                     </div>
                 </div>

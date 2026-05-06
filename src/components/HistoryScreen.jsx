@@ -817,40 +817,6 @@ export default function HistoryScreen({
         </div>
       </details>
 
-      <div
-        style={{
-          background: "var(--card)",
-          borderRadius: 18,
-          padding: "12px 14px",
-          border: "1px solid rgba(18, 199, 194, 0.08)",
-          boxShadow: "0 10px 22px rgba(15, 94, 99, 0.05)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.45 }}>
-          移行用に、過去の自己ベストだけ先に登録できます
-        </div>
-        <button
-          onClick={() => setShowManualBestManager(true)}
-          disabled={!user}
-          style={{
-            padding: "8px 11px",
-            borderRadius: 12,
-            background: "var(--card2)",
-            border: "1px solid var(--border2)",
-            color: "var(--text)",
-            fontSize: 11,
-            fontWeight: 800,
-            opacity: user ? 1 : 0.6,
-          }}
-        >
-          過去ベスト
-        </button>
-      </div>
-
       {editTarget && (
         <HistoryEditModal
           exName={editTarget.exName}
