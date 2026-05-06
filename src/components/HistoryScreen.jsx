@@ -32,6 +32,18 @@ const formatWeight = (value, unit = "kg") => {
 };
 const formatSetDisplay = (weight, reps, unit = "kg") =>
   `${formatWeight(weight, unit)} × ${Number(reps)}rep`;
+const isBodyweightOnlyEntry = (entry) =>
+  Array.isArray(entry?.sets) &&
+  entry.sets.length > 0 &&
+  entry.sets.every((set) => set?.weight === "BW");
+const getEntryBestReps = (entry) =>
+  Math.max(
+    0,
+    ...(entry?.sets || []).map((set) => {
+      const reps = Number(set?.reps);
+      return Number.isFinite(reps) && reps > 0 ? reps : 0;
+    })
+  );
 const formatDurationValue = (seconds) => {
   const totalSec = Math.max(0, Math.floor(Number(seconds) || 0));
   const totalMin = Math.floor(totalSec / 60);
@@ -348,7 +360,7 @@ export default function HistoryScreen({
     { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
     { key: "setCount", label: "セット数", value: `${todaySummary.setCount}` },
     { key: "exerciseCount", label: "種目数", value: `${todaySummary.exerciseCount}` },
-    { key: "trainingDays", label: "継続", value: `${totalTrainingDays}日目` },
+    { key: "trainingDays", label: "累計", value: `${totalTrainingDays}日` },
   ];
 
   const selectedSummary = useMemo(() => {
@@ -440,7 +452,7 @@ export default function HistoryScreen({
     if (selectedSummaryKey === "trainingDays") {
       return {
         title: "累計トレーニング日数",
-        subtitle: `${totalTrainingDays}日目`,
+        subtitle: `${totalTrainingDays}日`,
         emptyText: "まだ有効なトレーニング記録がありません",
         items:
           totalTrainingDays > 0
@@ -448,7 +460,7 @@ export default function HistoryScreen({
                 {
                   key: "total-training-days",
                   title: "累計トレーニング日数",
-                  meta: `${totalTrainingDays}日目`,
+                  meta: `${totalTrainingDays}日`,
                 },
               ]
             : [],
@@ -703,14 +715,16 @@ export default function HistoryScreen({
                     </div>
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.4 }}>
-                    {entry.setCount}セット ・ 最大{" "}
-                    {entry.maxWeight > 0
-                      ? formatWeight(
-                          entry.maxWeight,
-                          (getExUnit ? getExUnit(entry.name) : unit) || "kg"
-                        )
-                      : "-"} ・{" "}
-                    {formatVolume(entry.volume)}
+                    {isBodyweightOnlyEntry(entry)
+                      ? `${entry.setCount}セット ・ 最高 ${getEntryBestReps(entry)}rep ・ 自重`
+                      : `${entry.setCount}セット ・ 最大 ${
+                          entry.maxWeight > 0
+                            ? formatWeight(
+                                entry.maxWeight,
+                                (getExUnit ? getExUnit(entry.name) : unit) || "kg"
+                              )
+                            : "-"
+                        } ・ ${formatVolume(entry.volume)}`}
                   </div>
                 </div>
               ))}
