@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Bar, BarChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
@@ -410,33 +410,15 @@ export default function AnalyticsScreen({
   );
 
   const overviewSummary = overviewScope === "monthly" ? monthlySummary : weeklySummary;
-  const overviewTrend = overviewSummary?.trend || [];
-  const hasOverviewTrendData = overviewTrend.some((item) => Number(item.volume) > 0);
   const prUpdatePreview = (overviewSummary?.prUpdates || []).slice(0, 3);
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
   const selectedPrPreview = selectedPrGroup ? selectedPrGroup.items.slice(0, 3) : [];
   const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
-  const overviewBodyPartPreview = overviewBodyPartStats.slice(0, 3);
-
-  const getTrendTickIndexes = (length, group) => {
-    if (length <= 0) return new Set();
-    if (group === "weekly") {
-      return new Set(Array.from({ length }, (_, index) => index));
-    }
-
-    if (length <= 4) return new Set(Array.from({ length }, (_, index) => index));
-    return new Set([
-      0,
-      Math.floor((length - 1) / 3),
-      Math.floor(((length - 1) * 2) / 3),
-      length - 1,
-    ]);
-  };
-
-  const trendTickIndexes = useMemo(
-    () => getTrendTickIndexes(overviewTrend.length, overviewSummary?.group),
-    [overviewTrend.length, overviewSummary?.group]
-  );
+  const overviewBodyPartChart = overviewBodyPartStats.slice(0, 6).map((item) => ({
+    label: item.bodyPart,
+    sets: item.sets,
+  }));
+  const totalOverviewSets = overviewBodyPartStats.reduce((sum, item) => sum + item.sets, 0);
 
   const renderOverviewMetric = (label, value, accent = null) => (
     <div
@@ -691,106 +673,94 @@ export default function AnalyticsScreen({
           {
             label: "Volume",
             value: `${overviewSummary.totalVolume.toLocaleString("ja-JP")}kg`,
-            accent: overviewSummary.prUpdateCount > 0 ? `PR ${overviewSummary.prUpdateCount}件` : null,
+            accent: overviewSummary.shortLabel,
           },
           {
             label: "トレーニング",
             value: `${overviewSummary.workoutCount}回`,
-            accent: overviewSummary.shortLabel,
+            accent: `${totalOverviewSets}セット`,
           },
           {
             label: "種目数",
             value: `${overviewSummary.exerciseCount}種目`,
-            accent: overviewSummary.topBodyPart !== "なし" ? `最多 ${overviewSummary.topBodyPart}` : null,
+            accent: null,
+          },
+          {
+            label: "PR更新",
+            value: `${overviewSummary.prUpdateCount}件`,
+            accent: overviewSummary.prUpdateCount > 0 ? "この期間の更新数" : null,
           },
         ].map((item) => renderOverviewMetric(item.label, item.value, item.accent))}
-
-        <button
-          type="button"
-          onClick={() => setShowBodyPartBreakdown(true)}
-          style={{
-            background: "var(--card)",
-            borderRadius: 18,
-            padding: "14px 14px 12px",
-            border: "1px solid rgba(18, 199, 194, 0.10)",
-            boxShadow: "var(--shadow-soft)",
-            textAlign: "left",
-          }}
-        >
-          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>部位別セット</div>
-          {overviewBodyPartPreview.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {overviewBodyPartPreview.map((item) => (
-                <div key={item.bodyPart} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, color: "var(--text2)" }}>
-                  <span style={{ fontWeight: 700, color: "var(--text)" }}>{item.bodyPart}</span>
-                  <span>{item.sets}セット</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.5 }}>
-              まだありません
-            </div>
-          )}
-        </button>
       </div>
 
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>Volume推移</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>部位別セット</div>
             <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
               {overviewSummary.rangeLabel}
             </div>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
-            {overviewSummary.totalVolume.toLocaleString("ja-JP")}kg
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowBodyPartBreakdown(true)}
+            style={{
+              padding: "7px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(18, 199, 194, 0.12)",
+              background: "var(--card2)",
+              color: "var(--accent)",
+              fontSize: 11,
+              fontWeight: 800,
+            }}
+          >
+            すべて見る
+          </button>
         </div>
 
-        {hasOverviewTrendData ? (
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={overviewTrend}>
-              <defs>
-                <linearGradient id="pumpVolumeFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#12C7C2" stopOpacity={0.26} />
-                  <stop offset="100%" stopColor="#12C7C2" stopOpacity={0.03} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                axisLine={false}
-                tickLine={false}
-                interval={0}
-                tick={{ fontSize: 11, fill: "var(--text3)" }}
-                tickFormatter={(value, index) => (trendTickIndexes.has(index) ? value : "")}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 11, fill: "var(--text3)" }}
-                width={38}
-                tickFormatter={(value) =>
-                  Number(value) >= 1000
-                    ? `${Math.round(Number(value) / 1000)}k`
-                    : String(Math.round(Number(value)))
-                }
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--card)",
-                  border: "1px solid rgba(18, 199, 194, 0.12)",
-                  borderRadius: 14,
-                  fontSize: 12,
-                  boxShadow: "var(--shadow-card)",
-                }}
-                labelStyle={{ color: "var(--text)" }}
-                formatter={(value) => [`${Math.round(Number(value) || 0).toLocaleString("ja-JP")}kg`, "Volume"]}
-              />
-              <Area type="monotone" dataKey="volume" stroke="#12C7C2" strokeWidth={3} fill="url(#pumpVolumeFill)" />
-            </AreaChart>
-          </ResponsiveContainer>
+        {overviewBodyPartChart.length > 0 ? (
+          <>
+            <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700, marginBottom: 10 }}>
+              合計 {totalOverviewSets}セット
+            </div>
+            <ResponsiveContainer width="100%" height={Math.max(220, overviewBodyPartChart.length * 38)}>
+              <BarChart data={overviewBodyPartChart} layout="vertical" margin={{ top: 6, right: 8, left: 2, bottom: 2 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" horizontal={false} />
+                <XAxis
+                  type="number"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: "var(--text3)" }}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  dataKey="label"
+                  type="category"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: "var(--text2)", fontWeight: 700 }}
+                  width={84}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--card)",
+                    border: "1px solid rgba(18, 199, 194, 0.12)",
+                    borderRadius: 14,
+                    fontSize: 12,
+                    boxShadow: "var(--shadow-card)",
+                  }}
+                  labelStyle={{ color: "var(--text)" }}
+                  formatter={(value) => [`${Math.round(Number(value) || 0)}セット`, "セット数"]}
+                />
+                <Bar
+                  dataKey="sets"
+                  radius={[999, 999, 999, 999]}
+                  fill="#12C7C2"
+                  background={{ fill: "rgba(18, 199, 194, 0.10)", radius: 999 }}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </>
         ) : (
           <div
             style={{
