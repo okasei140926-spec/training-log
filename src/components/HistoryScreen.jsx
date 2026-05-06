@@ -223,10 +223,9 @@ export default function HistoryScreen({
   const visibleTodayWorkouts = showAllTodayWorkouts ? todayEntries : heroWorkoutCards;
 
   const summaryCards = [
-    { key: "exerciseCount", icon: "🏋️", label: "種目数", value: `${todaySummary.exerciseCount}` },
-    { key: "setCount", icon: "✅", label: "セット数", value: `${todaySummary.setCount}` },
-    { key: "totalVolume", icon: "📈", label: "Volume", value: formatVolume(todaySummary.totalVolume) },
-    { key: "prCount", icon: "🏆", label: "PR更新", value: `${todaySummary.prCount}件` },
+    { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
+    { key: "setCount", label: "セット数", value: `${todaySummary.setCount}` },
+    { key: "exerciseCount", label: "種目数", value: `${todaySummary.exerciseCount}` },
   ];
 
   const selectedSummary = useMemo(() => {
@@ -288,9 +287,9 @@ export default function HistoryScreen({
     }
 
     return {
-      title: "今日のVolume",
+      title: "今日のボリューム",
       subtitle: formatVolume(todaySummary.totalVolume),
-      emptyText: "今日はまだVolumeがありません",
+      emptyText: "今日はまだボリュームがありません",
       items: todayEntries.map((entry) => ({
         key: `${entry.id}-volume`,
         title: entry.name,
@@ -343,10 +342,10 @@ export default function HistoryScreen({
       style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 14 }}
     >
       <div>
-        <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>
+        <div style={{ fontSize: 19, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
           今日のサマリー
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
           {summaryCards.map((item) => (
             <button
               type="button"
@@ -354,18 +353,29 @@ export default function HistoryScreen({
               onClick={() => setSelectedSummaryKey(item.key)}
               style={{
                 background: "var(--card)",
-                borderRadius: 20,
-                padding: "12px 12px 11px",
-                border: "1px solid rgba(18, 199, 194, 0.12)",
-                boxShadow: "0 12px 28px rgba(15, 94, 99, 0.06)",
+                borderRadius: 18,
+                padding: "12px 11px 10px",
+                minHeight: 92,
+                border: "1px solid rgba(18, 199, 194, 0.10)",
+                boxShadow: "0 8px 18px rgba(15, 94, 99, 0.05)",
                 textAlign: "left",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
               }}
             >
-              <div style={{ fontSize: 20, marginBottom: 6 }}>{item.icon}</div>
-              <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 2 }}>
+              <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.2 }}>
                 {item.label}
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text)", lineHeight: 1.15 }}>
+              <div
+                style={{
+                  fontSize: item.key === "totalVolume" ? 16 : 21,
+                  fontWeight: 800,
+                  color: "var(--text)",
+                  lineHeight: 1.05,
+                  letterSpacing: item.key === "totalVolume" ? -0.2 : 0,
+                }}
+              >
                 {item.value}
               </div>
             </button>
