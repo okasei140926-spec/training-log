@@ -156,22 +156,43 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
         </div>
 
         {summaryOptions.length > 0 && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              marginBottom: 14,
+              padding: 4,
+              borderRadius: 999,
+              background: "rgba(18, 199, 194, 0.05)",
+              border: "1px solid rgba(18, 199, 194, 0.10)",
+              width: "fit-content",
+            }}
+          >
             {summaryOptions.map((option) => (
               <button
                 key={option.key}
                 type="button"
                 onClick={() => setSelectedSummaryKey(option.key)}
                 style={{
-                  padding: "8px 12px",
+                  minWidth: 76,
+                  padding: "9px 14px",
                   borderRadius: 999,
-                  border: "1px solid var(--border2)",
+                  border:
+                    selectedSummaryKey === option.key
+                      ? "1px solid rgba(15, 94, 99, 0.18)"
+                      : "1px solid rgba(18, 199, 194, 0.10)",
                   background:
-                    selectedSummaryKey === option.key ? "var(--text)" : "var(--card2)",
+                    selectedSummaryKey === option.key
+                      ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                      : "var(--card)",
                   color:
-                    selectedSummaryKey === option.key ? "var(--bg)" : "var(--text2)",
+                    selectedSummaryKey === option.key ? "#fff" : "var(--text2)",
                   fontSize: 12,
-                  fontWeight: 700,
+                  fontWeight: 800,
+                  boxShadow:
+                    selectedSummaryKey === option.key
+                      ? "0 10px 22px rgba(15, 94, 99, 0.14)"
+                      : "none",
                 }}
               >
                 {option.label}
