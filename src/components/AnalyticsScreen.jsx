@@ -258,10 +258,9 @@ export default function AnalyticsScreen({
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
   const [activeSummaryKey, setActiveSummaryKey] = useState(null);
-  const [overviewScope, setOverviewScope] = useState("weekly");
+  const [overviewScope, setOverviewScope] = useState("this_week");
   const [selectedOverviewMetric, setSelectedOverviewMetric] = useState(null);
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
-  const [showBodyPartBreakdown, setShowBodyPartBreakdown] = useState(false);
   const [showAllBodyPartPr, setShowAllBodyPartPr] = useState(false);
 
   const resolutionContext = useMemo(
@@ -395,11 +394,27 @@ export default function AnalyticsScreen({
     }),
     [thisMonthSummary, lastMonthSummary]
   );
+  const displayWeeklySummary = overviewScope === "last_week"
+    ? {
+        ...lastWeekSummary,
+        relatedSummaries: {
+          this_week: thisWeekSummary,
+        },
+      }
+    : weeklySummary;
+  const displayMonthlySummary = overviewScope === "last_month"
+    ? {
+        ...lastMonthSummary,
+        relatedSummaries: {
+          this_month: thisMonthSummary,
+        },
+      }
+    : monthlySummary;
   const activeSummary =
     activeSummaryKey === "weekly"
-      ? weeklySummary
+      ? displayWeeklySummary
       : activeSummaryKey === "monthly"
-        ? monthlySummary
+        ? displayMonthlySummary
         : null;
   useEffect(() => {
     const labels = prData.groupedByBodyPart.map((group) => group.bodyPart);
@@ -424,7 +439,14 @@ export default function AnalyticsScreen({
     [selectedRecords, period]
   );
 
-  const overviewSummary = overviewScope === "monthly" ? monthlySummary : weeklySummary;
+  const overviewSummary =
+    overviewScope === "last_week"
+      ? lastWeekSummary
+      : overviewScope === "this_month"
+        ? thisMonthSummary
+        : overviewScope === "last_month"
+          ? lastMonthSummary
+          : thisWeekSummary;
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
   const selectedPrPreview = selectedPrGroup ? selectedPrGroup.items.slice(0, 3) : [];
   const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
@@ -773,15 +795,17 @@ export default function AnalyticsScreen({
         }}
       >
         {[
-          { key: "weekly", label: "今週" },
-          { key: "monthly", label: "今月" },
+          { key: "this_week", label: "今週" },
+          { key: "last_week", label: "先週" },
+          { key: "this_month", label: "今月" },
+          { key: "last_month", label: "先月" },
         ].map((option) => (
           <button
             key={option.key}
             type="button"
             onClick={() => setOverviewScope(option.key)}
             style={{
-              minWidth: 92,
+              minWidth: 82,
               padding: "9px 16px",
               borderRadius: 999,
               border: "1px solid rgba(18, 199, 194, 0.10)",
@@ -831,28 +855,13 @@ export default function AnalyticsScreen({
       </div>
 
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <div style={{ marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>部位別セット</div>
             <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
               {overviewSummary.rangeLabel}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowBodyPartBreakdown(true)}
-            style={{
-              padding: "7px 12px",
-              borderRadius: 999,
-              border: "1px solid rgba(18, 199, 194, 0.12)",
-              background: "var(--card2)",
-              color: "var(--accent)",
-              fontSize: 11,
-              fontWeight: 800,
-            }}
-          >
-            すべて見る
-          </button>
         </div>
 
         {overviewBodyPartChart.length > 0 ? (
@@ -1329,97 +1338,6 @@ export default function AnalyticsScreen({
         </div>
       )}
 
-      {showBodyPartBreakdown && (
-        <div
-          onClick={() => setShowBodyPartBreakdown(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.35)",
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            zIndex: 999,
-            padding: "16px",
-          }}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: 430,
-              background: "var(--card)",
-              borderRadius: 20,
-              padding: "18px 16px 20px",
-              border: "1px solid var(--border2)",
-              maxHeight: "58vh",
-              overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                height: 5,
-                borderRadius: 999,
-                background: "var(--border2)",
-              margin: "0 auto 14px",
-              }}
-            />
-
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-                {overviewSummary.shortLabel}の部位別セット数
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-                {overviewSummary.rangeLabel}
-              </div>
-            </div>
-
-            {overviewBodyPartStats.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {overviewBodyPartStats.map((item) => (
-                  <div
-                    key={item.bodyPart}
-                    style={{
-                      background: "linear-gradient(180deg, var(--card2), var(--card))",
-                      borderRadius: 16,
-                      padding: "11px 12px",
-                      border: "1px solid rgba(18, 199, 194, 0.1)",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
-                        {item.bodyPart}
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>
-                        {item.sets}セット
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.45 }}>
-                      {Math.round(item.volume).toLocaleString("ja-JP")}kg
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div
-                style={{
-                  background: "linear-gradient(180deg, var(--card2), var(--card))",
-                  borderRadius: 18,
-                  padding: "18px 14px",
-                  border: "1px dashed rgba(18, 199, 194, 0.24)",
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: "var(--text2)",
-                  lineHeight: 1.5,
-                }}
-              >
-                まだありません
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
