@@ -15,13 +15,13 @@ export default function WorkoutElapsedTimer({ elapsedSec = 0 }) {
         gap: 6,
         padding: "6px 10px",
         borderRadius: 999,
-        background: "rgba(18, 199, 194, 0.10)",
-        border: "1px solid rgba(18, 199, 194, 0.18)",
-        color: "var(--accent)",
+        background: "linear-gradient(180deg, rgba(18, 199, 194, 0.085), rgba(18, 199, 194, 0.04))",
+        border: "1px solid rgba(18, 199, 194, 0.16)",
+        color: "#0F5E63",
         fontSize: 12,
         fontWeight: 700,
         lineHeight: 1,
-        boxShadow: "0 8px 18px rgba(15, 94, 99, 0.08)",
+        boxShadow: "0 8px 18px rgba(15, 94, 99, 0.06)",
         whiteSpace: "nowrap",
       }}
     >

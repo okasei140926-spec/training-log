@@ -68,6 +68,10 @@ export default function LogScreen({
 }) {
 
     const hasExercises = exercises.length > 0;
+    const softBorderColor = "rgba(18, 199, 194, 0.16)";
+    const softTealBg = "linear-gradient(180deg, rgba(18, 199, 194, 0.05), rgba(18, 199, 194, 0.02))";
+    const subActionBg = "linear-gradient(180deg, rgba(18, 199, 194, 0.06), rgba(18, 199, 194, 0.02))";
+    const subActionText = "#0F5E63";
 
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
@@ -240,9 +244,9 @@ export default function LogScreen({
                             marginTop: 10,
                             padding: "7px 10px",
                             borderRadius: 10,
-                            border: "1px solid var(--border2)",
-                            background: "var(--card2)",
-                            color: "var(--text)",
+                            border: `1px solid ${softBorderColor}`,
+                            background: subActionBg,
+                            color: subActionText,
                             fontSize: 12,
                             fontWeight: 700,
                         }}
@@ -366,11 +370,12 @@ export default function LogScreen({
                                                             setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
                                                         }}
                                                         style={{
-                                                            background: "none",
-                                                            border: "none",
+                                                            background: subActionBg,
+                                                            border: `1px solid ${softBorderColor}`,
                                                             padding: "6px 10px",
-                                                            color: "var(--text3)",
-                                                            fontSize: 18,
+                                                            color: subActionText,
+                                                            fontSize: 16,
+                                                            borderRadius: 10,
                                                         }}
                                                     >
                                                         ≡
@@ -395,8 +400,8 @@ export default function LogScreen({
                                                         style={{
                                                             padding: "7px 10px",
                                                             borderRadius: 10,
-                                                            border: "1px solid var(--border2)",
-                                                            background: "var(--card2)",
+                                                            border: `1px solid ${softBorderColor}`,
+                                                            background: subActionBg,
                                                             color: i === 0 ? "var(--text4)" : "var(--text2)",
                                                             fontSize: 12,
                                                             fontWeight: 700,
@@ -411,8 +416,8 @@ export default function LogScreen({
                                                         style={{
                                                             padding: "7px 10px",
                                                             borderRadius: 10,
-                                                            border: "1px solid var(--border2)",
-                                                            background: "var(--card2)",
+                                                            border: `1px solid ${softBorderColor}`,
+                                                            background: subActionBg,
                                                             color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)",
                                                             fontSize: 12,
                                                             fontWeight: 700,
@@ -426,8 +431,8 @@ export default function LogScreen({
                                                         style={{
                                                             padding: "7px 10px",
                                                             borderRadius: 10,
-                                                            border: "1px solid var(--border2)",
-                                                            background: "transparent",
+                                                            border: `1px solid ${softBorderColor}`,
+                                                            background: subActionBg,
                                                             color: "var(--text3)",
                                                             fontSize: 12,
                                                             fontWeight: 700,
@@ -446,7 +451,7 @@ export default function LogScreen({
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
                                 {() => (
-                                    <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : "var(--border2)"}`, boxShadow: isPR ? "0 14px 32px rgba(34,197,94,0.12)" : "var(--shadow-card)" }}>
+                                    <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : softBorderColor}`, boxShadow: isPR ? "0 14px 32px rgba(18,199,194,0.10)" : "var(--shadow-card)" }}>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                             <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
@@ -474,11 +479,12 @@ export default function LogScreen({
                                                         setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
                                                     }}
                                                     style={{
-                                                        background: "none",
-                                                        border: "none",
+                                                        background: subActionBg,
+                                                        border: `1px solid ${softBorderColor}`,
                                                         padding: "6px 10px",
-                                                        color: "var(--text3)",
-                                                        fontSize: 18,
+                                                        color: subActionText,
+                                                        fontSize: 16,
+                                                        borderRadius: 10,
                                                     }}
                                                 >
                                                     ≡
@@ -487,7 +493,7 @@ export default function LogScreen({
                                                 {onToggleExUnit && (
                                                     <button
                                                         onClick={() => onToggleExUnit(ex.name)}
-                                                        style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: "1px solid var(--border2)", background: exUnit !== unit ? "var(--text)" : "var(--card2)", color: exUnit !== unit ? "var(--bg)" : "var(--text2)" }}
+                                                        style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: `1px solid ${softBorderColor}`, background: exUnit !== unit ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : subActionBg, color: exUnit !== unit ? "#ffffff" : subActionText, boxShadow: exUnit !== unit ? "0 8px 18px rgba(15, 94, 99, 0.10)" : "none" }}
                                                     >
                                                         {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
                                                     </button>
@@ -503,14 +509,14 @@ export default function LogScreen({
                                                         borderRadius: 10,
                                                         fontSize: 11,
                                                         fontWeight: 700,
-                                                        border: "1px solid var(--border2)",
-                                                        background: "var(--card2)",
-                                                        color: "var(--text2)",
+                                                        border: `1px solid ${softBorderColor}`,
+                                                        background: subActionBg,
+                                                        color: subActionText,
                                                     }}
                                                 >
                                                     履歴
                                                 </button>
-                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "none", color: "var(--text4)", fontSize: 18, padding: "4px 10px" }}>×</button>
+                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: subActionBg, border: `1px solid ${softBorderColor}`, color: subActionText, fontSize: 16, padding: "4px 10px", borderRadius: 10 }}>×</button>
                                             </div>
                                         </div>
 
@@ -523,8 +529,8 @@ export default function LogScreen({
                                                     style={{
                                                         padding: "7px 10px",
                                                         borderRadius: 10,
-                                                        border: "1px solid var(--border2)",
-                                                        background: "var(--card2)",
+                                                        border: `1px solid ${softBorderColor}`,
+                                                        background: subActionBg,
                                                         color: i === 0 ? "var(--text4)" : "var(--text2)",
                                                         fontSize: 12,
                                                         fontWeight: 700,
@@ -539,8 +545,8 @@ export default function LogScreen({
                                                     style={{
                                                         padding: "7px 10px",
                                                         borderRadius: 10,
-                                                        border: "1px solid var(--border2)",
-                                                        background: "var(--card2)",
+                                                        border: `1px solid ${softBorderColor}`,
+                                                        background: subActionBg,
                                                         color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)",
                                                         fontSize: 12,
                                                         fontWeight: 700,
@@ -554,8 +560,8 @@ export default function LogScreen({
                                                     style={{
                                                         padding: "7px 10px",
                                                         borderRadius: 10,
-                                                        border: "1px solid var(--border2)",
-                                                        background: "transparent",
+                                                        border: `1px solid ${softBorderColor}`,
+                                                        background: subActionBg,
                                                         color: "var(--text3)",
                                                         fontSize: 12,
                                                         fontWeight: 700,
@@ -568,7 +574,7 @@ export default function LogScreen({
 
                                         {/* 前回の記録 + PR */}
                                         {(prev || pr) && (
-                                            <div style={{ marginBottom: 10, padding: "10px 12px", background: "linear-gradient(180deg, var(--card2), var(--card))", borderRadius: 14, border: "1px solid rgba(186, 230, 253, 0.6)" }}>
+                                            <div style={{ marginBottom: 10, padding: "10px 12px", background: softTealBg, borderRadius: 14, border: `1px solid ${softBorderColor}` }}>
                                                 {prev && (
                                                     <>
                                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
@@ -633,12 +639,12 @@ export default function LogScreen({
                                                     marginTop: 10,
                                                     padding: "12px",
                                                     borderRadius: 14,
-                                                    background: "linear-gradient(135deg, var(--card2), var(--card))",
-                                                    border: "1px solid var(--border2)",
-                                                    color: "var(--text)",
+                                                    background: softTealBg,
+                                                    border: `1px solid ${softBorderColor}`,
+                                                    color: subActionText,
                                                     fontSize: 13,
                                                     fontWeight: 700,
-                                                    boxShadow: "var(--shadow-card)",
+                                                    boxShadow: "0 10px 20px rgba(15, 94, 99, 0.05)",
                                                 }}
                                             >
                                                 ＋ セット追加
@@ -654,7 +660,7 @@ export default function LogScreen({
 
             {/* フローティング＋ボタン */}
             <button onClick={() => setShowAdd(true)}
-                style={{ position: "fixed", bottom: 154, left: 20, width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, var(--accent), var(--accent2))", color: "#fff", fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 14px 28px rgba(34,197,94,0.22)", border: "1px solid rgba(255,255,255,0.55)", zIndex: 101 }}>
+                style={{ position: "fixed", bottom: 154, left: 20, width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, #0F5E63, #12C7C2)", color: "#fff", fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 14px 26px rgba(15, 94, 99, 0.16)", border: "1px solid rgba(255,255,255,0.62)", zIndex: 101 }}>
                 ＋
             </button>
 
