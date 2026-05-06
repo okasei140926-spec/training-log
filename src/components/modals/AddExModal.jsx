@@ -275,7 +275,14 @@ export default function AddExModal({
                 {/* タブ（固定） */}
                 {isFree && (
                     <div style={{ flexShrink: 0, marginBottom: 10 }}>
-                        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, msOverflowStyle: "none", scrollbarWidth: "none" }}>
+                        <div
+                            style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 5,
+                                alignItems: "center",
+                            }}
+                        >
                             {tabLabels.map(label => (
                                 <button
                                     key={label}
@@ -284,11 +291,10 @@ export default function AddExModal({
                                         onLongPress: () => hideBodyPart(label),
                                     })}
                                     style={{
-                                        padding: "5px 12px",
+                                        padding: "5px 11px",
                                         borderRadius: 20,
                                         fontSize: 11,
                                         fontWeight: 700,
-                                        flexShrink: 0,
                                         border: activeTab === label
                                             ? "1px solid rgba(15, 94, 99, 0.18)"
                                             : "1px solid rgba(18, 199, 194, 0.10)",
@@ -306,11 +312,10 @@ export default function AddExModal({
                             <button
                                 onClick={() => setShowCustomBodyPartModal(true)}
                                 style={{
-                                    padding: "5px 12px",
+                                    padding: "5px 11px",
                                     borderRadius: 20,
                                     fontSize: 11,
                                     fontWeight: 700,
-                                    flexShrink: 0,
                                     border: "1px dashed var(--border2)",
                                     background: "transparent",
                                     color: "var(--text2)",
