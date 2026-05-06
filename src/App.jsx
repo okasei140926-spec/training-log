@@ -429,6 +429,7 @@ export default function GymApp() {
 
     // eslint-disable-next-line no-unused-vars
     const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
+    const appThemeClassName = isDark ? "app-shell" : "theme-light app-shell";
 
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
@@ -471,6 +472,18 @@ export default function GymApp() {
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
     }, [user?.id]);
+
+    useEffect(() => {
+        const root = document.documentElement;
+        const body = document.body;
+        root.classList.toggle("theme-light", !isDark);
+        body.classList.toggle("theme-light", !isDark);
+
+        return () => {
+            root.classList.remove("theme-light");
+            body.classList.remove("theme-light");
+        };
+    }, [isDark]);
 
     useEffect(() => {
         latestHistoryRef.current = history;
@@ -1932,7 +1945,7 @@ export default function GymApp() {
     // ─── 設定画面 ──────────────────────────────────────
     if (screen === "setup_routine") {
         return (
-            <div className={isDark ? "" : "theme-light"} style={S.root}><style>{css}</style>
+            <div className={appThemeClassName} style={S.root}><style>{css}</style>
                 <div style={S.header}>
                     <div><div style={S.appLabel}>PUMP</div><div style={S.headerTitle}>種目設定</div></div>
                     <button onClick={() => setScreen("history")} style={S.pillBtn}>完了</button>
@@ -2041,7 +2054,7 @@ export default function GymApp() {
 
     return (
         <>
-            <div className={isDark ? "" : "theme-light"} style={S.root}>
+            <div className={appThemeClassName} style={S.root}>
                 <style>{css}</style>
 
                 <AppHeader

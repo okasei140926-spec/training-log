@@ -1,9 +1,9 @@
 export const S = {
   root: {
-    minHeight: "100dvh",
     background: "var(--bg)",
     color: "var(--text)",
     fontFamily: "'Helvetica Neue', sans-serif",
+    width: "100%",
     maxWidth: 430,
     margin: "0 auto",
     paddingBottom: "calc(110px + var(--safe-bottom))",
@@ -126,9 +126,15 @@ export const css = `
     --info-border: #C4F3F2;
     --focus-ring: 0 0 0 4px rgba(51, 225, 219, 0.2);
   }
+  .app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+  }
   * { box-sizing: border-box; }
   input { outline: none; }
   button { cursor: pointer; border: none; }
+  html, body, #root { background: var(--bg); }
   body { background: var(--bg); }
   input:focus, textarea:focus, select:focus {
     border-color: var(--accent2) !important;
