@@ -93,6 +93,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         selfShared: false,
         selfSession: null,
     });
+    const [expandedFeedItems, setExpandedFeedItems] = useState({});
     const activityFeedOffsetRef = useRef(0);
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = formatDateKey();
@@ -343,6 +344,42 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         }
     }, [fetchTodayActive, user]);
 
+    const formatSessionSetDisplay = useCallback((set) => {
+        if (!set) return "";
+        const reps = Number(set.reps || 0);
+        const repLabel = `${reps}rep`;
+        if (String(set.weight || "").toUpperCase() === "BW") {
+            return `自重 × ${repLabel}`;
+        }
+        const weight = Math.round(Number(set.weight || 0) * 10) / 10;
+        return `${weight}kg × ${repLabel}`;
+    }, []);
+
+    const buildDetailedSessionItems = useCallback((workoutRow, workoutDate) => {
+        if (!workoutRow?.data || !workoutDate) return [];
+
+        return Object.entries(workoutRow.data)
+            .flatMap(([exerciseName, records]) => (records || []).map((record, index) => ({
+                exerciseName,
+                record,
+                index,
+            })))
+            .filter(({ record }) => String(record?.date || "").slice(0, 10) === workoutDate)
+            .map(({ exerciseName, record, index }) => {
+                const sets = sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
+                if (!sets.length) return null;
+                return {
+                    exercise_name: exerciseName,
+                    body_part: String(record?.bodyPart || record?.body_part || "").trim(),
+                    set_count: sets.length,
+                    order: Number(record?.timestamp || 0) || index,
+                    sets,
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.order - b.order);
+    }, []);
+
     const fetchActivityFeed = useCallback(async ({ reset = false } = {}) => {
         if (!user?.id) {
             setActivityFeed([]);
@@ -381,7 +418,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             )];
             const sessionIds = [...new Set(visibleSessions.map((session) => session.id).filter(Boolean))];
 
-            const [profilesRes, photosRes, likesRes, commentsRes] = await Promise.all([
+            const [profilesRes, photosRes, likesRes, commentsRes, workoutsRes] = await Promise.all([
                 profileIds.length
                     ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
                     : Promise.resolve({ data: [], error: null }),
@@ -394,17 +431,29 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 sessionIds.length
                     ? supabase.from("workout_session_comments").select("id, session_id").in("session_id", sessionIds)
                     : Promise.resolve({ data: [], error: null }),
+                feedUserIds.length
+                    ? supabase
+                        .from("workouts")
+                        .select("user_id, date, data")
+                        .in("user_id", feedUserIds)
+                        .gte("date", recentSevenStart)
+                        .lte("date", today)
+                    : Promise.resolve({ data: [], error: null }),
             ]);
 
             if (profilesRes.error) throw profilesRes.error;
             if (photosRes.error) throw photosRes.error;
             if (likesRes.error) throw likesRes.error;
             if (commentsRes.error) throw commentsRes.error;
+            if (workoutsRes.error) throw workoutsRes.error;
 
             const profileMap = new Map((profilesRes.data || []).map((profile) => [profile.id, profile]));
             const photoRows = photosRes.data || [];
             const likeRows = likesRes.data || [];
             const commentRows = commentsRes.data || [];
+            const workoutRowMap = new Map(
+                (workoutsRes.data || []).map((row) => [`${row.user_id}::${row.date}`, row])
+            );
             const signedEntries = await Promise.all(photoRows.map(async (row) => {
                 try {
                     const { data: signedData, error: signedError } = await supabase
@@ -440,12 +489,17 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 const profile = profileMap.get(session.user_id) || {};
                 const summary = session.summary_json || {};
                 const summaryItems = Array.isArray(summary.items) ? summary.items : [];
+                const detailedItems = buildDetailedSessionItems(
+                    workoutRowMap.get(`${session.user_id}::${session.workout_date}`),
+                    session.workout_date
+                );
 
                 return {
                     ...session,
                     profile,
                     summary,
                     summaryItems,
+                    detailedItems,
                     photoUrl: session.photo_visibility === "friends" ? photoUrlMap.get(session.photo_id) || null : null,
                     likeCount: likeCountMap.get(session.id) || 0,
                     likedByMe: likedSessionIds.has(session.id),
@@ -471,7 +525,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         } finally {
             setActivityFeedLoading(false);
         }
-    }, [friendIds, recentSevenStart, today, user?.id]);
+    }, [buildDetailedSessionItems, friendIds, recentSevenStart, today, user?.id]);
 
     const fetchActivityOverview = useCallback(async () => {
         if (!user?.id) {
@@ -844,13 +898,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 if (rankIndex === 0) {
                     return {
                         headline: "あなたは 1位",
-                        metric: `${myEntry.value}日`,
+                        metric: `7日中${myEntry.value}日`,
                         note: myEntry.value > 0 ? "この調子で継続中" : "まずは1回記録してみましょう",
                     };
                 }
                 return {
                     headline: `あなたは ${rankIndex + 1}位`,
-                    metric: `${myEntry.value}日`,
+                    metric: `7日中${myEntry.value}日`,
                     note: `${rankIndex}位まであと${Math.max(0, aboveEntry.value - myEntry.value)}日`,
                 };
             },
@@ -861,7 +915,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             unit: "回",
             description: "今月のワークアウト回数ランキング",
             data: monthlyWorkoutRanking,
-            detailLabel: () => `${currentMonthPrefix}のワークアウト回数`,
+            detailLabel: () => "今月のワークアウト回数",
             metricLabel: (entry) => `${entry.value}回`,
             mySummary: (rankIndex, myEntry, aboveEntry) => {
                 if (!myEntry) return null;
@@ -929,10 +983,10 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     const activityHeadline = `直近7日で ${activityOverview.sharedCount}件 の投稿`;
     const activitySubline = !hasTodayRecord
-        ? "あなたはまだ今日の記録がありません"
+        ? "あなたは今日まだ投稿していません"
         : activityOverview.selfShared
             ? "あなたは今日の記録をシェア済みです"
-            : "あなたはまだ今日の記録をシェアしていません";
+            : "あなたは今日まだ投稿していません";
 
     const feedEmptyState = !hasTodayRecord
         ? {
@@ -1106,6 +1160,10 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 const bodyParts = getSessionBodyParts(item);
                                 const setCount = getSessionSetCount(item);
                                 const prCount = getSessionPrCount(item);
+                                const isExpanded = Boolean(expandedFeedItems[item.id]);
+                                const detailedExercises = item.detailedItems?.length ? item.detailedItems : (item.summaryItems || []);
+                                const hasExtraExercises = detailedExercises.length > 3;
+                                const visibleExercises = isExpanded ? detailedExercises : detailedExercises.slice(0, 3);
 
                                 return (
                                     <div
@@ -1156,24 +1214,20 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                             </div>
                                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                                                 {item.user_id === user.id && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenSessionShare(item)}
-                                                        disabled={Boolean(sharePreparingSessionId)}
+                                                    <div
                                                         style={{
                                                             flexShrink: 0,
-                                                            padding: "9px 12px",
+                                                            padding: "8px 11px",
                                                             borderRadius: 14,
                                                             border: "1px solid var(--border2)",
-                                                            background: "var(--card2)",
+                                                            background: "rgba(18, 199, 194, 0.07)",
                                                             color: "var(--text2)",
                                                             fontSize: 12,
                                                             fontWeight: 800,
-                                                            opacity: sharePreparingSessionId && sharePreparingSessionId !== item.id ? 0.7 : 1,
                                                         }}
                                                     >
-                                                        {sharePreparingSessionId === item.id ? "準備中..." : "シェア"}
-                                                    </button>
+                                                        投稿済み
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -1209,7 +1263,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                         </div>
 
                                         <div style={{ display: "grid", gap: 8 }}>
-                                            {(item.summaryItems || []).slice(0, 3).map((summaryItem) => (
+                                            {visibleExercises.map((summaryItem) => (
                                                 <div
                                                     key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`}
                                                     style={{
@@ -1223,16 +1277,36 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                         {summaryItem.exercise_name}
                                                     </div>
                                                     <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
-                                                    {Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × {summaryItem.set_count}セット
+                                                        {Array.isArray(summaryItem.sets) && summaryItem.sets.length
+                                                            ? summaryItem.sets.map(formatSessionSetDisplay).join(" / ")
+                                                            : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}セット`}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                        {item.summaryItems.length > 3 && (
-                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                                +{item.summaryItems.length - 3}種目
-                                            </div>
-                                        )}
-                                    </div>
+                                            ))}
+                                            {hasExtraExercises && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setExpandedFeedItems((prev) => ({
+                                                            ...prev,
+                                                            [item.id]: !prev[item.id],
+                                                        }));
+                                                    }}
+                                                    style={{
+                                                        justifySelf: "start",
+                                                        padding: 0,
+                                                        border: "none",
+                                                        background: "transparent",
+                                                        fontSize: 11,
+                                                        color: "var(--accent)",
+                                                        fontWeight: 800,
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
+                                                    {isExpanded ? "表示を減らす" : `残り${detailedExercises.length - 3}種目を表示`}
+                                                </button>
+                                            )}
+                                        </div>
 
                                         <div
                                             style={{
@@ -1452,7 +1526,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                             }}
                         >
                             <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
-                                Your Rank
+                                あなたの順位
                             </div>
                             <div style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", marginBottom: 6 }}>
                                 {myRankingSummary.headline}
