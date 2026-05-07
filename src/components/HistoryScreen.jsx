@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
@@ -7,6 +7,10 @@ import ManualBestManagerModal from "./modals/ManualBestManagerModal";
 import CustomBodyPartModal from "./modals/CustomBodyPartModal";
 import HistoryExerciseItem from "./history/HistoryExerciseItem";
 import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
+import {
+  buildWorkoutDaySummary,
+  buildWorkoutDaySummaryPrKey,
+} from "../utils/workoutDaySummary";
 import {
   PR_UPDATE_TOLERANCE_KG,
   dispW,
@@ -23,6 +27,7 @@ import {
   getWorkoutTimerPersistence,
   readWorkoutTimerState,
 } from "../utils/workoutTimer";
+import { buildWorkoutSessionPayloadFromHistory } from "../utils/workoutSessions";
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
 const formatWeight = (value, unit = "kg") => {
@@ -82,6 +87,7 @@ export default function HistoryScreen({
   onUpdateManualBest,
   onDeleteManualBest,
   onAddCustomBodyPart,
+  onOpenWorkoutDaySummary,
 }) {
   const [editTarget, setEditTarget] = useState(null);
   const [showManualBestModal, setShowManualBestModal] = useState(false);
@@ -483,10 +489,17 @@ export default function HistoryScreen({
     unit,
   ]);
 
-  const dayDetails = useMemo(
+  const selectedDateEntries = useMemo(
     () =>
       resolvedEntries
         .filter((entry) => entry.date === selectedDate)
+        .sort((a, b) => a.order - b.order),
+    [resolvedEntries, selectedDate]
+  );
+
+  const dayDetails = useMemo(
+    () =>
+      selectedDateEntries
         .map((entry) => ({
           name: entry.name,
           count: entry.setCount,
@@ -494,19 +507,16 @@ export default function HistoryScreen({
           order: entry.order,
         }))
         .sort((a, b) => a.order - b.order),
-    [resolvedEntries, selectedDate]
+    [selectedDateEntries]
   );
 
   const workedLabels = useMemo(
     () => [
       ...new Set(
-        resolvedEntries
-          .filter((entry) => entry.date === selectedDate)
-          .map((entry) => entry.bodyPart)
-          .filter(Boolean)
+        selectedDateEntries.map((entry) => entry.bodyPart).filter(Boolean)
       ),
     ],
-    [resolvedEntries, selectedDate]
+    [selectedDateEntries]
   );
 
   const daySummary = useMemo(
@@ -519,6 +529,148 @@ export default function HistoryScreen({
   );
 
   const totalSets = Object.values(daySummary).reduce((a, b) => a + b, 0);
+
+  const handleOpenDaySummary = useCallback(
+    async (targetDate, options = {}) => {
+      const normalizedDate = String(targetDate || "").trim();
+      if (!normalizedDate || typeof onOpenWorkoutDaySummary !== "function") return;
+
+      const entries = resolvedEntries
+        .filter((entry) => entry.date === normalizedDate)
+        .sort((a, b) => a.order - b.order);
+
+      if (!entries.length) return;
+
+      const prEntries = entries
+        .map((entry) => {
+          const summaryKey = buildWorkoutDaySummaryPrKey(entry.bodyPart, entry.name);
+          const previousSets = [];
+
+          Object.entries(history || {}).forEach(([exerciseName, records]) => {
+            if (normalizeExerciseName(exerciseName) !== normalizeExerciseName(entry.name)) return;
+
+            (records || []).forEach((record) => {
+              const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: false });
+              if (!sanitized?.date || sanitized.date >= normalizedDate) return;
+
+              const bodyPart = resolveRecordedBodyPartLabel(sanitized, exerciseName, {
+                muscleEx,
+                hiddenBodyParts,
+                exerciseBodyPartOverrides,
+              });
+              if (!bodyPart || buildWorkoutDaySummaryPrKey(bodyPart, exerciseName) !== summaryKey) return;
+
+              previousSets.push(
+                ...sanitizeWorkoutSets(sanitized.sets, { allowBodyweight: false })
+              );
+            });
+          });
+
+          (manualBests || []).forEach((best) => {
+            if (
+              buildWorkoutDaySummaryPrKey(best?.body_part, best?.exercise_name)
+              !== summaryKey
+            ) {
+              return;
+            }
+
+            previousSets.push(
+              ...sanitizeWorkoutSets(
+                [{ weight: best.weight, reps: best.reps }],
+                { allowBodyweight: false }
+              )
+            );
+          });
+
+          const bestSet = getBestRmSet(entry.sets, { allowBodyweight: false });
+          if (
+            !bestSet
+            || !hasMeaningfulPRIncrease(entry.sets, previousSets, null, PR_UPDATE_TOLERANCE_KG)
+          ) {
+            return null;
+          }
+
+          return entry;
+        })
+        .filter(Boolean);
+
+      let durationSec = 0;
+      let isShared = false;
+      if (normalizedDate === todayKey && todayWorkoutDurationSec > 0) {
+        durationSec = todayWorkoutDurationSec;
+      }
+
+      if (user?.id) {
+        try {
+          const { data } = await supabase
+            .from("workouts")
+            .select("duration_sec")
+            .eq("user_id", user.id)
+            .eq("date", normalizedDate)
+            .maybeSingle();
+          durationSec = Math.max(
+            durationSec,
+            Math.floor(Number(data?.duration_sec) || 0)
+          );
+        } catch (error) {
+          console.error("workout day summary duration fetch failed", error);
+        }
+
+        try {
+          const { data } = await supabase
+            .from("workout_sessions")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("workout_date", normalizedDate)
+            .maybeSingle();
+          isShared = Boolean(data?.id);
+        } catch (error) {
+          console.error("workout day summary shared state fetch failed", error);
+        }
+      }
+
+      const sessionPayload = buildWorkoutSessionPayloadFromHistory(history, normalizedDate);
+      onOpenWorkoutDaySummary(
+        buildWorkoutDaySummary({
+          title: options.title || `${normalizedDate} のサマリー`,
+          date: normalizedDate,
+          entries,
+          getExUnit,
+          fallbackUnit: unit,
+          prKeys: prEntries.map((entry) => buildWorkoutDaySummaryPrKey(entry.bodyPart, entry.name)),
+          durationSec,
+          isShared,
+          openWorkoutDate: normalizedDate,
+          shareTarget: sessionPayload
+            ? {
+                workoutDate: normalizedDate,
+                sessionPayload: {
+                  ...sessionPayload,
+                  session: {
+                    ...sessionPayload.session,
+                    duration_sec: durationSec,
+                  },
+                },
+              }
+            : null,
+        })
+      );
+    },
+    [
+      onOpenWorkoutDaySummary,
+      resolvedEntries,
+      history,
+      muscleEx,
+      hiddenBodyParts,
+      exerciseBodyPartOverrides,
+      manualBests,
+      user?.id,
+      todayKey,
+      todayWorkoutDurationSec,
+      getExUnit,
+      unit,
+    ]
+  );
 
   return (
     <div
@@ -1007,20 +1159,44 @@ export default function HistoryScreen({
                 marginBottom: 4,
               }}
             >
-              <button
-                onClick={() => onLogForDate(selectedDate)}
-                style={{
-                  width: "100%",
-                  borderRadius: 18,
-                  padding: "16px",
-                  fontSize: 15,
-                  fontWeight: 700,
-                  background: "var(--card2)",
-                  color: "var(--text)",
-                }}
-              >
-                記録を開く
-              </button>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const targetDate = selectedDate;
+                    setSelectedDate(null);
+                    await handleOpenDaySummary(targetDate, { title: `${targetDate} のサマリー` });
+                  }}
+                  style={{
+                    width: "100%",
+                    borderRadius: 18,
+                    padding: "15px 12px",
+                    fontSize: 14,
+                    fontWeight: 800,
+                    background: "linear-gradient(180deg, rgba(18, 199, 194, 0.06), rgba(18, 199, 194, 0.02))",
+                    border: "1px solid rgba(18, 199, 194, 0.14)",
+                    color: "var(--accent-strong, var(--accent))",
+                  }}
+                >
+                  サマリーを見る
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onLogForDate(selectedDate)}
+                  style={{
+                    width: "100%",
+                    borderRadius: 18,
+                    padding: "15px 12px",
+                    fontSize: 14,
+                    fontWeight: 800,
+                    background: "var(--card2)",
+                    color: "var(--text)",
+                    border: "1px solid rgba(18, 199, 194, 0.1)",
+                  }}
+                >
+                  記録を開く
+                </button>
+              </div>
             </div>
 
             <div style={{ fontSize: 13, color: "var(--text2)", marginBottom: 12 }}>

@@ -6,9 +6,12 @@ import {
     storeW,
     KG_TO_LBS,
     buildHistoryFromWorkoutRows,
+    calc1RM,
     formatDateKey,
+    hasMeaningfulPRIncrease,
     hasValidWorkoutOnDate,
     mergeHistoryMaps,
+    PR_UPDATE_TOLERANCE_KG,
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
 } from "./utils/helpers";
@@ -35,14 +38,22 @@ import BottomNav from "./components/layout/BottomNav";
 import PushPromptModal from "./components/PushPromptModal";
 
 import AddExModal from "./components/modals/AddExModal";
-import SummaryModal from "./components/modals/SummaryModal";
+import WorkoutDaySummaryModal from "./components/modals/WorkoutDaySummaryModal";
 import OnboardingOverlay from "./components/OnboardingOverlay";
 import {
     buildBaseExercises,
     getExSetsHelper,
 } from "./utils/workoutHelpers";
-import { buildWorkoutSessionPayloadFromHistory } from "./utils/workoutSessions";
+import {
+    buildWorkoutSessionPayloadFromDraft,
+    buildWorkoutSessionPayloadFromHistory,
+} from "./utils/workoutSessions";
 import { getPrimaryDefaultBodyPartLabel } from "./utils/bodyPartClassification";
+import WorkoutSessionShareModal from "./components/modals/WorkoutSessionShareModal";
+import {
+    buildWorkoutDaySummary,
+    buildWorkoutDaySummaryPrKey,
+} from "./utils/workoutDaySummary";
 
 import { useWorkout } from "./hooks/useWorkout";
 import { useTimer } from "./hooks/useTimer";
@@ -470,6 +481,7 @@ export default function GymApp() {
     const [addTarget, setAddTarget] = useState(null);
     const [newExName, setNewExName] = useState("");
     const [summary, setSummary] = useState(null);
+    const [workoutDayShareTarget, setWorkoutDayShareTarget] = useState(null);
 
 
     // ─── AI Coach ─────────────────────────────────────
@@ -613,6 +625,19 @@ export default function GymApp() {
     ]);
 
     const workoutTimerStatus = getWorkoutTimerStatus(workoutTimerStateRef.current);
+
+    const closeWorkoutDaySummary = useCallback(() => {
+        setSummary(null);
+    }, []);
+
+    const closeWorkoutDayShareModal = useCallback(() => {
+        setWorkoutDayShareTarget(null);
+    }, []);
+
+    const openWorkoutDayShareModal = useCallback((target) => {
+        if (!target?.workoutDate || !target?.sessionPayload) return;
+        setWorkoutDayShareTarget(target);
+    }, []);
 
     const queueWorkoutSessionSync = useCallback((date) => {
         const normalizedDate = String(date || "").trim();
@@ -1480,6 +1505,133 @@ export default function GymApp() {
         exerciseBodyPartOverrides,
     });
 
+    const buildDraftWorkoutDaySummary = useCallback(async (targetDate, options = {}) => {
+        const normalizedDate = String(targetDate || "").trim();
+        if (!normalizedDate) return null;
+
+        const entries = exercises
+            .map((exercise, index) => {
+                const exerciseName = String(exercise?.name || "").trim();
+                if (!exerciseName) return null;
+
+                const exUnit = typeof getExUnit === "function" ? getExUnit(exerciseName) : unit;
+                const sets = sanitizeWorkoutSets(
+                    (logData[exerciseName] || []).map((set) => ({
+                        ...set,
+                        weight: storeW(set.weight, exUnit),
+                    })),
+                    { allowBodyweight: true }
+                );
+
+                if (!sets.length) return null;
+
+                const bodyPart = getExerciseRecordBodyPart(exercise, todayLabels[0] || null);
+                const volume = sets.reduce((sum, set) => {
+                    const weight = Number(set?.weight);
+                    const reps = Number(set?.reps);
+                    if (!Number.isFinite(weight) || weight <= 0) return sum;
+                    if (!Number.isFinite(reps) || reps <= 0) return sum;
+                    return sum + weight * reps;
+                }, 0);
+
+                const validNumericSets = sets.filter((set) => {
+                    const weight = Number(set?.weight);
+                    const reps = Number(set?.reps);
+                    return Number.isFinite(weight) && weight > 0 && Number.isFinite(reps) && reps > 0;
+                });
+
+                const previousPr = getPreviousPR
+                    ? getPreviousPR(exercise, { excludeDate: normalizedDate })
+                    : (getPR ? getPR(exercise) : null);
+                const previousSets = previousPr?.sets || [];
+                const previousRm = previousPr?.rm ?? calc1RM(previousSets);
+                const isPr = Boolean(
+                    validNumericSets.length
+                    && hasMeaningfulPRIncrease(
+                        validNumericSets,
+                        previousSets,
+                        previousRm,
+                        PR_UPDATE_TOLERANCE_KG
+                    )
+                );
+
+                return {
+                    id: `${exerciseName}-${normalizedDate}-${index}`,
+                    name: exerciseName,
+                    bodyPart,
+                    sets,
+                    setCount: sets.length,
+                    volume,
+                    isPr,
+                };
+            })
+            .filter(Boolean);
+
+        const prKeys = entries
+            .filter((entry) => entry.isPr)
+            .map((entry) => buildWorkoutDaySummaryPrKey(entry.bodyPart, entry.name));
+
+        const currentTimerState = workoutTimerStateRef.current;
+        const timerEndedAt =
+            options.endedAt
+            || currentTimerState.finishedAt
+            || currentTimerState.lastActivityAt
+            || Date.now();
+        const durationSec =
+            currentTimerState.startedForDate === normalizedDate && currentTimerState.startedAt
+                ? Math.max(0, Math.floor((timerEndedAt - currentTimerState.startedAt) / 1000))
+                : 0;
+
+        const sessionPayload = buildWorkoutSessionPayloadFromDraft({
+            exercises,
+            logData,
+            getExUnit,
+            workoutDate: normalizedDate,
+        });
+
+        let isShared = false;
+        if (user?.id) {
+            try {
+                const { data } = await supabase
+                    .from("workout_sessions")
+                    .select("id")
+                    .eq("user_id", user.id)
+                    .eq("workout_date", normalizedDate)
+                    .maybeSingle();
+                isShared = Boolean(data?.id);
+            } catch (error) {
+                console.error("workout day summary shared state fetch failed", error);
+            }
+        }
+
+        return buildWorkoutDaySummary({
+            title: options.title || "今日のワークアウト完了",
+            date: normalizedDate,
+            entries,
+            getExUnit,
+            fallbackUnit: unit,
+            prKeys,
+            durationSec,
+            isShared,
+            shareTarget: sessionPayload
+                ? {
+                    workoutDate: normalizedDate,
+                    sessionPayload,
+                  }
+                : null,
+        });
+    }, [exercises, getExUnit, getPR, getPreviousPR, logData, todayLabels, unit, user?.id]);
+
+    const handleFinishWorkoutTimerAndShowSummary = useCallback(async () => {
+        const endedAt = Date.now();
+        finishWorkoutTimer(endedAt);
+        const nextSummary = await buildDraftWorkoutDaySummary(logDate, {
+            title: "今日のワークアウト完了",
+            endedAt,
+        });
+        setSummary(nextSummary);
+    }, [buildDraftWorkoutDaySummary, finishWorkoutTimer, logDate]);
+
 
 
     const removeEx = (idOrName, maybeName) => {
@@ -2208,7 +2360,7 @@ export default function GymApp() {
                             logDate={logDate}
                             workoutElapsedSec={displayedWorkoutElapsedSec}
                             workoutTimerStatus={displayedWorkoutTimerStatus}
-                            onFinishWorkoutTimer={() => finishWorkoutTimer()}
+                            onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
                             resetSession={() => {
                                 setSessionEx(null);
                                 setLogData({});
@@ -2327,6 +2479,9 @@ export default function GymApp() {
                                 prev.includes(bodyPart) ? prev : [...prev, bodyPart]
                             );
                         }}
+                        onOpenWorkoutDaySummary={(nextSummary) => {
+                            setSummary(nextSummary);
+                        }}
                     />
                 )}
 
@@ -2344,12 +2499,30 @@ export default function GymApp() {
                 <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen} onSelectTab={setScreen} />
 
                 {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
-                <SummaryModal
+                <WorkoutDaySummaryModal
+                    isOpen={Boolean(summary)}
                     summary={summary}
-                    onClose={() => {
-                        setSummary(null);
-                        setScreen("history");
-                    }}
+                    onClose={closeWorkoutDaySummary}
+                    onOpenWorkout={
+                        summary?.openWorkoutDate
+                            ? () => {
+                                const targetDate = summary.openWorkoutDate;
+                                setSummary(null);
+                                handleCalendarDayOpen(targetDate);
+                              }
+                            : undefined
+                    }
+                    onShare={
+                        summary?.shareTarget && !summary?.isShared
+                            ? () => openWorkoutDayShareModal(summary.shareTarget)
+                            : undefined
+                    }
+                />
+                <WorkoutSessionShareModal
+                    isOpen={Boolean(workoutDayShareTarget)}
+                    onClose={closeWorkoutDayShareModal}
+                    workoutDate={workoutDayShareTarget?.workoutDate}
+                    sessionPayload={workoutDayShareTarget?.sessionPayload || null}
                 />
                 {showAuth && (
                     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
