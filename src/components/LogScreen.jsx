@@ -66,14 +66,7 @@ export default function LogScreen({
     getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
     workoutElapsedSec = 0,
     workoutTimerStatus = "idle",
-    onPauseWorkoutTimer,
-    onResumeWorkoutTimer,
     onFinishWorkoutTimer,
-    onResetWorkoutTimer,
-    showWorkoutResumePrompt = false,
-    workoutResumePromptReason = "",
-    onFinishPreviousWorkout,
-    onContinuePreviousWorkout,
 }) {
 
     const hasExercises = exercises.length > 0;
@@ -211,12 +204,6 @@ export default function LogScreen({
         }
     }, [exercises, reorderMenuId]);
 
-    useEffect(() => {
-        if (showWorkoutResumePrompt) {
-            setShowWorkoutTimerMenu(false);
-        }
-    }, [showWorkoutResumePrompt]);
-
     return (
         <div className="fade-in" style={{ ...S.page, paddingBottom: 200 }}>
             <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
@@ -227,7 +214,7 @@ export default function LogScreen({
                     <WorkoutElapsedTimer
                         elapsedSec={workoutElapsedSec}
                         status={workoutTimerStatus}
-                        onClick={() => setShowWorkoutTimerMenu(true)}
+                        onClick={workoutTimerStatus === "active" ? () => setShowWorkoutTimerMenu(true) : undefined}
                     />
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
@@ -752,145 +739,38 @@ export default function LogScreen({
                             ワークアウト時間
                         </div>
                         <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 14, lineHeight: 1.6 }}>
-                            {workoutTimerStatus === "idle"
-                                ? "種目を追加するか、有効なセットを入力すると計測を開始します。"
-                                : workoutTimerStatus === "paused"
-                                    ? "一時停止中です。再開すると続きから計測します。"
-                                    : workoutTimerStatus === "finished"
-                                        ? "完了済みです。再開すると続きから計測できます。"
-                                        : "ワークアウトの区切りに合わせて一時停止や終了ができます。"}
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {workoutTimerStatus === "active" && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        onPauseWorkoutTimer?.();
-                                        setShowWorkoutTimerMenu(false);
-                                    }}
-                                    style={{
-                                        width: "100%",
-                                        padding: "12px 14px",
-                                        borderRadius: 14,
-                                        border: "1px solid rgba(18, 199, 194, 0.16)",
-                                        background: "linear-gradient(180deg, rgba(18, 199, 194, 0.09), rgba(18, 199, 194, 0.04))",
-                                        color: "#0F5E63",
-                                        fontSize: 14,
-                                        fontWeight: 800,
-                                    }}
-                                >
-                                    一時停止
-                                </button>
-                            )}
-                            {(workoutTimerStatus === "paused" || workoutTimerStatus === "finished") && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        onResumeWorkoutTimer?.();
-                                        setShowWorkoutTimerMenu(false);
-                                    }}
-                                    style={{
-                                        width: "100%",
-                                        padding: "12px 14px",
-                                        borderRadius: 14,
-                                        border: "1px solid rgba(18, 199, 194, 0.16)",
-                                        background: "linear-gradient(135deg, #0F5E63, #12C7C2)",
-                                        color: "#ffffff",
-                                        fontSize: 14,
-                                        fontWeight: 800,
-                                        boxShadow: "0 12px 22px rgba(15, 94, 99, 0.12)",
-                                    }}
-                                >
-                                    再開
-                                </button>
-                            )}
-                            {workoutTimerStatus !== "idle" && workoutTimerStatus !== "finished" && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        onFinishWorkoutTimer?.();
-                                        setShowWorkoutTimerMenu(false);
-                                    }}
-                                    style={{
-                                        width: "100%",
-                                        padding: "12px 14px",
-                                        borderRadius: 14,
-                                        border: "1px solid rgba(255, 146, 39, 0.18)",
-                                        background: "linear-gradient(180deg, rgba(255, 146, 39, 0.10), rgba(255, 146, 39, 0.04))",
-                                        color: "#8A4A12",
-                                        fontSize: 14,
-                                        fontWeight: 800,
-                                    }}
-                                >
-                                    ワークアウト終了
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onResetWorkoutTimer?.();
-                                    setShowWorkoutTimerMenu(false);
-                                }}
-                                style={{
-                                    width: "100%",
-                                    padding: "11px 14px",
-                                    borderRadius: 14,
-                                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                                    background: "rgba(18, 199, 194, 0.03)",
-                                    color: "var(--text3)",
-                                    fontSize: 13,
-                                    fontWeight: 700,
-                                }}
-                            >
-                                リセット
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showWorkoutResumePrompt && (
-                <div
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        zIndex: 320,
-                        background: "rgba(15, 23, 42, 0.52)",
-                        display: "flex",
-                        alignItems: "flex-end",
-                        justifyContent: "center",
-                        padding: "16px 14px calc(24px + var(--safe-bottom, 0px))",
-                        boxSizing: "border-box",
-                    }}
-                >
-                    <div
-                        style={{
-                            width: "100%",
-                            maxWidth: 420,
-                            background: "var(--card-modal)",
-                            borderRadius: 24,
-                            border: "1px solid rgba(18, 199, 194, 0.14)",
-                            boxShadow: "0 24px 48px rgba(15, 23, 42, 0.2)",
-                            padding: "18px 16px 16px",
-                            boxSizing: "border-box",
-                        }}
-                    >
-                        <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", marginBottom: 8 }}>
-                            前回のワークアウトを終了しますか？
-                        </div>
-                        <div style={{ fontSize: 13, color: "var(--text3)", lineHeight: 1.6, marginBottom: 16 }}>
-                            {workoutResumePromptReason === "date_changed"
-                                ? "日付が変わっています。前回のワークアウトを終了するか、続けるか選んでください。"
-                                : "最後の入力から90分以上経過しています。前回のワークアウトを終了するか、続けるか選んでください。"}
+                            ワークアウトを終了しますか？
+                            <br />
+                            この時間を今日のワークアウト時間として保存します。
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                             <button
                                 type="button"
-                                onClick={onFinishPreviousWorkout}
+                                onClick={() => {
+                                    setShowWorkoutTimerMenu(false);
+                                }}
                                 style={{
                                     padding: "12px 14px",
                                     borderRadius: 14,
-                                    border: "1px solid rgba(255, 146, 39, 0.2)",
+                                    border: "1px solid rgba(18, 199, 194, 0.12)",
+                                    background: "rgba(18, 199, 194, 0.03)",
+                                    color: "var(--text3)",
+                                    fontSize: 14,
+                                    fontWeight: 800,
+                                }}
+                            >
+                                キャンセル
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onFinishWorkoutTimer?.();
+                                    setShowWorkoutTimerMenu(false);
+                                }}
+                                style={{
+                                    padding: "12px 14px",
+                                    borderRadius: 14,
+                                    border: "1px solid rgba(255, 146, 39, 0.18)",
                                     background: "linear-gradient(180deg, rgba(255, 146, 39, 0.10), rgba(255, 146, 39, 0.04))",
                                     color: "#8A4A12",
                                     fontSize: 14,
@@ -898,22 +778,6 @@ export default function LogScreen({
                                 }}
                             >
                                 終了する
-                            </button>
-                            <button
-                                type="button"
-                                onClick={onContinuePreviousWorkout}
-                                style={{
-                                    padding: "12px 14px",
-                                    borderRadius: 14,
-                                    border: "1px solid rgba(18, 199, 194, 0.16)",
-                                    background: "linear-gradient(135deg, #0F5E63, #12C7C2)",
-                                    color: "#ffffff",
-                                    fontSize: 14,
-                                    fontWeight: 800,
-                                    boxShadow: "0 12px 22px rgba(15, 94, 99, 0.12)",
-                                }}
-                            >
-                                続ける
                             </button>
                         </div>
                     </div>

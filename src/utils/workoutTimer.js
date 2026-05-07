@@ -49,11 +49,8 @@ export const normalizeWorkoutTimerState = (state = {}) => {
   const startedAt = normalizeStoredTimestamp(state.startedAt);
   const startedForDate = String(state.startedForDate || "").trim();
   const lastActivityAt = normalizeStoredTimestamp(state.lastActivityAt);
-  const pausedDurationSec = normalizeStoredSeconds(state.pausedDurationSec);
-  const pauseStartedAt = normalizeStoredTimestamp(state.pauseStartedAt);
   const finishedAt = normalizeStoredTimestamp(state.finishedAt);
   const isFinished = Boolean(state.isFinished && finishedAt);
-  const isPaused = Boolean(!isFinished && state.isPaused && pauseStartedAt);
 
   if (!startedAt || !startedForDate) {
     return createEmptyWorkoutTimerState();
@@ -63,9 +60,9 @@ export const normalizeWorkoutTimerState = (state = {}) => {
     startedAt,
     startedForDate,
     lastActivityAt,
-    pausedDurationSec,
-    pauseStartedAt: isPaused ? pauseStartedAt : null,
-    isPaused,
+    pausedDurationSec: 0,
+    pauseStartedAt: null,
+    isPaused: false,
     isFinished,
     finishedAt: isFinished ? finishedAt : null,
   };
@@ -123,18 +120,14 @@ export const clearWorkoutTimerState = (
 export const computeWorkoutDurationSec = ({
   startedAt = null,
   endedAt = null,
-  pausedDurationSec = 0,
 }) => {
   if (!startedAt || !endedAt) return 0;
-  const duration = Math.floor((endedAt - startedAt) / 1000) - normalizeStoredSeconds(pausedDurationSec);
+  const duration = Math.floor((endedAt - startedAt) / 1000);
   return Math.max(0, duration);
 };
 
 export const computeWorkoutDisplayElapsedSec = ({
   startedAt = null,
-  pausedDurationSec = 0,
-  pauseStartedAt = null,
-  isPaused = false,
   finishedAt = null,
   isFinished = false,
 }, now = Date.now()) => {
@@ -144,29 +137,18 @@ export const computeWorkoutDisplayElapsedSec = ({
     return computeWorkoutDurationSec({
       startedAt,
       endedAt: finishedAt,
-      pausedDurationSec,
-    });
-  }
-
-  if (isPaused && pauseStartedAt) {
-    return computeWorkoutDurationSec({
-      startedAt,
-      endedAt: pauseStartedAt,
-      pausedDurationSec,
     });
   }
 
   return computeWorkoutDurationSec({
     startedAt,
     endedAt: now,
-    pausedDurationSec,
   });
 };
 
 export const getWorkoutTimerStatus = (state = {}) => {
   const normalized = normalizeWorkoutTimerState(state);
   if (normalized.isFinished && normalized.finishedAt) return "finished";
-  if (normalized.isPaused && normalized.pauseStartedAt) return "paused";
   if (normalized.startedAt) return "active";
   return "idle";
 };
@@ -177,7 +159,6 @@ export const getWorkoutTimerPersistence = (state = {}, fallbackEndedAt = null) =
 
   let endedAt = normalized.lastActivityAt || fallbackEndedAt || null;
   if (normalized.isFinished && normalized.finishedAt) endedAt = normalized.finishedAt;
-  if (normalized.isPaused && normalized.pauseStartedAt) endedAt = normalized.pauseStartedAt;
   if (!endedAt) return null;
 
   return {
@@ -186,42 +167,27 @@ export const getWorkoutTimerPersistence = (state = {}, fallbackEndedAt = null) =
     durationSec: computeWorkoutDurationSec({
       startedAt: normalized.startedAt,
       endedAt,
-      pausedDurationSec: normalized.pausedDurationSec,
     }),
   };
 };
 
-export const getWorkoutResumePromptState = (state = {}, activeLogDate = "", now = Date.now()) => {
+export const getWorkoutAutoFinishState = (state = {}, currentDateKey = "", now = Date.now()) => {
   const normalized = normalizeWorkoutTimerState(state);
   if (!normalized.startedAt || !normalized.startedForDate || normalized.isFinished) {
     return {
-      shouldPrompt: false,
+      shouldAutoFinish: false,
       reason: "",
-      dateChanged: false,
-      idleTimedOut: false,
-      signature: "",
+      endedAt: null,
     };
   }
 
-  const dateChanged = Boolean(activeLogDate && normalized.startedForDate !== activeLogDate);
+  const dateChanged = Boolean(currentDateKey && normalized.startedForDate !== currentDateKey);
   const referenceAt = normalized.lastActivityAt || normalized.startedAt;
   const idleTimedOut = Boolean(referenceAt && now - referenceAt >= WORKOUT_IDLE_TIMEOUT_MS);
-  const signature = [
-    normalized.startedAt || "",
-    normalized.startedForDate,
-    normalized.lastActivityAt || "",
-    normalized.pauseStartedAt || "",
-    normalized.pausedDurationSec,
-    normalized.isPaused ? 1 : 0,
-    normalized.isFinished ? 1 : 0,
-    normalized.finishedAt || "",
-  ].join("::");
 
   return {
-    shouldPrompt: dateChanged || idleTimedOut,
+    shouldAutoFinish: dateChanged || idleTimedOut,
     reason: dateChanged ? "date_changed" : idleTimedOut ? "idle_timeout" : "",
-    dateChanged,
-    idleTimedOut,
-    signature,
+    endedAt: dateChanged || idleTimedOut ? referenceAt : null,
   };
 };

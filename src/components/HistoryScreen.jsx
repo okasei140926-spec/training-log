@@ -352,7 +352,7 @@ export default function HistoryScreen({
   const summaryCards = [
     { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
     { key: "setCount", label: "セット数", value: `${todaySummary.setCount}` },
-    { key: "exerciseCount", label: "種目数", value: `${todaySummary.exerciseCount}` },
+    { key: "duration", label: "時間", value: formatDurationValue(todaySummary.durationSec) },
     { key: "trainingDays", label: "累計", value: `${totalTrainingDays}日` },
   ];
 
