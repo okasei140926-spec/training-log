@@ -23,7 +23,6 @@ import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
 import WorkoutCommentsModal from "./modals/WorkoutCommentsModal";
-import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 
 const RESERVED_USERNAMES = [
     "あなた",
@@ -83,10 +82,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [activityFeedLoading, setActivityFeedLoading] = useState(false);
     const [activityFeedAction, setActivityFeedAction] = useState(null);
     const [activityFeedStatusMessage, setActivityFeedStatusMessage] = useState("");
-    const [shareSessionTarget, setShareSessionTarget] = useState(null);
-    const [sharePhotoRows, setSharePhotoRows] = useState([]);
-    const [sharePhotoUrls, setSharePhotoUrls] = useState({});
-    const [sharePreparingSessionId, setSharePreparingSessionId] = useState(null);
     const [likePendingMap, setLikePendingMap] = useState({});
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
@@ -94,8 +89,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         activityCount: 0,
         activeFriendCount: 0,
         hasTodayRecord: false,
-        selfShared: false,
-        selfFeedItem: null,
     });
     const [expandedFeedItems, setExpandedFeedItems] = useState({});
     const activityFeedStatusTimeoutRef = useRef(null);
@@ -358,33 +351,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         return `${weight}kg × ${repLabel}`;
     }, []);
 
-    const buildDetailedSessionItems = useCallback((workoutRow, workoutDate) => {
-        if (!workoutRow?.data || !workoutDate) return [];
-
-        return Object.entries(workoutRow.data)
-            .flatMap(([exerciseName, records]) => (records || []).map((record, index) => ({
-                exerciseName,
-                record,
-                index,
-            })))
-            .filter(({ record }) => String(record?.date || "").slice(0, 10) === workoutDate)
-            .map(({ exerciseName, record, index }) => {
-                const sets = sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
-                if (!sets.length) return null;
-                return {
-                    exercise_name: exerciseName,
-                    body_part: String(record?.bodyPart || record?.body_part || "").trim(),
-                    set_count: sets.length,
-                    order: Number(record?.timestamp || 0) || index,
-                    sets,
-                };
-            })
-            .filter(Boolean)
-            .sort((a, b) => a.order - b.order);
-    }, []);
-
-    const buildOwnFeedDraftItem = useCallback((workoutDate, workoutRow, sourceHistory = history || {}) => {
-        if (!user?.id || !workoutDate) return null;
+    const buildFeedItemFromHistoryDate = useCallback(({
+        feedUserId,
+        workoutDate,
+        workoutRow,
+        sourceHistory = {},
+        profile = {},
+        sessionMeta = null,
+    }) => {
+        if (!feedUserId || !workoutDate) return null;
 
         const entries = buildWorkoutSessionEntriesFromHistory(sourceHistory, workoutDate);
         if (!entries.length) return null;
@@ -403,31 +378,31 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         const timestampBase = workoutRow?.ended_at || workoutRow?.started_at || `${workoutDate}T12:00:00+09:00`;
         const summary = {
             ...(payload.session.summary_json || {}),
-            prCount: Number(payload.session.summary_json?.prCount || 0),
+            ...(sessionMeta?.summary_json || {}),
+            prCount: Number(sessionMeta?.summary_json?.prCount || payload.session.summary_json?.prCount || 0),
         };
 
         return {
-            id: `draft-${user.id}-${workoutDate}`,
-            user_id: user.id,
+            id: sessionMeta?.id || `feed-${feedUserId}-${workoutDate}`,
+            sessionId: sessionMeta?.id || null,
+            user_id: feedUserId,
             workout_date: workoutDate,
-            created_at: timestampBase,
-            updated_at: workoutRow?.ended_at || workoutRow?.started_at || timestampBase,
-            duration_sec: Number(workoutRow?.duration_sec || 0),
-            total_volume: Number(payload.session.total_volume || 0),
-            exercise_count: Number(payload.session.exercise_count || 0),
+            created_at: sessionMeta?.created_at || timestampBase,
+            updated_at: sessionMeta?.updated_at || workoutRow?.ended_at || workoutRow?.started_at || timestampBase,
+            duration_sec: Number(sessionMeta?.duration_sec || workoutRow?.duration_sec || 0),
+            total_volume: Number(sessionMeta?.total_volume || payload.session.total_volume || 0),
+            exercise_count: Number(sessionMeta?.exercise_count || payload.session.exercise_count || 0),
             summary_json: summary,
             summary,
             summaryItems: Array.isArray(summary.items) ? summary.items : [],
             detailedItems,
-            likeCount: 0,
-            likedByMe: false,
-            commentCount: 0,
-            profile: {},
-            photoUrl: null,
-            visibility: "draft",
-            isShared: false,
+            likeCount: Number(sessionMeta?.likeCount || 0),
+            likedByMe: Boolean(sessionMeta?.likedByMe),
+            commentCount: Number(sessionMeta?.commentCount || 0),
+            profile,
+            photoUrl: sessionMeta?.photoUrl || null,
         };
-    }, [history, user?.id]);
+    }, []);
 
     const fetchActivityFeed = useCallback(async ({ reset = false } = {}) => {
         if (!user?.id) {
@@ -436,8 +411,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 activityCount: 0,
                 activeFriendCount: 0,
                 hasTodayRecord: false,
-                selfShared: false,
-                selfFeedItem: null,
             });
             return false;
         }
@@ -463,7 +436,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             if (sessionsError) throw sessionsError;
             const rawSessions = sessions || [];
 
-            const profileIds = [...new Set(rawSessions.map((session) => session.user_id).filter(Boolean))];
+            const profileIds = [...new Set(feedUserIds.filter(Boolean))];
             const photoIds = [...new Set(
                 rawSessions
                     .filter((session) => session.photo_visibility === "friends" && session.photo_id)
@@ -539,16 +512,17 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             });
 
             const excludedItems = [];
-            const ownWorkoutRows = (workoutsRes.data || []).filter((row) => row.user_id === user.id);
-            const mergedOwnHistory = mergeHistoryMaps(
-                buildHistoryFromWorkoutRows(ownWorkoutRows),
-                history || {}
-            );
+            const workoutRowsByUser = new Map();
+            (workoutsRes.data || []).forEach((row) => {
+                const current = workoutRowsByUser.get(row.user_id) || [];
+                current.push(row);
+                workoutRowsByUser.set(row.user_id, current);
+            });
 
-            const sessionItems = rawSessions.flatMap((session) => {
+            const sessionMetaMap = new Map();
+            rawSessions.forEach((session) => {
                 const isOwnWorkout = session.user_id === user.id;
                 const isFriendWorkout = !isOwnWorkout && friendIds.includes(session.user_id);
-                const isShared = session.visibility === "friends";
 
                 if (!session.workout_date) {
                     excludedItems.push({
@@ -557,102 +531,91 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                         created_at: session.created_at,
                         shared_at: session.updated_at,
                         visibility: session.visibility,
-                        isShared,
+                        isShared: true,
                         isOwnWorkout,
                         isFriendWorkout,
                         includedInFeed: false,
                         excludedReason: "invalid_date",
                     });
-                    return [];
+                    return;
                 }
 
-                if (!isOwnWorkout && (!isFriendWorkout || !isShared)) {
+                if (!isOwnWorkout && !isFriendWorkout) {
                     excludedItems.push({
                         workoutId: session.id,
                         workoutDate: session.workout_date,
                         created_at: session.created_at,
                         shared_at: session.updated_at,
                         visibility: session.visibility,
-                        isShared,
+                        isShared: true,
                         isOwnWorkout,
                         isFriendWorkout,
                         includedInFeed: false,
-                        excludedReason: isFriendWorkout ? "friend_not_shared" : "not_friend",
+                        excludedReason: "not_friend",
                     });
-                    return [];
+                    return;
                 }
-
-                const profile = profileMap.get(session.user_id) || {};
-                const summary = session.summary_json || {};
-                const summaryItems = Array.isArray(summary.items) ? summary.items : [];
-                const detailedItems = buildDetailedSessionItems(
-                    workoutRowMap.get(`${session.user_id}::${session.workout_date}`),
-                    session.workout_date
-                );
-                const effectiveItems = detailedItems.length ? detailedItems : summaryItems;
-
-                if (!effectiveItems.length) {
-                    excludedItems.push({
-                        workoutId: session.id,
-                        workoutDate: session.workout_date,
-                        created_at: session.created_at,
-                        shared_at: session.updated_at,
-                        visibility: session.visibility,
-                        isShared,
-                        isOwnWorkout,
-                        isFriendWorkout,
-                        includedInFeed: false,
-                        excludedReason: "no_valid_sets",
-                    });
-                    return [];
-                }
-
-                return [{
+                const sessionKey = `${session.user_id}::${session.workout_date}`;
+                const nextMeta = {
                     ...session,
-                    profile,
-                    summary,
-                    summaryItems,
-                    detailedItems,
-                    photoUrl: session.photo_visibility === "friends" ? photoUrlMap.get(session.photo_id) || null : null,
+                    photoUrl: session.photo_id ? photoUrlMap.get(session.photo_id) || null : null,
                     likeCount: likeCountMap.get(session.id) || 0,
                     likedByMe: likedSessionIds.has(session.id),
                     commentCount: commentCountMap.get(session.id) || 0,
-                    isShared: true,
-                }];
+                };
+                const existingMeta = sessionMetaMap.get(sessionKey);
+                const existingTime = new Date(existingMeta?.updated_at || existingMeta?.created_at || 0).getTime();
+                const nextTime = new Date(nextMeta.updated_at || nextMeta.created_at || 0).getTime();
+                if (!existingMeta || nextTime >= existingTime) {
+                    sessionMetaMap.set(sessionKey, nextMeta);
+                }
             });
 
-            const sessionKeySet = new Set(sessionItems.map((session) => `${session.user_id}::${session.workout_date}`));
-            const ownDraftDates = getValidWorkoutDatesFromHistory(mergedOwnHistory, { since: recentSevenStart })
-                .filter((dateKey) => dateKey <= today && !sessionKeySet.has(`${user.id}::${dateKey}`));
+            const buildItemsForUser = (targetUserId, sourceHistory = {}) => {
+                const validDates = getValidWorkoutDatesFromHistory(sourceHistory, { since: recentSevenStart })
+                    .filter((dateKey) => dateKey <= today);
 
-            const ownDraftItems = ownDraftDates
-                .map((workoutDate) => {
-                    const draftItem = buildOwnFeedDraftItem(
+                return validDates.map((workoutDate) => {
+                    const workoutKey = `${targetUserId}::${workoutDate}`;
+                    const item = buildFeedItemFromHistoryDate({
+                        feedUserId: targetUserId,
                         workoutDate,
-                        workoutRowMap.get(`${user.id}::${workoutDate}`),
-                        mergedOwnHistory
-                    );
+                        workoutRow: workoutRowMap.get(workoutKey),
+                        sourceHistory,
+                        profile: profileMap.get(targetUserId) || {},
+                        sessionMeta: sessionMetaMap.get(workoutKey) || null,
+                    });
 
-                    if (!draftItem) {
+                    if (!item) {
                         excludedItems.push({
-                            workoutId: `draft-${user.id}-${workoutDate}`,
+                            workoutId: workoutKey,
                             workoutDate,
                             created_at: null,
                             shared_at: null,
-                            visibility: "draft",
+                            visibility: null,
                             isShared: false,
-                            isOwnWorkout: true,
-                            isFriendWorkout: false,
+                            isOwnWorkout: targetUserId === user.id,
+                            isFriendWorkout: targetUserId !== user.id,
                             includedInFeed: false,
                             excludedReason: "no_valid_sets",
                         });
                     }
 
-                    return draftItem;
-                })
-                .filter(Boolean);
+                    return item;
+                }).filter(Boolean);
+            };
 
-            const allItems = [...sessionItems, ...ownDraftItems]
+            const ownWorkoutRows = workoutRowsByUser.get(user.id) || [];
+            const mergedOwnHistory = mergeHistoryMaps(
+                buildHistoryFromWorkoutRows(ownWorkoutRows),
+                history || {}
+            );
+            const ownItems = buildItemsForUser(user.id, mergedOwnHistory);
+            const friendItems = friendIds.flatMap((friendId) =>
+                buildItemsForUser(friendId, buildHistoryFromWorkoutRows(workoutRowsByUser.get(friendId) || []))
+            );
+
+            const allItems = [...ownItems, ...friendItems]
                 .sort((a, b) => {
                     const dateCompare = String(b.workout_date || "").localeCompare(String(a.workout_date || ""));
                     if (dateCompare !== 0) return dateCompare;
@@ -661,30 +624,26 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     return timeB - timeA;
                 });
 
-            const ownItems = allItems.filter((item) => item.user_id === user.id);
-            const selfFeedItem = ownItems.find((item) => item.workout_date === today) || null;
             const nextOverview = {
                 activityCount: allItems.length,
                 activeFriendCount: new Set(
-                    allItems
-                        .filter((item) => item.user_id !== user.id)
+                    friendItems
                         .map((item) => item.user_id)
                         .filter(Boolean)
                 ).size,
                 hasTodayRecord: getValidWorkoutDatesFromHistory(mergedOwnHistory, { since: today }).includes(today),
-                selfShared: Boolean(selfFeedItem?.isShared),
-                selfFeedItem,
             };
 
             console.log("[feed] normalized feed items", {
                 currentUserId: user.id,
                 friendIds,
                 ownWorkoutsLast7DaysCount: ownItems.length,
-                friendSharedWorkoutsLast7DaysCount: allItems.filter((item) => item.user_id !== user.id).length,
+                friendWorkoutsLast7DaysCount: friendItems.length,
                 feedItemsLength: allItems.length,
-                headerActivityCount: nextOverview.activityCount,
-                displayedFeedCardsCount: allItems.length,
-                excludedWorkouts: excludedItems,
+                displayedCardsCount: allItems.length,
+                todayLocalDate: today,
+                last7StartDate: recentSevenStart,
+                excludedReason: excludedItems,
             });
 
             setActivityFeed(allItems);
@@ -698,15 +657,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     activityCount: 0,
                     activeFriendCount: 0,
                     hasTodayRecord: false,
-                    selfShared: false,
-                    selfFeedItem: null,
                 });
             }
             return false;
         } finally {
             setActivityFeedLoading(false);
         }
-    }, [buildDetailedSessionItems, buildOwnFeedDraftItem, friendIds, history, recentSevenStart, today, user?.id]);
+    }, [buildFeedItemFromHistoryDate, friendIds, history, recentSevenStart, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -720,13 +677,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         showActivityFeedStatusMessage(feedOk && friendsOk ? "更新しました" : "更新できませんでした");
     }, [activityFeedLoading, fetchActivityFeed, fetchFriendsData, showActivityFeedStatusMessage]);
 
-    const closeShareSessionModal = useCallback(() => {
-        setShareSessionTarget(null);
-        setSharePhotoRows([]);
-        setSharePhotoUrls({});
-        setSharePreparingSessionId(null);
-    }, []);
-
     const handleOpenComments = useCallback((sessionItem) => {
         setCommentsSessionTarget(sessionItem);
     }, []);
@@ -737,7 +687,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     const handleCommentCountChange = useCallback((sessionId, nextCount) => {
         setActivityFeed((prev) => prev.map((item) => (
-            item.id === sessionId
+            item.sessionId === sessionId
                 ? { ...item, commentCount: Number(nextCount || 0) }
                 : item
         )));
@@ -748,55 +698,10 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         ));
     }, []);
 
-    const handleOpenSessionShare = useCallback(async (sessionItem) => {
-        if (!user?.id || !sessionItem?.workout_date || sharePreparingSessionId) return;
-
-        setSharePreparingSessionId(sessionItem.id);
-        setSharePhotoRows([]);
-        setSharePhotoUrls({});
-
-        try {
-            const { data, error } = await supabase
-                .from("progress_photos")
-                .select("id, storage_path, workout_date")
-                .eq("user_id", user.id)
-                .eq("workout_date", sessionItem.workout_date);
-
-            if (error) throw error;
-
-            const nextRows = [...(data || [])].sort((a, b) =>
-                String(a.storage_path || "").localeCompare(String(b.storage_path || ""))
-            );
-
-            const signedEntries = await Promise.all(nextRows.map(async (row) => {
-                try {
-                    const { data: signedData, error: signedError } = await supabase
-                        .storage
-                        .from("progress-photos-private")
-                        .createSignedUrl(row.storage_path, 3600);
-                    return signedError ? null : [row.id, signedData?.signedUrl || null];
-                } catch (signedError) {
-                    console.error("session share photo signed url failed", signedError);
-                    return null;
-                }
-            }));
-
-            setSharePhotoRows(nextRows);
-            setSharePhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
-        } catch (error) {
-            console.error("session share photo load failed", error);
-            setSharePhotoRows([]);
-            setSharePhotoUrls({});
-        } finally {
-            setShareSessionTarget(sessionItem);
-            setSharePreparingSessionId(null);
-        }
-    }, [sharePreparingSessionId, user?.id]);
-
     const handleToggleSessionLike = useCallback(async (sessionId) => {
         if (!user?.id || !sessionId || likePendingMap[sessionId]) return;
 
-        const currentItem = activityFeed.find((item) => item.id === sessionId);
+        const currentItem = activityFeed.find((item) => item.sessionId === sessionId);
         if (!currentItem || currentItem.user_id === user.id) return;
 
         const previousLiked = Boolean(currentItem.likedByMe);
@@ -806,7 +711,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
         setLikePendingMap((prev) => ({ ...prev, [sessionId]: true }));
         setActivityFeed((prev) => prev.map((item) => (
-            item.id === sessionId
+            item.sessionId === sessionId
                 ? { ...item, likedByMe: optimisticLiked, likeCount: optimisticCount }
                 : item
         )));
@@ -836,7 +741,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             }
 
             setActivityFeed((prev) => prev.map((item) => (
-                item.id === sessionId
+                item.sessionId === sessionId
                     ? {
                         ...item,
                         likedByMe: Boolean(data.liked),
@@ -847,7 +752,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         } catch (error) {
             console.error("toggle workout like failed on client", error);
             setActivityFeed((prev) => prev.map((item) => (
-                item.id === sessionId
+                item.sessionId === sessionId
                     ? {
                         ...item,
                         likedByMe: previousLiked,
@@ -1102,54 +1007,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         return Math.max(0, Number(summary.prCount || 0));
     }, []);
 
-    const handleShareTodayRecord = useCallback(async () => {
-        if (!user?.id) return;
-        const selfSession = activityOverview.selfFeedItem;
-
-        if (!selfSession) {
-            onOpenRecord?.();
-            return;
-        }
-
-        await handleOpenSessionShare(selfSession);
-    }, [activityOverview.selfFeedItem, handleOpenSessionShare, onOpenRecord, user?.id]);
-
-    const handleViewOwnTodayPost = useCallback(() => {
-        if (activityOverview.selfFeedItem?.id) {
-            document.getElementById(`feed-session-${activityOverview.selfFeedItem.id}`)?.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-            });
-        }
-    }, [activityOverview.selfFeedItem]);
-
-    const activityHeadline = `直近7日で ${activityOverview.activityCount}件 のアクティビティ`;
-    const activitySubline = !activityOverview.hasTodayRecord
-        ? "あなたは今日まだ記録していません"
-        : activityOverview.selfShared
-            ? "あなたは今日の記録を投稿済みです"
-            : "あなたは今日まだ投稿していません";
-
-    const feedEmptyState = !activityOverview.hasTodayRecord
-        ? {
-            title: "まだアクティビティはありません",
-            body: "今日の記録をシェアするか、友達を招待してフィードを動かしましょう。",
-            action: "ワークアウトを記録",
-            onClick: onOpenRecord,
-        }
-        : activityOverview.selfShared
-            ? {
-                title: "まだアクティビティはありません",
-                body: "あなたの投稿はシェア済みです。友達のワークアウトが投稿されるとここに並びます。",
-                action: "今日の投稿を見る",
-                onClick: handleViewOwnTodayPost,
-            }
-            : {
-                title: "まだアクティビティはありません",
-                body: "あなたの今日の記録をシェアして、フィードを動かしましょう。",
-                action: "今日の記録をシェア",
-                onClick: handleShareTodayRecord,
-            };
+    const activityHeadline = `直近7日で ${activityOverview.activityCount}件 のワークアウト`;
+    const feedEmptyState = {
+        title: "まだアクティビティはありません",
+        body: "ワークアウトを記録すると、ここに表示されます。友達を招待すると、お互いの記録も見られます。",
+        action: "ワークアウトを記録",
+        onClick: onOpenRecord,
+    };
 
     const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
 
@@ -1197,12 +1061,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 4 }}>
                                     {activityHeadline}
                                 </div>
-                                <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
-                                    {activitySubline}
-                                </div>
                                 {activityOverview.activeFriendCount > 0 && (
                                     <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
-                                        友達 {activityOverview.activeFriendCount}人が直近7日で投稿しています
+                                        友達{activityOverview.activeFriendCount}人が直近7日で記録しています
                                     </div>
                                 )}
                             </div>
@@ -1218,32 +1079,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                     flexShrink: 0,
                                 }}
                             >
-                                アクティビティ {activityOverview.activityCount}件
+                                ワークアウト {activityOverview.activityCount}件
                             </div>
                         </div>
 
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                                 <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
-                                    新しいアクティビティ順に表示しています
+                                    新しい記録順に表示しています
                                 </div>
-                                {activityFeed.length > 0 && activityOverview.hasTodayRecord && !activityOverview.selfShared && (
-                                    <button
-                                        type="button"
-                                        onClick={handleShareTodayRecord}
-                                        style={{
-                                            padding: "9px 12px",
-                                            borderRadius: 14,
-                                            border: "1px solid rgba(18, 199, 194, 0.16)",
-                                            background: "linear-gradient(135deg, #12C7C2, #33E1DB)",
-                                            color: "#fff",
-                                            fontSize: 12,
-                                            fontWeight: 800,
-                                        }}
-                                    >
-                                        今日の記録をシェア
-                                    </button>
-                                )}
                             </div>
                             <button
                                 type="button"
@@ -1327,6 +1171,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 const hasExtraExercises = detailedExercises.length > 3;
                                 const visibleExercises = isExpanded ? detailedExercises : detailedExercises.slice(0, 3);
                                 const isOwnWorkout = item.user_id === user.id;
+                                const canInteract = Boolean(item.sessionId);
 
                                 return (
                                     <div
@@ -1373,45 +1218,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                             </span>
                                                         ))}
                                                     </div>
-                                                )}
-                                            </div>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                                                {isOwnWorkout && item.isShared && (
-                                                    <div
-                                                        style={{
-                                                            flexShrink: 0,
-                                                            padding: "8px 11px",
-                                                            borderRadius: 14,
-                                                            border: "1px solid var(--border2)",
-                                                            background: "rgba(18, 199, 194, 0.07)",
-                                                            color: "var(--text2)",
-                                                            fontSize: 12,
-                                                            fontWeight: 800,
-                                                        }}
-                                                    >
-                                                        投稿済み
-                                                    </div>
-                                                )}
-                                                {isOwnWorkout && !item.isShared && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenSessionShare(item)}
-                                                        disabled={sharePreparingSessionId === item.id}
-                                                        style={{
-                                                            flexShrink: 0,
-                                                            padding: "8px 11px",
-                                                            borderRadius: 14,
-                                                            border: "1px solid rgba(18, 199, 194, 0.18)",
-                                                            background: "linear-gradient(135deg, #12C7C2, #33E1DB)",
-                                                            color: "#fff",
-                                                            fontSize: 12,
-                                                            fontWeight: 800,
-                                                            boxShadow: "0 12px 22px rgba(18, 199, 194, 0.16)",
-                                                            opacity: sharePreparingSessionId === item.id ? 0.7 : 1,
-                                                        }}
-                                                    >
-                                                        {sharePreparingSessionId === item.id ? "準備中..." : "シェア"}
-                                                    </button>
                                                 )}
                                             </div>
                                         </div>
@@ -1523,7 +1329,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                         cursor: "pointer",
                                                     }}
                                                 >
-                                                    {isExpanded ? "表示を減らす" : `残り${detailedExercises.length - 3}種目を表示`}
+                                                    {isExpanded ? "表示を減らす" : `さらに${detailedExercises.length - 3}種目を見る`}
                                                 </button>
                                             )}
                                         </div>
@@ -1539,16 +1345,16 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                 borderTop: "1px solid rgba(217, 228, 239, 0.75)",
                                             }}
                                         >
-                                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                                {isOwnWorkout && item.isShared ? (
+                                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                                {isOwnWorkout && canInteract ? (
                                                     <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 800 }}>
                                                         ♥ {Number(item.likeCount || 0)}
                                                     </div>
-                                                ) : !isOwnWorkout ? (
+                                                ) : !isOwnWorkout && canInteract ? (
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleToggleSessionLike(item.id)}
-                                                        disabled={Boolean(likePendingMap[item.id])}
+                                                        onClick={() => handleToggleSessionLike(item.sessionId)}
+                                                        disabled={Boolean(likePendingMap[item.sessionId])}
                                                         style={{
                                                             display: "inline-flex",
                                                             alignItems: "center",
@@ -1560,17 +1366,17 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                             color: item.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
                                                             fontSize: 12,
                                                             fontWeight: 800,
-                                                            opacity: likePendingMap[item.id] ? 0.7 : 1,
+                                                            opacity: likePendingMap[item.sessionId] ? 0.7 : 1,
                                                         }}
                                                     >
                                                         <span>{item.likedByMe ? "♥" : "♡"}</span>
                                                             <span>{Number(item.likeCount || 0)}</span>
                                                         </button>
                                                 ) : null}
-                                                {item.isShared && (
+                                                {canInteract && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleOpenComments(item)}
+                                                        onClick={() => handleOpenComments({ ...item, id: item.sessionId })}
                                                         style={{
                                                             display: "inline-flex",
                                                             alignItems: "center",
@@ -1589,7 +1395,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                     </button>
                                                 )}
                                             </div>
-                                            {likePendingMap[item.id] && (
+                                            {canInteract && likePendingMap[item.sessionId] && (
                                                 <div style={{ fontSize: 11, color: "var(--text3)" }}>
                                                     更新中...
                                                 </div>
@@ -1831,29 +1637,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     setNewUsername("");
                     setUsernameError("");
                 }}
-            />
-
-            <WorkoutSessionShareModal
-                isOpen={Boolean(shareSessionTarget)}
-                onClose={closeShareSessionModal}
-                workoutDate={shareSessionTarget?.workout_date}
-                sessionPayload={shareSessionTarget ? {
-                    session: {
-                        duration_sec: shareSessionTarget.duration_sec || 0,
-                        summary_json: {
-                            ...(shareSessionTarget.summary || {}),
-                            totalVolume: Number(
-                                shareSessionTarget.summary?.totalVolume
-                                || shareSessionTarget.total_volume
-                                || 0
-                            ),
-                            items: shareSessionTarget.summaryItems || [],
-                        },
-                    },
-                    exercises: shareSessionTarget.summaryItems || [],
-                } : null}
-                photoRows={sharePhotoRows}
-                photoUrls={sharePhotoUrls}
             />
 
             <WorkoutCommentsModal
