@@ -7,6 +7,10 @@ import {
     waitForAnimationFrame,
     buildPhotoShareBlob,
 } from "../../utils/shareCanvas";
+import {
+    formatExerciseCountByBodyPart,
+    getExerciseCountTotal,
+} from "../../utils/exerciseCountByBodyPart";
 
 const TEMPLATE_OPTIONS = [
     { id: "cute", label: "映え" },
@@ -90,8 +94,28 @@ export default function WorkoutShareModal({
     const styleSet = buildTemplateStyles(template);
     const dateLabel = formatDate(workoutDate);
     const totalVolumeLabel = `${Number(summary?.totalVolumeKg || 0).toLocaleString("ja-JP")}kg`;
+    const exerciseCountSummary =
+        formatExerciseCountByBodyPart(summary?.exerciseCountByBodyPart || [], {
+            sort: "count",
+            maxParts: 2,
+            separator: " / ",
+            suffix: "",
+        }) || "まだありません";
+    const totalExerciseCount = getExerciseCountTotal(summary?.exerciseCountByBodyPart || []);
     const summaryItems = [
-        { value: `${summary?.exerciseCount || 0}種目`, label: "種目" },
+        {
+            value: (
+                <div style={{ display: "grid", gap: 4 }}>
+                    <div>{exerciseCountSummary}</div>
+                    {totalExerciseCount > 0 && (
+                        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.72 }}>
+                            合計 {totalExerciseCount}種目
+                        </div>
+                    )}
+                </div>
+            ),
+            label: "種目",
+        },
         { value: `${summary?.setCount || 0}セット`, label: "セット" },
         { value: `PR ${summary?.prCount || 0}`, label: "PR" },
         { value: totalVolumeLabel, label: "ボリューム" },

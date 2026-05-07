@@ -28,6 +28,11 @@ import {
   readWorkoutTimerState,
 } from "../utils/workoutTimer";
 import { buildWorkoutSessionPayloadFromHistory } from "../utils/workoutSessions";
+import {
+  formatExerciseCountByBodyPart,
+  getExerciseCountByBodyPart,
+  getExerciseCountTotal,
+} from "../utils/exerciseCountByBodyPart";
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
 const formatWeight = (value, unit = "kg") => {
@@ -328,8 +333,12 @@ export default function HistoryScreen({
   );
 
   const todaySummary = useMemo(() => {
+    const exerciseCountByBodyPart = getExerciseCountByBodyPart(todayEntries, {
+      sort: "fixed",
+    });
     return {
-      exerciseCount: todayEntries.length,
+      exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
+      exerciseCountByBodyPart,
       setCount: todayEntries.reduce((sum, entry) => sum + entry.setCount, 0),
       totalVolume: Math.round(todayEntries.reduce((sum, entry) => sum + entry.volume, 0)),
       durationSec: todayWorkoutDurationSec,
@@ -347,8 +356,8 @@ export default function HistoryScreen({
   );
 
   const todayWorkedBodyParts = useMemo(
-    () => [...new Set(todayEntries.map((entry) => entry.bodyPart).filter(Boolean))],
-    [todayEntries]
+    () => todaySummary.exerciseCountByBodyPart || [],
+    [todaySummary.exerciseCountByBodyPart]
   );
 
   const heroWorkoutCards = todayEntries.slice(0, 3);
@@ -395,14 +404,16 @@ export default function HistoryScreen({
 
     if (selectedSummaryKey === "exerciseCount") {
       return {
-        title: "今日やった種目",
-        subtitle: `${todaySummary.exerciseCount}種目`,
+        title: "今日の部位別種目数",
+        subtitle: formatExerciseCountByBodyPart(todaySummary.exerciseCountByBodyPart, {
+          separator: " / ",
+          sort: "fixed",
+        }),
         emptyText: "今日はまだ種目を記録していません",
-        items: todayEntries.map((entry) => ({
-          key: entry.id,
-          title: entry.name,
-          badge: entry.bodyPart,
-          meta: `${entry.setCount}セット ・ ${formatVolume(entry.volume)}`,
+        items: (todaySummary.exerciseCountByBodyPart || []).map((item) => ({
+          key: `today-exercise-count-${item.bodyPart}`,
+          title: item.bodyPart,
+          meta: `${item.count}種目`,
         })),
       };
     }
@@ -718,9 +729,9 @@ export default function HistoryScreen({
                       msOverflowStyle: "none",
                     }}
                   >
-                    {todayWorkedBodyParts.map((bodyPart) => (
+                    {todayWorkedBodyParts.map((item) => (
                       <span
-                        key={bodyPart}
+                        key={item.bodyPart}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -736,7 +747,7 @@ export default function HistoryScreen({
                           flexShrink: 0,
                         }}
                       >
-                        {bodyPart}
+                        {item.bodyPart} {item.count}種目
                       </span>
                     ))}
                   </div>

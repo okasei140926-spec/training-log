@@ -15,6 +15,9 @@ import {
     buildWorkoutSessionEntriesFromHistory,
     buildWorkoutSessionPayloadFromEntries,
 } from "../utils/workoutSessions";
+import {
+    getExerciseCountByBodyPart,
+} from "../utils/exerciseCountByBodyPart";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
@@ -1037,6 +1040,34 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         )];
     }, []);
 
+    const getSessionExerciseCountByBodyPart = useCallback((item) => {
+        const summaryCounts = Array.isArray(item?.summary?.exerciseCountByBodyPart)
+            ? item.summary.exerciseCountByBodyPart
+            : Array.isArray(item?.summary_json?.exerciseCountByBodyPart)
+                ? item.summary_json.exerciseCountByBodyPart
+                : null;
+
+        if (summaryCounts?.length) {
+            return getExerciseCountByBodyPart(summaryCounts, { sort: "fixed" });
+        }
+
+        const sourceItems = item?.detailedItems?.length
+            ? item.detailedItems.map((exercise) => ({
+                bodyPart: String(exercise.body_part || "").trim() || "その他",
+                exerciseName: exercise.exercise_name,
+                sets: exercise.sets || [],
+                setCount: Number(exercise.set_count || 0),
+            }))
+            : (item?.summaryItems || []).map((exercise) => ({
+                bodyPart: String(exercise.body_part || "").trim() || "その他",
+                exerciseName: exercise.exercise_name,
+                sets: exercise.sets || [],
+                setCount: Number(exercise.set_count || 0),
+            }));
+
+        return getExerciseCountByBodyPart(sourceItems, { sort: "fixed" });
+    }, []);
+
     const getSessionPrCount = useCallback((item) => {
         const summary = item.summary || {};
         return Math.max(0, Number(summary.prCount || 0));
@@ -1242,6 +1273,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 const bodyParts = getSessionBodyParts(item);
                                 const setCount = getSessionSetCount(item);
                                 const prCount = getSessionPrCount(item);
+                                const exerciseCountByBodyPart = getSessionExerciseCountByBodyPart(item);
                                 const isExpanded = Boolean(expandedFeedItems[item.id]);
                                 const detailedExercises = item.detailedItems?.length ? item.detailedItems : (item.summaryItems || []);
                                 const hasExtraExercises = detailedExercises.length > 3;
@@ -1348,7 +1380,37 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                             {[
                                                 { label: "Volume", value: `${Math.round(Number(item.total_volume || 0)).toLocaleString("ja-JP")}kg` },
                                                 { label: "セット数", value: `${setCount}` },
-                                                { label: "種目数", value: `${item.exercise_count}` },
+                                                {
+                                                    label: "種目数",
+                                                    valueNode: exerciseCountByBodyPart.length > 0 ? (
+                                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                                            {exerciseCountByBodyPart.map((countItem) => (
+                                                                <span
+                                                                    key={`${item.id}-exercise-count-${countItem.bodyPart}`}
+                                                                    style={{
+                                                                        display: "inline-flex",
+                                                                        alignItems: "center",
+                                                                        justifyContent: "center",
+                                                                        padding: "4px 7px",
+                                                                        borderRadius: 999,
+                                                                        background: "rgba(18, 199, 194, 0.08)",
+                                                                        border: "1px solid rgba(18, 199, 194, 0.12)",
+                                                                        color: "var(--accent-strong, var(--accent))",
+                                                                        fontSize: 10,
+                                                                        fontWeight: 800,
+                                                                        lineHeight: 1.2,
+                                                                    }}
+                                                                >
+                                                                    {countItem.bodyPart} {countItem.count}種目
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)" }}>
+                                                            まだありません
+                                                        </div>
+                                                    ),
+                                                },
                                                 { label: "PR", value: `${prCount}件` },
                                             ].map((stat) => (
                                                 <div
@@ -1361,7 +1423,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                     }}
                                                 >
                                                     <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", letterSpacing: 0.4 }}>{stat.label}</div>
-                                                    <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginTop: 4 }}>{stat.value}</div>
+                                                    {stat.valueNode ? (
+                                                        <div style={{ marginTop: 8 }}>
+                                                            {stat.valueNode}
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginTop: 4 }}>{stat.value}</div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>

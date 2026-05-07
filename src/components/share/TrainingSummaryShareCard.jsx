@@ -1,4 +1,8 @@
 import { forwardRef } from "react";
+import {
+  formatExerciseCountByBodyPart,
+  getExerciseCountTotal,
+} from "../../utils/exerciseCountByBodyPart";
 
 const PRESET_STYLES = {
   square: {
@@ -27,7 +31,7 @@ const renderMetric = (label, value) => (
     }}
   >
     <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", letterSpacing: 1.4 }}>{label}</div>
-    <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{value}</div>
+    <div style={{ fontSize: 18, fontWeight: 900, color: "#fff", lineHeight: 1.35 }}>{value}</div>
   </div>
 );
 
@@ -61,6 +65,14 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
   const isWeekly = summary.group === "weekly";
   const trendItems = buildTrendLabels(summary.trend, isWeekly);
   const storyHighlights = summary.highlights.slice(0, 2);
+  const exerciseCountSummary =
+    formatExerciseCountByBodyPart(summary.exerciseCountByBodyPart, {
+      sort: "count",
+      maxParts: 2,
+      separator: " / ",
+      suffix: "",
+    }) || "まだありません";
+  const totalExerciseCount = getExerciseCountTotal(summary.exerciseCountByBodyPart || []);
 
   return (
     <div
@@ -105,7 +117,17 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isStory ? 8 : 12, marginBottom: isStory ? 12 : 16 }}>
         {renderMetric("WORKOUTS", `${summary.workoutCount}回`)}
         {renderMetric("VOLUME", formatVolume(summary.totalVolume))}
-        {renderMetric("EXERCISES", `${summary.exerciseCount}種目`)}
+        {renderMetric(
+          "EXERCISES",
+          <div style={{ display: "grid", gap: 4 }}>
+            <div>{exerciseCountSummary}</div>
+            {totalExerciseCount > 0 && (
+              <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.68)" }}>
+                合計 {totalExerciseCount}種目
+              </div>
+            )}
+          </div>
+        )}
         {renderMetric("MOST TRAINED", summary.topBodyPart)}
         {renderMetric("PR UPDATES", `${summary.prUpdateCount}件`)}
         {renderMetric("STREAK", `${summary.streak}日`)}

@@ -1,5 +1,9 @@
 import { dispW } from "./helpers";
 import { normalizeExerciseName } from "./exerciseName";
+import {
+  getExerciseCountByBodyPart,
+  getExerciseCountTotal,
+} from "./exerciseCountByBodyPart";
 
 export const formatWorkoutDaySummaryDuration = (seconds) => {
   const totalSec = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -72,6 +76,9 @@ export function buildWorkoutDaySummary({
   const totalVolume = Math.round(
     normalizedEntries.reduce((sum, entry) => sum + Number(entry?.volume || 0), 0)
   );
+  const exerciseCountByBodyPart = getExerciseCountByBodyPart(normalizedEntries, {
+    sort: "fixed",
+  });
   const totalSetCount = normalizedEntries.reduce(
     (sum, entry) => sum + Number(entry?.setCount || entry?.sets?.length || 0),
     0
@@ -83,7 +90,8 @@ export function buildWorkoutDaySummary({
     durationSec: Math.max(0, Math.floor(Number(durationSec) || 0)),
     totalVolume,
     setCount: totalSetCount,
-    exerciseCount: normalizedEntries.length,
+    exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
+    exerciseCountByBodyPart,
     prCount: prKeySet.size,
     bodyParts,
     items,

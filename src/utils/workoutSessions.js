@@ -4,6 +4,10 @@ import {
   sanitizeWorkoutSets,
   storeW,
 } from "./helpers";
+import {
+  getExerciseCountByBodyPart,
+  getExerciseCountTotal,
+} from "./exerciseCountByBodyPart";
 
 const buildSessionExerciseKey = (exerciseName, bodyPart) =>
   `${String(bodyPart || "").trim()}::${String(exerciseName || "").trim()}`;
@@ -171,16 +175,21 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
       volume: roundNumeric(item.volume, 1),
       best_set_json: item.best_set_json || {},
     }));
+  const exerciseCountByBodyPart = getExerciseCountByBodyPart(exercises, {
+    sort: "fixed",
+  });
+  const totalExerciseCount = getExerciseCountTotal(exerciseCountByBodyPart);
 
   return {
     session: {
       workout_date: workoutDate,
       total_volume: roundNumeric(totalVolume, 1),
-      exercise_count: exercises.length,
+      exercise_count: totalExerciseCount,
       summary_json: {
         setCount: totalSetCount,
         totalVolume: roundNumeric(totalVolume, 1),
-        exerciseCount: exercises.length,
+        exerciseCount: totalExerciseCount,
+        exerciseCountByBodyPart,
         items: exercises,
       },
       visibility: options.visibility || "friends",

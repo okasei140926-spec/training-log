@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { formatWorkoutDaySummaryDuration } from "../../utils/workoutDaySummary";
+import { getExerciseCountTotal } from "../../utils/exerciseCountByBodyPart";
 
 const formatDateLabel = (date) => {
   const value = String(date || "").trim();
@@ -68,7 +69,39 @@ export default function WorkoutDaySummaryModal({
         : null,
       { key: "volume", label: "Volume", value: formatVolume(summary.totalVolume) },
       { key: "setCount", label: "セット数", value: `${summary.setCount}` },
-      { key: "exerciseCount", label: "種目数", value: `${summary.exerciseCount}` },
+      {
+        key: "exerciseCount",
+        label: "種目数",
+        valueNode:
+          summary.exerciseCountByBodyPart?.length > 0 ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {summary.exerciseCountByBodyPart.map((item) => (
+                <span
+                  key={`exercise-count-${item.bodyPart}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    background: "rgba(18, 199, 194, 0.08)",
+                    border: "1px solid rgba(18, 199, 194, 0.14)",
+                    color: "var(--accent-strong, var(--accent))",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {item.bodyPart} {item.count}種目
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+              {getExerciseCountTotal(summary.exerciseCountByBodyPart || [])}
+            </div>
+          ),
+      },
       { key: "prCount", label: "PR", value: `${summary.prCount}件` },
     ];
     return base.filter(Boolean);
@@ -182,9 +215,13 @@ export default function WorkoutDaySummaryModal({
                 }}
               >
                 <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 700 }}>{item.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", marginTop: 6 }}>
-                  {item.value}
-                </div>
+                {item.valueNode ? (
+                  <div style={{ marginTop: 8 }}>{item.valueNode}</div>
+                ) : (
+                  <div style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", marginTop: 6 }}>
+                    {item.value}
+                  </div>
+                )}
               </div>
             ))}
           </div>

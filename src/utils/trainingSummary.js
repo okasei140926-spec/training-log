@@ -8,6 +8,10 @@ import {
   buildBodyPartExerciseKey,
   resolveRecordedBodyPartLabel,
 } from "./bodyPartClassification";
+import {
+  getExerciseCountByBodyPart,
+  getExerciseCountTotal,
+} from "./exerciseCountByBodyPart";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -238,7 +242,6 @@ export function buildTrainingSummary({
   const periodEntries = allEntries.filter((entry) => entry.date >= startKey && entry.date <= endKey);
   const workoutDates = [...new Set(periodEntries.map((entry) => entry.date))].sort();
   const totalVolume = Math.round(periodEntries.reduce((sum, entry) => sum + entry.volume, 0));
-  const exerciseKeys = [...new Set(periodEntries.map((entry) => entry.key))];
 
   const bodyPartStats = {};
   const exerciseStats = {};
@@ -321,6 +324,9 @@ export function buildTrainingSummary({
     .sort((a, b) => b.sets - a.sets || b.volume - a.volume || a.bodyPart.localeCompare(b.bodyPart, "ja"));
   const sortedExerciseStats = Object.values(exerciseStats)
     .sort((a, b) => b.volume - a.volume || b.setCount - a.setCount || a.exerciseName.localeCompare(b.exerciseName, "ja"));
+  const exerciseCountByBodyPart = getExerciseCountByBodyPart(sortedExerciseStats, {
+    sort: "fixed",
+  });
   const sortedDailyStats = Object.values(dailyStats)
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((item) => ({
@@ -328,6 +334,9 @@ export function buildTrainingSummary({
       setCount: item.setCount,
       volume: Math.round(item.volume),
       exerciseCount: Object.keys(item.exerciseMap).length,
+      exerciseCountByBodyPart: getExerciseCountByBodyPart(Object.values(item.exerciseMap), {
+        sort: "fixed",
+      }),
       bodyParts: [...item.bodyParts].sort((a, b) => a.localeCompare(b, "ja")),
       exercises: Object.values(item.exerciseMap).sort(
         (a, b) => b.volume - a.volume || b.setCount - a.setCount || a.exerciseName.localeCompare(b.exerciseName, "ja")
@@ -372,7 +381,8 @@ export function buildTrainingSummary({
     workoutCount: workoutDates.length,
     totalSets: periodEntries.reduce((sum, entry) => sum + entry.setCount, 0),
     totalVolume,
-    exerciseCount: exerciseKeys.length,
+    exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
+    exerciseCountByBodyPart,
     topBodyPart: topBodyPart?.bodyPart || "なし",
     bodyPartStats: sortedBodyPartStats,
     exerciseStats: sortedExerciseStats,

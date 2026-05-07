@@ -4,6 +4,10 @@ import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/help
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 import { buildTrainingSummary } from "../utils/trainingSummary";
+import {
+  formatExerciseCountByBodyPart,
+  getExerciseCountTotal,
+} from "../utils/exerciseCountByBodyPart";
 import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 
 const PERIODS = [
@@ -518,15 +522,24 @@ export default function AnalyticsScreen({
         title: "種目数詳細",
         rangeLabel: overviewSummary.rangeLabel,
         empty: overviewSummary.exerciseCount <= 0,
-        summaryRows: [{ label: "実施種目数", value: `${overviewSummary.exerciseCount}種目` }],
+        summaryRows: [
+          {
+            label: "部位別種目数",
+            value:
+              formatExerciseCountByBodyPart(overviewSummary.exerciseCountByBodyPart, {
+                sort: "fixed",
+                separator: " / ",
+              }) || "まだありません",
+          },
+        ],
         sections: [
           {
-            title: "種目一覧",
-            items: (overviewSummary.exerciseStats || []).map((item) => ({
-              key: `exercise-list-${item.key}`,
-              title: item.exerciseName,
-              meta: `${item.bodyPart}・${item.setCount}セット`,
-              value: `${Math.round(item.volume).toLocaleString("ja-JP")}kg`,
+            title: "部位別",
+            items: (overviewSummary.exerciseCountByBodyPart || []).map((item) => ({
+              key: `exercise-body-part-${item.bodyPart}`,
+              title: item.bodyPart,
+              meta: `${item.count}種目`,
+              value: "",
             })),
           },
         ],
@@ -558,7 +571,7 @@ export default function AnalyticsScreen({
     label,
     value,
     accent = null,
-    { accentColor = "var(--accent)" } = {}
+    { accentColor = "var(--accent)", valueNode = null, compactValue = false } = {}
   ) => (
     <button
       type="button"
@@ -588,7 +601,21 @@ export default function AnalyticsScreen({
         詳細
       </div>
       <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>{value}</div>
+      {valueNode ? (
+        <div
+          style={{
+            fontSize: compactValue ? 13 : 24,
+            fontWeight: compactValue ? 700 : 800,
+            color: "var(--text)",
+            lineHeight: compactValue ? 1.45 : 1.1,
+            whiteSpace: "pre-line",
+          }}
+        >
+          {valueNode}
+        </div>
+      ) : (
+        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>{value}</div>
+      )}
       {accent && (
         <div style={{ fontSize: 11, color: accentColor, fontWeight: 700, marginTop: 6 }}>
           {accent}
@@ -904,8 +931,24 @@ export default function AnalyticsScreen({
           {
             key: "exercises",
             label: "種目数",
-            value: `${overviewSummary.exerciseCount}種目`,
-            accent: null,
+            value: "",
+            valueNode:
+              overviewSummary.exerciseCountByBodyPart?.length > 0 ? (
+                <div style={{ display: "grid", gap: 4 }}>
+                  {overviewSummary.exerciseCountByBodyPart.slice(0, 3).map((item) => (
+                    <div key={`overview-exercise-count-${item.bodyPart}`}>
+                      {item.bodyPart} {item.count}種目
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                "まだありません"
+              ),
+            compactValue: true,
+            accent:
+              overviewSummary.exerciseCountByBodyPart?.length > 3
+                ? `合計 ${getExerciseCountTotal(overviewSummary.exerciseCountByBodyPart)}種目`
+                : null,
           },
           {
             key: "sets",
@@ -913,7 +956,13 @@ export default function AnalyticsScreen({
             value: `${totalOverviewSets}セット`,
             accent: null,
           },
-        ].map((item) => renderOverviewMetric(item.key, item.label, item.value, item.accent, { accentColor: item.accentColor }))}
+        ].map((item) =>
+          renderOverviewMetric(item.key, item.label, item.value, item.accent, {
+            accentColor: item.accentColor,
+            valueNode: item.valueNode,
+            compactValue: item.compactValue,
+          })
+        )}
       </div>
 
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
