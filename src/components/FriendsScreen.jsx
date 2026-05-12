@@ -10,7 +10,10 @@ import {
     getValidWorkoutDatesFromHistory,
     hasValidWorkoutOnDate,
     mergeHistoryMaps,
+    PR_UPDATE_TOLERANCE_KG,
     sanitizeWorkoutSets,
+    sanitizeHistoryRecord,
+    hasMeaningfulPRIncrease,
 } from "../utils/helpers";
 import {
     buildWorkoutSessionEntriesFromHistory,
@@ -19,6 +22,7 @@ import {
 import {
     getSetCountByBodyPart,
 } from "../utils/setCountByBodyPart";
+import { BODY_PART_DISPLAY_ORDER } from "../utils/exerciseCountByBodyPart";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
@@ -65,6 +69,19 @@ const formatRelativeWorkoutDate = (workoutDate, todayKey) => {
 
     const [, month = "", day = ""] = normalizedDate.split("-");
     return `${month}/${day}`;
+};
+
+const sortBodyPartCountsFixed = (items = []) => {
+    const orderIndex = (bodyPart) => {
+        const index = BODY_PART_DISPLAY_ORDER.indexOf(bodyPart);
+        return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    };
+
+    return [...items].sort(
+        (a, b) =>
+            orderIndex(a.bodyPart) - orderIndex(b.bodyPart) ||
+            String(a.bodyPart || "").localeCompare(String(b.bodyPart || ""), "ja")
+    );
 };
 
 export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, user, onLogin, onLogout, onOpenRecord, mode = "all" }) {
@@ -384,10 +401,28 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         const timestampBase = workoutRow?.ended_at || workoutRow?.started_at || `${workoutDate}T12:00:00+09:00`;
         const payloadSummary = payload?.session?.summary_json || {};
         const sessionSummary = sessionMeta?.summary_json || {};
+        const fallbackPrCount = entries.reduce((count, entry) => {
+            const previousSets = (sourceHistory?.[entry.exerciseName] || []).reduce((sets, record) => {
+                const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: false });
+                if (!sanitized?.date || sanitized.date >= workoutDate) return sets;
+                const recordBodyPart = String(sanitized.bodyPart || sanitized.body_part || "").trim();
+                if (recordBodyPart && entry.bodyPart && recordBodyPart !== entry.bodyPart) {
+                    return sets;
+                }
+                sets.push(...sanitizeWorkoutSets(getRecordSourceSets(sanitized), { allowBodyweight: false }));
+                return sets;
+            }, []);
+
+            if (!previousSets.length) return count;
+            if (!hasMeaningfulPRIncrease(entry.sets, previousSets, null, PR_UPDATE_TOLERANCE_KG)) {
+                return count;
+            }
+            return count + 1;
+        }, 0);
         const summary = {
             ...payloadSummary,
             ...sessionSummary,
-            prCount: Number(sessionSummary?.prCount || payloadSummary?.prCount || 0),
+            prCount: Number(sessionSummary?.prCount || payloadSummary?.prCount || fallbackPrCount || 0),
         };
         const summaryItems = Array.isArray(summary.items) ? summary.items : [];
 
@@ -1032,7 +1067,14 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 : null;
 
         if (summaryCounts?.length) {
-            return getSetCountByBodyPart(summaryCounts, { sort: "fixed" });
+            return sortBodyPartCountsFixed(
+                summaryCounts
+                    .map((countItem) => ({
+                        bodyPart: String(countItem?.bodyPart || countItem?.body_part || "").trim() || "その他",
+                        count: Number(countItem?.count || 0),
+                    }))
+                    .filter((countItem) => countItem.count > 0)
+            );
         }
 
         const sourceItems = item?.detailedItems?.length
@@ -1054,7 +1096,19 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
     const getSessionPrCount = useCallback((item) => {
         const summary = item.summary || {};
-        return Math.max(0, Number(summary.prCount || 0));
+        const summaryPrCount = Number(summary.prCount || item?.summary_json?.prCount || 0);
+        if (Number.isFinite(summaryPrCount) && summaryPrCount > 0) return Math.max(0, summaryPrCount);
+
+        if (!summaryPrCount && item?.summaryItems?.length) {
+            console.warn("[feed] prCount fallback returned 0", {
+                workoutId: item?.id,
+                workoutDate: item?.workout_date,
+                userId: item?.user_id,
+                summaryItems: item?.summaryItems,
+            });
+        }
+
+        return 0;
     }, []);
 
     const activityCount = activityFeed.length;
