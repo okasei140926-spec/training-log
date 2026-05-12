@@ -5,8 +5,9 @@ import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 import { buildTrainingSummary } from "../utils/trainingSummary";
 import {
-  formatExerciseCountByBodyPart,
-} from "../utils/exerciseCountByBodyPart";
+  formatSetCountByBodyPart,
+  getSetCountTotal,
+} from "../utils/setCountByBodyPart";
 import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 
 const PERIODS = [
@@ -518,14 +519,14 @@ export default function AnalyticsScreen({
         ],
       },
       exercises: {
-        title: "種目数詳細",
+        title: "部位別セット詳細",
         rangeLabel: overviewSummary.rangeLabel,
-        empty: overviewSummary.exerciseCount <= 0,
+        empty: getSetCountTotal(overviewSummary.setCountByBodyPart || []) <= 0,
         summaryRows: [
           {
-            label: "部位別種目数",
+            label: "部位別セット数",
             value:
-              formatExerciseCountByBodyPart(overviewSummary.exerciseCountByBodyPart, {
+              formatSetCountByBodyPart(overviewSummary.setCountByBodyPart, {
                 sort: "fixed",
                 separator: " / ",
               }) || "まだありません",
@@ -534,10 +535,10 @@ export default function AnalyticsScreen({
         sections: [
           {
             title: "部位別",
-            items: (overviewSummary.exerciseCountByBodyPart || []).map((item) => ({
-              key: `exercise-body-part-${item.bodyPart}`,
+            items: (overviewSummary.setCountByBodyPart || []).map((item) => ({
+              key: `set-body-part-${item.bodyPart}`,
               title: item.bodyPart,
-              meta: `${item.count}種目`,
+              meta: `${item.count}セット`,
               value: "",
             })),
           },
@@ -963,6 +964,24 @@ export default function AnalyticsScreen({
           <>
             <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700, marginBottom: 10 }}>
               合計 {totalOverviewSets}セット
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+              {overviewBodyPartStats.slice(0, 4).map((item) => (
+                <div
+                  key={`overview-sets-${item.bodyPart}`}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "rgba(18, 199, 194, 0.06)",
+                    border: "1px solid rgba(18, 199, 194, 0.12)",
+                    color: "var(--text2)",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  {item.bodyPart} {item.sets}セット
+                </div>
+              ))}
             </div>
             <ResponsiveContainer width="100%" height={Math.max(250, Math.min(360, 160 + overviewBodyPartChart.length * 18))}>
               <BarChart data={overviewBodyPartChart} margin={{ top: 10, right: 10, left: 4, bottom: 4 }}>

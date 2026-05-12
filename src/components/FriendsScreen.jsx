@@ -357,40 +357,54 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         if (!feedUserId || !workoutDate) return null;
 
         const entries = buildWorkoutSessionEntriesFromHistory(sourceHistory, workoutDate);
-        if (!entries.length) return null;
+        const payload = entries.length
+            ? buildWorkoutSessionPayloadFromEntries(entries, workoutDate)
+            : null;
 
-        const payload = buildWorkoutSessionPayloadFromEntries(entries, workoutDate);
-        if (!payload?.session) return null;
-
-        const detailedItems = entries.map((entry) => ({
-            exercise_name: entry.exerciseName,
-            body_part: String(entry.bodyPart || "").trim(),
-            set_count: entry.sets.length,
-            order: Number.isFinite(entry.order) ? entry.order : 999,
-            sets: entry.sets,
-        }));
+        const detailedItems = entries.length
+            ? entries.map((entry) => ({
+                exercise_name: entry.exerciseName,
+                body_part: String(entry.bodyPart || "").trim(),
+                set_count: entry.sets.length,
+                order: Number.isFinite(entry.order) ? entry.order : 999,
+                sets: entry.sets,
+            }))
+            : [];
 
         const timestampBase = workoutRow?.ended_at || workoutRow?.started_at || `${workoutDate}T12:00:00+09:00`;
+        const payloadSummary = payload?.session?.summary_json || {};
+        const sessionSummary = sessionMeta?.summary_json || {};
         const summary = {
-            ...(payload.session.summary_json || {}),
-            ...(sessionMeta?.summary_json || {}),
-            prCount: Number(sessionMeta?.summary_json?.prCount || payload.session.summary_json?.prCount || 0),
+            ...payloadSummary,
+            ...sessionSummary,
+            prCount: Number(sessionSummary?.prCount || payloadSummary?.prCount || 0),
         };
+        const summaryItems = Array.isArray(summary.items) ? summary.items : [];
+
+        if (!payload?.session && !summaryItems.length) return null;
 
         return {
             id: sessionMeta?.id || `feed-${feedUserId}-${workoutDate}`,
             sessionId: sessionMeta?.id || null,
             user_id: feedUserId,
             workout_date: workoutDate,
+            started_at: workoutRow?.started_at || null,
+            ended_at: workoutRow?.ended_at || null,
             created_at: sessionMeta?.created_at || timestampBase,
             updated_at: sessionMeta?.updated_at || workoutRow?.ended_at || workoutRow?.started_at || timestampBase,
             duration_sec: Number(sessionMeta?.duration_sec || workoutRow?.duration_sec || 0),
-            total_volume: Number(sessionMeta?.total_volume || payload.session.total_volume || 0),
-            exercise_count: Number(sessionMeta?.exercise_count || payload.session.exercise_count || 0),
+            total_volume: Number(sessionMeta?.total_volume || payload?.session?.total_volume || 0),
+            exercise_count: Number(sessionMeta?.exercise_count || payload?.session?.exercise_count || 0),
             summary_json: summary,
             summary,
-            summaryItems: Array.isArray(summary.items) ? summary.items : [],
-            detailedItems,
+            summaryItems,
+            detailedItems: detailedItems.length ? detailedItems : summaryItems.map((exercise) => ({
+                exercise_name: exercise.exercise_name,
+                body_part: exercise.body_part,
+                set_count: Number(exercise.set_count || 0),
+                order: Number(exercise.order || 999),
+                sets: Array.isArray(exercise.sets) ? exercise.sets : [],
+            })),
             likeCount: Number(sessionMeta?.likeCount || 0),
             likedByMe: Boolean(sessionMeta?.likedByMe),
             commentCount: Number(sessionMeta?.commentCount || 0),
@@ -562,8 +576,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             });
 
             const buildItemsForUser = (targetUserId, sourceHistory = {}) => {
-                const validDates = getValidWorkoutDatesFromHistory(sourceHistory, { since: recentSevenStart })
+                const historyDates = getValidWorkoutDatesFromHistory(sourceHistory, { since: recentSevenStart })
                     .filter((dateKey) => dateKey <= today);
+                const sessionDates = Array.from(sessionMetaMap.keys())
+                    .map((key) => {
+                        const [userId, date] = String(key).split("::");
+                        return userId === targetUserId ? date : null;
+                    })
+                    .filter((dateKey) => dateKey && dateKey >= recentSevenStart && dateKey <= today);
+                const validDates = [...new Set([...historyDates, ...sessionDates])];
 
                 return validDates.map((workoutDate) => {
                     const workoutKey = `${targetUserId}::${workoutDate}`;
@@ -609,9 +630,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 .sort((a, b) => {
                     const dateCompare = String(b.workout_date || "").localeCompare(String(a.workout_date || ""));
                     if (dateCompare !== 0) return dateCompare;
-                    const timeA = new Date(a.updated_at || a.shared_at || a.created_at || 0).getTime();
-                    const timeB = new Date(b.updated_at || b.shared_at || b.created_at || 0).getTime();
-                    return timeB - timeA;
+                    const timeA = new Date(a.started_at || a.created_at || a.updated_at || 0).getTime();
+                    const timeB = new Date(b.started_at || b.created_at || b.updated_at || 0).getTime();
+                    return timeA - timeB;
                 });
 
             console.log("[feed] normalized feed items", {
