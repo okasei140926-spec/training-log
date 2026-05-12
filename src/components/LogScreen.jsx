@@ -7,7 +7,7 @@ import SetRow from "./log/SetRow";
 import WorkoutElapsedTimer from "./WorkoutElapsedTimer";
 import { buildWorkoutSessionPayloadFromDraft } from "../utils/workoutSessions";
 import { S } from "../utils/styles";
-import { getExerciseCountByBodyPart } from "../utils/exerciseCountByBodyPart";
+import { getSetCountByBodyPart } from "../utils/setCountByBodyPart";
 
 
 import {
@@ -89,7 +89,7 @@ export default function LogScreen({
     const [showWorkoutTimerMenu, setShowWorkoutTimerMenu] = useState(false);
     const editRef = useRef(null);
 
-    const exerciseCountByBodyPart = getExerciseCountByBodyPart(
+    const setCountByBodyPart = getSetCountByBodyPart(
         exercises.map((exercise) => ({
             bodyPart: exercise.bodyPart || exercise.label || "その他",
             exerciseName: exercise.name,
@@ -227,7 +227,7 @@ export default function LogScreen({
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
                     {[
-                        ...exerciseCountByBodyPart.map((item) => `${item.bodyPart} ${item.count}種目`),
+                        ...setCountByBodyPart.map((item) => `${item.bodyPart} ${item.count}セット`),
                         `${setCount}セット`,
                         `PR ${prCount}件`,
                     ].map((item) => (

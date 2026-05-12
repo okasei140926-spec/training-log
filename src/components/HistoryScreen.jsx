@@ -28,11 +28,11 @@ import {
   readWorkoutTimerState,
 } from "../utils/workoutTimer";
 import { buildWorkoutSessionPayloadFromHistory } from "../utils/workoutSessions";
+import { getExerciseCountByBodyPart, getExerciseCountTotal } from "../utils/exerciseCountByBodyPart";
 import {
-  formatExerciseCountByBodyPart,
-  getExerciseCountByBodyPart,
-  getExerciseCountTotal,
-} from "../utils/exerciseCountByBodyPart";
+  formatSetCountByBodyPart,
+  getSetCountByBodyPart,
+} from "../utils/setCountByBodyPart";
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
 const formatWeight = (value, unit = "kg") => {
@@ -336,9 +336,13 @@ export default function HistoryScreen({
     const exerciseCountByBodyPart = getExerciseCountByBodyPart(todayEntries, {
       sort: "fixed",
     });
+    const setCountByBodyPart = getSetCountByBodyPart(todayEntries, {
+      sort: "fixed",
+    });
     return {
       exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
       exerciseCountByBodyPart,
+      setCountByBodyPart,
       setCount: todayEntries.reduce((sum, entry) => sum + entry.setCount, 0),
       totalVolume: Math.round(todayEntries.reduce((sum, entry) => sum + entry.volume, 0)),
       durationSec: todayWorkoutDurationSec,
@@ -356,8 +360,8 @@ export default function HistoryScreen({
   );
 
   const todayWorkedBodyParts = useMemo(
-    () => todaySummary.exerciseCountByBodyPart || [],
-    [todaySummary.exerciseCountByBodyPart]
+    () => todaySummary.setCountByBodyPart || [],
+    [todaySummary.setCountByBodyPart]
   );
 
   const heroWorkoutCards = todayEntries.slice(0, 3);
@@ -404,16 +408,16 @@ export default function HistoryScreen({
 
     if (selectedSummaryKey === "exerciseCount") {
       return {
-        title: "今日の部位別種目数",
-        subtitle: formatExerciseCountByBodyPart(todaySummary.exerciseCountByBodyPart, {
+        title: "今日の部位別セット数",
+        subtitle: formatSetCountByBodyPart(todaySummary.setCountByBodyPart, {
           separator: " / ",
           sort: "fixed",
         }),
-        emptyText: "今日はまだ種目を記録していません",
-        items: (todaySummary.exerciseCountByBodyPart || []).map((item) => ({
-          key: `today-exercise-count-${item.bodyPart}`,
+        emptyText: "今日はまだセットを記録していません",
+        items: (todaySummary.setCountByBodyPart || []).map((item) => ({
+          key: `today-set-count-${item.bodyPart}`,
           title: item.bodyPart,
-          meta: `${item.count}種目`,
+          meta: `${item.count}セット`,
         })),
       };
     }

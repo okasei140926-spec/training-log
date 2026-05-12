@@ -1,8 +1,8 @@
 import { forwardRef } from "react";
 import {
-  formatExerciseCountByBodyPart,
-  getExerciseCountTotal,
-} from "../../utils/exerciseCountByBodyPart";
+  formatSetCountByBodyPart,
+  getSetCountTotal,
+} from "../../utils/setCountByBodyPart";
 
 const PRESET_STYLES = {
   square: {
@@ -65,14 +65,14 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
   const isWeekly = summary.group === "weekly";
   const trendItems = buildTrendLabels(summary.trend, isWeekly);
   const storyHighlights = summary.highlights.slice(0, 2);
-  const exerciseCountSummary =
-    formatExerciseCountByBodyPart(summary.exerciseCountByBodyPart, {
+  const setCountSummary =
+    formatSetCountByBodyPart(summary.setCountByBodyPart, {
       sort: "count",
       maxParts: 2,
       separator: " / ",
       suffix: "",
     }) || "まだありません";
-  const totalExerciseCount = getExerciseCountTotal(summary.exerciseCountByBodyPart || []);
+  const totalSetCount = getSetCountTotal(summary.setCountByBodyPart || []);
 
   return (
     <div
@@ -118,12 +118,12 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
         {renderMetric("WORKOUTS", `${summary.workoutCount}回`)}
         {renderMetric("VOLUME", formatVolume(summary.totalVolume))}
         {renderMetric(
-          "EXERCISES",
+          "BODY PARTS",
           <div style={{ display: "grid", gap: 4 }}>
-            <div>{exerciseCountSummary}</div>
-            {totalExerciseCount > 0 && (
+            <div>{setCountSummary}</div>
+            {totalSetCount > 0 && (
               <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.68)" }}>
-                合計 {totalExerciseCount}種目
+                合計 {totalSetCount}セット
               </div>
             )}
           </div>

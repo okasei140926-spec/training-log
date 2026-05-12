@@ -6,7 +6,6 @@ import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/b
 import { buildTrainingSummary } from "../utils/trainingSummary";
 import {
   formatExerciseCountByBodyPart,
-  getExerciseCountTotal,
 } from "../utils/exerciseCountByBodyPart";
 import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 
@@ -931,24 +930,9 @@ export default function AnalyticsScreen({
           {
             key: "exercises",
             label: "種目数",
-            value: "",
-            valueNode:
-              overviewSummary.exerciseCountByBodyPart?.length > 0 ? (
-                <div style={{ display: "grid", gap: 4 }}>
-                  {overviewSummary.exerciseCountByBodyPart.slice(0, 3).map((item) => (
-                    <div key={`overview-exercise-count-${item.bodyPart}`}>
-                      {item.bodyPart} {item.count}種目
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                "まだありません"
-              ),
-            compactValue: true,
-            accent:
-              overviewSummary.exerciseCountByBodyPart?.length > 3
-                ? `合計 ${getExerciseCountTotal(overviewSummary.exerciseCountByBodyPart)}種目`
-                : null,
+            value: `${overviewSummary.exerciseCount || 0}種目`,
+            compactValue: false,
+            accent: null,
           },
           {
             key: "sets",

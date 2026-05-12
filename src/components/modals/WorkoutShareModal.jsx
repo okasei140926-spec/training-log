@@ -8,9 +8,9 @@ import {
     buildPhotoShareBlob,
 } from "../../utils/shareCanvas";
 import {
-    formatExerciseCountByBodyPart,
-    getExerciseCountTotal,
-} from "../../utils/exerciseCountByBodyPart";
+    formatSetCountByBodyPart,
+    getSetCountTotal,
+} from "../../utils/setCountByBodyPart";
 
 const TEMPLATE_OPTIONS = [
     { id: "cute", label: "映え" },
@@ -94,27 +94,27 @@ export default function WorkoutShareModal({
     const styleSet = buildTemplateStyles(template);
     const dateLabel = formatDate(workoutDate);
     const totalVolumeLabel = `${Number(summary?.totalVolumeKg || 0).toLocaleString("ja-JP")}kg`;
-    const exerciseCountSummary =
-        formatExerciseCountByBodyPart(summary?.exerciseCountByBodyPart || [], {
+    const setCountSummary =
+        formatSetCountByBodyPart(summary?.setCountByBodyPart || [], {
             sort: "count",
             maxParts: 2,
             separator: " / ",
             suffix: "",
         }) || "まだありません";
-    const totalExerciseCount = getExerciseCountTotal(summary?.exerciseCountByBodyPart || []);
+    const totalSetCount = getSetCountTotal(summary?.setCountByBodyPart || []);
     const summaryItems = [
         {
             value: (
                 <div style={{ display: "grid", gap: 4 }}>
-                    <div>{exerciseCountSummary}</div>
-                    {totalExerciseCount > 0 && (
+                    <div>{setCountSummary}</div>
+                    {totalSetCount > 0 && (
                         <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.72 }}>
-                            合計 {totalExerciseCount}種目
+                            合計 {totalSetCount}セット
                         </div>
                     )}
                 </div>
             ),
-            label: "種目",
+            label: "部位別セット",
         },
         { value: `${summary?.setCount || 0}セット`, label: "セット" },
         { value: `PR ${summary?.prCount || 0}`, label: "PR" },

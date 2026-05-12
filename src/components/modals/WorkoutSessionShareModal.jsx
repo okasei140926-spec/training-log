@@ -50,6 +50,7 @@ export default function WorkoutSessionShareModal({
     const [selectedPhotoId, setSelectedPhotoId] = useState(() => photoRows[0]?.id ?? null);
     const [sharing, setSharing] = useState(false);
     const cardRef = useRef(null);
+    const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
 
     const preset = CARD_PRESETS[sizeKey] || CARD_PRESETS.square;
     const dateLabel = formatDate(workoutDate);
@@ -66,6 +67,47 @@ export default function WorkoutSessionShareModal({
         if (!isOpen) return;
         setSelectedPhotoId(photoRows[0]?.id ?? null);
     }, [isOpen, photoRows]);
+
+    useEffect(() => {
+        if (!isOpen) return undefined;
+
+        const body = document.body;
+        const html = document.documentElement;
+        const scrollTop = window.scrollY || window.pageYOffset || 0;
+        const scrollLock = scrollLockRef.current;
+
+        scrollLock.top = scrollTop;
+        scrollLock.body = {
+            overflow: body.style.overflow,
+            position: body.style.position,
+            top: body.style.top,
+            width: body.style.width,
+            touchAction: body.style.touchAction,
+        };
+        scrollLock.html = {
+            overflow: html.style.overflow,
+            overscrollBehavior: html.style.overscrollBehavior,
+        };
+
+        body.style.overflow = "hidden";
+        body.style.position = "fixed";
+        body.style.top = `-${scrollTop}px`;
+        body.style.width = "100%";
+        body.style.touchAction = "none";
+        html.style.overflow = "hidden";
+        html.style.overscrollBehavior = "none";
+
+        return () => {
+            body.style.overflow = scrollLock.body.overflow || "";
+            body.style.position = scrollLock.body.position || "";
+            body.style.top = scrollLock.body.top || "";
+            body.style.width = scrollLock.body.width || "";
+            body.style.touchAction = scrollLock.body.touchAction || "";
+            html.style.overflow = scrollLock.html.overflow || "";
+            html.style.overscrollBehavior = scrollLock.html.overscrollBehavior || "";
+            window.scrollTo(0, scrollLock.top || 0);
+        };
+    }, [isOpen]);
 
     if (!isOpen || !sessionPayload) return null;
 
@@ -123,9 +165,10 @@ export default function WorkoutSessionShareModal({
                 background: "rgba(15, 23, 42, 0.72)",
                 zIndex: 320,
                 display: "flex",
-                alignItems: "center",
+                alignItems: "flex-end",
                 justifyContent: "center",
-                padding: 20,
+                padding:
+                    "calc(16px + var(--safe-top, 0px)) 12px calc(12px + var(--safe-bottom, 0px))",
             }}
             onClick={onClose}
         >
@@ -135,12 +178,18 @@ export default function WorkoutSessionShareModal({
                     maxWidth: 420,
                     background: "var(--card-modal)",
                     borderRadius: 24,
-                    padding: 20,
+                    border: "1px solid var(--border2)",
+                    boxShadow: "0 22px 44px rgba(15, 23, 42, 0.18)",
                     boxSizing: "border-box",
+                    maxHeight:
+                        "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 24px)",
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
                 }}
                 onClick={(event) => event.stopPropagation()}
             >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "18px 18px 12px" }}>
                     <div>
                         <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>シェアカードを作成</div>
                         <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
@@ -156,98 +205,109 @@ export default function WorkoutSessionShareModal({
                     </button>
                 </div>
 
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                    {Object.values(CARD_PRESETS).map((item) => (
-                        <button
-                            key={item.key}
-                            type="button"
-                            onClick={() => setSizeKey(item.key)}
-                            style={{
-                                padding: "8px 12px",
-                                borderRadius: 999,
-                                border: "1px solid var(--border2)",
-                                background: sizeKey === item.key ? "var(--text)" : "var(--card2)",
-                                color: sizeKey === item.key ? "var(--bg)" : "var(--text2)",
-                                fontSize: 12,
-                                fontWeight: 700,
-                            }}
-                        >
-                            {item.label}
-                        </button>
-                    ))}
-                </div>
-
-                {photoRows.length > 0 && (
-                    <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>
-                            写真を選択
-                        </div>
-                        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
+                <div
+                    style={{
+                        flex: 1,
+                        minHeight: 0,
+                        overflowY: "auto",
+                        WebkitOverflowScrolling: "touch",
+                        overscrollBehavior: "contain",
+                        padding: "0 18px calc(18px + var(--safe-bottom, 0px))",
+                    }}
+                >
+                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        {Object.values(CARD_PRESETS).map((item) => (
                             <button
+                                key={item.key}
                                 type="button"
-                                onClick={() => setSelectedPhotoId(null)}
+                                onClick={() => setSizeKey(item.key)}
                                 style={{
-                                    minWidth: 76,
-                                    padding: "8px 10px",
-                                    borderRadius: 12,
+                                    padding: "8px 12px",
+                                    borderRadius: 999,
                                     border: "1px solid var(--border2)",
-                                    background: selectedPhotoId === null ? "var(--text)" : "var(--card2)",
-                                    color: selectedPhotoId === null ? "var(--bg)" : "var(--text2)",
-                                    fontSize: 11,
+                                    background: sizeKey === item.key ? "var(--text)" : "var(--card2)",
+                                    color: sizeKey === item.key ? "var(--bg)" : "var(--text2)",
+                                    fontSize: 12,
                                     fontWeight: 700,
                                 }}
                             >
-                                写真なし
+                                {item.label}
                             </button>
-                            {photoRows.map((row, index) => (
+                        ))}
+                    </div>
+
+                    {photoRows.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>
+                                写真を選択
+                            </div>
+                            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
                                 <button
-                                    key={row.id}
                                     type="button"
-                                    onClick={() => setSelectedPhotoId(row.id)}
+                                    onClick={() => setSelectedPhotoId(null)}
                                     style={{
                                         minWidth: 76,
-                                        padding: "6px",
+                                        padding: "8px 10px",
                                         borderRadius: 12,
-                                        border: selectedPhotoId === row.id ? "2px solid var(--accent)" : "1px solid var(--border2)",
-                                        background: "var(--card2)",
-                                        color: "var(--text2)",
+                                        border: "1px solid var(--border2)",
+                                        background: selectedPhotoId === null ? "var(--text)" : "var(--card2)",
+                                        color: selectedPhotoId === null ? "var(--bg)" : "var(--text2)",
                                         fontSize: 11,
                                         fontWeight: 700,
                                     }}
                                 >
-                                    {photoUrls[row.id] ? (
-                                        <img
-                                            src={photoUrls[row.id]}
-                                            alt={`${workoutDate} session ${index + 1}`}
-                                            style={{ width: "100%", height: 56, borderRadius: 8, objectFit: "cover", display: "block", marginBottom: 4 }}
-                                        />
-                                    ) : (
-                                        <div style={{ width: "100%", height: 56, borderRadius: 8, background: "var(--card)", marginBottom: 4 }} />
-                                    )}
-                                    {index + 1}枚目
+                                    写真なし
                                 </button>
-                            ))}
+                                {photoRows.map((row, index) => (
+                                    <button
+                                        key={row.id}
+                                        type="button"
+                                        onClick={() => setSelectedPhotoId(row.id)}
+                                        style={{
+                                            minWidth: 76,
+                                            padding: "6px",
+                                            borderRadius: 12,
+                                            border: selectedPhotoId === row.id ? "2px solid var(--accent)" : "1px solid var(--border2)",
+                                            background: "var(--card2)",
+                                            color: "var(--text2)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                        }}
+                                    >
+                                        {photoUrls[row.id] ? (
+                                            <img
+                                                src={photoUrls[row.id]}
+                                                alt={`${workoutDate} session ${index + 1}`}
+                                                style={{ width: "100%", height: 56, borderRadius: 8, objectFit: "cover", display: "block", marginBottom: 4 }}
+                                            />
+                                        ) : (
+                                            <div style={{ width: "100%", height: 56, borderRadius: 8, background: "var(--card)", marginBottom: 4 }} />
+                                        )}
+                                        {index + 1}枚目
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-                    <div
-                        ref={cardRef}
-                        style={{
-                            width: preset.width,
-                            height: preset.height,
-                            borderRadius: 28,
-                            overflow: "hidden",
-                            background: selectedPhotoUrl
-                                ? "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)"
-                                : "linear-gradient(160deg, #eff6ff 0%, #dcfce7 52%, #ffffff 100%)",
-                            border: "1px solid rgba(255,255,255,0.85)",
-                            boxShadow: "0 30px 60px rgba(15, 23, 42, 0.14)",
-                            display: "flex",
-                            flexDirection: "column",
-                        }}
-                    >
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+                        <div
+                            ref={cardRef}
+                            style={{
+                                width: preset.width,
+                                height: preset.height,
+                                borderRadius: 28,
+                                overflow: "hidden",
+                                background: selectedPhotoUrl
+                                    ? "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)"
+                                    : "linear-gradient(160deg, #eff6ff 0%, #dcfce7 52%, #ffffff 100%)",
+                                border: "1px solid rgba(255,255,255,0.85)",
+                                boxShadow: "0 30px 60px rgba(15, 23, 42, 0.14)",
+                                display: "flex",
+                                flexDirection: "column",
+                                flexShrink: 0,
+                            }}
+                        >
                         {selectedPhotoUrl ? (
                             <img
                                 src={selectedPhotoUrl}
@@ -327,44 +387,45 @@ export default function WorkoutSessionShareModal({
                                 </div>
                             )}
                         </div>
+                        </div>
                     </div>
-                </div>
 
-                <div style={{ display: "flex", gap: 10 }}>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        style={{
-                            flex: 1,
-                            padding: "14px",
-                            borderRadius: 14,
-                            background: "var(--card2)",
-                            border: "1px solid var(--border2)",
-                            color: "var(--text2)",
-                            fontSize: 14,
-                            fontWeight: 700,
-                        }}
-                    >
-                        閉じる
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleShare}
-                        disabled={sharing}
-                        style={{
-                            flex: 2,
-                            padding: "14px",
-                            borderRadius: 14,
-                            background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                            border: "none",
-                            color: "#fff",
-                            fontSize: 15,
-                            fontWeight: 800,
-                            opacity: sharing ? 0.7 : 1,
-                        }}
-                    >
-                        {sharing ? "作成中..." : "共有する"}
-                    </button>
+                    <div style={{ display: "flex", gap: 10 }}>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            style={{
+                                flex: 1,
+                                padding: "14px",
+                                borderRadius: 14,
+                                background: "var(--card2)",
+                                border: "1px solid var(--border2)",
+                                color: "var(--text2)",
+                                fontSize: 14,
+                                fontWeight: 700,
+                            }}
+                        >
+                            閉じる
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleShare}
+                            disabled={sharing}
+                            style={{
+                                flex: 2,
+                                padding: "14px",
+                                borderRadius: 14,
+                                background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                                border: "none",
+                                color: "#fff",
+                                fontSize: 15,
+                                fontWeight: 800,
+                                opacity: sharing ? 0.7 : 1,
+                            }}
+                        >
+                            {sharing ? "作成中..." : "共有する"}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

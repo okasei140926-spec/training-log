@@ -17,8 +17,8 @@ import {
     buildWorkoutSessionPayloadFromEntries,
 } from "../utils/workoutSessions";
 import {
-    getExerciseCountByBodyPart,
-} from "../utils/exerciseCountByBodyPart";
+    getSetCountByBodyPart,
+} from "../utils/setCountByBodyPart";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
@@ -85,11 +85,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [likePendingMap, setLikePendingMap] = useState({});
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
-    const [activityOverview, setActivityOverview] = useState({
-        activityCount: 0,
-        activeFriendCount: 0,
-        hasTodayRecord: false,
-    });
     const [expandedFeedItems, setExpandedFeedItems] = useState({});
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = formatDateKey();
@@ -407,11 +402,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const fetchActivityFeed = useCallback(async ({ reset = false } = {}) => {
         if (!user?.id) {
             setActivityFeed([]);
-            setActivityOverview({
-                activityCount: 0,
-                activeFriendCount: 0,
-                hasTodayRecord: false,
-            });
             return false;
         }
 
@@ -624,22 +614,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     return timeB - timeA;
                 });
 
-            const nextOverview = {
-                activityCount: allItems.length,
-                activeFriendCount: new Set(
-                    friendItems
-                        .map((item) => item.user_id)
-                        .filter(Boolean)
-                ).size,
-                hasTodayRecord: getValidWorkoutDatesFromHistory(mergedOwnHistory, { since: today }).includes(today),
-            };
-
             console.log("[feed] normalized feed items", {
                 currentUserId: user.id,
                 friendIds,
                 ownWorkoutsLast7DaysCount: ownItems.length,
                 friendWorkoutsLast7DaysCount: friendItems.length,
                 feedItemsLength: allItems.length,
+                headerActivityCount: allItems.length,
                 displayedCardsCount: allItems.length,
                 todayLocalDate: today,
                 last7StartDate: recentSevenStart,
@@ -647,17 +628,11 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             });
 
             setActivityFeed(allItems);
-            setActivityOverview(nextOverview);
             return true;
         } catch (error) {
             console.error("activity feed fetch failed", error);
             if (reset) {
                 setActivityFeed([]);
-                setActivityOverview({
-                    activityCount: 0,
-                    activeFriendCount: 0,
-                    hasTodayRecord: false,
-                });
             }
             return false;
         } finally {
@@ -974,15 +949,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         )];
     }, []);
 
-    const getSessionExerciseCountByBodyPart = useCallback((item) => {
-        const summaryCounts = Array.isArray(item?.summary?.exerciseCountByBodyPart)
-            ? item.summary.exerciseCountByBodyPart
-            : Array.isArray(item?.summary_json?.exerciseCountByBodyPart)
-                ? item.summary_json.exerciseCountByBodyPart
+    const getSessionSetCountByBodyPart = useCallback((item) => {
+        const summaryCounts = Array.isArray(item?.summary?.setCountByBodyPart)
+            ? item.summary.setCountByBodyPart
+            : Array.isArray(item?.summary_json?.setCountByBodyPart)
+                ? item.summary_json.setCountByBodyPart
                 : null;
 
         if (summaryCounts?.length) {
-            return getExerciseCountByBodyPart(summaryCounts, { sort: "fixed" });
+            return getSetCountByBodyPart(summaryCounts, { sort: "fixed" });
         }
 
         const sourceItems = item?.detailedItems?.length
@@ -999,7 +974,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 setCount: Number(exercise.set_count || 0),
             }));
 
-        return getExerciseCountByBodyPart(sourceItems, { sort: "fixed" });
+        return getSetCountByBodyPart(sourceItems, { sort: "fixed" });
     }, []);
 
     const getSessionPrCount = useCallback((item) => {
@@ -1007,7 +982,14 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         return Math.max(0, Number(summary.prCount || 0));
     }, []);
 
-    const activityHeadline = `直近7日で ${activityOverview.activityCount}件 のワークアウト`;
+    const activityCount = activityFeed.length;
+    const activeFriendCount = new Set(
+        activityFeed
+            .filter((item) => item.user_id !== user?.id)
+            .map((item) => item.user_id)
+            .filter(Boolean)
+    ).size;
+    const activityHeadline = `直近7日で ${activityCount}件 のワークアウト`;
     const feedEmptyState = {
         title: "まだアクティビティはありません",
         body: "ワークアウトを記録すると、ここに表示されます。友達を招待すると、お互いの記録も見られます。",
@@ -1061,9 +1043,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 4 }}>
                                     {activityHeadline}
                                 </div>
-                                {activityOverview.activeFriendCount > 0 && (
+                                {activeFriendCount > 0 && (
                                     <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 6 }}>
-                                        友達{activityOverview.activeFriendCount}人が直近7日で記録しています
+                                        友達{activeFriendCount}人が直近7日で記録しています
                                     </div>
                                 )}
                             </div>
@@ -1079,7 +1061,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                     flexShrink: 0,
                                 }}
                             >
-                                ワークアウト {activityOverview.activityCount}件
+                                アクティビティ {activityCount}件
                             </div>
                         </div>
 
@@ -1165,7 +1147,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 const bodyParts = getSessionBodyParts(item);
                                 const setCount = getSessionSetCount(item);
                                 const prCount = getSessionPrCount(item);
-                                const exerciseCountByBodyPart = getSessionExerciseCountByBodyPart(item);
+                                const setCountByBodyPart = getSessionSetCountByBodyPart(item);
                                 const isExpanded = Boolean(expandedFeedItems[item.id]);
                                 const detailedExercises = item.detailedItems?.length ? item.detailedItems : (item.summaryItems || []);
                                 const hasExtraExercises = detailedExercises.length > 3;
@@ -1235,12 +1217,12 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                 { label: "Volume", value: `${Math.round(Number(item.total_volume || 0)).toLocaleString("ja-JP")}kg` },
                                                 { label: "セット数", value: `${setCount}` },
                                                 {
-                                                    label: "種目数",
-                                                    valueNode: exerciseCountByBodyPart.length > 0 ? (
+                                                    label: "部位別セット",
+                                                    valueNode: setCountByBodyPart.length > 0 ? (
                                                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                                                            {exerciseCountByBodyPart.map((countItem) => (
+                                                            {setCountByBodyPart.map((countItem) => (
                                                                 <span
-                                                                    key={`${item.id}-exercise-count-${countItem.bodyPart}`}
+                                                                    key={`${item.id}-set-count-${countItem.bodyPart}`}
                                                                     style={{
                                                                         display: "inline-flex",
                                                                         alignItems: "center",
@@ -1255,7 +1237,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                                         lineHeight: 1.2,
                                                                     }}
                                                                 >
-                                                                    {countItem.bodyPart} {countItem.count}種目
+                                                                    {countItem.bodyPart} {countItem.count}セット
                                                                 </span>
                                                             ))}
                                                         </div>

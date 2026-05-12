@@ -12,6 +12,7 @@ import {
   getExerciseCountByBodyPart,
   getExerciseCountTotal,
 } from "./exerciseCountByBodyPart";
+import { getSetCountByBodyPart } from "./setCountByBodyPart";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -327,6 +328,9 @@ export function buildTrainingSummary({
   const exerciseCountByBodyPart = getExerciseCountByBodyPart(sortedExerciseStats, {
     sort: "fixed",
   });
+  const setCountByBodyPart = getSetCountByBodyPart(sortedExerciseStats, {
+    sort: "fixed",
+  });
   const sortedDailyStats = Object.values(dailyStats)
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((item) => ({
@@ -335,6 +339,9 @@ export function buildTrainingSummary({
       volume: Math.round(item.volume),
       exerciseCount: Object.keys(item.exerciseMap).length,
       exerciseCountByBodyPart: getExerciseCountByBodyPart(Object.values(item.exerciseMap), {
+        sort: "fixed",
+      }),
+      setCountByBodyPart: getSetCountByBodyPart(Object.values(item.exerciseMap), {
         sort: "fixed",
       }),
       bodyParts: [...item.bodyParts].sort((a, b) => a.localeCompare(b, "ja")),
@@ -383,6 +390,7 @@ export function buildTrainingSummary({
     totalVolume,
     exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
     exerciseCountByBodyPart,
+    setCountByBodyPart,
     topBodyPart: topBodyPart?.bodyPart || "なし",
     bodyPartStats: sortedBodyPartStats,
     exerciseStats: sortedExerciseStats,

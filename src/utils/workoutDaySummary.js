@@ -4,6 +4,7 @@ import {
   getExerciseCountByBodyPart,
   getExerciseCountTotal,
 } from "./exerciseCountByBodyPart";
+import { getSetCountByBodyPart } from "./setCountByBodyPart";
 
 export const formatWorkoutDaySummaryDuration = (seconds) => {
   const totalSec = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -79,6 +80,9 @@ export function buildWorkoutDaySummary({
   const exerciseCountByBodyPart = getExerciseCountByBodyPart(normalizedEntries, {
     sort: "fixed",
   });
+  const setCountByBodyPart = getSetCountByBodyPart(normalizedEntries, {
+    sort: "fixed",
+  });
   const totalSetCount = normalizedEntries.reduce(
     (sum, entry) => sum + Number(entry?.setCount || entry?.sets?.length || 0),
     0
@@ -92,6 +96,7 @@ export function buildWorkoutDaySummary({
     setCount: totalSetCount,
     exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
     exerciseCountByBodyPart,
+    setCountByBodyPart,
     prCount: prKeySet.size,
     bodyParts,
     items,

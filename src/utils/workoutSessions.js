@@ -8,6 +8,7 @@ import {
   getExerciseCountByBodyPart,
   getExerciseCountTotal,
 } from "./exerciseCountByBodyPart";
+import { getSetCountByBodyPart } from "./setCountByBodyPart";
 
 const buildSessionExerciseKey = (exerciseName, bodyPart) =>
   `${String(bodyPart || "").trim()}::${String(exerciseName || "").trim()}`;
@@ -178,6 +179,9 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
   const exerciseCountByBodyPart = getExerciseCountByBodyPart(exercises, {
     sort: "fixed",
   });
+  const setCountByBodyPart = getSetCountByBodyPart(exercises, {
+    sort: "fixed",
+  });
   const totalExerciseCount = getExerciseCountTotal(exerciseCountByBodyPart);
 
   return {
@@ -190,6 +194,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
         totalVolume: roundNumeric(totalVolume, 1),
         exerciseCount: totalExerciseCount,
         exerciseCountByBodyPart,
+        setCountByBodyPart,
         items: exercises,
       },
       visibility: options.visibility || "friends",

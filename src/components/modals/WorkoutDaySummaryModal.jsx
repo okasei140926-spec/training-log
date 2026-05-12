@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { formatWorkoutDaySummaryDuration } from "../../utils/workoutDaySummary";
-import { getExerciseCountTotal } from "../../utils/exerciseCountByBodyPart";
+import { getSetCountTotal } from "../../utils/setCountByBodyPart";
 
 const formatDateLabel = (date) => {
   const value = String(date || "").trim();
@@ -71,13 +71,13 @@ export default function WorkoutDaySummaryModal({
       { key: "setCount", label: "セット数", value: `${summary.setCount}` },
       {
         key: "exerciseCount",
-        label: "種目数",
+        label: "部位別セット",
         valueNode:
-          summary.exerciseCountByBodyPart?.length > 0 ? (
+          summary.setCountByBodyPart?.length > 0 ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {summary.exerciseCountByBodyPart.map((item) => (
+              {summary.setCountByBodyPart.map((item) => (
                 <span
-                  key={`exercise-count-${item.bodyPart}`}
+                  key={`set-count-${item.bodyPart}`}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -92,13 +92,13 @@ export default function WorkoutDaySummaryModal({
                     lineHeight: 1.2,
                   }}
                 >
-                  {item.bodyPart} {item.count}種目
+                  {item.bodyPart} {item.count}セット
                 </span>
               ))}
             </div>
           ) : (
             <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-              {getExerciseCountTotal(summary.exerciseCountByBodyPart || [])}
+              {getSetCountTotal(summary.setCountByBodyPart || [])}
             </div>
           ),
       },
