@@ -306,6 +306,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 )
             )];
 
+            console.log("[feed] accepted friend ids", {
+                currentUserId: user.id,
+                friendIds: nextFriendIds,
+            });
+
+            setFriendIds(nextFriendIds);
+
             const [profilesRes, workoutsRes] = await Promise.all([
                 supabase
                     .from("profiles")
@@ -322,7 +329,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             const workoutsError = workoutsRes.error;
             const workouts = workoutsRes.data || [];
 
-            if (profilesError) throw profilesError;
+            if (profilesError) {
+                console.error("[feed] friend profiles fetch failed", {
+                    error: profilesError,
+                    currentUserId: user.id,
+                    friendIds: nextFriendIds,
+                });
+            }
             if (workoutsError) {
                 console.error("[feed] friend workouts fetch failed", {
                     error: workoutsError,
@@ -338,13 +351,20 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 workoutRowsMap.set(workout.user_id, current);
             });
 
-            const friendsWithHistory = (profiles || []).map((p) => ({
-                ...p,
-                workoutRows: workoutRowsMap.get(p.id) || [],
-                history: buildHistoryFromWorkoutRows(workoutRowsMap.get(p.id) || []),
-            }));
+            const friendsWithHistory = nextFriendIds.map((friendId) => {
+                const profile = (profiles || []).find((item) => item.id === friendId) || {
+                    id: friendId,
+                    username: "ユーザー",
+                    avatar1_url: null,
+                };
+                const friendWorkoutRows = workoutRowsMap.get(friendId) || [];
+                return {
+                    ...profile,
+                    workoutRows: friendWorkoutRows,
+                    history: buildHistoryFromWorkoutRows(friendWorkoutRows),
+                };
+            });
 
-            setFriendIds(nextFriendIds);
             setFriends(friendsWithHistory);
             await fetchTodayActive(nextFriendIds);
             return true;
@@ -638,6 +658,25 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     });
                     return;
                 }
+                if (
+                    isFriendWorkout &&
+                    session.visibility &&
+                    !["friends", "public"].includes(String(session.visibility))
+                ) {
+                    excludedItems.push({
+                        workoutId: session.id,
+                        workoutDate: session.workout_date,
+                        created_at: session.created_at,
+                        shared_at: session.updated_at,
+                        visibility: session.visibility,
+                        isShared: true,
+                        isOwnWorkout,
+                        isFriendWorkout,
+                        includedInFeed: false,
+                        excludedReason: "friend_not_shared",
+                    });
+                    return;
+                }
                 const sessionKey = `${session.user_id}::${session.workout_date}`;
                 const nextMeta = {
                     ...session,
@@ -705,6 +744,16 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 buildItemsForUser(friendId, buildHistoryFromWorkoutRows(workoutRowsByUser.get(friendId) || []))
             );
 
+            console.log("[feed] own sessions count", {
+                currentUserId: user.id,
+                count: ownItems.length,
+            });
+            console.log("[feed] friend sessions count", {
+                currentUserId: user.id,
+                friendIds,
+                count: friendItems.length,
+            });
+
             const allItems = [...ownItems, ...friendItems]
                 .sort((a, b) => {
                     const dateCompare = String(b.workout_date || "").localeCompare(String(a.workout_date || ""));
@@ -727,6 +776,10 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 todayLocalDate: today,
                 last7StartDate: recentSevenStart,
                 excludedReason: excludedItems,
+            });
+            console.log("[feed] displayed cards count", {
+                currentUserId: user.id,
+                displayedCardsCount: allItems.length,
             });
 
             setActivityFeed(allItems);

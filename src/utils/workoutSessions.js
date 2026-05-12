@@ -114,6 +114,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
   const grouped = new Map();
   let totalSetCount = 0;
   let totalVolume = 0;
+  const previewItems = [];
 
   sortedEntries.forEach((entry) => {
     const key = buildSessionExerciseKey(entry.exerciseName, entry.bodyPart);
@@ -132,6 +133,26 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
 
     totalSetCount += entry.sets.length;
     totalVolume += numericVolume;
+
+    previewItems.push({
+      exercise_name: entry.exerciseName,
+      body_part: sanitizeBodyPart(entry.bodyPart),
+      order: Number.isFinite(entry.order) ? entry.order : 999,
+      set_count: entry.sets.length,
+      max_weight: roundNumeric(maxWeight, 1),
+      volume: roundNumeric(numericVolume, 1),
+      sets: entry.sets.map((set) => ({
+        weight: set.weight,
+        reps: set.reps,
+      })),
+      best_set_json: bestSet
+        ? {
+            weight: bestSet.weight,
+            reps: bestSet.reps,
+            rm: roundNumeric(bestSet.rm, 1),
+          }
+        : {},
+    });
 
     if (!grouped.has(key)) {
       grouped.set(key, {
@@ -202,6 +223,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
       photo_id: options.photoId || null,
     },
     exercises,
+    preview_items: previewItems,
   };
 }
 

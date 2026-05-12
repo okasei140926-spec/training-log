@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
+import { formatSetCountByBodyPart } from "../../utils/setCountByBodyPart";
 
 const CARD_PRESETS = {
     square: {
@@ -38,6 +39,15 @@ const getMaxWeightLabel = (weight) => {
     return `${Math.round(value * 10) / 10}kg`;
 };
 
+const formatSetLine = (set) => {
+    if (!set) return "";
+    const reps = Math.max(0, Number(set.reps || 0));
+    const weight = String(set.weight || "").toUpperCase();
+    if (weight === "BW") return `自重 × ${reps}reps`;
+    const weightNum = Math.round(Number(set.weight || 0) * 10) / 10;
+    return `${weightNum}kg × ${reps}reps`;
+};
+
 export default function WorkoutSessionShareModal({
     isOpen,
     onClose,
@@ -55,12 +65,35 @@ export default function WorkoutSessionShareModal({
     const preset = CARD_PRESETS[sizeKey] || CARD_PRESETS.square;
     const dateLabel = formatDate(workoutDate);
     const selectedPhotoUrl = selectedPhotoId ? photoUrls[selectedPhotoId] || null : null;
-    const items = useMemo(() => sessionPayload?.exercises || [], [sessionPayload]);
-    const summary = sessionPayload?.session?.summary_json || {};
+    const summary = useMemo(
+        () => sessionPayload?.session?.summary_json || {},
+        [sessionPayload]
+    );
+    const items = useMemo(
+        () => sessionPayload?.preview_items || sessionPayload?.exercises || [],
+        [sessionPayload]
+    );
+    const setCountByBodyPartLabel = useMemo(() => {
+        if (Array.isArray(summary?.setCountByBodyPart) && summary.setCountByBodyPart.length > 0) {
+            return formatSetCountByBodyPart(summary.setCountByBodyPart, {
+                maxParts: 3,
+                suffix: "",
+                separator: " / ",
+            });
+        }
+        if (items.length > 0) {
+            return formatSetCountByBodyPart(items, {
+                maxParts: 3,
+                suffix: "",
+                separator: " / ",
+            });
+        }
+        return "まだありません";
+    }, [items, summary]);
 
     const visibleItems = useMemo(() => {
-        if (sizeKey === "story") return items.slice(0, 7);
-        return items.slice(0, 5);
+        if (sizeKey === "story") return items;
+        return items.slice(0, 4);
     }, [items, sizeKey]);
 
     useEffect(() => {
@@ -295,7 +328,7 @@ export default function WorkoutSessionShareModal({
                             ref={cardRef}
                             style={{
                                 width: preset.width,
-                                height: preset.height,
+                                minHeight: preset.height,
                                 borderRadius: 28,
                                 overflow: "hidden",
                                 background: selectedPhotoUrl
@@ -357,6 +390,42 @@ export default function WorkoutSessionShareModal({
                                 </div>
                             </div>
 
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                    gap: 8,
+                                }}
+                            >
+                                {[
+                                    {
+                                        label: "部位別セット",
+                                        value: setCountByBodyPartLabel,
+                                    },
+                                    {
+                                        label: "合計セット",
+                                        value: `${Number(summary.setCount || 0)}セット`,
+                                    },
+                                ].map((item) => (
+                                    <div
+                                        key={item.label}
+                                        style={{
+                                            background: "rgba(248, 250, 252, 0.92)",
+                                            borderRadius: 16,
+                                            padding: "10px 12px",
+                                            border: "1px solid rgba(186, 230, 253, 0.8)",
+                                        }}
+                                    >
+                                        <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 4 }}>
+                                            {item.label}
+                                        </div>
+                                        <div style={{ fontSize: 12, color: "#0f172a", fontWeight: 800, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                                            {item.value}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
                             <div style={{ display: "grid", gap: 10, flex: 1 }}>
                                 {visibleItems.map((item) => (
                                     <div
@@ -372,18 +441,30 @@ export default function WorkoutSessionShareModal({
                                             {item.exercise_name}
                                             {item.body_part ? ` · ${item.body_part}` : ""}
                                         </div>
-                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 11, color: "#475569" }}>
-                                            <span>{item.set_count}セット</span>
-                                            <span>最大 {getMaxWeightLabel(item.max_weight)}</span>
-                                            <span>Volume {Math.round(Number(item.volume || 0)).toLocaleString("ja-JP")}</span>
+                                        <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.6 }}>
+                                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{item.set_count}セット</div>
+                                            {Array.isArray(item.sets) && item.sets.length > 0 ? (
+                                                <div style={{ display: "grid", gap: 2 }}>
+                                                    {item.sets.map((set, index) => (
+                                                        <div key={`${item.exercise_name}-${index}`}>
+                                                            {formatSetLine(set)}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div>最大 {getMaxWeightLabel(item.max_weight)}</div>
+                                            )}
+                                            <div style={{ marginTop: 4, fontWeight: 700 }}>
+                                                Volume {Math.round(Number(item.volume || 0)).toLocaleString("ja-JP")}kg
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
                             {items.length > visibleItems.length && (
-                                <div style={{ fontSize: 11, color: "#64748b" }}>
-                                    他 {items.length - visibleItems.length} 種目
+                                <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>
+                                    + 他 {items.length - visibleItems.length} 種目
                                 </div>
                             )}
                         </div>
