@@ -370,7 +370,17 @@ export default function HistoryScreen({
 
   const summaryCards = [
     { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
-    { key: "setCount", label: "セット数", value: `${todaySummary.setCount}` },
+    {
+      key: "bodyPartSets",
+      label: "部位別セット",
+      value:
+        formatSetCountByBodyPart(todaySummary.setCountByBodyPart, {
+          separator: " / ",
+          sort: "fixed",
+          maxParts: 3,
+          suffix: "",
+        }) || "まだありません",
+    },
     { key: "duration", label: "時間", value: formatDurationValue(todaySummary.durationSec) },
     { key: "trainingDays", label: "累計", value: `${totalTrainingDays}日` },
   ];
@@ -406,7 +416,7 @@ export default function HistoryScreen({
       };
     }
 
-    if (selectedSummaryKey === "exerciseCount") {
+    if (selectedSummaryKey === "bodyPartSets") {
       return {
         title: "今日の部位別セット数",
         subtitle: formatSetCountByBodyPart(todaySummary.setCountByBodyPart, {
@@ -418,29 +428,6 @@ export default function HistoryScreen({
           key: `today-set-count-${item.bodyPart}`,
           title: item.bodyPart,
           meta: `${item.count}セット`,
-        })),
-      };
-    }
-
-    if (selectedSummaryKey === "setCount") {
-      return {
-        title: "今日のセット詳細",
-        subtitle: `合計 ${todaySummary.setCount}セット`,
-        emptyText: "今日はまだセットを記録していません",
-        items: todayEntries.map((entry) => ({
-          key: entry.id,
-          title: entry.name,
-          badge: entry.bodyPart,
-          meta: entry.sets
-            .map(
-              (set, index) =>
-                `${index + 1}. ${formatSetDisplay(
-                  set.weight,
-                  set.reps,
-                  (getExUnit ? getExUnit(entry.name) : unit) || "kg"
-                )}`
-            )
-            .join(" / "),
         })),
       };
     }
@@ -751,7 +738,7 @@ export default function HistoryScreen({
                           flexShrink: 0,
                         }}
                       >
-                        {item.bodyPart} {item.count}種目
+                        {item.bodyPart} {item.count}セット
                       </span>
                     ))}
                   </div>
@@ -782,11 +769,12 @@ export default function HistoryScreen({
                   </div>
                   <div
                     style={{
-                      fontSize: item.key === "totalVolume" ? 16 : 20,
+                      fontSize: item.key === "totalVolume" ? 16 : item.key === "bodyPartSets" ? 13 : 20,
                       fontWeight: 800,
                       color: "var(--text)",
-                      lineHeight: 1.05,
+                      lineHeight: item.key === "bodyPartSets" ? 1.35 : 1.05,
                       letterSpacing: item.key === "totalVolume" ? -0.2 : 0,
+                      whiteSpace: item.key === "bodyPartSets" ? "normal" : "nowrap",
                     }}
                   >
                     {item.value}

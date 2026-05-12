@@ -302,10 +302,17 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             ]);
 
             const { data: profiles, error: profilesError } = profilesRes;
-            const { data: workouts, error: workoutsError } = workoutsRes;
+            const workoutsError = workoutsRes.error;
+            const workouts = workoutsRes.data || [];
 
             if (profilesError) throw profilesError;
-            if (workoutsError) throw workoutsError;
+            if (workoutsError) {
+                console.error("[feed] friend workouts fetch failed", {
+                    error: workoutsError,
+                    currentUserId: user.id,
+                    friendIds: nextFriendIds,
+                });
+            }
 
             const workoutRowsMap = new Map();
             (workouts || []).forEach((workout) => {
@@ -325,7 +332,10 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             await fetchTodayActive(nextFriendIds);
             return true;
         } catch (err) {
-            console.error(err);
+            console.error("[feed] friendships/profile fetch failed", {
+                error: err,
+                currentUserId: user?.id,
+            });
             setFriendIds([]);
             setFriends([]);
             setTodayActiveMap({});
@@ -436,8 +446,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 .lte("workout_date", today);
 
             const { data: sessions, error: sessionsError } = await sessionsQuery;
-
-            if (sessionsError) throw sessionsError;
+            if (sessionsError) {
+                console.error("[feed] workout_sessions fetch failed", {
+                    error: sessionsError,
+                    currentUserId: user.id,
+                    friendIds,
+                    recentSevenStart,
+                    today,
+                });
+            }
             const rawSessions = sessions || [];
 
             const profileIds = [...new Set(feedUserIds.filter(Boolean))];
@@ -471,11 +488,38 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     : Promise.resolve({ data: [], error: null }),
             ]);
 
-            if (profilesRes.error) throw profilesRes.error;
-            if (photosRes.error) throw photosRes.error;
-            if (likesRes.error) throw likesRes.error;
-            if (commentsRes.error) throw commentsRes.error;
-            if (workoutsRes.error) throw workoutsRes.error;
+            if (profilesRes.error) {
+                console.error("[feed] profiles fetch failed", {
+                    error: profilesRes.error,
+                    currentUserId: user.id,
+                    friendIds,
+                });
+            }
+            if (photosRes.error) {
+                console.error("[feed] photos fetch failed", {
+                    error: photosRes.error,
+                    currentUserId: user.id,
+                });
+            }
+            if (likesRes.error) {
+                console.error("[feed] likes fetch failed", {
+                    error: likesRes.error,
+                    currentUserId: user.id,
+                });
+            }
+            if (commentsRes.error) {
+                console.error("[feed] comments fetch failed", {
+                    error: commentsRes.error,
+                    currentUserId: user.id,
+                });
+            }
+            if (workoutsRes.error) {
+                console.error("[feed] workouts fetch failed", {
+                    error: workoutsRes.error,
+                    currentUserId: user.id,
+                    friendIds,
+                });
+            }
 
             const profileMap = new Map((profilesRes.data || []).map((profile) => [profile.id, profile]));
             const photoRows = photosRes.data || [];
@@ -640,6 +684,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 friendIds,
                 ownWorkoutsLast7DaysCount: ownItems.length,
                 friendWorkoutsLast7DaysCount: friendItems.length,
+                sessionsCount: rawSessions.length,
+                workoutsCount: (workoutsRes.data || []).length,
                 feedItemsLength: allItems.length,
                 headerActivityCount: allItems.length,
                 displayedCardsCount: allItems.length,
@@ -651,7 +697,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             setActivityFeed(allItems);
             return true;
         } catch (error) {
-            console.error("activity feed fetch failed", error);
+            console.error("[feed] fetch failed", {
+                error,
+                currentUserId: user?.id,
+                friendIds,
+                sessionsCount: 0,
+                workoutsCount: 0,
+                feedItemsLength: 0,
+                displayedCardsCount: 0,
+            });
             if (reset) {
                 setActivityFeed([]);
             }
@@ -665,12 +719,12 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         if (activityFeedLoading) return;
         setActivityFeedAction("refresh");
         setActivityFeedStatusMessage("");
-        const [feedOk, friendsOk] = await Promise.all([
+        const [feedOk] = await Promise.all([
             fetchActivityFeed({ reset: true }),
             fetchFriendsData(),
         ]);
         setActivityFeedAction(null);
-        showActivityFeedStatusMessage(feedOk && friendsOk ? "更新しました" : "更新できませんでした");
+        showActivityFeedStatusMessage(feedOk ? "更新しました" : "更新できませんでした");
     }, [activityFeedLoading, fetchActivityFeed, fetchFriendsData, showActivityFeedStatusMessage]);
 
     const handleOpenComments = useCallback((sessionItem) => {
