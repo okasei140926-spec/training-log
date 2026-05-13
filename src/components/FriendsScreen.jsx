@@ -706,7 +706,18 @@ export default function FriendsScreen({
         const now = Date.now();
         const hasCache = FRIENDS_SCREEN_CACHE.feedData.fetchedAt > 0
             && FRIENDS_SCREEN_CACHE.feedData.userId === user.id;
-        if (!force && hasCache && now - FRIENDS_SCREEN_CACHE.feedData.fetchedAt < STALE_MS) {
+        const cachedItems = hasCache ? (FRIENDS_SCREEN_CACHE.feedData.activityFeed || []) : [];
+        const cachedFriendCount = cachedItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
+        const expectedFriendCount = friendIds.reduce(
+            (sum, friendId) => sum + ((friendSessionInsights.visibleDatesByUser?.[friendId] || []).length),
+            0
+        );
+        const shouldBypassFreshCache = hasCache
+            && friendIds.length > 0
+            && expectedFriendCount > 0
+            && cachedFriendCount < expectedFriendCount;
+
+        if (!force && hasCache && !shouldBypassFreshCache && now - FRIENDS_SCREEN_CACHE.feedData.fetchedAt < STALE_MS) {
             return true;
         }
 
@@ -717,6 +728,9 @@ export default function FriendsScreen({
         }
 
         try {
+            const previousItems = hasCache ? cachedItems : (activityFeed || []);
+            const beforeCount = previousItems.length;
+            const beforeFriendCount = previousItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
             let sessionsQuery = supabase
                 .from("workout_sessions")
                 .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
@@ -1077,6 +1091,16 @@ export default function FriendsScreen({
                 activityFeed: allItems,
                 fetchedAt: Date.now(),
             };
+            if (background) {
+                const afterFriendCount = allItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
+                console.log("[feed] auto refresh result", {
+                    beforeCount,
+                    afterCount: allItems.length,
+                    beforeFriendCount,
+                    afterFriendCount,
+                    updatedFromAutoRefresh: true,
+                });
+            }
             return true;
         } catch (error) {
             console.error("[feed] RLS or Supabase error", {
@@ -1103,7 +1127,7 @@ export default function FriendsScreen({
             setActivityFeedLoading(false);
             setFeedRefreshing(false);
         }
-    }, [buildFeedItemFromHistoryDate, friendIds, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, today, user?.id]);
+    }, [activityFeed, buildFeedItemFromHistoryDate, friendIds, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -1240,7 +1264,7 @@ export default function FriendsScreen({
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
-        fetchActivityFeed({ reset: true, background: true }).catch(console.error);
+        fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
     }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion]);
 
     useEffect(() => {
