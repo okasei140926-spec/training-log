@@ -19,10 +19,6 @@ import {
     buildWorkoutSessionEntriesFromHistory,
     buildWorkoutSessionPayloadFromEntries,
 } from "../utils/workoutSessions";
-import {
-    getSetCountByBodyPart,
-} from "../utils/setCountByBodyPart";
-import { BODY_PART_DISPLAY_ORDER } from "../utils/exerciseCountByBodyPart";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import NotificationSettings from "./NotificationSettings";
@@ -69,19 +65,6 @@ const formatRelativeWorkoutDate = (workoutDate, todayKey) => {
 
     const [, month = "", day = ""] = normalizedDate.split("-");
     return `${month}/${day}`;
-};
-
-const sortBodyPartCountsFixed = (items = []) => {
-    const orderIndex = (bodyPart) => {
-        const index = BODY_PART_DISPLAY_ORDER.indexOf(bodyPart);
-        return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-    };
-
-    return [...items].sort(
-        (a, b) =>
-            orderIndex(a.bodyPart) - orderIndex(b.bodyPart) ||
-            String(a.bodyPart || "").localeCompare(String(b.bodyPart || ""), "ja")
-    );
 };
 
 export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, user, onLogin, onLogout, onOpenRecord, mode = "all" }) {
@@ -385,7 +368,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const formatSessionSetDisplay = useCallback((set) => {
         if (!set) return "";
         const reps = Number(set.reps || 0);
-        const repLabel = `${reps}rep`;
+        const repLabel = `${reps}`;
         if (String(set.weight || "").toUpperCase() === "BW") {
             return `自重 × ${repLabel}`;
         }
@@ -1098,72 +1081,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const aboveRankingEntry = myRankingIndex > 0 ? activeRanking.data[myRankingIndex - 1] : null;
     const myRankingSummary = activeRanking?.mySummary?.(myRankingIndex, myRankingEntry, aboveRankingEntry) || null;
 
-    const getSessionSetCount = useCallback((item) => {
-        const summary = item.summary || {};
-        if (Number.isFinite(Number(summary.setCount))) return Number(summary.setCount);
-        return (item.summaryItems || []).reduce((sum, exercise) => sum + Number(exercise.set_count || 0), 0);
-    }, []);
-
-    const getSessionBodyParts = useCallback((item) => {
-        return [...new Set(
-            (item.summaryItems || [])
-                .map((summaryItem) => String(summaryItem.body_part || "").trim())
-                .filter(Boolean)
-        )];
-    }, []);
-
-    const getSessionSetCountByBodyPart = useCallback((item) => {
-        const summaryCounts = Array.isArray(item?.summary?.setCountByBodyPart)
-            ? item.summary.setCountByBodyPart
-            : Array.isArray(item?.summary_json?.setCountByBodyPart)
-                ? item.summary_json.setCountByBodyPart
-                : null;
-
-        if (summaryCounts?.length) {
-            return sortBodyPartCountsFixed(
-                summaryCounts
-                    .map((countItem) => ({
-                        bodyPart: String(countItem?.bodyPart || countItem?.body_part || "").trim() || "その他",
-                        count: Number(countItem?.count || 0),
-                    }))
-                    .filter((countItem) => countItem.count > 0)
-            );
-        }
-
-        const sourceItems = item?.detailedItems?.length
-            ? item.detailedItems.map((exercise) => ({
-                bodyPart: String(exercise.body_part || "").trim() || "その他",
-                exerciseName: exercise.exercise_name,
-                sets: exercise.sets || [],
-                setCount: Number(exercise.set_count || 0),
-            }))
-            : (item?.summaryItems || []).map((exercise) => ({
-                bodyPart: String(exercise.body_part || "").trim() || "その他",
-                exerciseName: exercise.exercise_name,
-                sets: exercise.sets || [],
-                setCount: Number(exercise.set_count || 0),
-            }));
-
-        return getSetCountByBodyPart(sourceItems, { sort: "fixed" });
-    }, []);
-
-    const getSessionPrCount = useCallback((item) => {
-        const summary = item.summary || {};
-        const summaryPrCount = Number(summary.prCount || item?.summary_json?.prCount || 0);
-        if (Number.isFinite(summaryPrCount) && summaryPrCount > 0) return Math.max(0, summaryPrCount);
-
-        if (!summaryPrCount && item?.summaryItems?.length) {
-            console.warn("[feed] prCount fallback returned 0", {
-                workoutId: item?.id,
-                workoutDate: item?.workout_date,
-                userId: item?.user_id,
-                summaryItems: item?.summaryItems,
-            });
-        }
-
-        return 0;
-    }, []);
-
     const activityCount = activityFeed.length;
     const activeFriendCount = new Set(
         activityFeed
@@ -1326,10 +1243,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 const profileName = item.user_id === user.id
                                     ? getDisplayUsername(myUsername, { isMe: true })
                                     : getDisplayUsername(item.profile?.username);
-                                const bodyParts = getSessionBodyParts(item);
-                                const setCount = getSessionSetCount(item);
-                                const prCount = getSessionPrCount(item);
-                                const setCountByBodyPart = getSessionSetCountByBodyPart(item);
                                 const isExpanded = Boolean(expandedFeedItems[item.id]);
                                 const detailedExercises = item.detailedItems?.length ? item.detailedItems : (item.summaryItems || []);
                                 const hasExtraExercises = detailedExercises.length > 3;
@@ -1357,99 +1270,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                 }
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                    {profileName}
-                                                </div>
-                                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
-                                                    {formatRelativeWorkoutDate(item.workout_date, today)}
-                                                </div>
-                                {bodyParts.length > 0 && (
-                                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 7 }}>
-                                                        {bodyParts.map((bodyPart) => (
-                                                            <span
-                                                                key={`${item.id}-${bodyPart}`}
-                                                                style={{
-                                                                    padding: "4px 9px",
-                                                                    borderRadius: 999,
-                                                                    background: "rgba(18, 199, 194, 0.06)",
-                                                                    border: "1px solid rgba(18, 199, 194, 0.14)",
-                                                                    color: "var(--text2)",
-                                                                    fontSize: 11,
-                                                                    fontWeight: 700,
-                                                                }}
-                                                            >
-                                                                {bodyPart}
-                                                            </span>
-                                                        ))}
+                                                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                                                    <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                        {profileName}
                                                     </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {item.photoUrl && (
-                                            <img
-                                                src={item.photoUrl}
-                                                alt={`${item.workout_date} session`}
-                                                style={{ width: "100%", borderRadius: 16, objectFit: "cover", aspectRatio: "16 / 9", display: "block", marginBottom: 14 }}
-                                            />
-                                        )}
-
-                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
-                                            {[
-                                                { label: "Volume", value: `${Math.round(Number(item.total_volume || 0)).toLocaleString("ja-JP")}kg` },
-                                                { label: "セット数", value: `${setCount}` },
-                                                {
-                                                    label: "部位別セット",
-                                                    valueNode: setCountByBodyPart.length > 0 ? (
-                                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                                                            {setCountByBodyPart.map((countItem) => (
-                                                                <span
-                                                                    key={`${item.id}-set-count-${countItem.bodyPart}`}
-                                                                    style={{
-                                                                        display: "inline-flex",
-                                                                        alignItems: "center",
-                                                                        justifyContent: "center",
-                                                                        padding: "4px 7px",
-                                                                        borderRadius: 999,
-                                                                        background: "rgba(18, 199, 194, 0.08)",
-                                                                        border: "1px solid rgba(18, 199, 194, 0.12)",
-                                                                        color: "var(--accent-strong, var(--accent))",
-                                                                        fontSize: 10,
-                                                                        fontWeight: 800,
-                                                                        lineHeight: 1.2,
-                                                                    }}
-                                                                >
-                                                                    {countItem.bodyPart} {countItem.count}セット
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)" }}>
-                                                            まだありません
-                                                        </div>
-                                                    ),
-                                                },
-                                                { label: "PR", value: `${prCount}件` },
-                                            ].map((stat) => (
-                                                <div
-                                                    key={`${item.id}-${stat.label}`}
-                                                    style={{
-                                                        padding: "11px 12px",
-                                                        borderRadius: 16,
-                                                        background: "linear-gradient(180deg, rgba(18, 199, 194, 0.05), rgba(18, 199, 194, 0.015))",
-                                                        border: "1px solid rgba(18, 199, 194, 0.12)",
-                                                    }}
-                                                >
-                                                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text3)", letterSpacing: 0.4 }}>{stat.label}</div>
-                                                    {stat.valueNode ? (
-                                                        <div style={{ marginTop: 8 }}>
-                                                            {stat.valueNode}
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginTop: 4 }}>{stat.value}</div>
-                                                    )}
+                                                    <div style={{ fontSize: 13, color: "var(--text3)", fontWeight: 700 }}>
+                                                        {formatRelativeWorkoutDate(item.workout_date, today)}
+                                                    </div>
                                                 </div>
-                                            ))}
+                                            </div>
                                         </div>
 
                                         <div style={{ display: "grid", gap: 8 }}>
@@ -1457,19 +1286,17 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                 <div
                                                     key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`}
                                                     style={{
-                                                        padding: "11px 12px",
-                                                        borderRadius: 16,
-                                                        background: "var(--card2)",
-                                                        border: "1px solid rgba(217, 228, 239, 0.9)",
+                                                        padding: "10px 0 12px",
+                                                        borderBottom: "1px solid rgba(217, 228, 239, 0.9)",
                                                     }}
                                                 >
-                                                    <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
+                                                    <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
                                                         {summaryItem.exercise_name}
                                                     </div>
-                                                    <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 4 }}>
+                                                    <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 5, lineHeight: 1.65 }}>
                                                         {Array.isArray(summaryItem.sets) && summaryItem.sets.length
                                                             ? summaryItem.sets.map(formatSessionSetDisplay).join(" / ")
-                                                            : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}セット`}
+                                                            : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}`}
                                                     </div>
                                                 </div>
                                             ))}
@@ -1487,34 +1314,35 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                         padding: 0,
                                                         border: "none",
                                                         background: "transparent",
-                                                        fontSize: 11,
+                                                        fontSize: 12,
                                                         color: "var(--accent)",
                                                         fontWeight: 800,
                                                         cursor: "pointer",
                                                     }}
                                                 >
-                                                    {isExpanded ? "表示を減らす" : `さらに${detailedExercises.length - 3}種目を見る`}
+                                                    {isExpanded ? "閉じる" : `さらに${detailedExercises.length - 3}種目を表示`}
                                                 </button>
                                             )}
                                         </div>
 
-                                        <div
-                                            style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                gap: 10,
-                                                marginTop: 14,
-                                                paddingTop: 12,
-                                                borderTop: "1px solid rgba(217, 228, 239, 0.75)",
-                                            }}
-                                        >
+                                        {canInteract && (
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    justifyContent: "space-between",
+                                                    alignItems: "center",
+                                                    gap: 10,
+                                                    marginTop: 14,
+                                                    paddingTop: 12,
+                                                    borderTop: "1px solid rgba(217, 228, 239, 0.75)",
+                                                }}
+                                            >
                                                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                                {isOwnWorkout && canInteract ? (
+                                                {isOwnWorkout ? (
                                                     <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 800 }}>
                                                         ♥ {Number(item.likeCount || 0)}
                                                     </div>
-                                                ) : !isOwnWorkout && canInteract ? (
+                                                ) : (
                                                     <button
                                                         type="button"
                                                         onClick={() => handleToggleSessionLike(item.sessionId)}
@@ -1533,11 +1361,11 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                             opacity: likePendingMap[item.sessionId] ? 0.7 : 1,
                                                         }}
                                                     >
-                                                        <span>{item.likedByMe ? "♥" : "♡"}</span>
-                                                            <span>{Number(item.likeCount || 0)}</span>
+                                                            <span>{item.likedByMe ? "♥" : "♡"}</span>
+                                                        <span>{Number(item.likeCount || 0)}</span>
                                                         </button>
-                                                ) : null}
-                                                {canInteract && (
+                                                )}
+                                                {(
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenComments({ ...item, id: item.sessionId })}
@@ -1559,12 +1387,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                                     </button>
                                                 )}
                                             </div>
-                                            {canInteract && likePendingMap[item.sessionId] && (
+                                            {likePendingMap[item.sessionId] && (
                                                 <div style={{ fontSize: 11, color: "var(--text3)" }}>
                                                     更新中...
                                                 </div>
                                             )}
-                                        </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
