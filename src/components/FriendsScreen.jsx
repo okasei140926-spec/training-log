@@ -1752,9 +1752,9 @@ export default function FriendsScreen({
                                                     justifyContent: "space-between",
                                                     alignItems: "center",
                                                     gap: 10,
-                                                    marginTop: hasExtraExercises ? 10 : 8,
-                                                    paddingTop: hasExtraExercises ? 10 : 8,
-                                                    borderTop: "1px solid rgba(217, 228, 239, 0.75)",
+                                                    marginTop: hasExtraExercises ? 10 : 4,
+                                                    paddingTop: hasExtraExercises ? 10 : 0,
+                                                    borderTop: hasExtraExercises ? "1px solid rgba(217, 228, 239, 0.75)" : "none",
                                                 }}
                                             >
                                                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
