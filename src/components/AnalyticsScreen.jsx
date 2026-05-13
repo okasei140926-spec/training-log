@@ -263,6 +263,7 @@ export default function AnalyticsScreen({
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
   const [showAllBodyPartPr, setShowAllBodyPartPr] = useState(false);
   const screenScrollRef = useRef(null);
+  const prDetailTouchRef = useRef({ startX: 0, startY: 0, tracking: false });
 
   const resolutionContext = useMemo(
     () => ({
@@ -664,6 +665,9 @@ export default function AnalyticsScreen({
       }
       if (screenScrollRef.current) {
         screenScrollRef.current.scrollTop = 0;
+        if (typeof screenScrollRef.current.scrollTo === "function") {
+          screenScrollRef.current.scrollTo({ top: 0, behavior: "auto" });
+        }
       }
     };
 
@@ -674,6 +678,30 @@ export default function AnalyticsScreen({
 
     return () => cancelAnimationFrame(firstFrame);
   }, [selectedExerciseKey]);
+
+  const handlePrDetailTouchStart = (event) => {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    prDetailTouchRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      tracking: touch.clientX <= 48,
+    };
+  };
+
+  const handlePrDetailTouchEnd = (event) => {
+    const touch = event.changedTouches?.[0];
+    if (!touch) return;
+    const { startX, startY, tracking } = prDetailTouchRef.current;
+    prDetailTouchRef.current = { startX: 0, startY: 0, tracking: false };
+    if (!tracking) return;
+
+    const deltaX = touch.clientX - startX;
+    const deltaY = touch.clientY - startY;
+    if (deltaX > 72 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      setSelectedExerciseKey(null);
+    }
+  };
 
   const renderPRCard = (item, { compact = false, hideEstimated1RM = false } = {}) => {
     const sharedStyle = {
@@ -711,11 +739,11 @@ export default function AnalyticsScreen({
             </div>
           )}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, color: "var(--text2)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, color: "var(--text2)" }}>
           <span>{item.weight}kg × {item.reps}rep</span>
           {item.date && <span>{formatDate(item.date)}</span>}
           {!compact && item.bodyPart && (
-            <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 11, fontWeight: 700 }}>
+            <span style={{ padding: "1px 7px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 10, fontWeight: 700, lineHeight: 1.45 }}>
               {item.bodyPart}
             </span>
           )}
@@ -731,7 +759,13 @@ export default function AnalyticsScreen({
 
   if (selectedExercise) {
     return (
-      <div ref={screenScrollRef} style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div
+        key={selectedExercise.key}
+        ref={screenScrollRef}
+        onTouchStart={handlePrDetailTouchStart}
+        onTouchEnd={handlePrDetailTouchEnd}
+        style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}
+      >
         <button
           onClick={() => setSelectedExerciseKey(null)}
           style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--text2)", fontSize: 14, cursor: "pointer", padding: 0 }}
@@ -748,7 +782,7 @@ export default function AnalyticsScreen({
               {selectedExercise.displayName || selectedExercise.name}
             </div>
             {selectedExercise.bodyPart && (
-              <span style={{ padding: "4px 10px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 12, fontWeight: 700 }}>
+              <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 10, fontWeight: 700, lineHeight: 1.4 }}>
                 {selectedExercise.bodyPart}
               </span>
             )}

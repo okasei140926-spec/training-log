@@ -326,6 +326,12 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 });
             }
 
+            console.log("[feed] friend workouts count", {
+                currentUserId: user.id,
+                friendIds: nextFriendIds,
+                count: workouts.length,
+            });
+
             const workoutRowsMap = new Map();
             (workouts || []).forEach((workout) => {
                 const current = workoutRowsMap.get(workout.user_id) || [];
@@ -493,6 +499,18 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 });
             }
             const rawSessions = sessions || [];
+            const friendSessions = rawSessions.filter((session) => session?.user_id && friendIds.includes(session.user_id));
+            const friendVisibilityStats = friendSessions.reduce((stats, session) => {
+                const visibility = String(session?.visibility || "unknown");
+                stats[visibility] = (stats[visibility] || 0) + 1;
+                return stats;
+            }, {});
+            console.log("[feed] friend visibility stats", {
+                currentUserId: user.id,
+                friendIds,
+                count: friendSessions.length,
+                stats: friendVisibilityStats,
+            });
 
             const profileIds = [...new Set(feedUserIds.filter(Boolean))];
             const photoIds = [...new Set(
@@ -735,6 +753,16 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 friendIds,
                 count: friendItems.length,
             });
+            console.log("[feed] friend workouts count", {
+                currentUserId: user.id,
+                friendIds,
+                count: (workoutsRes.data || []).filter((row) => friendIds.includes(row.user_id)).length,
+            });
+            console.log("[feed] friend workout excluded reason", {
+                currentUserId: user.id,
+                friendIds,
+                items: excludedItems.filter((item) => item.isFriendWorkout),
+            });
 
             const allItems = [...ownItems, ...friendItems]
                 .sort((a, b) => {
@@ -767,6 +795,13 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             setActivityFeed(allItems);
             return true;
         } catch (error) {
+            console.error("[feed] RLS or Supabase error", {
+                error,
+                currentUserId: user?.id,
+                friendIds,
+                recentSevenStart,
+                today,
+            });
             console.error("[feed] fetch failed", {
                 error,
                 currentUserId: user?.id,
