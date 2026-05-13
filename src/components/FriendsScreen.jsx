@@ -630,7 +630,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             }))
             : [];
 
-        const timestampBase = workoutRow?.ended_at || workoutRow?.started_at || `${workoutDate}T12:00:00+09:00`;
+        const timestampBase = `${workoutDate}T12:00:00+09:00`;
         const payloadSummary = payload?.session?.summary_json || {};
         const sessionSummary = sessionMeta?.summary_json || {};
         const fallbackPrCount = entries.reduce((count, entry) => {
@@ -665,11 +665,11 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             sessionId: sessionMeta?.id || null,
             user_id: feedUserId,
             workout_date: workoutDate,
-            started_at: workoutRow?.started_at || null,
-            ended_at: workoutRow?.ended_at || null,
+            started_at: null,
+            ended_at: null,
             created_at: sessionMeta?.created_at || timestampBase,
-            updated_at: sessionMeta?.updated_at || workoutRow?.ended_at || workoutRow?.started_at || timestampBase,
-            duration_sec: Number(sessionMeta?.duration_sec || workoutRow?.duration_sec || 0),
+            updated_at: sessionMeta?.updated_at || timestampBase,
+            duration_sec: Number(sessionMeta?.duration_sec || 0),
             total_volume: Number(sessionMeta?.total_volume || payload?.session?.total_volume || 0),
             exercise_count: Number(sessionMeta?.exercise_count || payload?.session?.exercise_count || 0),
             summary_json: summary,
@@ -762,7 +762,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 feedUserIds.length
                     ? supabase
                         .from("workouts")
-                        .select("user_id, date, data, started_at, ended_at, duration_sec")
+                        .select("user_id, date, data")
                         .in("user_id", feedUserIds)
                         .gte("date", recentSevenStart)
                         .lte("date", today)
