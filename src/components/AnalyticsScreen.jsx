@@ -265,6 +265,21 @@ export default function AnalyticsScreen({
   const screenScrollRef = useRef(null);
   const prDetailTouchRef = useRef({ startX: 0, startY: 0, tracking: false });
 
+  const scrollAnalyticsScreenToTop = () => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    if (document.scrollingElement) {
+      document.scrollingElement.scrollTop = 0;
+    }
+    if (screenScrollRef.current) {
+      screenScrollRef.current.scrollTop = 0;
+      if (typeof screenScrollRef.current.scrollTo === "function") {
+        screenScrollRef.current.scrollTo({ top: 0, behavior: "auto" });
+      }
+    }
+  };
+
   const resolutionContext = useMemo(
     () => ({
       muscleEx,
@@ -658,26 +673,20 @@ export default function AnalyticsScreen({
   useLayoutEffect(() => {
     if (!selectedExerciseKey) return;
 
-    const scrollToTop = () => {
-      window.scrollTo(0, 0);
-      if (document.scrollingElement) {
-        document.scrollingElement.scrollTop = 0;
-      }
-      if (screenScrollRef.current) {
-        screenScrollRef.current.scrollTop = 0;
-        if (typeof screenScrollRef.current.scrollTo === "function") {
-          screenScrollRef.current.scrollTo({ top: 0, behavior: "auto" });
-        }
-      }
-    };
-
     const firstFrame = requestAnimationFrame(() => {
-      scrollToTop();
-      requestAnimationFrame(scrollToTop);
+      scrollAnalyticsScreenToTop();
+      requestAnimationFrame(scrollAnalyticsScreenToTop);
+      setTimeout(scrollAnalyticsScreenToTop, 0);
     });
 
     return () => cancelAnimationFrame(firstFrame);
   }, [selectedExerciseKey]);
+
+  const handleSelectExercise = (exerciseKey) => {
+    scrollAnalyticsScreenToTop();
+    setSelectedExerciseKey(exerciseKey);
+    requestAnimationFrame(scrollAnalyticsScreenToTop);
+  };
 
   const handlePrDetailTouchStart = (event) => {
     const touch = event.touches?.[0];
@@ -726,7 +735,7 @@ export default function AnalyticsScreen({
 
     return (
       <button
-        onClick={() => setSelectedExerciseKey(item.key)}
+        onClick={() => handleSelectExercise(item.key)}
         style={sharedStyle}
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 4 }}>
@@ -1185,8 +1194,8 @@ export default function AnalyticsScreen({
                   type="button"
                   onClick={() => setSelectedPrBodyPart(group.bodyPart)}
                   style={{
-                    padding: "12px 12px 11px",
-                    borderRadius: 16,
+                    padding: "9px 10px 8px",
+                    borderRadius: 14,
                     border: "1px solid rgba(18, 199, 194, 0.12)",
                     background:
                       selectedPrBodyPart === group.bodyPart
@@ -1198,10 +1207,10 @@ export default function AnalyticsScreen({
                       selectedPrBodyPart === group.bodyPart ? "0 10px 22px rgba(15, 94, 99, 0.10)" : "none",
                   }}
                 >
-                  <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 2 }}>
                     {group.bodyPart}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 700 }}>
+                  <div style={{ fontSize: 10, color: "var(--text2)", fontWeight: 700, lineHeight: 1.35 }}>
                     {group.items.length}件のPR
                   </div>
                 </button>

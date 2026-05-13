@@ -472,6 +472,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             return false;
         }
 
+        console.log("[feed] current user id", user?.id);
         const feedUserIds = [...new Set([user.id, ...friendIds])];
 
         setActivityFeedLoading(true);
@@ -629,7 +630,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
                 if (!session.workout_date) {
                     excludedItems.push({
+                        userId: session.user_id,
                         workoutId: session.id,
+                        sessionId: session.id,
                         workoutDate: session.workout_date,
                         created_at: session.created_at,
                         shared_at: session.updated_at,
@@ -645,7 +648,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
                 if (!isOwnWorkout && !isFriendWorkout) {
                     excludedItems.push({
+                        userId: session.user_id,
                         workoutId: session.id,
+                        sessionId: session.id,
                         workoutDate: session.workout_date,
                         created_at: session.created_at,
                         shared_at: session.updated_at,
@@ -664,7 +669,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     !["friends", "public"].includes(String(session.visibility))
                 ) {
                     excludedItems.push({
+                        userId: session.user_id,
                         workoutId: session.id,
+                        sessionId: session.id,
                         workoutDate: session.workout_date,
                         created_at: session.created_at,
                         shared_at: session.updated_at,
@@ -717,7 +724,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
                     if (!item) {
                         excludedItems.push({
+                            userId: targetUserId,
                             workoutId: workoutKey,
+                            sessionId: sessionMetaMap.get(workoutKey)?.id || null,
                             workoutDate,
                             created_at: null,
                             shared_at: null,
@@ -751,18 +760,26 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             console.log("[feed] friend sessions count", {
                 currentUserId: user.id,
                 friendIds,
-                count: friendItems.length,
+                count: friendSessions.length,
             });
             console.log("[feed] friend workouts count", {
                 currentUserId: user.id,
                 friendIds,
                 count: (workoutsRes.data || []).filter((row) => friendIds.includes(row.user_id)).length,
             });
-            console.log("[feed] friend workout excluded reason", {
-                currentUserId: user.id,
-                friendIds,
-                items: excludedItems.filter((item) => item.isFriendWorkout),
-            });
+            excludedItems
+                .filter((item) => item.isFriendWorkout)
+                .forEach((item) => {
+                    console.warn("[feed] friend workout excluded reason", {
+                        userId: item.userId || null,
+                        workoutId: item.workoutId,
+                        sessionId: item.sessionId || item.workoutId || null,
+                        visibility: item.visibility,
+                        hasValidSets: item.excludedReason !== "no_valid_sets",
+                        isAcceptedFriend: true,
+                        reason: item.excludedReason,
+                    });
+                });
 
             const allItems = [...ownItems, ...friendItems]
                 .sort((a, b) => {
