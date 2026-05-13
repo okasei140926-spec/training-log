@@ -38,6 +38,36 @@ const RANKING_TABS = [
     { key: "consistency", label: "継続" },
     { key: "monthly", label: "今月" },
 ];
+const STALE_MS = 30000;
+const EMPTY_FRIEND_SESSION_INSIGHTS = {
+    rawMonthlySessions: [],
+    monthlyCountByUser: {},
+    recentSevenCountByUser: {},
+    visibleDatesByUser: {},
+    visibilityByUserDate: {},
+    sessionsByDate: {},
+    workoutsByDate: {},
+    validSetsByDate: {},
+    missingDates: {},
+    excludedSessions: [],
+};
+const FRIENDS_SCREEN_CACHE = {
+    friendsData: {
+        userId: null,
+        friendIds: [],
+        friends: [],
+        friendSessionInsights: EMPTY_FRIEND_SESSION_INSIGHTS,
+        myUsername: "",
+        avatarUrl: null,
+        fetchedAt: 0,
+    },
+    feedData: {
+        userId: null,
+        activityFeed: [],
+        fetchedAt: 0,
+    },
+    diagnosticPayload: null,
+};
 
 const parseDateKey = (value) => {
     if (!value) return new Date();
@@ -101,17 +131,19 @@ export default function FriendsScreen({
     mode = "all",
 }) {
     const [copied, setCopied] = useState(false);
-    const [friends, setFriends] = useState([]);
-    const [friendIds, setFriendIds] = useState([]);
+    const [friends, setFriends] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.friends || []);
+    const [friendIds, setFriendIds] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.friendIds || []);
     const [, setTodayActiveMap] = useState({});
     const [showEditName, setShowEditName] = useState(false);
     const [newUsername, setNewUsername] = useState("");
     const [usernameError, setUsernameError] = useState("");
-    const [avatarUrl, setAvatarUrl] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [myUsername, setMyUsername] = useState("");
-    const [activityFeed, setActivityFeed] = useState([]);
+    const [avatarUrl, setAvatarUrl] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.avatarUrl || null);
+    const [loading, setLoading] = useState(() => !FRIENDS_SCREEN_CACHE.friendsData.fetchedAt);
+    const [friendsRefreshing, setFriendsRefreshing] = useState(false);
+    const [myUsername, setMyUsername] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.myUsername || "");
+    const [activityFeed, setActivityFeed] = useState(() => FRIENDS_SCREEN_CACHE.feedData.activityFeed || []);
     const [activityFeedLoading, setActivityFeedLoading] = useState(false);
+    const [feedRefreshing, setFeedRefreshing] = useState(false);
     const [activityFeedAction, setActivityFeedAction] = useState(null);
     const [activityFeedStatusMessage, setActivityFeedStatusMessage] = useState("");
     const [likePendingMap, setLikePendingMap] = useState({});
@@ -120,19 +152,10 @@ export default function FriendsScreen({
     const [expandedFeedItems, setExpandedFeedItems] = useState({});
     const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
     const [diagnosticCopyStatus, setDiagnosticCopyStatus] = useState("");
-    const [monthlyVisibilityDiagnostic, setMonthlyVisibilityDiagnostic] = useState(null);
-    const [friendSessionInsights, setFriendSessionInsights] = useState({
-        rawMonthlySessions: [],
-        monthlyCountByUser: {},
-        recentSevenCountByUser: {},
-        visibleDatesByUser: {},
-        visibilityByUserDate: {},
-        sessionsByDate: {},
-        workoutsByDate: {},
-        validSetsByDate: {},
-        missingDates: {},
-        excludedSessions: [],
-    });
+    const [monthlyVisibilityDiagnostic, setMonthlyVisibilityDiagnostic] = useState(() => FRIENDS_SCREEN_CACHE.diagnosticPayload);
+    const [friendSessionInsights, setFriendSessionInsights] = useState(() => (
+        FRIENDS_SCREEN_CACHE.friendsData.friendSessionInsights || EMPTY_FRIEND_SESSION_INSIGHTS
+    ));
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
@@ -347,27 +370,27 @@ export default function FriendsScreen({
         }, 1800);
     }, [combinedDiagnosticPayload]);
 
-    const fetchFriendsData = useCallback(async () => {
+    const fetchFriendsData = useCallback(async ({ force = false, background = false } = {}) => {
         if (!user) {
             setFriendIds([]);
             setFriends([]);
-            setFriendSessionInsights({
-                rawMonthlySessions: [],
-                monthlyCountByUser: {},
-                recentSevenCountByUser: {},
-                visibleDatesByUser: {},
-                visibilityByUserDate: {},
-                sessionsByDate: {},
-                workoutsByDate: {},
-                validSetsByDate: {},
-                missingDates: {},
-                excludedSessions: [],
-            });
+            setFriendSessionInsights(EMPTY_FRIEND_SESSION_INSIGHTS);
             setTodayActiveMap({});
             return false;
         }
 
-        setLoading(true);
+        const now = Date.now();
+        const hasCache = FRIENDS_SCREEN_CACHE.friendsData.fetchedAt > 0
+            && FRIENDS_SCREEN_CACHE.friendsData.userId === user.id;
+        if (!force && hasCache && now - FRIENDS_SCREEN_CACHE.friendsData.fetchedAt < STALE_MS) {
+            return true;
+        }
+
+        if (!hasCache && !background) {
+            setLoading(true);
+        } else {
+            setFriendsRefreshing(true);
+        }
         try {
             const { data: friendships, error: friendshipsError } = await supabase
                 .from("friendships")
@@ -384,18 +407,15 @@ export default function FriendsScreen({
             if (!friendships || friendships.length === 0) {
                 setFriendIds([]);
                 setFriends([]);
-                setFriendSessionInsights({
-                    rawMonthlySessions: [],
-                    monthlyCountByUser: {},
-                    recentSevenCountByUser: {},
-                    visibleDatesByUser: {},
-                    visibilityByUserDate: {},
-                    sessionsByDate: {},
-                    workoutsByDate: {},
-                    validSetsByDate: {},
-                    missingDates: {},
-                    excludedSessions: [],
-                });
+                setFriendSessionInsights(EMPTY_FRIEND_SESSION_INSIGHTS);
+                FRIENDS_SCREEN_CACHE.friendsData = {
+                    userId: user.id,
+                    ...FRIENDS_SCREEN_CACHE.friendsData,
+                    friendIds: [],
+                    friends: [],
+                    friendSessionInsights: EMPTY_FRIEND_SESSION_INSIGHTS,
+                    fetchedAt: Date.now(),
+                };
                 setTodayActiveMap({});
                 setLoading(false);
                 return true;
@@ -575,7 +595,7 @@ export default function FriendsScreen({
                 missingDates[friend.id] = workoutDates.filter((dateKey) => !new Set(visibleDates).has(dateKey));
             });
 
-            setFriendSessionInsights({
+            const nextInsights = {
                 rawMonthlySessions: rawFriendSessions,
                 monthlyCountByUser: Object.fromEntries(
                     Object.entries(monthlyCountByUser).map(([userId, dates]) => [userId, dates.size])
@@ -592,9 +612,19 @@ export default function FriendsScreen({
                 validSetsByDate,
                 missingDates,
                 excludedSessions,
-            });
+            };
 
+            setFriendSessionInsights(nextInsights);
             setFriends(friendsWithHistory);
+            FRIENDS_SCREEN_CACHE.friendsData = {
+                userId: user.id,
+                friendIds: nextFriendIds,
+                friends: friendsWithHistory,
+                friendSessionInsights: nextInsights,
+                myUsername,
+                avatarUrl,
+                fetchedAt: Date.now(),
+            };
             await fetchTodayActive(nextFriendIds);
             return true;
         } catch (err) {
@@ -604,24 +634,14 @@ export default function FriendsScreen({
             });
             setFriendIds([]);
             setFriends([]);
-            setFriendSessionInsights({
-                rawMonthlySessions: [],
-                monthlyCountByUser: {},
-                recentSevenCountByUser: {},
-                visibleDatesByUser: {},
-                visibilityByUserDate: {},
-                sessionsByDate: {},
-                workoutsByDate: {},
-                validSetsByDate: {},
-                missingDates: {},
-                excludedSessions: [],
-            });
+            setFriendSessionInsights(EMPTY_FRIEND_SESSION_INSIGHTS);
             setTodayActiveMap({});
             return false;
         } finally {
             setLoading(false);
+            setFriendsRefreshing(false);
         }
-    }, [currentMonthPrefix, fetchTodayActive, recentSevenStart, today, user]);
+    }, [avatarUrl, currentMonthPrefix, fetchTodayActive, myUsername, recentSevenStart, today, user]);
 
     const formatSessionSetDisplay = useCallback((set) => {
         if (!set) return "";
@@ -686,8 +706,9 @@ export default function FriendsScreen({
             prCount: Number(sessionSummary?.prCount || payloadSummary?.prCount || fallbackPrCount || 0),
         };
         const summaryItems = Array.isArray(summary.items) ? summary.items : [];
+        const hasSessionFallback = hasValidSessionData(sessionMeta);
 
-        if (!payload?.session && !summaryItems.length) return null;
+        if (!payload?.session && !summaryItems.length && !hasSessionFallback) return null;
 
         return {
             id: sessionMeta?.id || `feed-${feedUserId}-${workoutDate}`,
@@ -716,10 +737,11 @@ export default function FriendsScreen({
             commentCount: Number(sessionMeta?.commentCount || 0),
             profile,
             photoUrl: sessionMeta?.photoUrl || null,
+            source: sessionMeta ? "session" : "workout_fallback",
         };
     }, []);
 
-    const fetchActivityFeed = useCallback(async ({ reset = false } = {}) => {
+    const fetchActivityFeed = useCallback(async ({ reset = false, force = false, background = false } = {}) => {
         if (!user?.id) {
             setActivityFeed([]);
             return false;
@@ -728,7 +750,18 @@ export default function FriendsScreen({
         console.log("[feed] current user id", user?.id);
         const feedUserIds = [...new Set([user.id, ...friendIds])];
 
-        setActivityFeedLoading(true);
+        const now = Date.now();
+        const hasCache = FRIENDS_SCREEN_CACHE.feedData.fetchedAt > 0
+            && FRIENDS_SCREEN_CACHE.feedData.userId === user.id;
+        if (!force && hasCache && now - FRIENDS_SCREEN_CACHE.feedData.fetchedAt < STALE_MS) {
+            return true;
+        }
+
+        if (!hasCache && !background) {
+            setActivityFeedLoading(true);
+        } else {
+            setFeedRefreshing(true);
+        }
 
         try {
             let sessionsQuery = supabase
@@ -954,7 +987,7 @@ export default function FriendsScreen({
                 }
             });
 
-            const buildItemsForUser = (targetUserId, sourceHistory = {}) => {
+            const buildItemsForUser = (targetUserId, sourceHistory = {}, preferredDates = []) => {
                 const historyDates = getValidWorkoutDatesFromHistory(sourceHistory, { since: recentSevenStart })
                     .filter((dateKey) => dateKey <= today);
                 const sessionDates = Array.from(sessionMetaMap.keys())
@@ -963,7 +996,9 @@ export default function FriendsScreen({
                         return userId === targetUserId ? date : null;
                     })
                     .filter((dateKey) => dateKey && dateKey >= recentSevenStart && dateKey <= today);
-                const validDates = [...new Set([...historyDates, ...sessionDates])];
+                const visibleDates = (Array.isArray(preferredDates) ? preferredDates : [])
+                    .filter((dateKey) => dateKey >= recentSevenStart && dateKey <= today);
+                const validDates = [...new Set([...historyDates, ...sessionDates, ...visibleDates])];
 
                 return validDates.map((workoutDate) => {
                     const workoutKey = `${targetUserId}::${workoutDate}`;
@@ -1004,7 +1039,11 @@ export default function FriendsScreen({
             );
             const ownItems = buildItemsForUser(user.id, mergedOwnHistory);
             const friendItems = friendIds.flatMap((friendId) =>
-                buildItemsForUser(friendId, buildHistoryFromWorkoutRows(workoutRowsByUser.get(friendId) || []))
+                buildItemsForUser(
+                    friendId,
+                    buildHistoryFromWorkoutRows(workoutRowsByUser.get(friendId) || []),
+                    friendSessionInsights.visibleDatesByUser?.[friendId] || []
+                )
             );
 
             console.log("[feed] own sessions count", {
@@ -1067,8 +1106,24 @@ export default function FriendsScreen({
                 displayedCardsCount: allItems.length,
             });
             console.log("[feed] displayed cards count", allItems.length);
+            console.log("[feed] final cards", {
+                ownCount: ownItems.length,
+                friendCount: friendItems.length,
+                totalCount: allItems.length,
+                cards: allItems.map((x) => ({
+                    userId: x.user_id,
+                    userName: getDisplayUsername(x.profile?.username, { isMe: x.user_id === user.id }),
+                    date: x.workout_date,
+                    source: x.source,
+                })),
+            });
 
             setActivityFeed(allItems);
+            FRIENDS_SCREEN_CACHE.feedData = {
+                userId: user.id,
+                activityFeed: allItems,
+                fetchedAt: Date.now(),
+            };
             return true;
         } catch (error) {
             console.error("[feed] RLS or Supabase error", {
@@ -1093,16 +1148,17 @@ export default function FriendsScreen({
             return false;
         } finally {
             setActivityFeedLoading(false);
+            setFeedRefreshing(false);
         }
-    }, [buildFeedItemFromHistoryDate, friendIds, history, recentSevenStart, today, user?.id]);
+    }, [buildFeedItemFromHistoryDate, friendIds, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
         setActivityFeedAction("refresh");
         setActivityFeedStatusMessage("");
         const [feedOk] = await Promise.all([
-            fetchActivityFeed({ reset: true }),
-            fetchFriendsData(),
+            fetchActivityFeed({ reset: true, force: true }),
+            fetchFriendsData({ force: true }),
         ]);
         setActivityFeedAction(null);
         showActivityFeedStatusMessage(feedOk ? "更新しました" : "更新できませんでした");
@@ -1203,12 +1259,12 @@ export default function FriendsScreen({
 
     useEffect(() => {
         if (!user) return;
-        fetchFriendsData();
+        fetchFriendsData({ background: Boolean(FRIENDS_SCREEN_CACHE.friendsData.fetchedAt) });
     }, [user, fetchFriendsData, sessionSyncVersion]);
 
     useEffect(() => {
         if (!user || !showRankingSections) return;
-        fetchFriendsData().catch(console.error);
+        fetchFriendsData({ background: true }).catch(console.error);
     }, [user, fetchFriendsData, rankingTab, showRankingSections]);
 
     useEffect(() => {
@@ -1223,21 +1279,24 @@ export default function FriendsScreen({
 
     useEffect(() => {
         if (!user) return;
-        fetchActivityFeed({ reset: true });
+        fetchActivityFeed({
+            reset: true,
+            background: Boolean(FRIENDS_SCREEN_CACHE.feedData.fetchedAt),
+        });
     }, [user, friendIds, fetchActivityFeed, sessionSyncVersion]);
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
-        fetchActivityFeed({ reset: true }).catch(console.error);
+        fetchActivityFeed({ reset: true, background: true }).catch(console.error);
     }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion]);
 
     useEffect(() => {
         if (!user) return undefined;
 
         const refreshVisibleData = () => {
-            fetchFriendsData().catch(console.error);
+            fetchFriendsData({ background: true }).catch(console.error);
             if (showFeedSections) {
-                fetchActivityFeed({ reset: true }).catch(console.error);
+                fetchActivityFeed({ reset: true, background: true }).catch(console.error);
             }
         };
 
@@ -1259,7 +1318,7 @@ export default function FriendsScreen({
     useEffect(() => {
         if (!user) return undefined;
         const intervalId = setInterval(() => {
-            fetchActivityFeed({ reset: true }).catch(console.error);
+            fetchActivityFeed({ reset: true, background: true }).catch(console.error);
         }, 90000);
 
         return () => clearInterval(intervalId);
@@ -1283,6 +1342,11 @@ export default function FriendsScreen({
                 .single();
             setAvatarUrl(data?.avatar1_url || null);
             setMyUsername(data?.username || "");
+            FRIENDS_SCREEN_CACHE.friendsData = {
+                ...FRIENDS_SCREEN_CACHE.friendsData,
+                avatarUrl: data?.avatar1_url || null,
+                myUsername: data?.username || "",
+            };
         };
         fetchProfile();
     }, [user]);
@@ -1399,15 +1463,11 @@ export default function FriendsScreen({
         user?.id,
     ]);
 
-    useEffect(() => {
-        if (!showRankingSections || !user?.id) return undefined;
-
-        let cancelled = false;
-
-        const runMonthlyVisibilityDiagnostic = async () => {
+    const runMonthlyVisibilityDiagnostic = useCallback(async () => {
+        if (!showRankingSections || !user?.id) return null;
             const currentMonthStart = `${currentMonthPrefix}-01`;
             const targetUserIds = [...new Set([user.id, ...friendIds].filter(Boolean))];
-            if (!targetUserIds.length) return;
+            if (!targetUserIds.length) return null;
 
             const [monthlyWorkoutsRes, monthlySessionsRes] = await Promise.all([
                 supabase
@@ -1445,8 +1505,6 @@ export default function FriendsScreen({
                     today,
                 });
             }
-
-            if (cancelled) return;
 
             const monthlyWorkoutRows = monthlyWorkoutsRes.data || [];
             const monthlySessionRows = monthlySessionsRes.data || [];
@@ -1576,14 +1634,9 @@ export default function FriendsScreen({
             };
 
             setMonthlyVisibilityDiagnostic(diagnosticPayload);
+            FRIENDS_SCREEN_CACHE.diagnosticPayload = diagnosticPayload;
             console.log("[diagnostic] monthly visibility diff", diagnosticPayload);
-        };
-
-        runMonthlyVisibilityDiagnostic();
-
-        return () => {
-            cancelled = true;
-        };
+            return diagnosticPayload;
     }, [
         countMonthlyWorkoutDays,
         currentMonthPrefix,
@@ -1598,6 +1651,11 @@ export default function FriendsScreen({
         today,
         user?.id,
     ]);
+
+    useEffect(() => {
+        if (!showDiagnosticPanel) return;
+        runMonthlyVisibilityDiagnostic().catch(console.error);
+    }, [runMonthlyVisibilityDiagnostic, showDiagnosticPanel]);
 
     const rankingConfig = {
         big3: {
@@ -1681,6 +1739,7 @@ export default function FriendsScreen({
     const myRankingSummary = activeRanking?.mySummary?.(myRankingIndex, myRankingEntry, aboveRankingEntry) || null;
 
     const activityCount = activityFeed.length;
+    const shouldShowRankingLoading = loading && activeRanking.data.length === 0;
     const activeFriendCount = new Set(
         activityFeed
             .filter((item) => item.user_id !== user?.id)
@@ -1762,11 +1821,16 @@ export default function FriendsScreen({
                                 <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
                                     新しい記録順に表示しています
                                 </div>
+                                {feedRefreshing && (
+                                    <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
+                                        更新中...
+                                    </div>
+                                )}
                             </div>
                             <button
                                 type="button"
                                 onClick={handleRefreshActivityFeed}
-                                disabled={activityFeedLoading}
+                                disabled={activityFeedLoading || feedRefreshing}
                                 style={{
                                     padding: "10px 14px",
                                     borderRadius: 14,
@@ -1778,7 +1842,7 @@ export default function FriendsScreen({
                                     flexShrink: 0,
                                 }}
                             >
-                                {activityFeedLoading && activityFeedAction === "refresh" ? "更新中..." : "更新"}
+                                {(activityFeedLoading || feedRefreshing) && activityFeedAction === "refresh" ? "更新中..." : "更新"}
                             </button>
                         </div>
 
@@ -1798,7 +1862,7 @@ export default function FriendsScreen({
                         )}
                     </div>
 
-                    {activityFeed.length === 0 && !activityFeedLoading ? (
+                    {activityFeed.length === 0 && !activityFeedLoading && !feedRefreshing ? (
                         <div
                             style={{
                                 ...S.sectionCard,
@@ -2144,11 +2208,18 @@ export default function FriendsScreen({
                         <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>
                             {activeRanking.description}
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 14 }}>
-                            自分の位置と友達との差をチェック
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+                            <div style={{ fontSize: 12, color: "var(--text3)" }}>
+                                自分の位置と友達との差をチェック
+                            </div>
+                            {friendsRefreshing && (
+                                <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
+                                    更新中...
+                                </div>
+                            )}
                         </div>
 
-                        {loading ? (
+                        {shouldShowRankingLoading ? (
                             <div style={{ textAlign: "center", padding: 26, color: "var(--text2)", fontSize: 14 }}>読み込み中...</div>
                         ) : (
                             <div style={{ display: "grid", gap: 10 }}>
