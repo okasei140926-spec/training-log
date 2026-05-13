@@ -73,6 +73,34 @@ const formatTimeStamp = (value) => {
     minute: "2-digit",
   });
 };
+const formatSlashDate = (value) => String(value || "").replace(/-/g, "/");
+const formatElapsedFromStartDate = (startDateKey, endDate = new Date()) => {
+  if (!startDateKey) return "";
+  const start = new Date(`${startDateKey}T00:00:00`);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
+
+  let years = end.getFullYear() - start.getFullYear();
+  let months = end.getMonth() - start.getMonth();
+  let days = end.getDate() - start.getDate();
+
+  if (days < 0) {
+    const previousMonthLastDay = new Date(end.getFullYear(), end.getMonth(), 0).getDate();
+    days += previousMonthLastDay;
+    months -= 1;
+  }
+
+  if (months < 0) {
+    months += 12;
+    years -= 1;
+  }
+
+  const parts = [];
+  if (years > 0) parts.push(`${years}年`);
+  if (months > 0) parts.push(`${months}ヶ月`);
+  if (days > 0 || parts.length === 0) parts.push(`${days}日`);
+  return parts.join("");
+};
 
 export default function HistoryScreen({
   history,
@@ -358,6 +386,14 @@ export default function HistoryScreen({
     () => getValidWorkoutDatesFromHistory(history || {}).length,
     [history]
   );
+  const firstTrainingDate = useMemo(() => {
+    const dates = getValidWorkoutDatesFromHistory(history || {});
+    return dates.length ? [...dates].sort()[0] : null;
+  }, [history]);
+  const trainingHistoryDuration = useMemo(
+    () => formatElapsedFromStartDate(firstTrainingDate, new Date()),
+    [firstTrainingDate]
+  );
 
   const todayWorkedBodyParts = useMemo(
     () => todaySummary.setCountByBodyPart || [],
@@ -452,16 +488,21 @@ export default function HistoryScreen({
 
     if (selectedSummaryKey === "trainingDays") {
       return {
-        title: "累計トレーニング日数",
-        subtitle: `${totalTrainingDays}日`,
-        emptyText: "まだ有効なトレーニング記録がありません",
+        title: "トレーニング履歴",
+        subtitle: firstTrainingDate ? `${formatSlashDate(firstTrainingDate)} 〜 今日` : "",
+        emptyText: "まだ記録がありません",
         items:
-          totalTrainingDays > 0
+          firstTrainingDate
             ? [
                 {
-                  key: "total-training-days",
-                  title: "累計トレーニング日数",
-                  meta: `${totalTrainingDays}日`,
+                  key: "training-history-start-date",
+                  title: "開始日",
+                  meta: formatSlashDate(firstTrainingDate),
+                },
+                {
+                  key: "training-history-duration",
+                  title: "継続期間",
+                  meta: trainingHistoryDuration || `${formatSlashDate(firstTrainingDate)} 〜 今日`,
                 },
               ]
             : [],
@@ -484,7 +525,8 @@ export default function HistoryScreen({
     todayEntries,
     todayPrEntries,
     todaySummary,
-    totalTrainingDays,
+    firstTrainingDate,
+    trainingHistoryDuration,
     todayWorkoutLastActivityAt,
     todayWorkoutStartedAt,
     getExUnit,
