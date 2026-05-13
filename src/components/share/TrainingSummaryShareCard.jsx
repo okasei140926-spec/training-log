@@ -19,6 +19,40 @@ const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString
 const formatAverageVolume = (totalVolume, workoutCount) =>
   `${Math.round(workoutCount > 0 ? Number(totalVolume || 0) / workoutCount : 0).toLocaleString("ja-JP")}kg/回`;
 
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+const formatMonthLabel = (startKey) => {
+  const [year, month] = String(startKey || "").split("-");
+  if (!year || !month) return "";
+  return `${year}年${Number(month)}月`;
+};
+
+const buildMonthCalendarCells = (summary) => {
+  const [year, month] = String(summary?.startKey || "").split("-").map(Number);
+  if (!year || !month) return [];
+
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDate = new Date(year, month, 0).getDate();
+  const offset = firstDay.getDay();
+  const activeDates = new Set((summary?.dailyStats || []).map((item) => item.date));
+  const cells = [];
+
+  for (let i = 0; i < offset; i += 1) {
+    cells.push({ key: `empty-${i}`, empty: true });
+  }
+
+  for (let day = 1; day <= lastDate; day += 1) {
+    const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    cells.push({
+      key,
+      day,
+      active: activeDates.has(key),
+    });
+  }
+
+  return cells;
+};
+
 const renderMetric = (label, value) => (
   <div
     key={label}
@@ -37,12 +71,37 @@ const renderMetric = (label, value) => (
   </div>
 );
 
+const renderMonthlyMetric = (label, value, options = {}) => (
+  <div
+    key={label}
+    style={{
+      background: options.wide
+        ? "linear-gradient(135deg, rgba(10, 15, 25, 0.96), rgba(20, 28, 40, 0.98))"
+        : "rgba(17, 24, 39, 0.86)",
+      border: "1px solid rgba(56, 189, 248, 0.16)",
+      borderRadius: options.wide ? 18 : 16,
+      padding: options.wide ? "12px 14px" : "12px 13px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 5,
+      minHeight: options.wide ? 72 : 82,
+      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+    }}
+  >
+    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.62)", letterSpacing: 1.2 }}>{label}</div>
+    <div style={{ fontSize: options.wide ? 16 : 20, fontWeight: 900, color: "#fff", lineHeight: 1.3, whiteSpace: "pre-wrap" }}>
+      {value}
+    </div>
+  </div>
+);
+
 const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
   { summary, sizeKey = "square" },
   ref
 ) {
   const preset = PRESET_STYLES[sizeKey] || PRESET_STYLES.square;
   const isStory = sizeKey === "story";
+  const isMonthly = summary.group === "monthly";
   const setCountSummary =
     formatSetCountByBodyPart(summary.setCountByBodyPart, {
       sort: "count",
@@ -56,6 +115,156 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
   const growthLabel = topProgress
     ? `${topProgress.exerciseName}\n+${Math.round(Number(topProgress.diffKg || 0) * 10) / 10}kg`
     : "記録なし";
+  const monthLabel = formatMonthLabel(summary.startKey);
+  const monthCalendarCells = buildMonthCalendarCells(summary);
+
+  if (isMonthly) {
+    return (
+      <div
+        ref={ref}
+        style={{
+          width: preset.width,
+          height: preset.height,
+          borderRadius: 30,
+          overflow: "hidden",
+          background:
+            "radial-gradient(circle at top right, rgba(56,189,248,0.20), transparent 28%), radial-gradient(circle at bottom left, rgba(18,199,194,0.16), transparent 26%), linear-gradient(165deg, #05070b 0%, #0b1220 42%, #111827 100%)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 30px 60px rgba(15, 23, 42, 0.32)",
+          display: "flex",
+          flexDirection: "column",
+          padding: isStory ? "18px 18px 18px" : "16px",
+          boxSizing: "border-box",
+          color: "#fff",
+        }}
+      >
+        <div style={{ marginBottom: isStory ? 12 : 10 }}>
+          <div style={{ fontSize: 10, letterSpacing: 2.6, color: "rgba(255,255,255,0.56)", marginBottom: 6 }}>PUMP</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: isStory ? 26 : 22, fontWeight: 900, lineHeight: 1.1, marginBottom: 4 }}>
+                月間サマリー
+              </div>
+              <div style={{ fontSize: isStory ? 13 : 12, color: "rgba(255,255,255,0.8)" }}>{monthLabel}</div>
+            </div>
+            <div
+              style={{
+                padding: "7px 11px",
+                borderRadius: 999,
+                background: "rgba(18, 199, 194, 0.12)",
+                border: "1px solid rgba(18, 199, 194, 0.28)",
+                color: "#7DE7E2",
+                fontSize: 11,
+                fontWeight: 800,
+              }}
+            >
+              {summary.shortLabel}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "linear-gradient(180deg, rgba(8, 16, 28, 0.96), rgba(15, 23, 42, 0.82))",
+            borderRadius: 20,
+            border: "1px solid rgba(56, 189, 248, 0.16)",
+            padding: isStory ? "12px 12px 10px" : "10px 10px 8px",
+            marginBottom: isStory ? 12 : 10,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+              gap: 4,
+              marginBottom: 8,
+            }}
+          >
+            {WEEKDAY_LABELS.map((label) => (
+              <div
+                key={label}
+                style={{
+                  textAlign: "center",
+                  fontSize: 10,
+                  color: "rgba(255,255,255,0.45)",
+                  paddingBottom: 2,
+                }}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+              gap: 4,
+            }}
+          >
+            {monthCalendarCells.map((cell) => (
+              <div
+                key={cell.key}
+                style={{
+                  height: isStory ? 30 : 24,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 10,
+                  background: cell.active ? "rgba(18, 199, 194, 0.14)" : "transparent",
+                  border: cell.active ? "1px solid rgba(18, 199, 194, 0.24)" : "1px solid transparent",
+                  boxShadow: cell.active ? "0 0 0 1px rgba(34,211,238,0.03), 0 10px 18px rgba(18,199,194,0.10)" : "none",
+                  position: "relative",
+                }}
+              >
+                {!cell.empty && (
+                  <>
+                    <span style={{ fontSize: isStory ? 11 : 10, color: cell.active ? "#E6FFFD" : "rgba(255,255,255,0.72)", fontWeight: cell.active ? 800 : 600 }}>
+                      {cell.day}
+                    </span>
+                    {cell.active && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          bottom: isStory ? 4 : 3,
+                          width: 4,
+                          height: 4,
+                          borderRadius: 999,
+                          background: "#33E1DB",
+                          boxShadow: "0 0 10px rgba(51,225,219,0.7)",
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: isStory ? 10 : 8,
+          }}
+        >
+          {renderMonthlyMetric("トレ日数", `${summary.workoutCount}日`)}
+          {renderMonthlyMetric("総ボリューム", formatVolume(summary.totalVolume))}
+          {renderMonthlyMetric("合計セット", `${totalSetCount}セット`)}
+          {renderMonthlyMetric("合計レップ", `${Math.round(Number(summary.totalReps || 0)).toLocaleString("ja-JP")}回`)}
+        </div>
+
+        <div style={{ display: "grid", gap: isStory ? 10 : 8, marginTop: isStory ? 10 : 8, flex: 1 }}>
+          {renderMonthlyMetric("部位別セット", setCountSummary, { wide: true })}
+          {renderMonthlyMetric("一番伸びた種目", growthLabel, { wide: true })}
+        </div>
+
+        <div style={{ marginTop: isStory ? 10 : 8, fontSize: 10, color: "rgba(255,255,255,0.45)", letterSpacing: 2 }}>
+          PUMP
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

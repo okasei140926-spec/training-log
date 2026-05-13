@@ -3,12 +3,6 @@ import { toBlob } from "html-to-image";
 import { formatSetCountByBodyPart } from "../../utils/setCountByBodyPart";
 
 const CARD_PRESETS = {
-    square: {
-        key: "square",
-        label: "1:1",
-        width: 360,
-        height: 360,
-    },
     story: {
         key: "story",
         label: "9:16",
@@ -26,7 +20,7 @@ const formatDate = (date) => {
 
 const formatDuration = (durationSec) => {
     const sec = Number(durationSec || 0);
-    if (!Number.isFinite(sec) || sec <= 0) return "0分";
+    if (!Number.isFinite(sec) || sec <= 0) return "";
     const hours = Math.floor(sec / 3600);
     const minutes = Math.max(1, Math.round((sec % 3600) / 60));
     if (hours <= 0) return `${minutes}分`;
@@ -43,9 +37,9 @@ const formatSetLine = (set) => {
     if (!set) return "";
     const reps = Math.max(0, Number(set.reps || 0));
     const weight = String(set.weight || "").toUpperCase();
-    if (weight === "BW") return `自重 × ${reps}reps`;
+    if (weight === "BW") return `自重 × ${reps}`;
     const weightNum = Math.round(Number(set.weight || 0) * 10) / 10;
-    return `${weightNum}kg × ${reps}reps`;
+    return `${weightNum}kg × ${reps}`;
 };
 
 export default function WorkoutSessionShareModal({
@@ -56,7 +50,7 @@ export default function WorkoutSessionShareModal({
     photoRows = [],
     photoUrls = {},
 }) {
-    const [sizeKey, setSizeKey] = useState("square");
+    const [sizeKey] = useState("story");
     const [selectedPhotoId, setSelectedPhotoId] = useState(() => photoRows[0]?.id ?? null);
     const [sharing, setSharing] = useState(false);
     const cardRef = useRef(null);
@@ -91,10 +85,8 @@ export default function WorkoutSessionShareModal({
         return "まだありません";
     }, [items, summary]);
 
-    const visibleItems = useMemo(() => {
-        if (sizeKey === "story") return items;
-        return items.slice(0, 4);
-    }, [items, sizeKey]);
+    const visibleItems = useMemo(() => items, [items]);
+    const durationLabel = formatDuration(sessionPayload.session.duration_sec);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -248,27 +240,6 @@ export default function WorkoutSessionShareModal({
                         padding: "0 18px calc(18px + var(--safe-bottom, 0px))",
                     }}
                 >
-                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                        {Object.values(CARD_PRESETS).map((item) => (
-                            <button
-                                key={item.key}
-                                type="button"
-                                onClick={() => setSizeKey(item.key)}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: 999,
-                                    border: "1px solid var(--border2)",
-                                    background: sizeKey === item.key ? "var(--text)" : "var(--card2)",
-                                    color: sizeKey === item.key ? "var(--bg)" : "var(--text2)",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                }}
-                            >
-                                {item.label}
-                            </button>
-                        ))}
-                    </div>
-
                     {photoRows.length > 0 && (
                         <div style={{ marginBottom: 12 }}>
                             <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>
@@ -332,10 +303,10 @@ export default function WorkoutSessionShareModal({
                                 borderRadius: 28,
                                 overflow: "hidden",
                                 background: selectedPhotoUrl
-                                    ? "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)"
-                                    : "linear-gradient(160deg, #eff6ff 0%, #dcfce7 52%, #ffffff 100%)",
-                                border: "1px solid rgba(255,255,255,0.85)",
-                                boxShadow: "0 30px 60px rgba(15, 23, 42, 0.14)",
+                                    ? "linear-gradient(180deg, #05070b 0%, #0b1220 100%)"
+                                    : "radial-gradient(circle at top right, rgba(51,225,219,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(15,94,99,0.18), transparent 26%), linear-gradient(165deg, #05070b 0%, #0b1220 42%, #111827 100%)",
+                                border: "1px solid rgba(255,255,255,0.08)",
+                                boxShadow: "0 30px 60px rgba(15, 23, 42, 0.24)",
                                 display: "flex",
                                 flexDirection: "column",
                                 flexShrink: 0,
@@ -347,7 +318,7 @@ export default function WorkoutSessionShareModal({
                                 alt={`${dateLabel} workout`}
                                 style={{
                                     width: "100%",
-                                    height: sizeKey === "story" ? 250 : 152,
+                                    height: 196,
                                     objectFit: "cover",
                                     display: "block",
                                 }}
@@ -356,74 +327,56 @@ export default function WorkoutSessionShareModal({
                             <div
                                 style={{
                                     width: "100%",
-                                    height: sizeKey === "story" ? 184 : 132,
-                                    background: "linear-gradient(135deg, #22c55e, #38bdf8)",
+                                    height: 96,
+                                    background: "transparent",
                                     display: "flex",
-                                    alignItems: "flex-end",
-                                    padding: "20px 24px",
+                                    alignItems: "center",
+                                    padding: "0 24px",
                                     boxSizing: "border-box",
-                                    color: "#fff",
-                                    fontWeight: 900,
-                                    fontSize: sizeKey === "story" ? 38 : 30,
-                                    letterSpacing: 1,
                                 }}
                             >
-                                PUMP
+                                <div style={{ fontSize: 13, letterSpacing: 3.2, color: "rgba(255,255,255,0.68)", fontWeight: 800 }}>
+                                    PUMP
+                                </div>
                             </div>
                         )}
 
-                        <div style={{ padding: sizeKey === "story" ? "22px 24px 24px" : "18px 20px 20px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+                        <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                                 <div>
-                                    <div style={{ fontSize: 11, letterSpacing: 2.4, color: "#64748b", marginBottom: 6 }}>PUMP</div>
-                                    <div style={{ fontSize: sizeKey === "story" ? 26 : 22, fontWeight: 900, color: "#0f172a" }}>
-                                        {dateLabel}
-                                    </div>
-                                </div>
-                                <div style={{ display: "grid", gap: 6 }}>
-                                    <div style={{ padding: "6px 10px", borderRadius: 999, background: "#dcfce7", color: "#15803d", fontSize: 11, fontWeight: 800 }}>
-                                        トレ時間 {formatDuration(sessionPayload.session.duration_sec)}
-                                    </div>
-                                    <div style={{ padding: "6px 10px", borderRadius: 999, background: "#e0f2fe", color: "#0369a1", fontSize: 11, fontWeight: 800 }}>
-                                        総ボリューム {Math.round(Number(summary.totalVolume || 0)).toLocaleString("ja-JP")}kg
+                                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", marginBottom: 6 }}>{dateLabel}</div>
+                                    <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", lineHeight: 1.12 }}>
+                                        今日のワークアウト
                                     </div>
                                 </div>
                             </div>
 
                             <div
                                 style={{
+                                    background: "rgba(17, 24, 39, 0.72)",
+                                    borderRadius: 20,
+                                    border: "1px solid rgba(56,189,248,0.14)",
+                                    padding: "14px 15px",
                                     display: "grid",
-                                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                                     gap: 8,
                                 }}
                             >
-                                {[
-                                    {
-                                        label: "部位別セット",
-                                        value: setCountByBodyPartLabel,
-                                    },
-                                    {
-                                        label: "合計セット",
-                                        value: `${Number(summary.setCount || 0)}セット`,
-                                    },
-                                ].map((item) => (
-                                    <div
-                                        key={item.label}
-                                        style={{
-                                            background: "rgba(248, 250, 252, 0.92)",
-                                            borderRadius: 16,
-                                            padding: "10px 12px",
-                                            border: "1px solid rgba(186, 230, 253, 0.8)",
-                                        }}
-                                    >
-                                        <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, marginBottom: 4 }}>
-                                            {item.label}
-                                        </div>
-                                        <div style={{ fontSize: 12, color: "#0f172a", fontWeight: 800, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                                            {item.value}
-                                        </div>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: "#E6FFFD", lineHeight: 1.4 }}>
+                                    {setCountByBodyPartLabel}
+                                </div>
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                    <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(18,199,194,0.12)", border: "1px solid rgba(18,199,194,0.22)", color: "#7DE7E2", fontSize: 12, fontWeight: 800 }}>
+                                        {Number(summary.setCount || 0)}セット
                                     </div>
-                                ))}
+                                    <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.18)", color: "#C9F7FF", fontSize: 12, fontWeight: 800 }}>
+                                        {Math.round(Number(summary.totalVolume || 0)).toLocaleString("ja-JP")}kg
+                                    </div>
+                                    {durationLabel ? (
+                                        <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(249,115,22,0.10)", border: "1px solid rgba(249,115,22,0.18)", color: "#FDBA74", fontSize: 12, fontWeight: 800 }}>
+                                            {durationLabel}
+                                        </div>
+                                    ) : null}
+                                </div>
                             </div>
 
                             <div style={{ display: "grid", gap: 10, flex: 1 }}>
@@ -431,42 +384,31 @@ export default function WorkoutSessionShareModal({
                                     <div
                                         key={`${item.body_part || ""}-${item.exercise_name}`}
                                         style={{
-                                            background: "rgba(248, 250, 252, 0.92)",
+                                            background: "rgba(17, 24, 39, 0.72)",
                                             borderRadius: 18,
                                             padding: "12px 14px",
-                                            border: "1px solid rgba(186, 230, 253, 0.8)",
+                                            border: "1px solid rgba(56,189,248,0.12)",
                                         }}
                                     >
-                                        <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>
+                                        <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
                                             {item.exercise_name}
-                                            {item.body_part ? ` · ${item.body_part}` : ""}
                                         </div>
-                                        <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.6 }}>
-                                            <div style={{ fontWeight: 700, marginBottom: 4 }}>{item.set_count}セット</div>
+                                        <div style={{ display: "grid", gap: 4 }}>
                                             {Array.isArray(item.sets) && item.sets.length > 0 ? (
-                                                <div style={{ display: "grid", gap: 2 }}>
-                                                    {item.sets.map((set, index) => (
-                                                        <div key={`${item.exercise_name}-${index}`}>
-                                                            {formatSetLine(set)}
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                item.sets.map((set, index) => (
+                                                    <div key={`${item.exercise_name}-${index}`} style={{ fontSize: 12, color: "rgba(255,255,255,0.84)", lineHeight: 1.5 }}>
+                                                        {formatSetLine(set)}
+                                                    </div>
+                                                ))
                                             ) : (
-                                                <div>最大 {getMaxWeightLabel(item.max_weight)}</div>
+                                                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.72)", lineHeight: 1.5 }}>
+                                                    最大 {getMaxWeightLabel(item.max_weight)}
+                                                </div>
                                             )}
-                                            <div style={{ marginTop: 4, fontWeight: 700 }}>
-                                                Volume {Math.round(Number(item.volume || 0)).toLocaleString("ja-JP")}kg
-                                            </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-
-                            {items.length > visibleItems.length && (
-                                <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>
-                                    + 他 {items.length - visibleItems.length} 種目
-                                </div>
-                            )}
                         </div>
                         </div>
                     </div>

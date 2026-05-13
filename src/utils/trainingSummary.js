@@ -243,6 +243,15 @@ export function buildTrainingSummary({
   const periodEntries = allEntries.filter((entry) => entry.date >= startKey && entry.date <= endKey);
   const workoutDates = [...new Set(periodEntries.map((entry) => entry.date))].sort();
   const totalVolume = Math.round(periodEntries.reduce((sum, entry) => sum + entry.volume, 0));
+  const totalReps = periodEntries.reduce(
+    (sum, entry) =>
+      sum +
+      (entry.sets || []).reduce((setSum, set) => {
+        const reps = Number(set?.reps || 0);
+        return Number.isFinite(reps) && reps > 0 ? setSum + reps : setSum;
+      }, 0),
+    0
+  );
 
   const bodyPartStats = {};
   const exerciseStats = {};
@@ -387,6 +396,7 @@ export function buildTrainingSummary({
     endKey,
     workoutCount: workoutDates.length,
     totalSets: periodEntries.reduce((sum, entry) => sum + entry.setCount, 0),
+    totalReps,
     totalVolume,
     exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
     exerciseCountByBodyPart,
