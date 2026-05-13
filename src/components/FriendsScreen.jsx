@@ -66,6 +66,29 @@ const formatRelativeWorkoutDate = (workoutDate, todayKey) => {
     return `${month}/${day}`;
 };
 
+const hasValidSummaryItem = (item) => {
+    if (!item || typeof item !== "object") return false;
+    if (Array.isArray(item.sets)) {
+        return item.sets.some((set) => {
+            const reps = Number(set?.reps ?? 0);
+            const weight = set?.weight;
+            if (reps <= 0) return false;
+            if (weight === "BW") return true;
+            return Number(weight ?? 0) > 0;
+        });
+    }
+    return Number(item.set_count ?? item.setCount ?? 0) > 0;
+};
+
+const hasValidSessionData = (session) => {
+    if (!session || typeof session !== "object") return false;
+    const summaryItems = Array.isArray(session.summary_json?.items) ? session.summary_json.items : [];
+    if (summaryItems.some(hasValidSummaryItem)) return true;
+    if (Number(session.exercise_count ?? 0) > 0) return true;
+    if (Number(session.total_volume ?? 0) > 0) return true;
+    return false;
+};
+
 export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, user, onLogin, onLogout, onOpenRecord, mode = "all" }) {
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
@@ -85,6 +108,18 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
     const [expandedFeedItems, setExpandedFeedItems] = useState({});
+    const [friendSessionInsights, setFriendSessionInsights] = useState({
+        rawMonthlySessions: [],
+        monthlyCountByUser: {},
+        recentSevenCountByUser: {},
+        visibleDatesByUser: {},
+        visibilityByUserDate: {},
+        sessionsByDate: {},
+        workoutsByDate: {},
+        validSetsByDate: {},
+        missingDates: {},
+        excludedSessions: [],
+    });
     const activityFeedStatusTimeoutRef = useRef(null);
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
@@ -260,6 +295,18 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         if (!user) {
             setFriendIds([]);
             setFriends([]);
+            setFriendSessionInsights({
+                rawMonthlySessions: [],
+                monthlyCountByUser: {},
+                recentSevenCountByUser: {},
+                visibleDatesByUser: {},
+                visibilityByUserDate: {},
+                sessionsByDate: {},
+                workoutsByDate: {},
+                validSetsByDate: {},
+                missingDates: {},
+                excludedSessions: [],
+            });
             setTodayActiveMap({});
             return false;
         }
@@ -272,11 +319,27 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 .eq("status", "accepted")
                 .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
 
-            if (friendshipsError) throw friendshipsError;
+            if (friendshipsError) {
+                console.error("[feed] friendships fetch failed", friendshipsError);
+                console.error("[ranking] friendships fetch failed", friendshipsError);
+                throw friendshipsError;
+            }
 
             if (!friendships || friendships.length === 0) {
                 setFriendIds([]);
                 setFriends([]);
+                setFriendSessionInsights({
+                    rawMonthlySessions: [],
+                    monthlyCountByUser: {},
+                    recentSevenCountByUser: {},
+                    visibleDatesByUser: {},
+                    visibilityByUserDate: {},
+                    sessionsByDate: {},
+                    workoutsByDate: {},
+                    validSetsByDate: {},
+                    missingDates: {},
+                    excludedSessions: [],
+                });
                 setTodayActiveMap({});
                 setLoading(false);
                 return true;
@@ -295,7 +358,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
             setFriendIds(nextFriendIds);
 
-            const [profilesRes, workoutsRes] = await Promise.all([
+            const currentMonthStart = `${currentMonthPrefix}-01`;
+            const [profilesRes, workoutsRes, friendSessionsRes] = await Promise.all([
                 supabase
                     .from("profiles")
                     .select("id, username, avatar1_url")
@@ -305,11 +369,21 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     .select("user_id, date, data")
                     .in("user_id", nextFriendIds)
                     .order("date", { ascending: false }),
+                supabase
+                    .from("workout_sessions")
+                    .select("id, user_id, workout_date, created_at, updated_at, visibility, summary_json, total_volume, exercise_count")
+                    .in("user_id", nextFriendIds)
+                    .gte("workout_date", currentMonthStart)
+                    .lte("workout_date", today)
+                    .order("workout_date", { ascending: false })
+                    .order("created_at", { ascending: true }),
             ]);
 
             const { data: profiles, error: profilesError } = profilesRes;
             const workoutsError = workoutsRes.error;
             const workouts = workoutsRes.data || [];
+            const friendSessionsError = friendSessionsRes.error;
+            const rawFriendSessions = friendSessionsRes.data || [];
 
             if (profilesError) {
                 console.error("[feed] friend profiles fetch failed", {
@@ -325,6 +399,22 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     friendIds: nextFriendIds,
                 });
             }
+            if (friendSessionsError) {
+                console.error("[ranking] friend sessions fetch failed", {
+                    error: friendSessionsError,
+                    currentUserId: user.id,
+                    friendIds: nextFriendIds,
+                    currentMonthStart,
+                    today,
+                });
+                console.error("[feed] friend sessions fetch failed", {
+                    error: friendSessionsError,
+                    currentUserId: user.id,
+                    friendIds: nextFriendIds,
+                    currentMonthStart,
+                    today,
+                });
+            }
 
             console.log("[feed] friend workouts count", {
                 currentUserId: user.id,
@@ -332,11 +422,73 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 count: workouts.length,
             });
 
+            const visibilityByUserDate = {};
+            const sessionsByDate = {};
+            const workoutsByDate = {};
+            const validSetsByDate = {};
+            const monthlyCountByUser = {};
+            const recentSevenCountByUser = {};
+            const missingDates = {};
+            const excludedSessions = [];
+
+            rawFriendSessions.forEach((session) => {
+                const userDateKey = `${session.user_id}::${session.workout_date}`;
+                if (!visibilityByUserDate[userDateKey]) visibilityByUserDate[userDateKey] = [];
+                visibilityByUserDate[userDateKey].push(String(session.visibility || "unknown"));
+                if (!sessionsByDate[userDateKey]) sessionsByDate[userDateKey] = [];
+                sessionsByDate[userDateKey].push(session.id);
+
+                const isAcceptedFriend = nextFriendIds.includes(session.user_id);
+                const visibility = String(session.visibility || "");
+                const isVisibleToFriends = visibility === "friends" || visibility === "public";
+                const hasValidSets = hasValidSessionData(session);
+                let reason = null;
+                if (!session.workout_date) reason = "invalid_date";
+                else if (!isAcceptedFriend) reason = "not_friend";
+                else if (!isVisibleToFriends) reason = "friend_not_shared";
+                else if (!hasValidSets) reason = "no_valid_sets";
+
+                if (reason) {
+                    excludedSessions.push({
+                        userId: session.user_id,
+                        sessionId: session.id,
+                        workoutDate: session.workout_date,
+                        visibility: session.visibility,
+                        hasValidSets,
+                        isAcceptedFriend,
+                        reason,
+                    });
+                    console.warn("[ranking] session excluded", {
+                        userId: session.user_id,
+                        sessionId: session.id,
+                        workoutDate: session.workout_date,
+                        visibility: session.visibility,
+                        hasValidSets,
+                        isAcceptedFriend,
+                        reason,
+                    });
+                    return;
+                }
+
+                monthlyCountByUser[session.user_id] = monthlyCountByUser[session.user_id] || new Set();
+                monthlyCountByUser[session.user_id].add(session.workout_date);
+                if (session.workout_date >= recentSevenStart) {
+                    recentSevenCountByUser[session.user_id] = recentSevenCountByUser[session.user_id] || new Set();
+                    recentSevenCountByUser[session.user_id].add(session.workout_date);
+                }
+            });
+
             const workoutRowsMap = new Map();
             (workouts || []).forEach((workout) => {
                 const current = workoutRowsMap.get(workout.user_id) || [];
                 current.push(workout);
                 workoutRowsMap.set(workout.user_id, current);
+
+                const userDateKey = `${workout.user_id}::${workout.date}`;
+                workoutsByDate[userDateKey] = true;
+                const historyMap = buildHistoryFromWorkoutRows([workout]);
+                const hasValidSets = getValidWorkoutDatesFromHistory(historyMap, { prefix: workout.date }).includes(workout.date);
+                if (hasValidSets) validSetsByDate[userDateKey] = true;
             });
 
             const friendsWithHistory = nextFriendIds.map((friendId) => {
@@ -353,6 +505,32 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 };
             });
 
+            friendsWithHistory.forEach((friend) => {
+                const visibleDates = monthlyCountByUser[friend.id] ? Array.from(monthlyCountByUser[friend.id]) : [];
+                const workoutDates = getValidWorkoutDatesFromHistory(friend.history, { prefix: currentMonthPrefix });
+                const visibleDateSet = new Set(visibleDates);
+                missingDates[friend.id] = workoutDates.filter((dateKey) => !visibleDateSet.has(dateKey));
+            });
+
+            setFriendSessionInsights({
+                rawMonthlySessions: rawFriendSessions,
+                monthlyCountByUser: Object.fromEntries(
+                    Object.entries(monthlyCountByUser).map(([userId, dates]) => [userId, dates.size])
+                ),
+                recentSevenCountByUser: Object.fromEntries(
+                    Object.entries(recentSevenCountByUser).map(([userId, dates]) => [userId, dates.size])
+                ),
+                visibleDatesByUser: Object.fromEntries(
+                    Object.entries(monthlyCountByUser).map(([userId, dates]) => [userId, Array.from(dates).sort()])
+                ),
+                visibilityByUserDate,
+                sessionsByDate,
+                workoutsByDate,
+                validSetsByDate,
+                missingDates,
+                excludedSessions,
+            });
+
             setFriends(friendsWithHistory);
             await fetchTodayActive(nextFriendIds);
             return true;
@@ -363,12 +541,24 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             });
             setFriendIds([]);
             setFriends([]);
+            setFriendSessionInsights({
+                rawMonthlySessions: [],
+                monthlyCountByUser: {},
+                recentSevenCountByUser: {},
+                visibleDatesByUser: {},
+                visibilityByUserDate: {},
+                sessionsByDate: {},
+                workoutsByDate: {},
+                validSetsByDate: {},
+                missingDates: {},
+                excludedSessions: [],
+            });
             setTodayActiveMap({});
             return false;
         } finally {
             setLoading(false);
         }
-    }, [fetchTodayActive, user]);
+    }, [currentMonthPrefix, fetchTodayActive, recentSevenStart, today, user]);
 
     const formatSessionSetDisplay = useCallback((set) => {
         if (!set) return "";
@@ -506,6 +696,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 stats[visibility] = (stats[visibility] || 0) + 1;
                 return stats;
             }, {});
+            console.log("[feed] accepted friend ids", friendIds);
             console.log("[feed] friend visibility stats", {
                 currentUserId: user.id,
                 friendIds,
@@ -757,16 +948,19 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 currentUserId: user.id,
                 count: ownItems.length,
             });
+            console.log("[feed] own sessions count", ownItems.length);
             console.log("[feed] friend sessions count", {
                 currentUserId: user.id,
                 friendIds,
                 count: friendSessions.length,
             });
+            console.log("[feed] friend sessions count", friendSessions.length);
             console.log("[feed] friend workouts count", {
                 currentUserId: user.id,
                 friendIds,
                 count: (workoutsRes.data || []).filter((row) => friendIds.includes(row.user_id)).length,
             });
+            console.log("[feed] friend workouts count", (workoutsRes.data || []).filter((row) => friendIds.includes(row.user_id)).length);
             excludedItems
                 .filter((item) => item.isFriendWorkout)
                 .forEach((item) => {
@@ -774,6 +968,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                         userId: item.userId || null,
                         workoutId: item.workoutId,
                         sessionId: item.sessionId || item.workoutId || null,
+                        workoutDate: item.workoutDate || null,
                         visibility: item.visibility,
                         hasValidSets: item.excludedReason !== "no_valid_sets",
                         isAcceptedFriend: true,
@@ -808,6 +1003,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                 currentUserId: user.id,
                 displayedCardsCount: allItems.length,
             });
+            console.log("[feed] displayed cards count", allItems.length);
 
             setActivityFeed(allItems);
             return true;
@@ -1021,18 +1217,24 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         }),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
+    const selfRecentSevenSessions = getValidWorkoutDatesFromHistory(history, { since: recentSevenStart });
+    const selfMonthlySessions = getValidWorkoutDatesFromHistory(history, { prefix: currentMonthPrefix });
+
     const recentSevenRanking = [
         {
             id: user?.id || "me",
             name: getDisplayUsername(myUsername, { isMe: true }),
             isMe: true,
-            value: getValidWorkoutDatesFromHistory(history, { since: recentSevenStart }).length,
+            value: selfRecentSevenSessions.length,
         },
         ...friends.map((friend) => ({
             id: friend.id,
             name: getDisplayUsername(friend.username),
             isMe: false,
-            value: getValidWorkoutDatesFromHistory(friend.history, { since: recentSevenStart }).length,
+            value: Number(
+                friendSessionInsights.recentSevenCountByUser?.[friend.id]
+                ?? getValidWorkoutDatesFromHistory(friend.history, { since: recentSevenStart }).length
+            ),
         })),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
@@ -1041,15 +1243,57 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             id: user?.id || "me",
             name: getDisplayUsername(myUsername, { isMe: true }),
             isMe: true,
-            value: getValidWorkoutDatesFromHistory(history, { prefix: currentMonthPrefix }).length,
+            value: selfMonthlySessions.length,
         },
         ...friends.map((friend) => ({
             id: friend.id,
             name: getDisplayUsername(friend.username),
             isMe: false,
-            value: countMonthlyWorkoutDays(friend.history),
+            value: Number(
+                friendSessionInsights.monthlyCountByUser?.[friend.id]
+                ?? countMonthlyWorkoutDays(friend.history)
+            ),
         })),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
+
+    useEffect(() => {
+        if (!user?.id) return;
+        const friendMonthlySessionsRaw = Array.isArray(friendSessionInsights.rawMonthlySessions)
+            ? friendSessionInsights.rawMonthlySessions
+            : [];
+        const friendSessionCountByUser = Object.fromEntries(
+            friends.map((friend) => [
+                friend.id,
+                Number(friendSessionInsights.monthlyCountByUser?.[friend.id] ?? countMonthlyWorkoutDays(friend.history)),
+            ])
+        );
+        console.log("[ranking] current user id", user?.id);
+        console.log("[ranking] accepted friend ids", friendIds);
+        console.log("[ranking] self monthly sessions count", selfMonthlySessions?.length);
+        console.log("[ranking] friend monthly sessions raw", friendMonthlySessionsRaw);
+        console.log("[ranking] friend monthly sessions count by user", friendSessionCountByUser);
+        console.log("[ranking] visibility by user/date", friendSessionInsights.visibilityByUserDate || {});
+        console.log("[ranking] excluded monthly sessions", friendSessionInsights.excludedSessions || []);
+        console.log("[ranking] final ranking rows", monthlyWorkoutRanking);
+        console.log("[profile] viewed user id", user?.id);
+        console.log("[profile] current user id", user?.id);
+        console.log("[profile] accepted friend ids", friendIds);
+        console.log("[profile] self visible training days", selfMonthlySessions);
+        console.log("[profile] friend visible training days", friendSessionInsights.visibleDatesByUser || {});
+        console.log("[profile] missing dates for friend", friendSessionInsights.missingDates || {});
+        console.log("[profile] visibility by date", friendSessionInsights.visibilityByUserDate || {});
+        console.log("[profile] workout_sessions by date", friendSessionInsights.sessionsByDate || {});
+        console.log("[profile] workouts by date", friendSessionInsights.workoutsByDate || {});
+        console.log("[profile] valid sets by date", friendSessionInsights.validSetsByDate || {});
+    }, [
+        countMonthlyWorkoutDays,
+        friendIds,
+        friendSessionInsights,
+        friends,
+        monthlyWorkoutRanking,
+        selfMonthlySessions,
+        user?.id,
+    ]);
 
     const rankingConfig = {
         big3: {
