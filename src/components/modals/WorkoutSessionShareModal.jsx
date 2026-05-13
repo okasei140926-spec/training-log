@@ -48,17 +48,14 @@ export default function WorkoutSessionShareModal({
     workoutDate,
     sessionPayload,
     photoRows = [],
-    photoUrls = {},
 }) {
     const [sizeKey] = useState("story");
-    const [selectedPhotoId, setSelectedPhotoId] = useState(() => photoRows[0]?.id ?? null);
     const [sharing, setSharing] = useState(false);
     const cardRef = useRef(null);
     const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
 
-    const preset = CARD_PRESETS[sizeKey] || CARD_PRESETS.square;
+    const preset = CARD_PRESETS[sizeKey] || CARD_PRESETS.story;
     const dateLabel = formatDate(workoutDate);
-    const selectedPhotoUrl = selectedPhotoId ? photoUrls[selectedPhotoId] || null : null;
     const summary = useMemo(
         () => sessionPayload?.session?.summary_json || {},
         [sessionPayload]
@@ -86,12 +83,9 @@ export default function WorkoutSessionShareModal({
     }, [items, summary]);
 
     const visibleItems = useMemo(() => items, [items]);
-    const durationLabel = formatDuration(sessionPayload.session.duration_sec);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        setSelectedPhotoId(photoRows[0]?.id ?? null);
-    }, [isOpen, photoRows]);
+    const durationLabel = formatDuration(sessionPayload?.session?.duration_sec);
+    const totalSetLabel = `${Number(summary?.setCount || 0)}セット`;
+    const totalVolumeLabel = `${Math.round(Number(summary?.totalVolume || 0)).toLocaleString("ja-JP")}kg`;
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -241,56 +235,8 @@ export default function WorkoutSessionShareModal({
                     }}
                 >
                     {photoRows.length > 0 && (
-                        <div style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 8 }}>
-                                写真を選択
-                            </div>
-                            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedPhotoId(null)}
-                                    style={{
-                                        minWidth: 76,
-                                        padding: "8px 10px",
-                                        borderRadius: 12,
-                                        border: "1px solid var(--border2)",
-                                        background: selectedPhotoId === null ? "var(--text)" : "var(--card2)",
-                                        color: selectedPhotoId === null ? "var(--bg)" : "var(--text2)",
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    写真なし
-                                </button>
-                                {photoRows.map((row, index) => (
-                                    <button
-                                        key={row.id}
-                                        type="button"
-                                        onClick={() => setSelectedPhotoId(row.id)}
-                                        style={{
-                                            minWidth: 76,
-                                            padding: "6px",
-                                            borderRadius: 12,
-                                            border: selectedPhotoId === row.id ? "2px solid var(--accent)" : "1px solid var(--border2)",
-                                            background: "var(--card2)",
-                                            color: "var(--text2)",
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                        }}
-                                    >
-                                        {photoUrls[row.id] ? (
-                                            <img
-                                                src={photoUrls[row.id]}
-                                                alt={`${workoutDate} session ${index + 1}`}
-                                                style={{ width: "100%", height: 56, borderRadius: 8, objectFit: "cover", display: "block", marginBottom: 4 }}
-                                            />
-                                        ) : (
-                                            <div style={{ width: "100%", height: 56, borderRadius: 8, background: "var(--card)", marginBottom: 4 }} />
-                                        )}
-                                        {index + 1}枚目
-                                    </button>
-                                ))}
-                            </div>
+                        <div style={{ marginBottom: 12, fontSize: 11, color: "var(--text3)" }}>
+                            写真はこのカードでは表示せず、ワークアウト内容を優先しています
                         </div>
                     )}
 
@@ -302,9 +248,8 @@ export default function WorkoutSessionShareModal({
                                 minHeight: preset.height,
                                 borderRadius: 28,
                                 overflow: "hidden",
-                                background: selectedPhotoUrl
-                                    ? "linear-gradient(180deg, #05070b 0%, #0b1220 100%)"
-                                    : "radial-gradient(circle at top right, rgba(51,225,219,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(15,94,99,0.18), transparent 26%), linear-gradient(165deg, #05070b 0%, #0b1220 42%, #111827 100%)",
+                                background:
+                                    "radial-gradient(circle at top right, rgba(51,225,219,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(15,94,99,0.18), transparent 26%), linear-gradient(165deg, #05070b 0%, #0b1220 42%, #111827 100%)",
                                 border: "1px solid rgba(255,255,255,0.08)",
                                 boxShadow: "0 30px 60px rgba(15, 23, 42, 0.24)",
                                 display: "flex",
@@ -312,22 +257,10 @@ export default function WorkoutSessionShareModal({
                                 flexShrink: 0,
                             }}
                         >
-                        {selectedPhotoUrl ? (
-                            <img
-                                src={selectedPhotoUrl}
-                                alt={`${dateLabel} workout`}
-                                style={{
-                                    width: "100%",
-                                    height: 196,
-                                    objectFit: "cover",
-                                    display: "block",
-                                }}
-                            />
-                        ) : (
                             <div
                                 style={{
                                     width: "100%",
-                                    height: 96,
+                                    height: 68,
                                     background: "transparent",
                                     display: "flex",
                                     alignItems: "center",
@@ -339,7 +272,6 @@ export default function WorkoutSessionShareModal({
                                     PUMP
                                 </div>
                             </div>
-                        )}
 
                         <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
@@ -366,10 +298,10 @@ export default function WorkoutSessionShareModal({
                                 </div>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                                     <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(18,199,194,0.12)", border: "1px solid rgba(18,199,194,0.22)", color: "#7DE7E2", fontSize: 12, fontWeight: 800 }}>
-                                        {Number(summary.setCount || 0)}セット
+                                        {totalSetLabel}
                                     </div>
                                     <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.18)", color: "#C9F7FF", fontSize: 12, fontWeight: 800 }}>
-                                        {Math.round(Number(summary.totalVolume || 0)).toLocaleString("ja-JP")}kg
+                                        {totalVolumeLabel}
                                     </div>
                                     {durationLabel ? (
                                         <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(249,115,22,0.10)", border: "1px solid rgba(249,115,22,0.18)", color: "#FDBA74", fontSize: 12, fontWeight: 800 }}>
@@ -396,7 +328,7 @@ export default function WorkoutSessionShareModal({
                                         <div style={{ display: "grid", gap: 4 }}>
                                             {Array.isArray(item.sets) && item.sets.length > 0 ? (
                                                 item.sets.map((set, index) => (
-                                                    <div key={`${item.exercise_name}-${index}`} style={{ fontSize: 12, color: "rgba(255,255,255,0.84)", lineHeight: 1.5 }}>
+                                                    <div key={`${item.exercise_name}-${index}`} style={{ fontSize: 13, color: "rgba(255,255,255,0.84)", lineHeight: 1.45 }}>
                                                         {formatSetLine(set)}
                                                     </div>
                                                 ))
