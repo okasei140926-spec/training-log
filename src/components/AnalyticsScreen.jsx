@@ -258,12 +258,57 @@ const buildChartData = (records = [], period) => {
     }
   });
 
-  return Object.values(grouped)
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .map((record) => ({
-      date: record.date.slice(5),
-      weight: record.estimated1RM,
-    }));
+  const sorted = Object.values(grouped)
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+
+  const maxWeight = sorted.reduce((max, record) => Math.max(max, Number(record.estimated1RM || 0)), 0);
+  const latestDate = sorted[sorted.length - 1]?.date || null;
+
+  return sorted.map((record) => ({
+    rawDate: record.date,
+    date: record.date.slice(5),
+    weight: Number(record.estimated1RM || 0),
+    isLatest: record.date === latestDate,
+    isPeak: Number(record.estimated1RM || 0) === maxWeight,
+  }));
+};
+
+const buildChartDomain = (chartData = []) => {
+  if (!chartData.length) return [0, 100];
+
+  const values = chartData.map((item) => Number(item.weight || 0)).filter(Number.isFinite);
+  if (!values.length) return [0, 100];
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const spread = Math.max(max - min, 1);
+  const minRange = Math.max(8, Math.ceil(max * 0.08));
+  const paddedSpread = Math.max(spread, minRange);
+  const padding = Math.max(2, Math.ceil(paddedSpread * 0.15));
+
+  let domainMin = Math.floor((min - padding) / 5) * 5;
+  let domainMax = Math.ceil((max + padding) / 5) * 5;
+
+  if (domainMax - domainMin < minRange) {
+    const midpoint = (max + min) / 2;
+    domainMin = Math.floor((midpoint - minRange / 2) / 5) * 5;
+    domainMax = Math.ceil((midpoint + minRange / 2) / 5) * 5;
+  }
+
+  if (domainMin < 0) domainMin = 0;
+  if (domainMax <= domainMin) domainMax = domainMin + minRange;
+
+  return [domainMin, domainMax];
+};
+
+const buildChartTicks = (chartData = []) => {
+  if (chartData.length <= 3) return chartData.map((item) => item.date);
+  const midIndex = Math.floor((chartData.length - 1) / 2);
+  return [...new Set([
+    chartData[0]?.date,
+    chartData[midIndex]?.date,
+    chartData[chartData.length - 1]?.date,
+  ].filter(Boolean))];
 };
 
 export default function AnalyticsScreen({
@@ -493,6 +538,14 @@ export default function AnalyticsScreen({
   const selectedChartData = useMemo(
     () => buildChartData(selectedRecords, period),
     [selectedRecords, period]
+  );
+  const selectedChartDomain = useMemo(
+    () => buildChartDomain(selectedChartData),
+    [selectedChartData]
+  );
+  const selectedChartTicks = useMemo(
+    () => buildChartTicks(selectedChartData),
+    [selectedChartData]
   );
 
   const overviewSummary =
@@ -779,7 +832,7 @@ export default function AnalyticsScreen({
     console.log("[pr-detail] chart records", {
       range: period,
       chartRecords: selectedChartData.map((r) => ({
-        date: r.date,
+        date: r.rawDate || r.date,
         value: r.weight,
       })),
     });
@@ -840,6 +893,32 @@ export default function AnalyticsScreen({
   };
 
   if (selectedExercise) {
+    const compactChartTooltip = ({ active, payload }) => {
+      if (!active || !payload?.length) return null;
+      const point = payload[0]?.payload;
+      if (!point) return null;
+
+      return (
+        <div
+          style={{
+            background: "rgba(255,255,255,0.96)",
+            border: "1px solid rgba(18, 199, 194, 0.16)",
+            borderRadius: 12,
+            boxShadow: "0 8px 18px rgba(15, 94, 99, 0.10)",
+            padding: "8px 10px",
+            minWidth: 74,
+          }}
+        >
+          <div style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700, marginBottom: 3 }}>
+            {point.rawDate ? point.rawDate.slice(5).replace("-", "/") : point.date}
+          </div>
+          <div style={{ fontSize: 16, color: "var(--accent)", fontWeight: 900, lineHeight: 1.1 }}>
+            {point.weight}kg
+          </div>
+        </div>
+      );
+    };
+
     return (
       <div
         key={selectedExercise.key}
@@ -917,16 +996,48 @@ export default function AnalyticsScreen({
 
           {selectedChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={selectedChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border2)" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--text3)" }} />
-                <YAxis tick={{ fontSize: 10, fill: "var(--text3)" }} />
-                <Tooltip
-                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border2)", borderRadius: 12, fontSize: 12, boxShadow: "var(--shadow-card)" }}
-                  labelStyle={{ color: "var(--text)" }}
-                  formatter={(value) => [`${value}kg`, "1RM"]}
+              <LineChart data={selectedChartData} margin={{ top: 8, right: 6, left: -10, bottom: 2 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" />
+                <XAxis
+                  dataKey="date"
+                  ticks={selectedChartTicks}
+                  interval={0}
+                  tick={{ fontSize: 10, fill: "var(--text3)" }}
+                  axisLine={false}
+                  tickLine={false}
                 />
-                <Line type="monotone" dataKey="weight" stroke="var(--accent)" strokeWidth={2.5} dot={{ fill: "var(--accent)", r: 3.5 }} />
+                <YAxis
+                  domain={selectedChartDomain}
+                  tick={{ fontSize: 10, fill: "var(--text3)" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={40}
+                />
+                <Tooltip
+                  content={compactChartTooltip}
+                  cursor={{ stroke: "rgba(15, 94, 99, 0.18)", strokeWidth: 1.5 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="weight"
+                  stroke="var(--accent)"
+                  strokeWidth={2.5}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props;
+                    const emphasized = payload?.isLatest || payload?.isPeak;
+                    return (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={emphasized ? 5 : 3.5}
+                        fill={emphasized ? "#0F5E63" : "var(--accent)"}
+                        stroke="#fff"
+                        strokeWidth={emphasized ? 2 : 1.5}
+                      />
+                    );
+                  }}
+                  activeDot={{ r: 5.5, stroke: "#fff", strokeWidth: 2 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           ) : (
