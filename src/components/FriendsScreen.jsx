@@ -147,6 +147,17 @@ export default function FriendsScreen({
               }
             : null
     ), [historySyncDiagnostic, monthlyVisibilityDiagnostic]);
+    const diagnosticMonthlyCountByUser = useMemo(() => {
+        const targetUsers = Array.isArray(monthlyVisibilityDiagnostic?.targetUsers)
+            ? monthlyVisibilityDiagnostic.targetUsers
+            : [];
+        return Object.fromEntries(
+            targetUsers.map((entry) => [
+                entry.userId,
+                Number(entry?.counts?.finalRankingCount ?? 0),
+            ])
+        );
+    }, [monthlyVisibilityDiagnostic]);
 
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
         return hasValidWorkoutOnDate(workoutData, today);
@@ -1196,6 +1207,11 @@ export default function FriendsScreen({
     }, [user, fetchFriendsData, sessionSyncVersion]);
 
     useEffect(() => {
+        if (!user || !showRankingSections) return;
+        fetchFriendsData().catch(console.error);
+    }, [user, fetchFriendsData, rankingTab, showRankingSections]);
+
+    useEffect(() => {
         if (!user || !friendIds.length) return;
 
         const intervalId = setInterval(() => {
@@ -1209,6 +1225,36 @@ export default function FriendsScreen({
         if (!user) return;
         fetchActivityFeed({ reset: true });
     }, [user, friendIds, fetchActivityFeed, sessionSyncVersion]);
+
+    useEffect(() => {
+        if (!user || !showFeedSections) return;
+        fetchActivityFeed({ reset: true }).catch(console.error);
+    }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion]);
+
+    useEffect(() => {
+        if (!user) return undefined;
+
+        const refreshVisibleData = () => {
+            fetchFriendsData().catch(console.error);
+            if (showFeedSections) {
+                fetchActivityFeed({ reset: true }).catch(console.error);
+            }
+        };
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                refreshVisibleData();
+            }
+        };
+
+        window.addEventListener("focus", refreshVisibleData);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener("focus", refreshVisibleData);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [user, fetchActivityFeed, fetchFriendsData, showFeedSections]);
 
     useEffect(() => {
         if (!user) return undefined;
@@ -1302,7 +1348,8 @@ export default function FriendsScreen({
             name: getDisplayUsername(friend.username),
             isMe: false,
             value: Number(
-                friendSessionInsights.monthlyCountByUser?.[friend.id]
+                diagnosticMonthlyCountByUser?.[friend.id]
+                ?? friendSessionInsights.monthlyCountByUser?.[friend.id]
                 ?? countMonthlyWorkoutDays(friend.history)
             ),
         })),
@@ -1316,7 +1363,11 @@ export default function FriendsScreen({
         const friendSessionCountByUser = Object.fromEntries(
             friends.map((friend) => [
                 friend.id,
-                Number(friendSessionInsights.monthlyCountByUser?.[friend.id] ?? countMonthlyWorkoutDays(friend.history)),
+                Number(
+                    diagnosticMonthlyCountByUser?.[friend.id]
+                    ?? friendSessionInsights.monthlyCountByUser?.[friend.id]
+                    ?? countMonthlyWorkoutDays(friend.history)
+                ),
             ])
         );
         console.log("[ranking] current user id", user?.id);
@@ -1339,6 +1390,7 @@ export default function FriendsScreen({
         console.log("[profile] valid sets by date", friendSessionInsights.validSetsByDate || {});
     }, [
         countMonthlyWorkoutDays,
+        diagnosticMonthlyCountByUser,
         friendIds,
         friendSessionInsights,
         friends,
@@ -1509,7 +1561,8 @@ export default function FriendsScreen({
                             finalRankingCount: entry.userId === user.id
                                 ? selfMonthlySessions.length
                                 : Number(
-                                    friendSessionInsights.monthlyCountByUser?.[entry.userId]
+                                    diagnosticMonthlyCountByUser?.[entry.userId]
+                                    ?? friendSessionInsights.monthlyCountByUser?.[entry.userId]
                                     ?? countMonthlyWorkoutDays(entry.sourceHistory)
                                 ),
                         },
@@ -1534,6 +1587,7 @@ export default function FriendsScreen({
     }, [
         countMonthlyWorkoutDays,
         currentMonthPrefix,
+        diagnosticMonthlyCountByUser,
         friendIds,
         friendSessionInsights.monthlyCountByUser,
         friends,
