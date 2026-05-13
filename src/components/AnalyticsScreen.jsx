@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
@@ -655,7 +655,7 @@ export default function AnalyticsScreen({
     };
   }, [showAllBodyPartPr]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!selectedExerciseKey) return;
 
     const scrollToTop = () => {
@@ -743,7 +743,7 @@ export default function AnalyticsScreen({
           <span>{item.weight}kg × {item.reps}rep</span>
           {item.date && <span>{formatDate(item.date)}</span>}
           {!compact && item.bodyPart && (
-            <span style={{ padding: "1px 7px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 10, fontWeight: 700, lineHeight: 1.45 }}>
+            <span style={{ padding: "0 6px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 9, fontWeight: 700, lineHeight: 1.5 }}>
               {item.bodyPart}
             </span>
           )}
@@ -782,7 +782,7 @@ export default function AnalyticsScreen({
               {selectedExercise.displayName || selectedExercise.name}
             </div>
             {selectedExercise.bodyPart && (
-              <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 10, fontWeight: 700, lineHeight: 1.4 }}>
+              <span style={{ padding: "1px 7px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 9, fontWeight: 700, lineHeight: 1.45 }}>
                 {selectedExercise.bodyPart}
               </span>
             )}

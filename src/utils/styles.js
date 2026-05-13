@@ -6,7 +6,7 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "calc(98px + var(--safe-bottom))",
+    paddingBottom: "calc(92px + var(--safe-bottom))",
   },
   page: {
     padding: "18px",
@@ -57,18 +57,18 @@ export const S = {
   },
   bottomNav: {
     position: "fixed",
-    bottom: "calc(2px + var(--safe-bottom))",
+    bottom: "max(0px, var(--safe-bottom))",
     left: "50%",
     transform: "translateX(-50%)",
-    width: "calc(100% - 24px)",
+    width: "calc(100% - 16px)",
     maxWidth: 406,
     background: "var(--nav-bg)",
     backdropFilter: "blur(24px)",
     border: "1px solid rgba(18, 199, 194, 0.12)",
-    borderRadius: 28,
-    boxShadow: "0 16px 36px rgba(15,94,99,0.12)",
+    borderRadius: 26,
+    boxShadow: "0 12px 28px rgba(15,94,99,0.1)",
     display: "flex",
-    padding: "8px 10px 10px",
+    padding: "7px 8px 8px",
   },
 };
 
