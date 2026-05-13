@@ -4,10 +4,6 @@ import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/help
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 import { buildTrainingSummary } from "../utils/trainingSummary";
-import {
-  formatSetCountByBodyPart,
-  getSetCountTotal,
-} from "../utils/setCountByBodyPart";
 import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 
 const PERIODS = [
@@ -519,26 +515,22 @@ export default function AnalyticsScreen({
         ],
       },
       exercises: {
-        title: "部位別セット詳細",
+        title: "種目数詳細",
         rangeLabel: overviewSummary.rangeLabel,
-        empty: getSetCountTotal(overviewSummary.setCountByBodyPart || []) <= 0,
+        empty: (overviewSummary.exerciseCount || 0) <= 0,
         summaryRows: [
           {
-            label: "部位別セット数",
-            value:
-              formatSetCountByBodyPart(overviewSummary.setCountByBodyPart, {
-                sort: "fixed",
-                separator: " / ",
-              }) || "まだありません",
+            label: "合計種目数",
+            value: `${overviewSummary.exerciseCount || 0}種目`,
           },
         ],
         sections: [
           {
-            title: "部位別",
-            items: (overviewSummary.setCountByBodyPart || []).map((item) => ({
-              key: `set-body-part-${item.bodyPart}`,
+            title: "部位別種目数",
+            items: (overviewSummary.exerciseCountByBodyPart || []).map((item) => ({
+              key: `exercise-body-part-${item.bodyPart}`,
               title: item.bodyPart,
-              meta: `${item.count}セット`,
+              meta: `${item.count}種目`,
               value: "",
             })),
           },
@@ -870,7 +862,7 @@ export default function AnalyticsScreen({
   }
 
   return (
-    <div ref={screenScrollRef} style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+    <div ref={screenScrollRef} style={{ padding: "20px 20px calc(120px + var(--safe-bottom, 0px))", display: "flex", flexDirection: "column", gap: 18 }}>
       <div
         style={{
           display: "inline-flex",
@@ -1048,7 +1040,7 @@ export default function AnalyticsScreen({
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, color: "var(--text)" }}>詳細サマリー</div>
             <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 3 }}>
-              先週 / 先月の確認やシェア画像生成はこちら
+              週・月ごとの記録を確認、シェアできます
             </div>
           </div>
         </div>
@@ -1112,15 +1104,17 @@ export default function AnalyticsScreen({
         <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 12 }}>
           BIG3 PR
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-          {prData.big3.map((entry) => (
-            <div key={entry.key}>
-              {renderPRCard(entry.item, { compact: true })}
-            </div>
-          ))}
-          <div style={{ background: "linear-gradient(135deg, var(--success-soft), var(--card))", borderRadius: 16, padding: "12px 14px", gridColumn: "1 / -1", border: "1px solid var(--success-border)" }}>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ background: "linear-gradient(135deg, var(--success-soft), var(--card))", borderRadius: 18, padding: "14px 16px", border: "1px solid var(--success-border)" }}>
             <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>BIG3合計</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: "var(--text)" }}>{prData.big3Total}kg</div>
+            <div style={{ fontSize: 30, fontWeight: 900, color: "var(--text)" }}>{prData.big3Total}kg</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+            {prData.big3.map((entry) => (
+              <div key={entry.key}>
+                {renderPRCard(entry.item, { compact: true })}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1150,26 +1144,32 @@ export default function AnalyticsScreen({
         </div>
         {prData.groupedByBodyPart.length > 0 ? (
           <>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
               {prData.groupedByBodyPart.map((group) => (
                 <button
                   key={group.bodyPart}
                   type="button"
                   onClick={() => setSelectedPrBodyPart(group.bodyPart)}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 999,
+                    padding: "12px 12px 11px",
+                    borderRadius: 16,
                     border: "1px solid rgba(18, 199, 194, 0.12)",
                     background:
                       selectedPrBodyPart === group.bodyPart
-                        ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                        : "var(--card2)",
-                    color: selectedPrBodyPart === group.bodyPart ? "#fff" : "var(--text2)",
-                    fontSize: 12,
-                    fontWeight: 700,
+                        ? "linear-gradient(135deg, rgba(15, 94, 99, 0.14), rgba(18, 199, 194, 0.12))"
+                        : "linear-gradient(180deg, var(--card2), var(--card))",
+                    color: "var(--text)",
+                    textAlign: "left",
+                    boxShadow:
+                      selectedPrBodyPart === group.bodyPart ? "0 10px 22px rgba(15, 94, 99, 0.10)" : "none",
                   }}
                 >
-                  {group.bodyPart}
+                  <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>
+                    {group.bodyPart}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 700 }}>
+                    {group.items.length}件のPR
+                  </div>
                 </button>
               ))}
             </div>
