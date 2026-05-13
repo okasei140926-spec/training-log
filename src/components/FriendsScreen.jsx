@@ -108,6 +108,9 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
     const [expandedFeedItems, setExpandedFeedItems] = useState({});
+    const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
+    const [diagnosticCopyStatus, setDiagnosticCopyStatus] = useState("");
+    const [monthlyVisibilityDiagnostic, setMonthlyVisibilityDiagnostic] = useState(null);
     const [friendSessionInsights, setFriendSessionInsights] = useState({
         rawMonthlySessions: [],
         monthlyCountByUser: {},
@@ -290,6 +293,30 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             activityFeedStatusTimeoutRef.current = null;
         }, 2200);
     }, []);
+
+    const copyDiagnosticPayload = useCallback(async () => {
+        if (!monthlyVisibilityDiagnostic) return;
+        const text = JSON.stringify(monthlyVisibilityDiagnostic, null, 2);
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const el = document.createElement("textarea");
+                el.value = text;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand("copy");
+                document.body.removeChild(el);
+            }
+            setDiagnosticCopyStatus("コピーしました");
+        } catch (error) {
+            console.error("[diagnostic] copy failed", error);
+            setDiagnosticCopyStatus("コピーできませんでした");
+        }
+        window.setTimeout(() => {
+            setDiagnosticCopyStatus("");
+        }, 1800);
+    }, [monthlyVisibilityDiagnostic]);
 
     const fetchFriendsData = useCallback(async () => {
         if (!user) {
@@ -1471,11 +1498,14 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                     };
                 });
 
-            console.log("[diagnostic] monthly visibility diff", {
+            const diagnosticPayload = {
                 currentUserId: user.id,
                 currentUserName: String(myUsername || "").trim() || "あなた",
                 targetUsers,
-            });
+            };
+
+            setMonthlyVisibilityDiagnostic(diagnosticPayload);
+            console.log("[diagnostic] monthly visibility diff", diagnosticPayload);
         };
 
         runMonthlyVisibilityDiagnostic();
@@ -2088,6 +2118,99 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div
+                        style={{
+                            background: "var(--card)",
+                            borderRadius: 20,
+                            padding: 14,
+                            border: "1px dashed rgba(18, 199, 194, 0.28)",
+                            boxShadow: "var(--shadow-card)",
+                            marginTop: 14,
+                        }}
+                    >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                            <div>
+                                <div style={{ fontSize: 14, fontWeight: 900, color: "var(--text)" }}>診断情報</div>
+                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>
+                                    自分と友達の今月ワークアウト差分をJSONで確認できます
+                                </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDiagnosticPanel((prev) => !prev)}
+                                    style={{
+                                        padding: "9px 12px",
+                                        borderRadius: 12,
+                                        border: "1px solid var(--border2)",
+                                        background: "var(--card2)",
+                                        color: "var(--text2)",
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                    }}
+                                >
+                                    {showDiagnosticPanel ? "診断情報を閉じる" : "診断情報を表示"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={copyDiagnosticPayload}
+                                    disabled={!monthlyVisibilityDiagnostic}
+                                    style={{
+                                        padding: "9px 12px",
+                                        borderRadius: 12,
+                                        border: "1px solid var(--border2)",
+                                        background: monthlyVisibilityDiagnostic
+                                            ? "linear-gradient(135deg, #12C7C2, #33E1DB)"
+                                            : "var(--card2)",
+                                        color: monthlyVisibilityDiagnostic ? "#fff" : "var(--text3)",
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                        opacity: monthlyVisibilityDiagnostic ? 1 : 0.6,
+                                    }}
+                                >
+                                    診断結果をコピー
+                                </button>
+                            </div>
+                        </div>
+
+                        {diagnosticCopyStatus && (
+                            <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, marginTop: 10 }}>
+                                {diagnosticCopyStatus}
+                            </div>
+                        )}
+
+                        {showDiagnosticPanel && (
+                            <div
+                                style={{
+                                    marginTop: 12,
+                                    borderRadius: 14,
+                                    border: "1px solid rgba(217, 228, 239, 0.9)",
+                                    background: "rgba(247, 251, 252, 0.96)",
+                                    padding: 12,
+                                    maxHeight: 360,
+                                    overflowY: "auto",
+                                    WebkitOverflowScrolling: "touch",
+                                }}
+                            >
+                                <pre
+                                    style={{
+                                        margin: 0,
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                        fontSize: 10,
+                                        lineHeight: 1.55,
+                                        color: "var(--text2)",
+                                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+                                    }}
+                                >
+                                    {monthlyVisibilityDiagnostic
+                                        ? JSON.stringify(monthlyVisibilityDiagnostic, null, 2)
+                                        : "診断データを準備中です..."}
+                                </pre>
                             </div>
                         )}
                     </div>
