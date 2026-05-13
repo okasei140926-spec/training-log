@@ -7,6 +7,8 @@ export default function AppHeader({
     onTimerClick,
     isDark,
     onToggleTheme,
+    showSettingsButton = false,
+    onOpenSettings,
 }) {
     return (
         <div style={S.header}>
@@ -15,6 +17,16 @@ export default function AppHeader({
                 <div style={S.headerTitle}>{title}</div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {showSettingsButton && (
+                    <button
+                        type="button"
+                        onClick={onOpenSettings}
+                        style={S.pillBtn}
+                        aria-label="設定を開く"
+                    >
+                        ⚙️
+                    </button>
+                )}
                 {showLogTimer && (
                     <button
                         onClick={onTimerClick}

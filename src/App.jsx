@@ -50,6 +50,7 @@ import {
 } from "./utils/workoutSessions";
 import { getPrimaryDefaultBodyPartLabel } from "./utils/bodyPartClassification";
 import WorkoutSessionShareModal from "./components/modals/WorkoutSessionShareModal";
+import SettingsModal from "./components/modals/SettingsModal";
 import {
     buildWorkoutDaySummary,
     buildWorkoutDaySummaryPrKey,
@@ -482,6 +483,7 @@ export default function GymApp() {
     const [newExName, setNewExName] = useState("");
     const [summary, setSummary] = useState(null);
     const [workoutDayShareTarget, setWorkoutDayShareTarget] = useState(null);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
 
 
     // ─── AI Coach ─────────────────────────────────────
@@ -637,6 +639,10 @@ export default function GymApp() {
     const openWorkoutDayShareModal = useCallback((target) => {
         if (!target?.workoutDate || !target?.sessionPayload) return;
         setWorkoutDayShareTarget(target);
+    }, []);
+
+    const handleLogout = useCallback(async () => {
+        await supabase.auth.signOut();
     }, []);
 
     const queueWorkoutSessionSync = useCallback((date) => {
@@ -2262,6 +2268,8 @@ export default function GymApp() {
                     }}
                     isDark={isDark}
                     onToggleTheme={() => setIsDark(p => !p)}
+                    showSettingsButton={["analytics", "feed", "ranking", "ai"].includes(screen)}
+                    onOpenSettings={() => setShowSettingsModal(true)}
                 />
 
 
@@ -2402,9 +2410,7 @@ export default function GymApp() {
                         user={user}
                         onLogin={() => setShowAuth(true)}
                         onOpenRecord={() => setScreen("history")}
-                        onLogout={async () => {
-                            await supabase.auth.signOut();
-                        }}
+                        onLogout={handleLogout}
 
                         onCopyMenu={(exs) => {
                             setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
@@ -2430,9 +2436,7 @@ export default function GymApp() {
                         user={user}
                         onLogin={() => setShowAuth(true)}
                         onOpenRecord={() => setScreen("history")}
-                        onLogout={async () => {
-                            await supabase.auth.signOut();
-                        }}
+                        onLogout={handleLogout}
                         onCopyMenu={(exs) => {
                             setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
                             setLogData(exs.reduce((acc, ex) => ({
@@ -2523,6 +2527,12 @@ export default function GymApp() {
                     onClose={closeWorkoutDayShareModal}
                     workoutDate={workoutDayShareTarget?.workoutDate}
                     sessionPayload={workoutDayShareTarget?.sessionPayload || null}
+                />
+                <SettingsModal
+                    isOpen={showSettingsModal}
+                    onClose={() => setShowSettingsModal(false)}
+                    user={user}
+                    onLogout={handleLogout}
                 />
                 {showAuth && (
                     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>

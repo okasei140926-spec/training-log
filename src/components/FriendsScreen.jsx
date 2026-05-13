@@ -21,7 +21,6 @@ import {
 } from "../utils/workoutSessions";
 import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
-import NotificationSettings from "./NotificationSettings";
 import WorkoutCommentsModal from "./modals/WorkoutCommentsModal";
 
 const RESERVED_USERNAMES = [
@@ -1118,12 +1117,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     }
     return (
         <div className="fade-in" style={{ ...S.page, paddingBottom: 120 }}>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-                <button onClick={onLogout} style={{ ...S.pillBtn, padding: "8px 14px", fontSize: 12, color: "var(--text2)" }}>
-                    ログアウト
-                </button>
-            </div>
-
             {showFeedSections && (
                 <>
                     <div
@@ -1481,7 +1474,6 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                         </div>
 
                         <InviteCard copied={copied} onCopyInvite={handleCopyInvite} />
-                        <NotificationSettings user={user} />
                     </div>
                 </>
             )}

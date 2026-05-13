@@ -211,7 +211,7 @@ export default function NotificationSettings({ user }) {
                   boxShadow: "var(--shadow-soft)",
                 }}
               >
-                通知を有効にする
+                通知をオンにする
               </button>
             )}
 

@@ -1210,7 +1210,7 @@ export default function HistoryScreen({
                   onClick={async () => {
                     const targetDate = selectedDate;
                     setSelectedDate(null);
-                    await handleOpenDaySummary(targetDate, { title: `${targetDate} のサマリー` });
+                    await handleOpenDaySummary(targetDate, { title: `${formatSlashDate(targetDate)} の記録` });
                   }}
                   style={{
                     width: "100%",
@@ -1239,7 +1239,7 @@ export default function HistoryScreen({
                     border: "1px solid rgba(18, 199, 194, 0.1)",
                   }}
                 >
-                  記録を開く
+                  記録を編集
                 </button>
               </div>
             </div>
