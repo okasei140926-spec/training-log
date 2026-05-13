@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
@@ -89,7 +89,17 @@ const hasValidSessionData = (session) => {
     return false;
 };
 
-export default function FriendsScreen({ history, manualBests = [], sessionSyncVersion = 0, user, onLogin, onLogout, onOpenRecord, mode = "all" }) {
+export default function FriendsScreen({
+    history,
+    historySyncDiagnostic = null,
+    manualBests = [],
+    sessionSyncVersion = 0,
+    user,
+    onLogin,
+    onLogout,
+    onOpenRecord,
+    mode = "all",
+}) {
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState([]);
     const [friendIds, setFriendIds] = useState([]);
@@ -129,6 +139,14 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     const recentSevenStart = shiftDateKey(today, -6);
     const showFeedSections = mode !== "ranking";
     const showRankingSections = mode !== "feed";
+    const combinedDiagnosticPayload = useMemo(() => (
+        monthlyVisibilityDiagnostic || historySyncDiagnostic
+            ? {
+                monthlyVisibilityDiff: monthlyVisibilityDiagnostic,
+                historySyncDiagnostic,
+              }
+            : null
+    ), [historySyncDiagnostic, monthlyVisibilityDiagnostic]);
 
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
         return hasValidWorkoutOnDate(workoutData, today);
@@ -295,8 +313,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
     }, []);
 
     const copyDiagnosticPayload = useCallback(async () => {
-        if (!monthlyVisibilityDiagnostic) return;
-        const text = JSON.stringify(monthlyVisibilityDiagnostic, null, 2);
+        if (!combinedDiagnosticPayload) return;
+        const text = JSON.stringify(combinedDiagnosticPayload, null, 2);
         try {
             if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(text);
@@ -316,7 +334,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         window.setTimeout(() => {
             setDiagnosticCopyStatus("");
         }, 1800);
-    }, [monthlyVisibilityDiagnostic]);
+    }, [combinedDiagnosticPayload]);
 
     const fetchFriendsData = useCallback(async () => {
         if (!user) {
@@ -2158,18 +2176,18 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                 <button
                                     type="button"
                                     onClick={copyDiagnosticPayload}
-                                    disabled={!monthlyVisibilityDiagnostic}
+                                    disabled={!combinedDiagnosticPayload}
                                     style={{
                                         padding: "9px 12px",
                                         borderRadius: 12,
                                         border: "1px solid var(--border2)",
-                                        background: monthlyVisibilityDiagnostic
+                                        background: combinedDiagnosticPayload
                                             ? "linear-gradient(135deg, #12C7C2, #33E1DB)"
                                             : "var(--card2)",
-                                        color: monthlyVisibilityDiagnostic ? "#fff" : "var(--text3)",
+                                        color: combinedDiagnosticPayload ? "#fff" : "var(--text3)",
                                         fontSize: 12,
                                         fontWeight: 800,
-                                        opacity: monthlyVisibilityDiagnostic ? 1 : 0.6,
+                                        opacity: combinedDiagnosticPayload ? 1 : 0.6,
                                     }}
                                 >
                                     診断結果をコピー
@@ -2207,8 +2225,8 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
                                         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
                                     }}
                                 >
-                                    {monthlyVisibilityDiagnostic
-                                        ? JSON.stringify(monthlyVisibilityDiagnostic, null, 2)
+                                    {combinedDiagnosticPayload
+                                        ? JSON.stringify(combinedDiagnosticPayload, null, 2)
                                         : "診断データを準備中です..."}
                                 </pre>
                             </div>
