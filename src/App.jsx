@@ -2268,7 +2268,7 @@ export default function GymApp() {
                     }}
                     isDark={isDark}
                     onToggleTheme={() => setIsDark(p => !p)}
-                    showSettingsButton={["analytics", "feed", "ranking", "ai"].includes(screen)}
+                    showSettingsButton={screen !== "log"}
                     onOpenSettings={() => setShowSettingsModal(true)}
                 />
 
