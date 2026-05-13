@@ -1068,9 +1068,11 @@ export default function GymApp() {
                     mergeHistoryMaps(remoteHistory, localHistorySnapshot),
                     effectiveDeleteMarkers
                 );
+                const validHistoryDates = getValidWorkoutDatesFromHistory(mergedHistory);
                 const syncDates = [
                     ...new Set([
                         ...(data || []).map((row) => String(row?.date || "")).filter(Boolean),
+                        ...validHistoryDates,
                         String(logDate || "").trim(),
                         formatDateKey(new Date()),
                     ]),
