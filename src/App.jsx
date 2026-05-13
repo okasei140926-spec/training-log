@@ -8,6 +8,7 @@ import {
     buildHistoryFromWorkoutRows,
     calc1RM,
     formatDateKey,
+    getValidWorkoutDatesFromHistory,
     hasMeaningfulPRIncrease,
     hasValidWorkoutOnDate,
     mergeHistoryMaps,
@@ -1213,6 +1214,54 @@ export default function GymApp() {
         workoutStartedAt,
         workoutStartedForDate,
     ]);
+
+    useEffect(() => {
+        if (!user?.id || !historySyncReady) return;
+
+        let cancelled = false;
+
+        const backfillCurrentMonthWorkoutSessions = async () => {
+            const todayKey = formatDateKey(new Date());
+            const currentMonthStart = `${todayKey.slice(0, 7)}-01`;
+            const targetDates = getValidWorkoutDatesFromHistory(history, { prefix: todayKey.slice(0, 7) });
+            if (!targetDates.length) return;
+
+            try {
+                await Promise.all(
+                    targetDates.map(async (dateKey) => {
+                        if (cancelled) return;
+                        try {
+                            await syncWorkoutSessionSnapshot(user.id, history, dateKey, null);
+                        } catch (error) {
+                            console.error("workout session month backfill failed", {
+                                error,
+                                userId: user.id,
+                                workoutDate: dateKey,
+                                currentMonthStart,
+                            });
+                        }
+                    })
+                );
+
+                if (!cancelled) {
+                    setSessionSyncVersion((prev) => prev + 1);
+                }
+            } catch (error) {
+                console.error("workout session month backfill batch failed", {
+                    error,
+                    userId: user.id,
+                    currentMonthStart,
+                    targetDates,
+                });
+            }
+        };
+
+        backfillCurrentMonthWorkoutSessions();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [history, historySyncReady, syncWorkoutSessionSnapshot, user?.id]);
 
     useEffect(() => {
         let isActive = true;

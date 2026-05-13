@@ -440,7 +440,7 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
 
                 const isAcceptedFriend = nextFriendIds.includes(session.user_id);
                 const visibility = String(session.visibility || "");
-                const isVisibleToFriends = visibility === "friends" || visibility === "public";
+                const isVisibleToFriends = !visibility || visibility === "friends" || visibility === "public";
                 const hasValidSets = hasValidSessionData(session);
                 let reason = null;
                 if (!session.workout_date) reason = "invalid_date";
@@ -508,8 +508,15 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
             friendsWithHistory.forEach((friend) => {
                 const visibleDates = monthlyCountByUser[friend.id] ? Array.from(monthlyCountByUser[friend.id]) : [];
                 const workoutDates = getValidWorkoutDatesFromHistory(friend.history, { prefix: currentMonthPrefix });
-                const visibleDateSet = new Set(visibleDates);
-                missingDates[friend.id] = workoutDates.filter((dateKey) => !visibleDateSet.has(dateKey));
+                const visibleDateSet = new Set([...visibleDates, ...workoutDates]);
+                monthlyCountByUser[friend.id] = visibleDateSet;
+                const recentWorkoutDates = getValidWorkoutDatesFromHistory(friend.history, { since: recentSevenStart })
+                    .filter((dateKey) => dateKey <= today);
+                recentSevenCountByUser[friend.id] = new Set([
+                    ...(recentSevenCountByUser[friend.id] ? Array.from(recentSevenCountByUser[friend.id]) : []),
+                    ...recentWorkoutDates,
+                ]);
+                missingDates[friend.id] = workoutDates.filter((dateKey) => !new Set(visibleDates).has(dateKey));
             });
 
             setFriendSessionInsights({
