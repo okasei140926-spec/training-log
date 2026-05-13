@@ -1302,6 +1302,201 @@ export default function FriendsScreen({ history, manualBests = [], sessionSyncVe
         user?.id,
     ]);
 
+    useEffect(() => {
+        if (!showRankingSections || !user?.id) return undefined;
+
+        let cancelled = false;
+
+        const runMonthlyVisibilityDiagnostic = async () => {
+            const currentMonthStart = `${currentMonthPrefix}-01`;
+            const targetUserIds = [...new Set([user.id, ...friendIds].filter(Boolean))];
+            if (!targetUserIds.length) return;
+
+            const [monthlyWorkoutsRes, monthlySessionsRes] = await Promise.all([
+                supabase
+                    .from("workouts")
+                    .select("user_id, date, data")
+                    .in("user_id", targetUserIds)
+                    .gte("date", currentMonthStart)
+                    .lte("date", today)
+                    .order("date", { ascending: true }),
+                supabase
+                    .from("workout_sessions")
+                    .select("id, user_id, workout_date, visibility, summary_json, total_volume, exercise_count")
+                    .in("user_id", targetUserIds)
+                    .gte("workout_date", currentMonthStart)
+                    .lte("workout_date", today)
+                    .order("workout_date", { ascending: true }),
+            ]);
+
+            if (monthlyWorkoutsRes.error) {
+                console.error("[diagnostic] monthly workouts fetch failed", {
+                    error: monthlyWorkoutsRes.error,
+                    currentUserId: user.id,
+                    targetUserIds,
+                    currentMonthStart,
+                    today,
+                });
+            }
+
+            if (monthlySessionsRes.error) {
+                console.error("[diagnostic] monthly workout_sessions fetch failed", {
+                    error: monthlySessionsRes.error,
+                    currentUserId: user.id,
+                    targetUserIds,
+                    currentMonthStart,
+                    today,
+                });
+            }
+
+            if (cancelled) return;
+
+            const monthlyWorkoutRows = monthlyWorkoutsRes.data || [];
+            const monthlySessionRows = monthlySessionsRes.data || [];
+
+            const workoutRowsByUser = new Map();
+            monthlyWorkoutRows.forEach((row) => {
+                const current = workoutRowsByUser.get(row.user_id) || [];
+                current.push(row);
+                workoutRowsByUser.set(row.user_id, current);
+            });
+
+            const sessionRowsByUser = new Map();
+            monthlySessionRows.forEach((row) => {
+                const current = sessionRowsByUser.get(row.user_id) || [];
+                current.push(row);
+                sessionRowsByUser.set(row.user_id, current);
+            });
+
+            const targetUsers = [
+                {
+                    userId: user.id,
+                    userName: String(myUsername || "").trim() || "あなた",
+                    sourceHistory: history,
+                },
+                ...friends.map((friend) => ({
+                    userId: friend.id,
+                    userName: String(friend.username || "").trim() || "ユーザー",
+                    sourceHistory: friend.history,
+                })),
+            ]
+                .filter((entry, index, array) => array.findIndex((item) => item.userId === entry.userId) === index)
+                .map((entry) => {
+                    const localHistoryDates = getValidWorkoutDatesFromHistory(entry.sourceHistory || {}, {
+                        prefix: currentMonthPrefix,
+                    }).sort();
+
+                    const remoteRows = workoutRowsByUser.get(entry.userId) || [];
+                    const remoteHistory = buildHistoryFromWorkoutRows(remoteRows);
+                    const remoteWorkoutDates = getValidWorkoutDatesFromHistory(remoteHistory, {
+                        prefix: currentMonthPrefix,
+                    }).sort();
+
+                    const sessions = sessionRowsByUser.get(entry.userId) || [];
+                    const sessionDates = [...new Set(
+                        sessions
+                            .map((session) => String(session?.workout_date || "").slice(0, 10))
+                            .filter(Boolean)
+                    )].sort();
+
+                    const friendVisibleSessionDates = [...new Set(
+                        sessions
+                            .filter((session) => {
+                                const visibility = String(session?.visibility || "").trim().toLowerCase();
+                                return !visibility || visibility === "friends" || visibility === "public";
+                            })
+                            .map((session) => String(session?.workout_date || "").slice(0, 10))
+                            .filter(Boolean)
+                    )].sort();
+
+                    const localOrRemoteDates = [...new Set([...localHistoryDates, ...remoteWorkoutDates])].sort();
+
+                    const privateOrNullVisibilityDates = [...new Set(
+                        sessions
+                            .filter((session) => {
+                                const visibility = String(session?.visibility || "").trim().toLowerCase();
+                                return !visibility || visibility === "private";
+                            })
+                            .map((session) => String(session?.workout_date || "").slice(0, 10))
+                            .filter(Boolean)
+                    )].sort();
+
+                    const noValidSessionDates = sessions
+                        .filter((session) => session?.workout_date && !hasValidSessionData(session))
+                        .map((session) => String(session.workout_date).slice(0, 10));
+
+                    const noValidWorkoutDates = remoteRows
+                        .filter((row) => {
+                            if (!row?.date) return false;
+                            const rowHistory = buildHistoryFromWorkoutRows([row]);
+                            return !getValidWorkoutDatesFromHistory(rowHistory, { prefix: String(row.date).slice(0, 7) })
+                                .includes(String(row.date).slice(0, 10));
+                        })
+                        .map((row) => String(row.date).slice(0, 10));
+
+                    const noValidSetsDates = [...new Set([
+                        ...noValidSessionDates,
+                        ...noValidWorkoutDates,
+                    ])].sort();
+
+                    const missingFromRemoteWorkouts = localHistoryDates.filter((dateKey) => !remoteWorkoutDates.includes(dateKey));
+                    const missingFromWorkoutSessions = localOrRemoteDates.filter((dateKey) => !sessionDates.includes(dateKey));
+
+                    const rlsBlockedDates = friendVisibleSessionDates.filter((dateKey) => !remoteWorkoutDates.includes(dateKey));
+
+                    return {
+                        userId: entry.userId,
+                        userName: entry.userName,
+                        localHistoryDates,
+                        remoteWorkoutDates,
+                        sessionDates,
+                        friendVisibleSessionDates,
+                        missingFromRemoteWorkouts,
+                        missingFromWorkoutSessions,
+                        privateOrNullVisibilityDates,
+                        noValidSetsDates,
+                        rlsBlockedDates,
+                        counts: {
+                            localHistory: localHistoryDates.length,
+                            remoteWorkouts: remoteWorkoutDates.length,
+                            sessions: sessionDates.length,
+                            friendVisibleSessions: friendVisibleSessionDates.length,
+                            finalRankingCount: entry.userId === user.id
+                                ? selfMonthlySessions.length
+                                : Number(
+                                    friendSessionInsights.monthlyCountByUser?.[entry.userId]
+                                    ?? countMonthlyWorkoutDays(entry.sourceHistory)
+                                ),
+                        },
+                    };
+                });
+
+            console.log("[diagnostic] monthly visibility diff", {
+                currentUserId: user.id,
+                currentUserName: String(myUsername || "").trim() || "あなた",
+                targetUsers,
+            });
+        };
+
+        runMonthlyVisibilityDiagnostic();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        countMonthlyWorkoutDays,
+        currentMonthPrefix,
+        friendIds,
+        friendSessionInsights.monthlyCountByUser,
+        friends,
+        history,
+        myUsername,
+        selfMonthlySessions.length,
+        showRankingSections,
+        today,
+        user?.id,
+    ]);
+
     const rankingConfig = {
         big3: {
             label: "BIG3",
