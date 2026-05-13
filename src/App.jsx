@@ -1053,7 +1053,7 @@ export default function GymApp() {
 
                 const { data, error } = await supabase
                     .from("workouts")
-                    .select("date, data, started_at, ended_at, duration_sec")
+                    .select("date, data")
                     .eq("user_id", currentUserId)
                     .order("date", { ascending: true });
 
@@ -1077,42 +1077,13 @@ export default function GymApp() {
                         formatDateKey(new Date()),
                     ]),
                 ];
-                const existingWorkoutRowsByDate = new Map(
-                    (data || []).map((row) => [String(row?.date || "").trim(), row])
-                );
 
                 await supabase.from("workouts").upsert(
                     syncDates.map((date) => {
-                        const existingRow = existingWorkoutRowsByDate.get(date);
-                        const hasValidWorkoutForDate =
-                            date === logDate && hasValidWorkoutOnDate(mergedHistory, date);
-                        const shouldPersistWorkoutTiming =
-                            hasValidWorkoutForDate &&
-                            workoutStartedAt &&
-                            workoutStartedForDate === date;
-                        const workoutTiming = shouldPersistWorkoutTiming
-                            ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
-                            : null;
-
-                        const endedAtIso = workoutTiming?.endedAtIso ?? (
-                            date === logDate ? null : existingRow?.ended_at || null
-                        );
-                        const startedAtIso = workoutTiming?.startedAtIso ?? (
-                            date === logDate ? null : existingRow?.started_at || null
-                        );
-                        const durationSec = Number.isFinite(workoutTiming?.durationSec)
-                            ? workoutTiming.durationSec
-                            : date === logDate
-                                ? null
-                                : existingRow?.duration_sec ?? null;
-
                         return {
                             user_id: currentUserId,
                             date,
                             data: mergedHistory,
-                            started_at: startedAtIso,
-                            ended_at: endedAtIso,
-                            duration_sec: durationSec,
                         };
                     }),
                     { onConflict: "user_id,date" }
