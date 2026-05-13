@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
@@ -121,7 +121,6 @@ const hasValidSessionData = (session) => {
 
 export default function FriendsScreen({
     history,
-    historySyncDiagnostic = null,
     manualBests = [],
     sessionSyncVersion = 0,
     user,
@@ -150,9 +149,6 @@ export default function FriendsScreen({
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
     const [expandedFeedItems, setExpandedFeedItems] = useState({});
-    const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
-    const [diagnosticCopyStatus, setDiagnosticCopyStatus] = useState("");
-    const [monthlyVisibilityDiagnostic, setMonthlyVisibilityDiagnostic] = useState(() => FRIENDS_SCREEN_CACHE.diagnosticPayload);
     const [friendSessionInsights, setFriendSessionInsights] = useState(() => (
         FRIENDS_SCREEN_CACHE.friendsData.friendSessionInsights || EMPTY_FRIEND_SESSION_INSIGHTS
     ));
@@ -162,25 +158,6 @@ export default function FriendsScreen({
     const recentSevenStart = shiftDateKey(today, -6);
     const showFeedSections = mode !== "ranking";
     const showRankingSections = mode !== "feed";
-    const combinedDiagnosticPayload = useMemo(() => (
-        monthlyVisibilityDiagnostic || historySyncDiagnostic
-            ? {
-                monthlyVisibilityDiff: monthlyVisibilityDiagnostic,
-                historySyncDiagnostic,
-              }
-            : null
-    ), [historySyncDiagnostic, monthlyVisibilityDiagnostic]);
-    const diagnosticMonthlyCountByUser = useMemo(() => {
-        const targetUsers = Array.isArray(monthlyVisibilityDiagnostic?.targetUsers)
-            ? monthlyVisibilityDiagnostic.targetUsers
-            : [];
-        return Object.fromEntries(
-            targetUsers.map((entry) => [
-                entry.userId,
-                Number(entry?.counts?.finalRankingCount ?? 0),
-            ])
-        );
-    }, [monthlyVisibilityDiagnostic]);
 
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
         return hasValidWorkoutOnDate(workoutData, today);
@@ -345,30 +322,6 @@ export default function FriendsScreen({
             activityFeedStatusTimeoutRef.current = null;
         }, 2200);
     }, []);
-
-    const copyDiagnosticPayload = useCallback(async () => {
-        if (!combinedDiagnosticPayload) return;
-        const text = JSON.stringify(combinedDiagnosticPayload, null, 2);
-        try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(text);
-            } else {
-                const el = document.createElement("textarea");
-                el.value = text;
-                document.body.appendChild(el);
-                el.select();
-                document.execCommand("copy");
-                document.body.removeChild(el);
-            }
-            setDiagnosticCopyStatus("コピーしました");
-        } catch (error) {
-            console.error("[diagnostic] copy failed", error);
-            setDiagnosticCopyStatus("コピーできませんでした");
-        }
-        window.setTimeout(() => {
-            setDiagnosticCopyStatus("");
-        }, 1800);
-    }, [combinedDiagnosticPayload]);
 
     const fetchFriendsData = useCallback(async ({ force = false, background = false } = {}) => {
         if (!user) {
@@ -1412,8 +1365,7 @@ export default function FriendsScreen({
             name: getDisplayUsername(friend.username),
             isMe: false,
             value: Number(
-                diagnosticMonthlyCountByUser?.[friend.id]
-                ?? friendSessionInsights.monthlyCountByUser?.[friend.id]
+                friendSessionInsights.monthlyCountByUser?.[friend.id]
                 ?? countMonthlyWorkoutDays(friend.history)
             ),
         })),
@@ -1428,8 +1380,7 @@ export default function FriendsScreen({
             friends.map((friend) => [
                 friend.id,
                 Number(
-                    diagnosticMonthlyCountByUser?.[friend.id]
-                    ?? friendSessionInsights.monthlyCountByUser?.[friend.id]
+                    friendSessionInsights.monthlyCountByUser?.[friend.id]
                     ?? countMonthlyWorkoutDays(friend.history)
                 ),
             ])
@@ -1454,7 +1405,6 @@ export default function FriendsScreen({
         console.log("[profile] valid sets by date", friendSessionInsights.validSetsByDate || {});
     }, [
         countMonthlyWorkoutDays,
-        diagnosticMonthlyCountByUser,
         friendIds,
         friendSessionInsights,
         friends,
@@ -1463,199 +1413,6 @@ export default function FriendsScreen({
         user?.id,
     ]);
 
-    const runMonthlyVisibilityDiagnostic = useCallback(async () => {
-        if (!showRankingSections || !user?.id) return null;
-            const currentMonthStart = `${currentMonthPrefix}-01`;
-            const targetUserIds = [...new Set([user.id, ...friendIds].filter(Boolean))];
-            if (!targetUserIds.length) return null;
-
-            const [monthlyWorkoutsRes, monthlySessionsRes] = await Promise.all([
-                supabase
-                    .from("workouts")
-                    .select("user_id, date, data")
-                    .in("user_id", targetUserIds)
-                    .gte("date", currentMonthStart)
-                    .lte("date", today)
-                    .order("date", { ascending: true }),
-                supabase
-                    .from("workout_sessions")
-                    .select("id, user_id, workout_date, visibility, summary_json, total_volume, exercise_count")
-                    .in("user_id", targetUserIds)
-                    .gte("workout_date", currentMonthStart)
-                    .lte("workout_date", today)
-                    .order("workout_date", { ascending: true }),
-            ]);
-
-            if (monthlyWorkoutsRes.error) {
-                console.error("[diagnostic] monthly workouts fetch failed", {
-                    error: monthlyWorkoutsRes.error,
-                    currentUserId: user.id,
-                    targetUserIds,
-                    currentMonthStart,
-                    today,
-                });
-            }
-
-            if (monthlySessionsRes.error) {
-                console.error("[diagnostic] monthly workout_sessions fetch failed", {
-                    error: monthlySessionsRes.error,
-                    currentUserId: user.id,
-                    targetUserIds,
-                    currentMonthStart,
-                    today,
-                });
-            }
-
-            const monthlyWorkoutRows = monthlyWorkoutsRes.data || [];
-            const monthlySessionRows = monthlySessionsRes.data || [];
-
-            const workoutRowsByUser = new Map();
-            monthlyWorkoutRows.forEach((row) => {
-                const current = workoutRowsByUser.get(row.user_id) || [];
-                current.push(row);
-                workoutRowsByUser.set(row.user_id, current);
-            });
-
-            const sessionRowsByUser = new Map();
-            monthlySessionRows.forEach((row) => {
-                const current = sessionRowsByUser.get(row.user_id) || [];
-                current.push(row);
-                sessionRowsByUser.set(row.user_id, current);
-            });
-
-            const targetUsers = [
-                {
-                    userId: user.id,
-                    userName: String(myUsername || "").trim() || "あなた",
-                    sourceHistory: history,
-                },
-                ...friends.map((friend) => ({
-                    userId: friend.id,
-                    userName: String(friend.username || "").trim() || "ユーザー",
-                    sourceHistory: friend.history,
-                })),
-            ]
-                .filter((entry, index, array) => array.findIndex((item) => item.userId === entry.userId) === index)
-                .map((entry) => {
-                    const localHistoryDates = getValidWorkoutDatesFromHistory(entry.sourceHistory || {}, {
-                        prefix: currentMonthPrefix,
-                    }).sort();
-
-                    const remoteRows = workoutRowsByUser.get(entry.userId) || [];
-                    const remoteHistory = buildHistoryFromWorkoutRows(remoteRows);
-                    const remoteWorkoutDates = getValidWorkoutDatesFromHistory(remoteHistory, {
-                        prefix: currentMonthPrefix,
-                    }).sort();
-
-                    const sessions = sessionRowsByUser.get(entry.userId) || [];
-                    const sessionDates = [...new Set(
-                        sessions
-                            .map((session) => String(session?.workout_date || "").slice(0, 10))
-                            .filter(Boolean)
-                    )].sort();
-
-                    const friendVisibleSessionDates = [...new Set(
-                        sessions
-                            .filter((session) => {
-                                const visibility = String(session?.visibility || "").trim().toLowerCase();
-                                return !visibility || visibility === "friends" || visibility === "public";
-                            })
-                            .map((session) => String(session?.workout_date || "").slice(0, 10))
-                            .filter(Boolean)
-                    )].sort();
-
-                    const localOrRemoteDates = [...new Set([...localHistoryDates, ...remoteWorkoutDates])].sort();
-
-                    const privateOrNullVisibilityDates = [...new Set(
-                        sessions
-                            .filter((session) => {
-                                const visibility = String(session?.visibility || "").trim().toLowerCase();
-                                return !visibility || visibility === "private";
-                            })
-                            .map((session) => String(session?.workout_date || "").slice(0, 10))
-                            .filter(Boolean)
-                    )].sort();
-
-                    const noValidSessionDates = sessions
-                        .filter((session) => session?.workout_date && !hasValidSessionData(session))
-                        .map((session) => String(session.workout_date).slice(0, 10));
-
-                    const noValidWorkoutDates = remoteRows
-                        .filter((row) => {
-                            if (!row?.date) return false;
-                            const rowHistory = buildHistoryFromWorkoutRows([row]);
-                            return !getValidWorkoutDatesFromHistory(rowHistory, { prefix: String(row.date).slice(0, 7) })
-                                .includes(String(row.date).slice(0, 10));
-                        })
-                        .map((row) => String(row.date).slice(0, 10));
-
-                    const noValidSetsDates = [...new Set([
-                        ...noValidSessionDates,
-                        ...noValidWorkoutDates,
-                    ])].sort();
-
-                    const missingFromRemoteWorkouts = localHistoryDates.filter((dateKey) => !remoteWorkoutDates.includes(dateKey));
-                    const missingFromWorkoutSessions = localOrRemoteDates.filter((dateKey) => !sessionDates.includes(dateKey));
-
-                    const rlsBlockedDates = friendVisibleSessionDates.filter((dateKey) => !remoteWorkoutDates.includes(dateKey));
-
-                    return {
-                        userId: entry.userId,
-                        userName: entry.userName,
-                        localHistoryDates,
-                        remoteWorkoutDates,
-                        sessionDates,
-                        friendVisibleSessionDates,
-                        missingFromRemoteWorkouts,
-                        missingFromWorkoutSessions,
-                        privateOrNullVisibilityDates,
-                        noValidSetsDates,
-                        rlsBlockedDates,
-                        counts: {
-                            localHistory: localHistoryDates.length,
-                            remoteWorkouts: remoteWorkoutDates.length,
-                            sessions: sessionDates.length,
-                            friendVisibleSessions: friendVisibleSessionDates.length,
-                            finalRankingCount: entry.userId === user.id
-                                ? selfMonthlySessions.length
-                                : Number(
-                                    diagnosticMonthlyCountByUser?.[entry.userId]
-                                    ?? friendSessionInsights.monthlyCountByUser?.[entry.userId]
-                                    ?? countMonthlyWorkoutDays(entry.sourceHistory)
-                                ),
-                        },
-                    };
-                });
-
-            const diagnosticPayload = {
-                currentUserId: user.id,
-                currentUserName: String(myUsername || "").trim() || "あなた",
-                targetUsers,
-            };
-
-            setMonthlyVisibilityDiagnostic(diagnosticPayload);
-            FRIENDS_SCREEN_CACHE.diagnosticPayload = diagnosticPayload;
-            console.log("[diagnostic] monthly visibility diff", diagnosticPayload);
-            return diagnosticPayload;
-    }, [
-        countMonthlyWorkoutDays,
-        currentMonthPrefix,
-        diagnosticMonthlyCountByUser,
-        friendIds,
-        friendSessionInsights.monthlyCountByUser,
-        friends,
-        history,
-        myUsername,
-        selfMonthlySessions.length,
-        showRankingSections,
-        today,
-        user?.id,
-    ]);
-
-    useEffect(() => {
-        if (!showDiagnosticPanel) return;
-        runMonthlyVisibilityDiagnostic().catch(console.error);
-    }, [runMonthlyVisibilityDiagnostic, showDiagnosticPanel]);
 
     const rankingConfig = {
         big3: {
@@ -1914,13 +1671,13 @@ export default function FriendsScreen({
                                         style={{
                                             background: "var(--card)",
                                             borderRadius: 22,
-                                            padding: 16,
+                                            padding: 14,
                                             border: "1px solid var(--border2)",
                                             boxShadow: "var(--shadow-card)",
                                         }}
                                     >
-                                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                                            <div style={{ width: 46, height: 46, borderRadius: 23, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                            <div style={{ width: 42, height: 42, borderRadius: 21, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
                                                 {item.profile?.avatar1_url
                                                     ? <img src={item.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                                     : profileName?.[0]?.toUpperCase()
@@ -1938,25 +1695,30 @@ export default function FriendsScreen({
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "grid", gap: 8 }}>
-                                            {visibleExercises.map((summaryItem) => (
+                                        <div style={{ display: "grid", gap: 4 }}>
+                                            {visibleExercises.map((summaryItem, index) => {
+                                                const isLastVisibleExercise = index === visibleExercises.length - 1;
+                                                const showExerciseDivider = !isLastVisibleExercise || hasExtraExercises;
+
+                                                return (
                                                 <div
                                                     key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`}
                                                     style={{
-                                                        padding: "10px 0 12px",
-                                                        borderBottom: "1px solid rgba(217, 228, 239, 0.9)",
+                                                        padding: "8px 0 10px",
+                                                        borderBottom: showExerciseDivider ? "1px solid rgba(217, 228, 239, 0.9)" : "none",
                                                     }}
                                                 >
                                                     <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
                                                         {summaryItem.exercise_name}
                                                     </div>
-                                                    <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 5, lineHeight: 1.65 }}>
+                                                    <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 3, lineHeight: 1.55 }}>
                                                         {Array.isArray(summaryItem.sets) && summaryItem.sets.length
                                                             ? summaryItem.sets.map(formatSessionSetDisplay).join(" / ")
                                                             : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}`}
                                                     </div>
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                             {hasExtraExercises && (
                                                 <button
                                                     type="button"
@@ -1969,6 +1731,7 @@ export default function FriendsScreen({
                                                     style={{
                                                         justifySelf: "start",
                                                         padding: 0,
+                                                        marginTop: 2,
                                                         border: "none",
                                                         background: "transparent",
                                                         fontSize: 12,
@@ -1989,8 +1752,8 @@ export default function FriendsScreen({
                                                     justifyContent: "space-between",
                                                     alignItems: "center",
                                                     gap: 10,
-                                                    marginTop: 14,
-                                                    paddingTop: 12,
+                                                    marginTop: hasExtraExercises ? 10 : 8,
+                                                    paddingTop: hasExtraExercises ? 10 : 8,
                                                     borderTop: "1px solid rgba(217, 228, 239, 0.75)",
                                                 }}
                                             >
@@ -2265,98 +2028,6 @@ export default function FriendsScreen({
                         )}
                     </div>
 
-                    <div
-                        style={{
-                            background: "var(--card)",
-                            borderRadius: 20,
-                            padding: 14,
-                            border: "1px dashed rgba(18, 199, 194, 0.28)",
-                            boxShadow: "var(--shadow-card)",
-                            marginTop: 14,
-                        }}
-                    >
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                            <div>
-                                <div style={{ fontSize: 14, fontWeight: 900, color: "var(--text)" }}>診断情報</div>
-                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>
-                                    自分と友達の今月ワークアウト差分をJSONで確認できます
-                                </div>
-                            </div>
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowDiagnosticPanel((prev) => !prev)}
-                                    style={{
-                                        padding: "9px 12px",
-                                        borderRadius: 12,
-                                        border: "1px solid var(--border2)",
-                                        background: "var(--card2)",
-                                        color: "var(--text2)",
-                                        fontSize: 12,
-                                        fontWeight: 800,
-                                    }}
-                                >
-                                    {showDiagnosticPanel ? "診断情報を閉じる" : "診断情報を表示"}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={copyDiagnosticPayload}
-                                    disabled={!combinedDiagnosticPayload}
-                                    style={{
-                                        padding: "9px 12px",
-                                        borderRadius: 12,
-                                        border: "1px solid var(--border2)",
-                                        background: combinedDiagnosticPayload
-                                            ? "linear-gradient(135deg, #12C7C2, #33E1DB)"
-                                            : "var(--card2)",
-                                        color: combinedDiagnosticPayload ? "#fff" : "var(--text3)",
-                                        fontSize: 12,
-                                        fontWeight: 800,
-                                        opacity: combinedDiagnosticPayload ? 1 : 0.6,
-                                    }}
-                                >
-                                    診断結果をコピー
-                                </button>
-                            </div>
-                        </div>
-
-                        {diagnosticCopyStatus && (
-                            <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, marginTop: 10 }}>
-                                {diagnosticCopyStatus}
-                            </div>
-                        )}
-
-                        {showDiagnosticPanel && (
-                            <div
-                                style={{
-                                    marginTop: 12,
-                                    borderRadius: 14,
-                                    border: "1px solid rgba(217, 228, 239, 0.9)",
-                                    background: "rgba(247, 251, 252, 0.96)",
-                                    padding: 12,
-                                    maxHeight: 360,
-                                    overflowY: "auto",
-                                    WebkitOverflowScrolling: "touch",
-                                }}
-                            >
-                                <pre
-                                    style={{
-                                        margin: 0,
-                                        whiteSpace: "pre-wrap",
-                                        wordBreak: "break-word",
-                                        fontSize: 10,
-                                        lineHeight: 1.55,
-                                        color: "var(--text2)",
-                                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
-                                    }}
-                                >
-                                    {combinedDiagnosticPayload
-                                        ? JSON.stringify(combinedDiagnosticPayload, null, 2)
-                                        : "診断データを準備中です..."}
-                                </pre>
-                            </div>
-                        )}
-                    </div>
                 </>
             )}
 

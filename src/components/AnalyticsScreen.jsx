@@ -72,6 +72,25 @@ const sortBodyPartLabels = (labels = []) =>
     return String(a).localeCompare(String(b), "ja");
   });
 
+const sortByRecentDateDesc = (aDate, bDate) => {
+  const safeA = String(aDate || "");
+  const safeB = String(bDate || "");
+  return safeB.localeCompare(safeA);
+};
+
+const sortPrItemsByUsage = (a, b) => {
+  const recordCountDiff = Number(b?.recordCount || 0) - Number(a?.recordCount || 0);
+  if (recordCountDiff !== 0) return recordCountDiff;
+
+  const latestDateDiff = sortByRecentDateDesc(a?.latestRecordDate, b?.latestRecordDate);
+  if (latestDateDiff !== 0) return latestDateDiff;
+
+  const estimatedDiff = Number(b?.estimated1RM || 0) - Number(a?.estimated1RM || 0);
+  if (estimatedDiff !== 0) return estimatedDiff;
+
+  return String(a?.displayName || a?.name || "").localeCompare(String(b?.displayName || b?.name || ""), "ja");
+};
+
 const getCompositeKey = (bodyPart, exerciseName) =>
   buildBodyPartExerciseKey(bodyPart, normalizeExerciseName(exerciseName));
 
@@ -272,11 +291,15 @@ export default function AnalyticsScreen({
     if (document.scrollingElement) {
       document.scrollingElement.scrollTop = 0;
     }
-    if (screenScrollRef.current) {
-      screenScrollRef.current.scrollTop = 0;
-      if (typeof screenScrollRef.current.scrollTo === "function") {
-        screenScrollRef.current.scrollTo({ top: 0, behavior: "auto" });
+    let node = screenScrollRef.current;
+    while (node) {
+      if (typeof node.scrollTop === "number") {
+        node.scrollTop = 0;
       }
+      if (typeof node.scrollTo === "function") {
+        node.scrollTo({ top: 0, behavior: "auto" });
+      }
+      node = node.parentElement;
     }
   };
 
@@ -305,6 +328,18 @@ export default function AnalyticsScreen({
     () => buildManualRecordMap(manualBests, resolutionContext),
     [manualBests, resolutionContext]
   );
+  const combinedRecordMap = useMemo(() => {
+    const allKeys = [...new Set([...Object.keys(historyRecordMap), ...Object.keys(manualRecordMap)])];
+    return Object.fromEntries(
+      allKeys.map((key) => [
+        key,
+        [
+          ...(historyRecordMap[key] || []),
+          ...(manualRecordMap[key] || []),
+        ].sort(sortByDateDesc),
+      ])
+    );
+  }, [historyRecordMap, manualRecordMap]);
 
   const prData = useMemo(() => {
     const allKeys = [...new Set([...Object.keys(historyBestMap), ...Object.keys(manualBestMap)])];
@@ -315,14 +350,21 @@ export default function AnalyticsScreen({
       if (!historyBest) return manualBest;
       if (!manualBest) return historyBest;
       return manualBest.estimated1RM > historyBest.estimated1RM ? manualBest : historyBest;
-    }).filter(Boolean);
+    }).filter(Boolean).map((item) => {
+      const records = combinedRecordMap[item.key] || [];
+      return {
+        ...item,
+        recordCount: records.length,
+        latestRecordDate: records[0]?.date || item.date || null,
+      };
+    });
 
     const groupLabels = sortBodyPartLabels(merged.map((item) => item.bodyPart));
     const groupedByBodyPart = groupLabels.map((bodyPart) => ({
       bodyPart,
       items: merged
         .filter((item) => item.bodyPart === bodyPart)
-        .sort((a, b) => b.estimated1RM - a.estimated1RM || a.displayName.localeCompare(b.displayName, "ja")),
+        .sort(sortPrItemsByUsage),
     }));
 
     const big3 = BIG3_EXERCISES.map(({ key, label }) => {
@@ -346,7 +388,7 @@ export default function AnalyticsScreen({
       big3Total: big3.reduce((sum, item) => sum + item.estimated1RM, 0),
       itemMap,
     };
-  }, [historyBestMap, manualBestMap]);
+  }, [historyBestMap, manualBestMap, combinedRecordMap]);
 
   const selectedExercise = selectedExerciseKey ? prData.itemMap[selectedExerciseKey] || null : null;
   const thisWeekSummary = useMemo(
@@ -445,11 +487,8 @@ export default function AnalyticsScreen({
 
   const selectedRecords = useMemo(() => {
     if (!selectedExerciseKey) return [];
-    return [
-      ...(historyRecordMap[selectedExerciseKey] || []),
-      ...(manualRecordMap[selectedExerciseKey] || []),
-    ].sort(sortByDateDesc);
-  }, [selectedExerciseKey, historyRecordMap, manualRecordMap]);
+    return combinedRecordMap[selectedExerciseKey] || [];
+  }, [selectedExerciseKey, combinedRecordMap]);
 
   const selectedChartData = useMemo(
     () => buildChartData(selectedRecords, period),
@@ -675,17 +714,26 @@ export default function AnalyticsScreen({
 
     const firstFrame = requestAnimationFrame(() => {
       scrollAnalyticsScreenToTop();
-      requestAnimationFrame(scrollAnalyticsScreenToTop);
+      requestAnimationFrame(() => {
+        scrollAnalyticsScreenToTop();
+        requestAnimationFrame(scrollAnalyticsScreenToTop);
+      });
       setTimeout(scrollAnalyticsScreenToTop, 0);
+      setTimeout(scrollAnalyticsScreenToTop, 40);
+      setTimeout(scrollAnalyticsScreenToTop, 120);
     });
 
     return () => cancelAnimationFrame(firstFrame);
   }, [selectedExerciseKey]);
 
   const handleSelectExercise = (exerciseKey) => {
-    scrollAnalyticsScreenToTop();
     setSelectedExerciseKey(exerciseKey);
-    requestAnimationFrame(scrollAnalyticsScreenToTop);
+    requestAnimationFrame(() => {
+      scrollAnalyticsScreenToTop();
+      requestAnimationFrame(scrollAnalyticsScreenToTop);
+      setTimeout(scrollAnalyticsScreenToTop, 0);
+      setTimeout(scrollAnalyticsScreenToTop, 40);
+    });
   };
 
   const handlePrDetailTouchStart = (event) => {
@@ -711,6 +759,31 @@ export default function AnalyticsScreen({
       setSelectedExerciseKey(null);
     }
   };
+
+  useEffect(() => {
+    if (!selectedExercise) return;
+    console.log("[pr-detail] selected exercise records", {
+      exerciseName: selectedExercise.displayName || selectedExercise.name,
+      totalRecords: selectedRecords.length,
+      records: selectedRecords.map((r) => ({
+        date: r.date || r.workoutDate || r.dateKey,
+        estimatedOneRepMax: r.estimated1RM,
+        weight: r.weight,
+        reps: r.reps,
+      })),
+    });
+  }, [selectedExercise, selectedRecords]);
+
+  useEffect(() => {
+    if (!selectedExercise) return;
+    console.log("[pr-detail] chart records", {
+      range: period,
+      chartRecords: selectedChartData.map((r) => ({
+        date: r.date,
+        value: r.weight,
+      })),
+    });
+  }, [selectedExercise, period, selectedChartData]);
 
   const renderPRCard = (item, { compact = false, hideEstimated1RM = false } = {}) => {
     const sharedStyle = {
