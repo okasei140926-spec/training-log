@@ -1378,8 +1378,8 @@ export default function AnalyticsScreen({
                   type="button"
                   onClick={() => setSelectedPrBodyPart(group.bodyPart)}
                   style={{
-                    padding: "9px 10px 8px",
-                    borderRadius: 14,
+                    padding: "7px 9px 7px",
+                    borderRadius: 12,
                     border: "1px solid rgba(18, 199, 194, 0.12)",
                     background:
                       selectedPrBodyPart === group.bodyPart
@@ -1391,10 +1391,10 @@ export default function AnalyticsScreen({
                       selectedPrBodyPart === group.bodyPart ? "0 10px 22px rgba(15, 94, 99, 0.10)" : "none",
                   }}
                 >
-                  <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 2 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 1 }}>
                     {group.bodyPart}
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--text2)", fontWeight: 700, lineHeight: 1.35 }}>
+                  <div style={{ fontSize: 9, color: "var(--text2)", fontWeight: 700, lineHeight: 1.3 }}>
                     {group.items.length}件のPR
                   </div>
                 </button>
