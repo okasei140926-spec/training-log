@@ -6,7 +6,7 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "calc(104px + var(--safe-bottom))",
+    paddingBottom: "calc(96px + var(--safe-bottom))",
   },
   page: {
     padding: "18px",
@@ -61,14 +61,14 @@ export const S = {
     left: 0,
     right: 0,
     margin: "0 auto",
-    width: "min(calc(100vw - 4px), 430px)",
+    width: "min(100vw, 430px)",
     background: "var(--nav-bg)",
     backdropFilter: "blur(24px)",
     border: "1px solid rgba(18, 199, 194, 0.08)",
-    borderRadius: "18px 18px 0 0",
-    boxShadow: "0 -2px 10px rgba(15,94,99,0.06)",
+    borderRadius: "16px 16px 0 0",
+    boxShadow: "0 -1px 6px rgba(15,94,99,0.04)",
     display: "flex",
-    padding: "6px 8px max(8px, var(--safe-bottom))",
+    padding: "6px 6px var(--safe-bottom)",
   },
 };
 
