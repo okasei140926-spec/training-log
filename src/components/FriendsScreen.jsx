@@ -79,9 +79,10 @@ const shiftDateKey = (dateKey, days) => {
     return formatDateKey(date);
 };
 
-const formatFeedDateShort = (workoutDate) => {
+const formatFeedDateShort = (workoutDate, todayKey) => {
     const normalizedDate = String(workoutDate || "").slice(0, 10);
     if (!normalizedDate) return "";
+    if (todayKey && normalizedDate === String(todayKey).slice(0, 10)) return "今日";
     const [, month = "", day = ""] = normalizedDate.split("-");
     return `${month}-${day}`;
 };
@@ -1818,7 +1819,7 @@ export default function FriendsScreen({
                                                                 <span style={{ color: "var(--text2)", fontSize: 13, width: 14 }}>
                                                                     {isExpanded ? "▼" : "▶"}
                                                                 </span>
-                                                                <span>{formatFeedDateShort(dateGroup.date)}</span>
+                                                                <span>{formatFeedDateShort(dateGroup.date, today)}</span>
                                                             </span>
                                                         </button>
 
