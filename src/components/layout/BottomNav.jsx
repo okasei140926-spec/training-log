@@ -14,17 +14,19 @@ export default function BottomNav({ tabs, activeTab, onSelectTab }) {
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
-                        gap: 3,
-                        padding: "8px 0 6px",
-                        borderRadius: 18,
+                        justifyContent: "center",
+                        gap: 2,
+                        padding: "5px 0 4px",
+                        minHeight: 54,
+                        borderRadius: 14,
                     }}
                 >
                     <div
                         style={{
-                            fontSize: 19,
-                            width: 34,
-                            height: 34,
-                            borderRadius: 17,
+                            fontSize: 18,
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
                             display: "grid",
                             placeItems: "center",
                             background: activeTab === tab.id ? "rgba(18, 199, 194, 0.12)" : "transparent",
@@ -32,7 +34,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab }) {
                     >
                         {tab.icon}
                     </div>
-                    <div style={{ fontSize: 10, fontWeight: activeTab === tab.id ? 800 : 600 }}>{tab.label}</div>
+                    <div style={{ fontSize: 9, lineHeight: 1.1, fontWeight: activeTab === tab.id ? 800 : 600 }}>{tab.label}</div>
                 </button>
             ))}
         </div>
