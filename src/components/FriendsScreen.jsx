@@ -1690,7 +1690,7 @@ export default function FriendsScreen({
                                 <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
                                     新しい記録順に表示しています
                                 </div>
-                                {feedRefreshing && (
+                                {feedRefreshing && activityFeedAction === "refresh" && (
                                     <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
                                         更新中...
                                     </div>
@@ -1801,7 +1801,7 @@ export default function FriendsScreen({
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "grid", gap: 8 }}>
+                                        <div style={{ display: "grid", gap: 6 }}>
                                             {userGroup.dates.map((dateGroup) => {
                                                 const expandedKey = `${userGroup.userId}:${dateGroup.date}`;
                                                 const isExpanded = Boolean(expandedFeedDates[expandedKey]);
@@ -1813,7 +1813,7 @@ export default function FriendsScreen({
                                                     <div
                                                         key={expandedKey}
                                                         style={{
-                                                            borderRadius: 16,
+                                                            borderRadius: 14,
                                                             border: "1px solid rgba(217, 228, 239, 0.75)",
                                                             background: "rgba(255,255,255,0.72)",
                                                             overflow: "hidden",
@@ -1837,19 +1837,20 @@ export default function FriendsScreen({
                                                                 display: "flex",
                                                                 alignItems: "center",
                                                                 justifyContent: "space-between",
-                                                                gap: 10,
-                                                                padding: "11px 14px",
+                                                                gap: 8,
+                                                                minHeight: 44,
+                                                                padding: "8px 12px",
                                                                 border: "none",
                                                                 background: "transparent",
                                                                 color: "var(--text)",
-                                                                fontSize: 14,
+                                                                fontSize: 13,
                                                                 fontWeight: 800,
                                                                 textAlign: "left",
                                                                 cursor: "pointer",
                                                             }}
                                                         >
-                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                                                                <span style={{ color: "var(--text2)", fontSize: 13, width: 14 }}>
+                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                                                                <span style={{ color: "var(--text2)", fontSize: 11, width: 12 }}>
                                                                     {isExpanded ? "▼" : "▶"}
                                                                 </span>
                                                                 <span>{formatFeedDateShort(dateGroup.date, today)}</span>
@@ -1857,7 +1858,7 @@ export default function FriendsScreen({
                                                         </button>
 
                                                         {isExpanded && (
-                                                            <div style={{ padding: "0 14px 12px" }}>
+                                                            <div style={{ padding: "0 12px 10px" }}>
                                                                 <div style={{ display: "grid", gap: 2 }}>
                                                                     {dateGroup.detailedExercises.map((summaryItem, index) => {
                                                                         const showDivider = index !== dateGroup.detailedExercises.length - 1;
@@ -1865,7 +1866,7 @@ export default function FriendsScreen({
                                                                             <div
                                                                                 key={`${expandedKey}-${summaryItem.body_part || ""}-${summaryItem.exercise_name}-${index}`}
                                                                                 style={{
-                                                                                    padding: showDivider ? "6px 0 8px" : "6px 0 2px",
+                                                                                    padding: showDivider ? "5px 0 7px" : "5px 0 2px",
                                                                                     borderBottom: showDivider ? "1px solid rgba(217, 228, 239, 0.85)" : "none",
                                                                                 }}
                                                                             >
