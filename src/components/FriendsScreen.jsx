@@ -144,6 +144,7 @@ export default function FriendsScreen({
         FRIENDS_SCREEN_CACHE.friendsData.friendSessionInsights || EMPTY_FRIEND_SESSION_INSIGHTS
     ));
     const activityFeedStatusTimeoutRef = useRef(null);
+    const latestFeedRequestIdRef = useRef(0);
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
     const recentSevenStart = shiftDateKey(today, -6);
@@ -664,6 +665,7 @@ export default function FriendsScreen({
         return {
             id: sessionMeta?.id || `feed-${feedUserId}-${workoutDate}`,
             sessionId: sessionMeta?.id || null,
+            photoId: sessionMeta?.photo_id || null,
             user_id: feedUserId,
             workout_date: workoutDate,
             started_at: null,
@@ -697,6 +699,8 @@ export default function FriendsScreen({
             setActivityFeed([]);
             return false;
         }
+        const requestId = Date.now();
+        latestFeedRequestIdRef.current = requestId;
 
         console.log("[feed] current user id", user?.id);
         const feedUserIds = [...new Set([user.id, ...friendIds])];
@@ -719,7 +723,11 @@ export default function FriendsScreen({
             return true;
         }
 
-        if (!hasCache && !background) {
+        if (hasCache && cachedItems.length) {
+            setActivityFeed((prev) => (prev.length ? prev : cachedItems));
+        }
+
+        if (!hasCache && !background && activityFeed.length === 0) {
             setActivityFeedLoading(true);
         } else {
             setFeedRefreshing(true);
@@ -729,18 +737,31 @@ export default function FriendsScreen({
             const previousItems = hasCache ? cachedItems : (activityFeed || []);
             const beforeCount = previousItems.length;
             const beforeFriendCount = previousItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
-            let sessionsQuery = supabase
-                .from("workout_sessions")
-                .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
-                .in("user_id", feedUserIds)
-                .order("workout_date", { ascending: false })
-                .order("updated_at", { ascending: false });
+            const profileIds = [...new Set(feedUserIds.filter(Boolean))];
+            const [sessionsRes, workoutsRes, profilesRes] = await Promise.all([
+                supabase
+                    .from("workout_sessions")
+                    .select("id, user_id, workout_date, created_at, updated_at, duration_sec, total_volume, exercise_count, summary_json, photo_id, photo_visibility, visibility")
+                    .in("user_id", feedUserIds)
+                    .gte("workout_date", recentSevenStart)
+                    .lte("workout_date", today)
+                    .order("workout_date", { ascending: false })
+                    .order("updated_at", { ascending: false }),
+                feedUserIds.length
+                    ? supabase
+                        .from("workouts")
+                        .select("user_id, date, data")
+                        .in("user_id", feedUserIds)
+                        .gte("date", recentSevenStart)
+                        .lte("date", today)
+                    : Promise.resolve({ data: [], error: null }),
+                profileIds.length
+                    ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
+                    : Promise.resolve({ data: [], error: null }),
+            ]);
 
-            sessionsQuery = sessionsQuery
-                .gte("workout_date", recentSevenStart)
-                .lte("workout_date", today);
-
-            const { data: sessions, error: sessionsError } = await sessionsQuery;
+            const sessions = sessionsRes.data;
+            const sessionsError = sessionsRes.error;
             if (sessionsError) {
                 console.error("[feed] workout_sessions fetch failed", {
                     error: sessionsError,
@@ -765,7 +786,6 @@ export default function FriendsScreen({
                 stats: friendVisibilityStats,
             });
 
-            const profileIds = [...new Set(feedUserIds.filter(Boolean))];
             const photoIds = [...new Set(
                 rawSessions
                     .filter((session) => session.photo_visibility === "friends" && session.photo_id)
@@ -773,52 +793,11 @@ export default function FriendsScreen({
             )];
             const sessionIds = [...new Set(rawSessions.map((session) => session.id).filter(Boolean))];
 
-            const [profilesRes, photosRes, likesRes, commentsRes, workoutsRes] = await Promise.all([
-                profileIds.length
-                    ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
-                    : Promise.resolve({ data: [], error: null }),
-                photoIds.length
-                    ? supabase.from("progress_photos").select("id, storage_path").in("id", photoIds)
-                    : Promise.resolve({ data: [], error: null }),
-                sessionIds.length
-                    ? supabase.from("workout_session_likes").select("session_id, user_id").in("session_id", sessionIds)
-                    : Promise.resolve({ data: [], error: null }),
-                sessionIds.length
-                    ? supabase.from("workout_session_comments").select("id, session_id").in("session_id", sessionIds)
-                    : Promise.resolve({ data: [], error: null }),
-                feedUserIds.length
-                    ? supabase
-                        .from("workouts")
-                        .select("user_id, date, data")
-                        .in("user_id", feedUserIds)
-                        .gte("date", recentSevenStart)
-                        .lte("date", today)
-                    : Promise.resolve({ data: [], error: null }),
-            ]);
-
             if (profilesRes.error) {
                 console.error("[feed] profiles fetch failed", {
                     error: profilesRes.error,
                     currentUserId: user.id,
                     friendIds,
-                });
-            }
-            if (photosRes.error) {
-                console.error("[feed] photos fetch failed", {
-                    error: photosRes.error,
-                    currentUserId: user.id,
-                });
-            }
-            if (likesRes.error) {
-                console.error("[feed] likes fetch failed", {
-                    error: likesRes.error,
-                    currentUserId: user.id,
-                });
-            }
-            if (commentsRes.error) {
-                console.error("[feed] comments fetch failed", {
-                    error: commentsRes.error,
-                    currentUserId: user.id,
                 });
             }
             if (workoutsRes.error) {
@@ -830,42 +809,9 @@ export default function FriendsScreen({
             }
 
             const profileMap = new Map((profilesRes.data || []).map((profile) => [profile.id, profile]));
-            const photoRows = photosRes.data || [];
-            const likeRows = likesRes.data || [];
-            const commentRows = commentsRes.data || [];
             const workoutRowMap = new Map(
                 (workoutsRes.data || []).map((row) => [`${row.user_id}::${row.date}`, row])
             );
-            const signedEntries = await Promise.all(photoRows.map(async (row) => {
-                try {
-                    const { data: signedData, error: signedError } = await supabase
-                        .storage
-                        .from("progress-photos-private")
-                        .createSignedUrl(row.storage_path, 3600);
-                    if (signedError) return null;
-                    return [row.id, signedData?.signedUrl || null];
-                } catch (error) {
-                    console.error("activity feed photo signed url failed", error);
-                    return null;
-                }
-            }));
-            const photoUrlMap = new Map(signedEntries.filter(Boolean));
-            const likeCountMap = new Map();
-            const likedSessionIds = new Set();
-            const commentCountMap = new Map();
-
-            likeRows.forEach((row) => {
-                if (!row?.session_id) return;
-                likeCountMap.set(row.session_id, (likeCountMap.get(row.session_id) || 0) + 1);
-                if (row.user_id === user.id) {
-                    likedSessionIds.add(row.session_id);
-                }
-            });
-
-            commentRows.forEach((row) => {
-                if (!row?.session_id) return;
-                commentCountMap.set(row.session_id, (commentCountMap.get(row.session_id) || 0) + 1);
-            });
 
             const excludedItems = [];
             const workoutRowsByUser = new Map();
@@ -939,10 +885,10 @@ export default function FriendsScreen({
                 const sessionKey = `${session.user_id}::${session.workout_date}`;
                 const nextMeta = {
                     ...session,
-                    photoUrl: session.photo_id ? photoUrlMap.get(session.photo_id) || null : null,
-                    likeCount: likeCountMap.get(session.id) || 0,
-                    likedByMe: likedSessionIds.has(session.id),
-                    commentCount: commentCountMap.get(session.id) || 0,
+                    photoUrl: null,
+                    likeCount: 0,
+                    likedByMe: false,
+                    commentCount: 0,
                 };
                 const existingMeta = sessionMetaMap.get(sessionKey);
                 const existingTime = new Date(existingMeta?.updated_at || existingMeta?.created_at || 0).getTime();
@@ -1083,6 +1029,9 @@ export default function FriendsScreen({
                 })),
             });
 
+            if (latestFeedRequestIdRef.current !== requestId) {
+                return true;
+            }
             setActivityFeed(allItems);
             FRIENDS_SCREEN_CACHE.feedData = {
                 userId: user.id,
@@ -1097,6 +1046,87 @@ export default function FriendsScreen({
                     beforeFriendCount,
                     afterFriendCount,
                     updatedFromAutoRefresh: true,
+                });
+            }
+            if (sessionIds.length || photoIds.length) {
+                Promise.all([
+                    photoIds.length
+                        ? supabase.from("progress_photos").select("id, storage_path").in("id", photoIds)
+                        : Promise.resolve({ data: [], error: null }),
+                    sessionIds.length
+                        ? supabase.from("workout_session_likes").select("session_id, user_id").in("session_id", sessionIds)
+                        : Promise.resolve({ data: [], error: null }),
+                    sessionIds.length
+                        ? supabase.from("workout_session_comments").select("id, session_id").in("session_id", sessionIds)
+                        : Promise.resolve({ data: [], error: null }),
+                ]).then(async ([photosRes, likesRes, commentsRes]) => {
+                    if (latestFeedRequestIdRef.current !== requestId) return;
+                    if (photosRes.error) {
+                        console.error("[feed] photos fetch failed", { error: photosRes.error, currentUserId: user.id });
+                    }
+                    if (likesRes.error) {
+                        console.error("[feed] likes fetch failed", { error: likesRes.error, currentUserId: user.id });
+                    }
+                    if (commentsRes.error) {
+                        console.error("[feed] comments fetch failed", { error: commentsRes.error, currentUserId: user.id });
+                    }
+
+                    const signedEntries = await Promise.all(((photosRes.data || [])).map(async (row) => {
+                        try {
+                            const { data: signedData, error: signedError } = await supabase
+                                .storage
+                                .from("progress-photos-private")
+                                .createSignedUrl(row.storage_path, 3600);
+                            if (signedError) return null;
+                            return [row.id, signedData?.signedUrl || null];
+                        } catch (error) {
+                            console.error("activity feed photo signed url failed", error);
+                            return null;
+                        }
+                    }));
+                    const photoUrlMap = new Map(signedEntries.filter(Boolean));
+                    const likeCountMap = new Map();
+                    const likedSessionIds = new Set();
+                    const commentCountMap = new Map();
+
+                    (likesRes.data || []).forEach((row) => {
+                        if (!row?.session_id) return;
+                        likeCountMap.set(row.session_id, (likeCountMap.get(row.session_id) || 0) + 1);
+                        if (row.user_id === user.id) likedSessionIds.add(row.session_id);
+                    });
+                    (commentsRes.data || []).forEach((row) => {
+                        if (!row?.session_id) return;
+                        commentCountMap.set(row.session_id, (commentCountMap.get(row.session_id) || 0) + 1);
+                    });
+
+                    setActivityFeed((prev) => prev.map((item) => (
+                        item?.sessionId
+                            ? {
+                                ...item,
+                                photoUrl: item.photoUrl || photoUrlMap.get(item.photoId) || item.photoUrl || null,
+                                likeCount: likeCountMap.get(item.sessionId) ?? item.likeCount ?? 0,
+                                likedByMe: likedSessionIds.has(item.sessionId) || item.likedByMe || false,
+                                commentCount: commentCountMap.get(item.sessionId) ?? item.commentCount ?? 0,
+                            }
+                            : item
+                    )));
+                    FRIENDS_SCREEN_CACHE.feedData = {
+                        userId: user.id,
+                        activityFeed: (FRIENDS_SCREEN_CACHE.feedData.activityFeed || []).map((item) => (
+                            item?.sessionId
+                                ? {
+                                    ...item,
+                                    photoUrl: item.photoUrl || photoUrlMap.get(item.photoId) || item.photoUrl || null,
+                                    likeCount: likeCountMap.get(item.sessionId) ?? item.likeCount ?? 0,
+                                    likedByMe: likedSessionIds.has(item.sessionId) || item.likedByMe || false,
+                                    commentCount: commentCountMap.get(item.sessionId) ?? item.commentCount ?? 0,
+                                }
+                                : item
+                        )),
+                        fetchedAt: FRIENDS_SCREEN_CACHE.feedData.fetchedAt,
+                    };
+                }).catch((error) => {
+                    console.error("[feed] async enrichment failed", { error, currentUserId: user.id });
                 });
             }
             return true;
@@ -1117,9 +1147,6 @@ export default function FriendsScreen({
                 feedItemsLength: 0,
                 displayedCardsCount: 0,
             });
-            if (reset) {
-                setActivityFeed([]);
-            }
             return false;
         } finally {
             setActivityFeedLoading(false);
@@ -1262,13 +1289,13 @@ export default function FriendsScreen({
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
-        fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
+        fetchActivityFeed({ reset: true, background: true }).catch(console.error);
     }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion]);
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
         if (!friendIds.length && visibleFriendDatesCount === 0) return;
-        fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
+        fetchActivityFeed({ reset: true, background: true }).catch(console.error);
     }, [user, showFeedSections, friendIds, visibleFriendDatesCount, fetchActivityFeed]);
 
     useEffect(() => {
@@ -1277,7 +1304,7 @@ export default function FriendsScreen({
         const refreshVisibleData = () => {
             fetchFriendsData({ background: true }).catch(console.error);
             if (showFeedSections) {
-                fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
+                fetchActivityFeed({ reset: true, background: true }).catch(console.error);
             }
         };
 
@@ -1299,7 +1326,7 @@ export default function FriendsScreen({
     useEffect(() => {
         if (!user) return undefined;
         const intervalId = setInterval(() => {
-            fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
+            fetchActivityFeed({ reset: true, background: true }).catch(console.error);
         }, 90000);
 
         return () => clearInterval(intervalId);
