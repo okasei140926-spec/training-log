@@ -1558,7 +1558,7 @@ export default function FriendsScreen({
             .map((item) => item.user_id)
             .filter(Boolean)
     ).size;
-    const activityHeadline = `直近7日で ${activityCount}件 のワークアウト`;
+    const activityHeadline = `直近7日 ${activityCount}記録`;
     const feedEmptyState = {
         title: "まだアクティビティはありません",
         body: "ワークアウトを記録すると、ここに表示されます。友達を招待すると、お互いの記録も見られます。",
@@ -1671,7 +1671,7 @@ export default function FriendsScreen({
         );
     }
     return (
-        <div className="fade-in" style={{ ...S.page, paddingBottom: 120 }}>
+        <div className="fade-in" style={{ ...S.page, paddingBottom: 24 }}>
             {showFeedSections && (
                 <>
                     <div
@@ -1718,7 +1718,7 @@ export default function FriendsScreen({
                                     新しい記録順に表示しています
                                 </div>
                                 {feedRefreshing && activityFeedAction === "refresh" && (
-                                    <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
+                                    <div style={{ fontSize: 10, color: "var(--text3)", fontWeight: 700 }}>
                                         更新中...
                                     </div>
                                 )}
@@ -1828,7 +1828,7 @@ export default function FriendsScreen({
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "grid", gap: 6 }}>
+                                        <div style={{ display: "grid", gap: 5 }}>
                                             {userGroup.dates.map((dateGroup) => {
                                                 const expandedKey = `${userGroup.userId}:${dateGroup.date}`;
                                                 const isExpanded = Boolean(expandedFeedDates[expandedKey]);
@@ -1840,7 +1840,7 @@ export default function FriendsScreen({
                                                     <div
                                                         key={expandedKey}
                                                         style={{
-                                                            borderRadius: 14,
+                                                            borderRadius: 12,
                                                             border: "1px solid rgba(217, 228, 239, 0.75)",
                                                             background: "rgba(255,255,255,0.72)",
                                                             overflow: "hidden",
@@ -1866,18 +1866,18 @@ export default function FriendsScreen({
                                                                 justifyContent: "space-between",
                                                                 gap: 8,
                                                                 minHeight: 44,
-                                                                padding: "8px 12px",
+                                                                padding: "6px 12px",
                                                                 border: "none",
                                                                 background: "transparent",
                                                                 color: "var(--text)",
-                                                                fontSize: 13,
+                                                                fontSize: 12,
                                                                 fontWeight: 800,
                                                                 textAlign: "left",
                                                                 cursor: "pointer",
                                                             }}
                                                         >
                                                             <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                                                                <span style={{ color: "var(--text2)", fontSize: 11, width: 12 }}>
+                                                                <span style={{ color: "var(--text2)", fontSize: 10, width: 11 }}>
                                                                     {isExpanded ? "▼" : "▶"}
                                                                 </span>
                                                                 <span>{formatFeedDateShort(dateGroup.date, today)}</span>
