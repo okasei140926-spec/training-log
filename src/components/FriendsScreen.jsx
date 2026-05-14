@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "../utils/supabase";
 import { S } from "../utils/styles";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
@@ -79,20 +79,11 @@ const shiftDateKey = (dateKey, days) => {
     return formatDateKey(date);
 };
 
-const formatRelativeWorkoutDate = (workoutDate, todayKey) => {
+const formatFeedDateShort = (workoutDate) => {
     const normalizedDate = String(workoutDate || "").slice(0, 10);
     if (!normalizedDate) return "";
-
-    const target = parseDateKey(normalizedDate).getTime();
-    const today = parseDateKey(todayKey).getTime();
-    if (!Number.isFinite(target) || !Number.isFinite(today)) return normalizedDate;
-
-    const diffDays = Math.round((today - target) / 86400000);
-    if (diffDays <= 0) return "今日";
-    if (diffDays < 7) return `${diffDays}日前`;
-
     const [, month = "", day = ""] = normalizedDate.split("-");
-    return `${month}/${day}`;
+    return `${month}-${day}`;
 };
 
 const hasValidSummaryItem = (item) => {
@@ -147,7 +138,7 @@ export default function FriendsScreen({
     const [likePendingMap, setLikePendingMap] = useState({});
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
-    const [expandedFeedItems, setExpandedFeedItems] = useState({});
+    const [expandedFeedDates, setExpandedFeedDates] = useState({});
     const [friendSessionInsights, setFriendSessionInsights] = useState(() => (
         FRIENDS_SCREEN_CACHE.friendsData.friendSessionInsights || EMPTY_FRIEND_SESSION_INSIGHTS
     ));
@@ -1534,6 +1525,75 @@ export default function FriendsScreen({
         onClick: onOpenRecord,
     };
 
+    const groupedActivityFeed = useMemo(() => {
+        const userMap = new Map();
+
+        activityFeed.forEach((item) => {
+            const userId = item.user_id || item.userId || "unknown";
+            const workoutDate = String(item.workout_date || item.date || "").slice(0, 10);
+            if (!workoutDate) return;
+
+            if (!userMap.has(userId)) {
+                const profileName = userId === user?.id
+                    ? getDisplayUsername(myUsername, { isMe: true })
+                    : getDisplayUsername(item.profile?.username);
+                const rawHandle = userId === user?.id
+                    ? (myUsername || "")
+                    : (item.profile?.username || profileName || "");
+
+                userMap.set(userId, {
+                    userId,
+                    userName: profileName,
+                    handle: rawHandle ? `@${String(rawHandle).replace(/^@+/, "")}` : "",
+                    profile: item.profile || null,
+                    latestDate: workoutDate,
+                    datesMap: new Map(),
+                });
+            }
+
+            const group = userMap.get(userId);
+            if (workoutDate > group.latestDate) group.latestDate = workoutDate;
+
+            if (!group.datesMap.has(workoutDate)) {
+                group.datesMap.set(workoutDate, {
+                    date: workoutDate,
+                    items: [],
+                });
+            }
+
+            group.datesMap.get(workoutDate).items.push(item);
+        });
+
+        return Array.from(userMap.values())
+            .map((group) => {
+                const dates = Array.from(group.datesMap.values())
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .map((dateGroup) => {
+                        const allExercises = dateGroup.items.flatMap((feedItem) => (
+                            feedItem.detailedItems?.length ? feedItem.detailedItems : (feedItem.summaryItems || [])
+                        ));
+                        const primaryItem = dateGroup.items[0] || null;
+
+                        return {
+                            ...dateGroup,
+                            primaryItem,
+                            detailedExercises: allExercises,
+                        };
+                    });
+
+                return {
+                    userId: group.userId,
+                    userName: group.userName,
+                    handle: group.handle,
+                    profile: group.profile,
+                    latestDate: group.latestDate,
+                    activityDayCount: dates.length,
+                    dates,
+                };
+            })
+            .sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+    }, [activityFeed, getDisplayUsername, myUsername, user?.id]);
+
     const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
 
     if (!user) {
@@ -1675,168 +1735,192 @@ export default function FriendsScreen({
                             </button>
                         </div>
                     ) : (
-                        <div style={{ display: "grid", gap: 14, marginBottom: 14 }}>
-                            {activityFeed.map((item) => {
-                                const profileName = item.user_id === user.id
-                                    ? getDisplayUsername(myUsername, { isMe: true })
-                                    : getDisplayUsername(item.profile?.username);
-                                const isExpanded = Boolean(expandedFeedItems[item.id]);
-                                const detailedExercises = item.detailedItems?.length ? item.detailedItems : (item.summaryItems || []);
-                                const hasExtraExercises = detailedExercises.length > 3;
-                                const visibleExercises = isExpanded ? detailedExercises : detailedExercises.slice(0, 3);
-                                const isOwnWorkout = item.user_id === user.id;
-                                const canInteract = Boolean(item.sessionId);
+                        <div style={{ display: "grid", gap: 12, marginBottom: 14 }}>
+                            {groupedActivityFeed.map((userGroup) => {
+                                const avatarSeed = userGroup.userName?.[0]?.toUpperCase() || "?";
 
                                 return (
                                     <div
-                                        key={item.id}
-                                        id={`feed-session-${item.id}`}
+                                        key={userGroup.userId}
                                         style={{
                                             background: "var(--card)",
                                             borderRadius: 22,
-                                            padding: 12,
+                                            padding: 14,
                                             border: "1px solid var(--border2)",
                                             boxShadow: "var(--shadow-card)",
                                         }}
                                     >
-                                        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                                             <div style={{ width: 40, height: 40, borderRadius: 20, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
-                                                {item.profile?.avatar1_url
-                                                    ? <img src={item.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                                                    : profileName?.[0]?.toUpperCase()
+                                                {userGroup.profile?.avatar1_url
+                                                    ? <img src={userGroup.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                                    : avatarSeed
                                                 }
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                                                    <div style={{ fontSize: 17, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                        {profileName}
+                                                <div style={{ fontSize: 17, fontWeight: 900, color: "var(--text)", lineHeight: 1.2 }}>
+                                                    {userGroup.userName}
+                                                </div>
+                                                {userGroup.handle && (
+                                                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2, lineHeight: 1.25 }}>
+                                                        {userGroup.handle}
                                                     </div>
-                                                    <div style={{ fontSize: 13, color: "var(--text3)", fontWeight: 700 }}>
-                                                        {formatRelativeWorkoutDate(item.workout_date, today)}
-                                                    </div>
+                                                )}
+                                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4, fontWeight: 700 }}>
+                                                    直近7日 {userGroup.activityDayCount}日記録
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "grid", gap: 2 }}>
-                                            {visibleExercises.map((summaryItem, index) => {
-                                                const isLastVisibleExercise = index === visibleExercises.length - 1;
-                                                const showExerciseDivider = !isLastVisibleExercise || hasExtraExercises;
+                                        <div style={{ display: "grid", gap: 8 }}>
+                                            {userGroup.dates.map((dateGroup) => {
+                                                const expandedKey = `${userGroup.userId}:${dateGroup.date}`;
+                                                const isExpanded = Boolean(expandedFeedDates[expandedKey]);
+                                                const primaryItem = dateGroup.primaryItem;
+                                                const canInteract = Boolean(primaryItem?.sessionId);
+                                                const isOwnWorkout = primaryItem?.user_id === user.id;
 
                                                 return (
-                                                <div
-                                                    key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`}
-                                                    style={{
-                                                        padding: showExerciseDivider ? "6px 0 8px" : "6px 0 2px",
-                                                        borderBottom: showExerciseDivider ? "1px solid rgba(217, 228, 239, 0.9)" : "none",
-                                                    }}
-                                                >
-                                                    <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
-                                                        {summaryItem.exercise_name}
+                                                    <div
+                                                        key={expandedKey}
+                                                        style={{
+                                                            borderRadius: 16,
+                                                            border: "1px solid rgba(217, 228, 239, 0.75)",
+                                                            background: "rgba(255,255,255,0.72)",
+                                                            overflow: "hidden",
+                                                        }}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setExpandedFeedDates((prev) => ({
+                                                                    ...prev,
+                                                                    [expandedKey]: !prev[expandedKey],
+                                                                }));
+                                                            }}
+                                                            style={{
+                                                                width: "100%",
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "space-between",
+                                                                gap: 10,
+                                                                padding: "11px 14px",
+                                                                border: "none",
+                                                                background: "transparent",
+                                                                color: "var(--text)",
+                                                                fontSize: 14,
+                                                                fontWeight: 800,
+                                                                textAlign: "left",
+                                                                cursor: "pointer",
+                                                            }}
+                                                        >
+                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                                                <span style={{ color: "var(--text2)", fontSize: 13, width: 14 }}>
+                                                                    {isExpanded ? "▼" : "▶"}
+                                                                </span>
+                                                                <span>{formatFeedDateShort(dateGroup.date)}</span>
+                                                            </span>
+                                                        </button>
+
+                                                        {isExpanded && (
+                                                            <div style={{ padding: "0 14px 12px" }}>
+                                                                <div style={{ display: "grid", gap: 2 }}>
+                                                                    {dateGroup.detailedExercises.map((summaryItem, index) => {
+                                                                        const showDivider = index !== dateGroup.detailedExercises.length - 1;
+                                                                        return (
+                                                                            <div
+                                                                                key={`${expandedKey}-${summaryItem.body_part || ""}-${summaryItem.exercise_name}-${index}`}
+                                                                                style={{
+                                                                                    padding: showDivider ? "6px 0 8px" : "6px 0 2px",
+                                                                                    borderBottom: showDivider ? "1px solid rgba(217, 228, 239, 0.85)" : "none",
+                                                                                }}
+                                                                            >
+                                                                                <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
+                                                                                    {summaryItem.exercise_name}
+                                                                                </div>
+                                                                                <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2, lineHeight: 1.45 }}>
+                                                                                    {Array.isArray(summaryItem.sets) && summaryItem.sets.length
+                                                                                        ? summaryItem.sets.map(formatSessionSetDisplay).join(" / ")
+                                                                                        : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}`}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                                {canInteract && (
+                                                                    <div
+                                                                        style={{
+                                                                            display: "flex",
+                                                                            justifyContent: "space-between",
+                                                                            alignItems: "center",
+                                                                            gap: 10,
+                                                                            marginTop: 8,
+                                                                            paddingTop: 8,
+                                                                            borderTop: "1px solid rgba(217, 228, 239, 0.75)",
+                                                                        }}
+                                                                    >
+                                                                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                                                            {isOwnWorkout ? (
+                                                                                <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 800 }}>
+                                                                                    ♥ {Number(primaryItem.likeCount || 0)}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleToggleSessionLike(primaryItem.sessionId)}
+                                                                                    disabled={Boolean(likePendingMap[primaryItem.sessionId])}
+                                                                                    style={{
+                                                                                        display: "inline-flex",
+                                                                                        alignItems: "center",
+                                                                                        gap: 6,
+                                                                                        padding: "9px 12px",
+                                                                                        borderRadius: 14,
+                                                                                        border: "1px solid var(--border2)",
+                                                                                        background: primaryItem.likedByMe ? "var(--danger-soft, #fee2e2)" : "var(--card2)",
+                                                                                        color: primaryItem.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
+                                                                                        fontSize: 12,
+                                                                                        fontWeight: 800,
+                                                                                        opacity: likePendingMap[primaryItem.sessionId] ? 0.7 : 1,
+                                                                                    }}
+                                                                                >
+                                                                                    <span>{primaryItem.likedByMe ? "♥" : "♡"}</span>
+                                                                                    <span>{Number(primaryItem.likeCount || 0)}</span>
+                                                                                </button>
+                                                                            )}
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleOpenComments({ ...primaryItem, id: primaryItem.sessionId })}
+                                                                                style={{
+                                                                                    display: "inline-flex",
+                                                                                    alignItems: "center",
+                                                                                    gap: 6,
+                                                                                    padding: "9px 12px",
+                                                                                    borderRadius: 14,
+                                                                                    border: "1px solid var(--border2)",
+                                                                                    background: "var(--card2)",
+                                                                                    color: "var(--text2)",
+                                                                                    fontSize: 12,
+                                                                                    fontWeight: 800,
+                                                                                }}
+                                                                            >
+                                                                                <span>💬</span>
+                                                                                <span>{Number(primaryItem.commentCount || 0)}</span>
+                                                                            </button>
+                                                                        </div>
+                                                                        {likePendingMap[primaryItem.sessionId] && (
+                                                                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                                                                更新中...
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2, lineHeight: 1.45 }}>
-                                                        {Array.isArray(summaryItem.sets) && summaryItem.sets.length
-                                                            ? summaryItem.sets.map(formatSessionSetDisplay).join(" / ")
-                                                            : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}`}
-                                                    </div>
-                                                </div>
                                                 );
                                             })}
-                                            {hasExtraExercises && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setExpandedFeedItems((prev) => ({
-                                                            ...prev,
-                                                            [item.id]: !prev[item.id],
-                                                        }));
-                                                    }}
-                                                    style={{
-                                                        justifySelf: "start",
-                                                        padding: 0,
-                                                        marginTop: 0,
-                                                        border: "none",
-                                                        background: "transparent",
-                                                        fontSize: 12,
-                                                        color: "var(--accent)",
-                                                        fontWeight: 800,
-                                                        cursor: "pointer",
-                                                    }}
-                                                >
-                                                    {isExpanded ? "閉じる" : `さらに${detailedExercises.length - 3}種目を表示`}
-                                                </button>
-                                            )}
                                         </div>
-
-                                        {canInteract && (
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent: "space-between",
-                                                    alignItems: "center",
-                                                    gap: 10,
-                                                    marginTop: hasExtraExercises ? 8 : 2,
-                                                    paddingTop: hasExtraExercises ? 10 : 0,
-                                                    borderTop: hasExtraExercises ? "1px solid rgba(217, 228, 239, 0.75)" : "none",
-                                                }}
-                                            >
-                                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                                {isOwnWorkout ? (
-                                                    <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 800 }}>
-                                                        ♥ {Number(item.likeCount || 0)}
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleToggleSessionLike(item.sessionId)}
-                                                        disabled={Boolean(likePendingMap[item.sessionId])}
-                                                        style={{
-                                                            display: "inline-flex",
-                                                            alignItems: "center",
-                                                            gap: 6,
-                                                            padding: "9px 12px",
-                                                            borderRadius: 14,
-                                                            border: "1px solid var(--border2)",
-                                                            background: item.likedByMe ? "var(--danger-soft, #fee2e2)" : "var(--card2)",
-                                                            color: item.likedByMe ? "var(--danger, #dc2626)" : "var(--text2)",
-                                                            fontSize: 12,
-                                                            fontWeight: 800,
-                                                            opacity: likePendingMap[item.sessionId] ? 0.7 : 1,
-                                                        }}
-                                                    >
-                                                            <span>{item.likedByMe ? "♥" : "♡"}</span>
-                                                        <span>{Number(item.likeCount || 0)}</span>
-                                                        </button>
-                                                )}
-                                                {(
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleOpenComments({ ...item, id: item.sessionId })}
-                                                        style={{
-                                                            display: "inline-flex",
-                                                            alignItems: "center",
-                                                            gap: 6,
-                                                            padding: "9px 12px",
-                                                            borderRadius: 14,
-                                                            border: "1px solid var(--border2)",
-                                                            background: "var(--card2)",
-                                                            color: "var(--text2)",
-                                                            fontSize: 12,
-                                                            fontWeight: 800,
-                                                        }}
-                                                    >
-                                                        <span>💬</span>
-                                                        <span>{Number(item.commentCount || 0)}</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {likePendingMap[item.sessionId] && (
-                                                <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                                    更新中...
-                                                </div>
-                                            )}
-                                            </div>
-                                        )}
                                     </div>
                                 );
                             })}
