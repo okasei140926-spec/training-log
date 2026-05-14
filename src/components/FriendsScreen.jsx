@@ -767,11 +767,12 @@ export default function FriendsScreen({
             0
         );
         const shouldBypassFreshCache = hasCache
-            && friendIds.length > 0
+            && effectiveFriendIds.length > 0
             && expectedFriendCount > 0
             && cachedFriendCount < expectedFriendCount;
 
         if (!force && hasCache && !shouldBypassFreshCache && now - FRIENDS_SCREEN_CACHE.feedData.fetchedAt < STALE_MS) {
+            console.timeEnd("[feed] load total");
             return true;
         }
 
@@ -1005,7 +1006,7 @@ export default function FriendsScreen({
                 history || {}
             );
             const ownItems = buildItemsForUser(user.id, mergedOwnHistory);
-            const friendItems = friendIds.flatMap((friendId) =>
+            const friendItems = effectiveFriendIds.flatMap((friendId) =>
                 buildItemsForUser(
                     friendId,
                     buildHistoryFromWorkoutRows(workoutRowsByUser.get(friendId) || []),
@@ -1056,7 +1057,7 @@ export default function FriendsScreen({
 
             console.log("[feed] normalized feed items", {
                 currentUserId: user.id,
-                friendIds,
+                friendIds: effectiveFriendIds,
                 ownWorkoutsLast7DaysCount: ownItems.length,
                 friendWorkoutsLast7DaysCount: friendItems.length,
                 sessionsCount: rawSessions.length,
@@ -1198,7 +1199,7 @@ export default function FriendsScreen({
             console.error("[feed] fetch failed", {
                 error,
                 currentUserId: user?.id,
-                friendIds,
+                friendIds: effectiveFriendIds,
                 sessionsCount: 0,
                 workoutsCount: 0,
                 feedItemsLength: 0,
@@ -1338,22 +1339,25 @@ export default function FriendsScreen({
     }, [user, friendIds, fetchTodayActive]);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user || !showFeedSections) return;
+        const hasCachedFeed = FRIENDS_SCREEN_CACHE.feedData.userId === user.id
+            && Array.isArray(FRIENDS_SCREEN_CACHE.feedData.activityFeed)
+            && FRIENDS_SCREEN_CACHE.feedData.activityFeed.length > 0;
         fetchActivityFeed({
             reset: true,
-            background: Boolean(FRIENDS_SCREEN_CACHE.feedData.fetchedAt),
-        });
-    }, [user, friendIds, fetchActivityFeed, sessionSyncVersion]);
-
-    useEffect(() => {
-        if (!user || !showFeedSections) return;
-        fetchActivityFeed({ reset: true, background: true }).catch(console.error);
+            background: hasCachedFeed,
+        }).catch(console.error);
     }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion]);
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
         if (!friendIds.length && visibleFriendDatesCount === 0) return;
-        fetchActivityFeed({ reset: true, background: true }).catch(console.error);
+        const cachedItems = FRIENDS_SCREEN_CACHE.feedData.userId === user.id
+            ? (FRIENDS_SCREEN_CACHE.feedData.activityFeed || [])
+            : [];
+        const cachedFriendCount = cachedItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
+        if (cachedFriendCount >= visibleFriendDatesCount && visibleFriendDatesCount > 0) return;
+        fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
     }, [user, showFeedSections, friendIds, visibleFriendDatesCount, fetchActivityFeed]);
 
     useEffect(() => {
