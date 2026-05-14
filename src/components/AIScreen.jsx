@@ -9,6 +9,7 @@ const FOOTER_SAFE_PADDING = "calc(8px + var(--safe-bottom))";
 const AI_SUGGESTIONS = [
     { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },
     { label: "今日の記録分析", prompt: "今日の記録を分析して" },
+    { label: "昨日の記録分析", prompt: "昨日の記録を分析して" },
     { label: "BIG3伸ばしたい", prompt: "BIG3を伸ばしたい" },
     { label: "減量中メニュー", prompt: "減量中のメニューを作って" },
     { label: "肩メニュー作成", prompt: "肩メニューを作成して" },
@@ -78,7 +79,7 @@ const CompactBubble = ({ children, role }) => (
                 maxWidth: "84%",
                 padding: role === "user" ? "11px 14px" : "12px 14px",
                 fontSize: 13,
-                lineHeight: 1.6,
+                lineHeight: 1.5,
                 borderRadius: role === "user" ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
                 background:
                     role === "user"
@@ -159,7 +160,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                     padding: "8px 0 10px",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 10,
+                    gap: 8,
                 }}
             >
                 {isInitialState && (
@@ -188,7 +189,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                                 メニュー提案・フォーム相談・重量相談ができます。
                             </div>
                             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
-                                {["胸メニュー組んで", "ベンチ伸ばしたい", "今日の記録分析"].map((example) => (
+                                {["胸メニュー組んで", "昨日の記録分析", "ベンチ伸ばしたい"].map((example) => (
                                     <div
                                         key={example}
                                         style={{
@@ -357,7 +358,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                     </button>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
-                    ベンチ伸ばしたい、減量中のメニュー、フォーム相談などをそのまま聞けます。
+                    今日は何をやるべきか、昨日の記録分析、フォーム相談などをそのまま聞けます。
                 </div>
             </div>
         </div>

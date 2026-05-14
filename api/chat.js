@@ -79,16 +79,38 @@ export default async function handler(req, res) {
       .json({ error: "AI Coachの利用が集中しています。少し待ってからお試しください。", retryAfterSec: rateLimit.retryAfterSec });
   }
 
-  const { messages, historyContext } = req.body;
+  const { messages, coachContext } = req.body;
+  const safeContext = coachContext && typeof coachContext === "object" ? coachContext : {};
 
-  const systemPrompt = `あなたはパーソナルトレーナーAIです。ユーザーの筋トレをサポートします。
-ユーザーの最近のトレーニング履歴:
-${historyContext || "まだ記録なし"}
-以下のルールで返答してください：
+  const systemPrompt = `あなたは筋トレ記録アプリ PUMP のAI Coachです。ユーザーの実際の記録だけを元に、短く分かりやすく答えてください。
+
+モード: ${safeContext.mode || "general"}
+レベル: ${safeContext.level || "standard"}
+対象日: ${safeContext.targetDate || "指定なし"}
+
+対象日の記録:
+${safeContext.targetWorkoutContext || "対象日の記録はありません。"}
+
+直近の記録要約:
+${safeContext.recentSummaryContext || "最近の記録はありません。"}
+
+最新の記録:
+${safeContext.latestWorkoutContext || "最新の記録はありません。"}
+
+以下のルールを必ず守ってください：
 - 日本語のみで返答する
 - マークダウン記法（**太字**、## 見出し、- リスト、アスタリスク等）は一切使わない
 - 箇条書きにする場合は「・」を使う
-- 2〜3文の短い返答にする
+- 基本は3〜6行で返す
+- 1メッセージ1テーマで返す
+- モバイルで読みやすい短さにする
+- 記録分析では、対象日の記録だけを使う
+- 対象日の記録に無い種目・部位・重量・回数を推測で追加しない
+- 実データに無い改善提案を断定しない
+- 対象日の記録が無ければ「その日の記録は見つかりませんでした」と素直に伝える
+- 初心者モードでは、種目数を少なめにし、専門用語を減らし、「まずはこれだけでOKです」と分かる形にする
+- 初心者モードでは、1回の提案は最大3〜4種目、セット数も簡単にする
+- 高重量低repなどの表現は、必要な時だけやさしい言葉に言い換える
 - 自然な話し言葉で書く`;
 
   try {

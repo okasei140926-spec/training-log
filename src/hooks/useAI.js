@@ -1,15 +1,174 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
+import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
 
 const AI_DAILY_LIMIT = 3;
-const getTodayKey = () => new Date().toISOString().slice(0, 10);
+
+const getTodayKey = () => formatDateKey(new Date());
 const getAiUsageKey = () => `ai_usage_${getTodayKey()}`;
 
+const ANALYSIS_KEYWORDS = ["分析", "振り返", "レビュー", "見て", "チェック"];
+const MENU_KEYWORDS = ["メニュー", "組んで", "作って", "何すれば", "何したら", "どうすれば"];
+const BEGINNER_KEYWORDS = ["初心者", "初めて", "はじめて", "まずは", "簡単", "やさしく"];
+const ADVANCED_KEYWORDS = ["中級", "上級", "高重量", "高強度"];
+
+const calcSetVolume = (set) => {
+  if (!set) return 0;
+  if (set.weight === "BW") return 0;
+  return Number(set.weight || 0) * Number(set.reps || 0);
+};
+
+const formatSetLabel = (set) => {
+  if (!set) return "";
+  const weightLabel = set.weight === "BW" ? "自重" : `${Number(set.weight)}kg`;
+  return `${weightLabel}×${Number(set.reps)}回`;
+};
+
+const flattenHistoryByDate = (history) => {
+  const grouped = new Map();
+
+  Object.entries(history || {}).forEach(([exerciseName, records]) => {
+    (records || []).forEach((record) => {
+      const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+      if (!sanitized?.date || !Array.isArray(sanitized.sets) || !sanitized.sets.length) return;
+
+      const dateKey = String(sanitized.date).slice(0, 10);
+      if (!grouped.has(dateKey)) grouped.set(dateKey, []);
+
+      grouped.get(dateKey).push({
+        exerciseName,
+        normalizedExerciseName: normalizeExerciseName(exerciseName),
+        bodyPart: sanitized.bodyPart || "その他",
+        sets: sanitized.sets,
+        setCount: sanitized.sets.length,
+        totalVolume: sanitized.sets.reduce((sum, set) => sum + calcSetVolume(set), 0),
+        totalReps: sanitized.sets.reduce((sum, set) => sum + Number(set.reps || 0), 0),
+        maxWeight: sanitized.sets.reduce((max, set) => {
+          if (set.weight === "BW") return max;
+          return Math.max(max, Number(set.weight || 0));
+        }, 0),
+      });
+    });
+  });
+
+  return grouped;
+};
+
+const summarizeWorkoutDay = (groupedHistory, dateKey) => {
+  const dayEntries = groupedHistory.get(dateKey) || [];
+  if (!dayEntries.length) return null;
+
+  const bodyPartSetMap = {};
+  let totalSets = 0;
+  let totalVolume = 0;
+  let totalReps = 0;
+
+  const exercises = dayEntries.map((entry) => {
+    bodyPartSetMap[entry.bodyPart] = (bodyPartSetMap[entry.bodyPart] || 0) + entry.setCount;
+    totalSets += entry.setCount;
+    totalVolume += entry.totalVolume;
+    totalReps += entry.totalReps;
+    return {
+      name: entry.exerciseName,
+      bodyPart: entry.bodyPart,
+      setCount: entry.setCount,
+      maxWeight: entry.maxWeight,
+      totalVolume: entry.totalVolume,
+      sets: entry.sets.map((set) => ({
+        weight: set.weight,
+        reps: Number(set.reps || 0),
+        label: formatSetLabel(set),
+      })),
+    };
+  });
+
+  const bodyParts = Object.entries(bodyPartSetMap)
+    .map(([bodyPart, setCount]) => ({ bodyPart, setCount }))
+    .sort((a, b) => b.setCount - a.setCount);
+
+  return {
+    date: dateKey,
+    totalSets,
+    totalVolume,
+    totalReps,
+    bodyParts,
+    exercises,
+  };
+};
+
+const getTargetDateKey = (message) => {
+  const normalized = String(message || "");
+  if (normalized.includes("昨日")) {
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    return formatDateKey(date);
+  }
+  if (normalized.includes("今日")) {
+    return getTodayKey();
+  }
+  return "";
+};
+
+const detectCoachMode = (message) => {
+  const text = String(message || "").trim();
+  const lower = text.toLowerCase();
+
+  const wantsMenu = MENU_KEYWORDS.some((keyword) => text.includes(keyword));
+  const wantsAnalysis = ANALYSIS_KEYWORDS.some((keyword) => text.includes(keyword));
+  const wantsBeginner = BEGINNER_KEYWORDS.some((keyword) => text.includes(keyword));
+  const wantsAdvanced = ADVANCED_KEYWORDS.some((keyword) => text.includes(keyword)) || lower.includes("big3");
+
+  const isBeginnerMenu = wantsMenu && !wantsAdvanced;
+
+  return {
+    wantsMenu,
+    wantsAnalysis,
+    wantsBeginner: wantsBeginner || isBeginnerMenu,
+    wantsAdvanced,
+  };
+};
+
+const buildWorkoutContextText = (summary) => {
+  if (!summary) return "対象日の記録はありません。";
+
+  const header = [
+    `対象日: ${summary.date}`,
+    `部位: ${summary.bodyParts.map((item) => `${item.bodyPart}${item.setCount}セット`).join(" / ") || "なし"}`,
+    `合計セット: ${summary.totalSets}`,
+    `総ボリューム: ${Math.round(summary.totalVolume)}kg`,
+  ];
+
+  const exercises = summary.exercises.map((exercise) => {
+    const sets = exercise.sets.map((set) => set.label).join(" / ");
+    return `${exercise.name} (${exercise.bodyPart}) | ${sets}`;
+  });
+
+  return [...header, ...exercises].join("\n");
+};
+
+const buildRecentSummaryText = (groupedHistory) => {
+  const recentDates = Array.from(groupedHistory.keys()).sort().slice(-3).reverse();
+  if (!recentDates.length) return "最近の記録はありません。";
+
+  return recentDates
+    .map((dateKey) => {
+      const summary = summarizeWorkoutDay(groupedHistory, dateKey);
+      if (!summary) return null;
+      const topParts = summary.bodyParts.slice(0, 2).map((item) => `${item.bodyPart}${item.setCount}セット`).join(" / ");
+      return `${dateKey}: ${topParts} / ${summary.totalSets}セット / ${Math.round(summary.totalVolume)}kg`;
+    })
+    .filter(Boolean)
+    .join("\n");
+};
+
 export function useAI(history) {
-  const [aiMsgs, setAiMsgs] = useState([{
-    role: "assistant",
-    content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪"
-  }]);
+  const [aiMsgs, setAiMsgs] = useState([
+    {
+      role: "assistant",
+      content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪",
+    },
+  ]);
   const [aiInput, setAiInput] = useState("");
   const [aiLoad, setAiLoad] = useState(false);
   const aiEnd = useRef(null);
@@ -20,6 +179,8 @@ export function useAI(history) {
       return 0;
     }
   });
+
+  const groupedHistory = useMemo(() => flattenHistoryByDate(history), [history]);
 
   useEffect(() => {
     aiEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,15 +197,24 @@ export function useAI(history) {
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
     if (!userMsg || aiLoad) return;
+
+    const mode = detectCoachMode(userMsg);
+    const targetDateKey = getTargetDateKey(userMsg);
+    const targetWorkoutSummary = targetDateKey ? summarizeWorkoutDay(groupedHistory, targetDateKey) : null;
+    const latestDateKey = Array.from(groupedHistory.keys()).sort().slice(-1)[0] || "";
+    const latestWorkoutSummary = latestDateKey ? summarizeWorkoutDay(groupedHistory, latestDateKey) : null;
+
     setAiInput("");
     const newMsgs = [...aiMsgs, { role: "user", content: userMsg }];
     setAiMsgs(newMsgs);
     setAiLoad(true);
+
     try {
       const nextUsageCount = aiUsageCount + 1;
       setAiUsageCount(nextUsageCount);
       localStorage.setItem(getAiUsageKey(), String(nextUsageCount));
     } catch {}
+
     try {
       const {
         data: { session },
@@ -52,14 +222,10 @@ export function useAI(history) {
       const accessToken = session?.access_token;
 
       if (!accessToken) {
-        setAiMsgs(p => [...p, { role: "assistant", content: "ログインが必要です。" }]);
+        setAiMsgs((p) => [...p, { role: "assistant", content: "ログインが必要です。" }]);
         return;
       }
 
-      const historyContext = Object.entries(history).slice(-8).map(([name, recs]) => {
-        const last = recs[recs.length - 1];
-        return `${name}: ${last.sets?.map(s => `${s.weight}kg×${s.reps}rep`).join(", ")}`;
-      }).join("\n");
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -67,25 +233,31 @@ export function useAI(history) {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          messages: newMsgs.map(m => ({ role: m.role, content: m.content })),
-          historyContext,
+          messages: newMsgs.map((m) => ({ role: m.role, content: m.content })),
+          coachContext: {
+            mode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
+            level: mode.wantsBeginner ? "beginner" : mode.wantsAdvanced ? "advanced" : "standard",
+            targetDate: targetDateKey || null,
+            targetWorkoutContext: buildWorkoutContextText(targetWorkoutSummary),
+            latestWorkoutContext: buildWorkoutContextText(latestWorkoutSummary),
+            recentSummaryContext: buildRecentSummaryText(groupedHistory),
+            hasTargetWorkout: Boolean(targetWorkoutSummary),
+          },
         }),
       });
       const data = await res.json();
 
       if (!res.ok) {
         const errorMessage =
-          res.status === 401
-            ? "ログインが必要です。"
-            : data?.error || "AI Coachの応答に失敗しました。";
-        setAiMsgs(p => [...p, { role: "assistant", content: errorMessage }]);
+          res.status === 401 ? "ログインが必要です。" : data?.error || "AI Coachの応答に失敗しました。";
+        setAiMsgs((p) => [...p, { role: "assistant", content: errorMessage }]);
         return;
       }
 
       const reply = data.content?.[0]?.text || "AI Coachの応答に失敗しました。";
-      setAiMsgs(p => [...p, { role: "assistant", content: reply }]);
+      setAiMsgs((p) => [...p, { role: "assistant", content: reply }]);
     } catch {
-      setAiMsgs(p => [...p, { role: "assistant", content: "AI Coachの応答に失敗しました。" }]);
+      setAiMsgs((p) => [...p, { role: "assistant", content: "AI Coachの応答に失敗しました。" }]);
     } finally {
       setAiLoad(false);
     }
