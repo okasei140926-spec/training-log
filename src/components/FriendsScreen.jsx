@@ -68,6 +68,12 @@ const FRIENDS_SCREEN_CACHE = {
     },
 };
 
+const getCachedFriendIdsForUser = (userId) => (
+    FRIENDS_SCREEN_CACHE.friendsData.userId === userId
+        ? (FRIENDS_SCREEN_CACHE.friendsData.friendIds || [])
+        : []
+);
+
 const parseDateKey = (value) => {
     if (!value) return new Date();
     return new Date(`${String(value).slice(0, 10)}T00:00:00`);
@@ -145,6 +151,7 @@ export default function FriendsScreen({
     ));
     const activityFeedStatusTimeoutRef = useRef(null);
     const latestFeedRequestIdRef = useRef(0);
+    const friendIdsRef = useRef(friendIds);
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
     const recentSevenStart = shiftDateKey(today, -6);
@@ -157,6 +164,10 @@ export default function FriendsScreen({
         ),
         [friendSessionInsights.visibleDatesByUser]
     );
+
+    useEffect(() => {
+        friendIdsRef.current = friendIds;
+    }, [friendIds]);
 
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
         return hasValidWorkoutOnDate(workoutData, today);
@@ -694,6 +705,45 @@ export default function FriendsScreen({
         };
     }, []);
 
+    const resolveAcceptedFriendIds = useCallback(async () => {
+        const directIds = Array.isArray(friendIdsRef.current) ? friendIdsRef.current.filter(Boolean) : [];
+        if (directIds.length) return directIds;
+
+        const cachedIds = getCachedFriendIdsForUser(user?.id).filter(Boolean);
+        if (cachedIds.length) return cachedIds;
+
+        if (!user?.id) return [];
+
+        const { data: friendships, error } = await supabase
+            .from("friendships")
+            .select("requester_id, receiver_id")
+            .eq("status", "accepted")
+            .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`);
+
+        if (error) {
+            console.error("[feed] friendships fetch failed", error);
+            return [];
+        }
+
+        const resolvedIds = [...new Set(
+            (friendships || []).map((f) => (
+                f.requester_id === user.id ? f.receiver_id : f.requester_id
+            ))
+        )].filter(Boolean);
+
+        if (resolvedIds.length) {
+            setFriendIds((prev) => (prev.length ? prev : resolvedIds));
+            FRIENDS_SCREEN_CACHE.friendsData = {
+                ...FRIENDS_SCREEN_CACHE.friendsData,
+                userId: user.id,
+                friendIds: resolvedIds,
+                fetchedAt: FRIENDS_SCREEN_CACHE.friendsData.fetchedAt || Date.now(),
+            };
+        }
+
+        return resolvedIds;
+    }, [user?.id]);
+
     const fetchActivityFeed = useCallback(async ({ reset = false, force = false, background = false } = {}) => {
         if (!user?.id) {
             setActivityFeed([]);
@@ -701,16 +751,18 @@ export default function FriendsScreen({
         }
         const requestId = Date.now();
         latestFeedRequestIdRef.current = requestId;
+        console.time("[feed] load total");
 
         console.log("[feed] current user id", user?.id);
-        const feedUserIds = [...new Set([user.id, ...friendIds])];
+        const effectiveFriendIds = await resolveAcceptedFriendIds();
+        const feedUserIds = [...new Set([user.id, ...effectiveFriendIds])];
 
         const now = Date.now();
         const hasCache = FRIENDS_SCREEN_CACHE.feedData.fetchedAt > 0
             && FRIENDS_SCREEN_CACHE.feedData.userId === user.id;
         const cachedItems = hasCache ? (FRIENDS_SCREEN_CACHE.feedData.activityFeed || []) : [];
         const cachedFriendCount = cachedItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
-        const expectedFriendCount = friendIds.reduce(
+        const expectedFriendCount = effectiveFriendIds.reduce(
             (sum, friendId) => sum + ((friendSessionInsights.visibleDatesByUser?.[friendId] || []).length),
             0
         );
@@ -738,6 +790,8 @@ export default function FriendsScreen({
             const beforeCount = previousItems.length;
             const beforeFriendCount = previousItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
             const profileIds = [...new Set(feedUserIds.filter(Boolean))];
+            console.time("[feed] fetch own");
+            console.time("[feed] fetch friends");
             const [sessionsRes, workoutsRes, profilesRes] = await Promise.all([
                 supabase
                     .from("workout_sessions")
@@ -759,6 +813,8 @@ export default function FriendsScreen({
                     ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
                     : Promise.resolve({ data: [], error: null }),
             ]);
+            console.timeEnd("[feed] fetch own");
+            console.timeEnd("[feed] fetch friends");
 
             const sessions = sessionsRes.data;
             const sessionsError = sessionsRes.error;
@@ -766,22 +822,22 @@ export default function FriendsScreen({
                 console.error("[feed] workout_sessions fetch failed", {
                     error: sessionsError,
                     currentUserId: user.id,
-                    friendIds,
+                    friendIds: effectiveFriendIds,
                     recentSevenStart,
                     today,
                 });
             }
             const rawSessions = sessions || [];
-            const friendSessions = rawSessions.filter((session) => session?.user_id && friendIds.includes(session.user_id));
+            const friendSessions = rawSessions.filter((session) => session?.user_id && effectiveFriendIds.includes(session.user_id));
             const friendVisibilityStats = friendSessions.reduce((stats, session) => {
                 const visibility = String(session?.visibility || "unknown");
                 stats[visibility] = (stats[visibility] || 0) + 1;
                 return stats;
             }, {});
-            console.log("[feed] accepted friend ids", friendIds);
+            console.log("[feed] accepted friend ids", effectiveFriendIds);
             console.log("[feed] friend visibility stats", {
                 currentUserId: user.id,
-                friendIds,
+                friendIds: effectiveFriendIds,
                 count: friendSessions.length,
                 stats: friendVisibilityStats,
             });
@@ -797,14 +853,14 @@ export default function FriendsScreen({
                 console.error("[feed] profiles fetch failed", {
                     error: profilesRes.error,
                     currentUserId: user.id,
-                    friendIds,
+                    friendIds: effectiveFriendIds,
                 });
             }
             if (workoutsRes.error) {
                 console.error("[feed] workouts fetch failed", {
                     error: workoutsRes.error,
                     currentUserId: user.id,
-                    friendIds,
+                    friendIds: effectiveFriendIds,
                 });
             }
 
@@ -824,7 +880,7 @@ export default function FriendsScreen({
             const sessionMetaMap = new Map();
             rawSessions.forEach((session) => {
                 const isOwnWorkout = session.user_id === user.id;
-                const isFriendWorkout = !isOwnWorkout && friendIds.includes(session.user_id);
+                const isFriendWorkout = !isOwnWorkout && effectiveFriendIds.includes(session.user_id);
 
                 if (!session.workout_date) {
                     excludedItems.push({
@@ -964,16 +1020,16 @@ export default function FriendsScreen({
             console.log("[feed] own sessions count", ownItems.length);
             console.log("[feed] friend sessions count", {
                 currentUserId: user.id,
-                friendIds,
+                friendIds: effectiveFriendIds,
                 count: friendSessions.length,
             });
             console.log("[feed] friend sessions count", friendSessions.length);
             console.log("[feed] friend workouts count", {
                 currentUserId: user.id,
-                friendIds,
-                count: (workoutsRes.data || []).filter((row) => friendIds.includes(row.user_id)).length,
+                friendIds: effectiveFriendIds,
+                count: (workoutsRes.data || []).filter((row) => effectiveFriendIds.includes(row.user_id)).length,
             });
-            console.log("[feed] friend workouts count", (workoutsRes.data || []).filter((row) => friendIds.includes(row.user_id)).length);
+            console.log("[feed] friend workouts count", (workoutsRes.data || []).filter((row) => effectiveFriendIds.includes(row.user_id)).length);
             excludedItems
                 .filter((item) => item.isFriendWorkout)
                 .forEach((item) => {
@@ -1129,12 +1185,13 @@ export default function FriendsScreen({
                     console.error("[feed] async enrichment failed", { error, currentUserId: user.id });
                 });
             }
+            console.timeEnd("[feed] load total");
             return true;
         } catch (error) {
             console.error("[feed] RLS or Supabase error", {
                 error,
                 currentUserId: user?.id,
-                friendIds,
+                friendIds: effectiveFriendIds,
                 recentSevenStart,
                 today,
             });
@@ -1147,12 +1204,13 @@ export default function FriendsScreen({
                 feedItemsLength: 0,
                 displayedCardsCount: 0,
             });
+            console.timeEnd("[feed] load total");
             return false;
         } finally {
             setActivityFeedLoading(false);
             setFeedRefreshing(false);
         }
-    }, [activityFeed, buildFeedItemFromHistoryDate, friendIds, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, today, user?.id]);
+    }, [activityFeed, buildFeedItemFromHistoryDate, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, resolveAcceptedFriendIds, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -1260,9 +1318,9 @@ export default function FriendsScreen({
     }, [activityFeed, likePendingMap, showActivityFeedStatusMessage, user?.id]);
 
     useEffect(() => {
-        if (!user) return;
+        if (!user || !showRankingSections) return;
         fetchFriendsData({ background: Boolean(FRIENDS_SCREEN_CACHE.friendsData.fetchedAt) });
-    }, [user, fetchFriendsData, sessionSyncVersion]);
+    }, [user, fetchFriendsData, sessionSyncVersion, showRankingSections]);
 
     useEffect(() => {
         if (!user || !showRankingSections) return;
@@ -1302,7 +1360,9 @@ export default function FriendsScreen({
         if (!user) return undefined;
 
         const refreshVisibleData = () => {
-            fetchFriendsData({ background: true }).catch(console.error);
+            if (showRankingSections) {
+                fetchFriendsData({ background: true }).catch(console.error);
+            }
             if (showFeedSections) {
                 fetchActivityFeed({ reset: true, background: true }).catch(console.error);
             }
@@ -1321,7 +1381,7 @@ export default function FriendsScreen({
             window.removeEventListener("focus", refreshVisibleData);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
-    }, [user, fetchActivityFeed, fetchFriendsData, showFeedSections]);
+    }, [user, fetchActivityFeed, fetchFriendsData, showFeedSections, showRankingSections]);
 
     useEffect(() => {
         if (!user) return undefined;
@@ -1567,6 +1627,7 @@ export default function FriendsScreen({
     };
 
     const groupedActivityFeed = useMemo(() => {
+        console.time("[feed] build grouped");
         const userMap = new Map();
         const ownItemsCount = activityFeed.filter((item) => item?.user_id === user?.id).length;
         const friendItemsCount = activityFeed.filter((item) => item?.user_id && item.user_id !== user?.id).length;
@@ -1647,6 +1708,7 @@ export default function FriendsScreen({
             dateCount: u.dates.length,
             latestDate: u.latestDate,
         })));
+        console.timeEnd("[feed] build grouped");
         return groupedUsers;
     }, [activityFeed, friendIds, getDisplayUsername, myUsername, user?.id]);
 
