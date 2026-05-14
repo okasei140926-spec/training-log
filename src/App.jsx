@@ -372,6 +372,9 @@ export default function GymApp() {
 
 
     const [screen, setScreen] = useState("history");
+    const [isOnline, setIsOnline] = useState(() =>
+        typeof navigator === "undefined" ? true : navigator.onLine
+    );
     const [showAuth, setShowAuth] = useState(false);
     const [showPushPrompt, setShowPushPrompt] = useState(false);
     const [pushPromptBusy, setPushPromptBusy] = useState(false);
@@ -387,6 +390,19 @@ export default function GymApp() {
             setScreen("ranking");
         }
     }, [screen]);
+
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
+
+        return () => {
+            window.removeEventListener("online", handleOnline);
+            window.removeEventListener("offline", handleOffline);
+        };
+    }, []);
 
     const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
     const updateTodayLabels = (nextOrUpdater) => {
@@ -478,6 +494,7 @@ export default function GymApp() {
     const previousWorkoutActivitySignatureRef = useRef("");
     const previousWorkoutActivityDateRef = useRef("");
     const workoutTimerStateRef = useRef(initialWorkoutTimerState);
+    const previousOnlineStateRef = useRef(isOnline);
 
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
@@ -495,6 +512,14 @@ export default function GymApp() {
         syncFailedDates: [],
         lastSyncErrorByDate: {},
     });
+
+    useEffect(() => {
+        const wasOnline = previousOnlineStateRef.current;
+        if (!wasOnline && isOnline) {
+            setSessionSyncVersion((prev) => prev + 1);
+        }
+        previousOnlineStateRef.current = isOnline;
+    }, [isOnline]);
 
 
     // ─── AI Coach ─────────────────────────────────────
@@ -1348,7 +1373,7 @@ export default function GymApp() {
     ]);
 
     useEffect(() => {
-        if (!user?.id || !historySyncReady) return;
+        if (!isOnline || !user?.id || !historySyncReady) return;
 
         let cancelled = false;
 
@@ -1405,6 +1430,7 @@ export default function GymApp() {
         refreshHistorySyncDiagnostic,
         syncWorkoutSessionSnapshot,
         syncWorkoutRowsForDates,
+        isOnline,
         user?.id,
     ]);
 
@@ -2393,6 +2419,7 @@ export default function GymApp() {
         { id: "ranking", icon: "🏆", label: "ランキング" },
         { id: "ai", icon: "🤖", label: "AI" },
     ];
+    const showOfflineOnlyCard = !isOnline && ["feed", "ranking", "ai"].includes(screen);
 
     if (!isSupabaseConfigured) {
         return (
@@ -2471,6 +2498,22 @@ export default function GymApp() {
                     showSettingsButton={screen !== "log"}
                     onOpenSettings={() => setShowSettingsModal(true)}
                 />
+
+                {!isOnline && (
+                    <div style={{ padding: "10px 18px 0" }}>
+                        <div style={{
+                            background: "var(--info-soft)",
+                            color: "var(--text)",
+                            border: "1px solid var(--info-border)",
+                            borderRadius: 18,
+                            padding: "12px 14px",
+                            fontSize: 13,
+                            lineHeight: 1.6,
+                        }}>
+                            オフラインです。端末内の記録は表示できます。通信が戻ると自動で同期します。
+                        </div>
+                    </div>
+                )}
 
 
                 {showTimerMenu && screen === "log" && (
@@ -2601,7 +2644,7 @@ export default function GymApp() {
                 )}
 
 
-                {screen === "feed" && (
+                {screen === "feed" && !showOfflineOnlyCard && (
                     <FriendsScreen
                         mode="feed"
                         history={history}
@@ -2628,7 +2671,7 @@ export default function GymApp() {
                     />
                 )}
 
-                {screen === "ranking" && (
+                {screen === "ranking" && !showOfflineOnlyCard && (
                     <FriendsScreen
                         mode="ranking"
                         history={history}
@@ -2691,7 +2734,7 @@ export default function GymApp() {
                     />
                 )}
 
-                {screen === "ai" && (
+                {screen === "ai" && !showOfflineOnlyCard && (
                     <AIScreen
                         aiMsgs={aiMsgs}
                         aiInput={aiInput}
@@ -2700,6 +2743,53 @@ export default function GymApp() {
                         aiLoad={aiLoad}
                         aiEnd={aiEnd}
                     />
+                )}
+
+                {showOfflineOnlyCard && (
+                    <div style={{ padding: "18px" }}>
+                        <div style={{
+                            ...S.sectionCard,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 14,
+                        }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, color: "var(--text3)" }}>
+                                PUMP
+                            </div>
+                            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1 }}>
+                                オフラインです
+                            </div>
+                            <div style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.7 }}>
+                                {screen === "feed"
+                                    ? "フィードはオンライン時に表示できます。通信が戻ると最新の記録を取得します。"
+                                    : screen === "ranking"
+                                        ? "ランキングはオンライン時に表示できます。通信が戻ると最新順位を取得します。"
+                                        : "AI Coach はオンライン時に利用できます。"}
+                            </div>
+                            <div style={{
+                                ...S.subtleCard,
+                                background: "var(--success-soft)",
+                                borderColor: "var(--success-border)",
+                                fontSize: 13,
+                                color: "var(--text2)",
+                                lineHeight: 1.7,
+                            }}>
+                                記録、今日のワークアウト、カレンダーはオフラインでも確認できます。
+                            </div>
+                            <button
+                                onClick={() => setScreen("history")}
+                                style={{
+                                    ...S.pillBtn,
+                                    alignSelf: "flex-start",
+                                    background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                                    color: "#fff",
+                                    padding: "12px 18px",
+                                }}
+                            >
+                                記録を見る
+                            </button>
+                        </div>
+                    </div>
                 )}
 
                 <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen} onSelectTab={setScreen} />

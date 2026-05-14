@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>PUMP | オフライン</title>
+    <style>
+      :root {
+        --bg: linear-gradient(180deg, #f7fbfb 0%, #f1f6f7 100%);
+        --card: #ffffff;
+        --border: #d8e6e8;
+        --text: #0a3f44;
+        --text2: #5d7a7e;
+        --accent: #12c7c2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        width: min(100%, 430px);
+        background: var(--card);
+        border: 1px solid rgba(18, 199, 194, 0.1);
+        border-radius: 28px;
+        padding: 28px 24px;
+        box-shadow: 0 14px 30px rgba(15, 94, 99, 0.08);
+      }
+      .label {
+        font-size: 11px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: var(--text2);
+        margin-bottom: 8px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+        line-height: 1.1;
+      }
+      p {
+        margin: 0 0 14px;
+        font-size: 15px;
+        line-height: 1.7;
+        color: var(--text2);
+      }
+      .note {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: #e8fcfb;
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="label">PUMP</div>
+      <h1>オフラインです</h1>
+      <p>電波がない状態でも、端末内に保存されている記録は引き続き確認できます。</p>
+      <p>通信が戻ると、記録は自動で同期されます。</p>
+      <div class="note">
+        フィード、ランキング、AI などのオンライン機能は、通信が戻ると利用できます。
+      </div>
+    </div>
+  </body>
+  </html>
