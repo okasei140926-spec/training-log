@@ -66,7 +66,6 @@ const FRIENDS_SCREEN_CACHE = {
         activityFeed: [],
         fetchedAt: 0,
     },
-    diagnosticPayload: null,
 };
 
 const parseDateKey = (value) => {
@@ -1695,13 +1694,13 @@ export default function FriendsScreen({
                                         style={{
                                             background: "var(--card)",
                                             borderRadius: 22,
-                                            padding: 14,
+                                            padding: 12,
                                             border: "1px solid var(--border2)",
                                             boxShadow: "var(--shadow-card)",
                                         }}
                                     >
-                                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                                            <div style={{ width: 42, height: 42, borderRadius: 21, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+                                            <div style={{ width: 40, height: 40, borderRadius: 20, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
                                                 {item.profile?.avatar1_url
                                                     ? <img src={item.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                                     : profileName?.[0]?.toUpperCase()
@@ -1709,7 +1708,7 @@ export default function FriendsScreen({
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                                                    <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                    <div style={{ fontSize: 17, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                         {profileName}
                                                     </div>
                                                     <div style={{ fontSize: 13, color: "var(--text3)", fontWeight: 700 }}>
@@ -1719,7 +1718,7 @@ export default function FriendsScreen({
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "grid", gap: 4 }}>
+                                        <div style={{ display: "grid", gap: 2 }}>
                                             {visibleExercises.map((summaryItem, index) => {
                                                 const isLastVisibleExercise = index === visibleExercises.length - 1;
                                                 const showExerciseDivider = !isLastVisibleExercise || hasExtraExercises;
@@ -1728,14 +1727,14 @@ export default function FriendsScreen({
                                                 <div
                                                     key={`${summaryItem.body_part || ""}-${summaryItem.exercise_name}`}
                                                     style={{
-                                                        padding: "8px 0 10px",
+                                                        padding: showExerciseDivider ? "6px 0 8px" : "6px 0 2px",
                                                         borderBottom: showExerciseDivider ? "1px solid rgba(217, 228, 239, 0.9)" : "none",
                                                     }}
                                                 >
                                                     <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
                                                         {summaryItem.exercise_name}
                                                     </div>
-                                                    <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 3, lineHeight: 1.55 }}>
+                                                    <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2, lineHeight: 1.45 }}>
                                                         {Array.isArray(summaryItem.sets) && summaryItem.sets.length
                                                             ? summaryItem.sets.map(formatSessionSetDisplay).join(" / ")
                                                             : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}`}
@@ -1755,7 +1754,7 @@ export default function FriendsScreen({
                                                     style={{
                                                         justifySelf: "start",
                                                         padding: 0,
-                                                        marginTop: 2,
+                                                        marginTop: 0,
                                                         border: "none",
                                                         background: "transparent",
                                                         fontSize: 12,
@@ -1776,7 +1775,7 @@ export default function FriendsScreen({
                                                     justifyContent: "space-between",
                                                     alignItems: "center",
                                                     gap: 10,
-                                                    marginTop: hasExtraExercises ? 10 : 4,
+                                                    marginTop: hasExtraExercises ? 8 : 2,
                                                     paddingTop: hasExtraExercises ? 10 : 0,
                                                     borderTop: hasExtraExercises ? "1px solid rgba(217, 228, 239, 0.75)" : "none",
                                                 }}
