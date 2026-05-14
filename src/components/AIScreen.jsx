@@ -1,54 +1,123 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { sanitizeHistoryRecord } from "../utils/helpers";
 
 const HEADER_OFFSET = 72;
-const BOTTOM_NAV_OFFSET = 110;
+const BOTTOM_NAV_OFFSET = 104;
 const AI_VIEWPORT_HEIGHT = `calc(100dvh - ${HEADER_OFFSET}px - ${BOTTOM_NAV_OFFSET}px - var(--safe-top) - var(--safe-bottom))`;
 const FOOTER_SAFE_PADDING = "calc(8px + var(--safe-bottom))";
 
 const AI_SUGGESTIONS = [
-    {
-        label: "種目組んで",
-        mode: "ask_part",
-    },
-    {
-        label: "次回メニュー提案",
-        prompt: "最近の記録をもとに、次は何をやればいいか初心者にも分かりやすく教えて",
-    },
-    {
-        label: "今日の記録分析",
-        prompt: "今日のトレーニング記録を分析して、良かった点と次回改善する点を教えて",
-    },
+    { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },
+    { label: "今日の記録分析", prompt: "今日の記録を分析して" },
+    { label: "BIG3伸ばしたい", prompt: "BIG3を伸ばしたい" },
+    { label: "減量中メニュー", prompt: "減量中のメニューを作って" },
+    { label: "肩メニュー作成", prompt: "肩メニューを作成して" },
 ];
 
-export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, aiEnd }) {
+const formatDateLabel = (dateKey) => {
+    if (!dateKey) return "";
+    const [year, month, day] = String(dateKey).split("-");
+    if (!year || !month || !day) return dateKey;
+    return `${month}/${day}`;
+};
+
+const buildAiOverview = (history) => {
+    const flattened = [];
+
+    Object.entries(history || {}).forEach(([exerciseName, records]) => {
+        (records || []).forEach((record) => {
+            const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+            if (!sanitized?.date || !sanitized.sets?.length) return;
+            flattened.push({
+                exerciseName,
+                date: sanitized.date,
+                bodyPart: sanitized.bodyPart || "その他",
+                setCount: sanitized.sets.length,
+            });
+        });
+    });
+
+    const uniqueDates = Array.from(new Set(flattened.map((entry) => entry.date))).sort();
+    const latestDate = uniqueDates[uniqueDates.length - 1] || "";
+    const latestEntries = flattened.filter((entry) => entry.date === latestDate);
+
+    const partMap = latestEntries.reduce((acc, entry) => {
+        acc[entry.bodyPart] = (acc[entry.bodyPart] || 0) + entry.setCount;
+        return acc;
+    }, {});
+
+    const partSummary = Object.entries(partMap)
+        .map(([bodyPart, count]) => ({ bodyPart, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 2);
+
+    const latestSummary = partSummary.length
+        ? partSummary.map((item) => `${item.bodyPart}${item.count}セット`).join(" / ")
+        : "最近の記録";
+
+    const recommendation = latestDate
+        ? `${formatDateLabel(latestDate)}は${latestSummary}でした。${
+            partSummary[0]
+                ? `${partSummary[0].bodyPart}を続けるならメイン1種目と補助2種目、別部位なら回復している部位を優先するのがおすすめです。`
+                : "メニュー提案やフォーム相談、重量相談ができます。"
+        }`
+        : "最近の記録をもとに、メニュー提案・フォーム相談・重量相談ができます。";
+
+    return {
+        trainingDays: uniqueDates.length,
+        latestDate,
+        latestSummary,
+        recommendation,
+    };
+};
+
+const CompactBubble = ({ children, role }) => (
+    <div style={{ display: "flex", justifyContent: role === "user" ? "flex-end" : "flex-start" }}>
+        <div
+            style={{
+                maxWidth: "84%",
+                padding: role === "user" ? "11px 14px" : "12px 14px",
+                fontSize: 13,
+                lineHeight: 1.6,
+                borderRadius: role === "user" ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
+                background:
+                    role === "user"
+                        ? "linear-gradient(135deg, var(--accent), var(--accent2))"
+                        : "linear-gradient(180deg, rgba(18, 199, 194, 0.12), rgba(18, 199, 194, 0.06))",
+                color: role === "user" ? "#fff" : "var(--text)",
+                border: role === "assistant" ? "1px solid rgba(18, 199, 194, 0.12)" : "none",
+                boxShadow: role === "user" ? "var(--shadow-soft)" : "0 10px 18px rgba(15,94,99,0.06)",
+            }}
+        >
+            {children}
+        </div>
+    </div>
+);
+
+export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, aiEnd, history, aiRemaining }) {
     const inputRef = useRef(null);
-    const [waitingForWorkoutPart, setWaitingForWorkoutPart] = useState(false);
+    const [activeQuickAction, setActiveQuickAction] = useState("");
+
+    const overview = useMemo(() => buildAiOverview(history), [history]);
+    const isInitialState =
+        aiMsgs.length === 1 &&
+        aiMsgs[0]?.role === "assistant" &&
+        !aiLoad;
+
+    const visibleMessages = isInitialState ? [] : aiMsgs;
 
     const handleSend = (overrideMsg) => {
         const nextMessage = overrideMsg ?? aiInput;
         if (!nextMessage?.trim()) return;
-
-        if (!overrideMsg && waitingForWorkoutPart) {
-            sendAI(`${nextMessage.trim()}のトレーニングメニューを、最近の記録を参考に初心者にも分かりやすく組んでください。`);
-            setWaitingForWorkoutPart(false);
-            setAiInput("");
-            setTimeout(() => inputRef.current?.blur(), 50);
-            return;
-        }
-
         sendAI(overrideMsg);
         setTimeout(() => inputRef.current?.blur(), 50);
     };
 
-    const handleSuggestion = ({ prompt, mode }) => {
-        if (mode === "ask_part") {
-            setWaitingForWorkoutPart(true);
-            setAiInput("");
-            return;
-        }
-
-        setWaitingForWorkoutPart(false);
-        handleSend(prompt);
+    const handleSuggestion = ({ label, prompt }) => {
+        setActiveQuickAction(label);
+        setAiInput(prompt);
+        inputRef.current?.focus();
+        setTimeout(() => setActiveQuickAction(""), 180);
     };
 
     return (
@@ -62,72 +131,173 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                 maxHeight: AI_VIEWPORT_HEIGHT,
                 overflow: "hidden",
                 background: "var(--bg)",
-                padding: "0 18px 8px",
+                padding: "0 16px 8px",
+                gap: 8,
             }}
         >
+            <div
+                style={{
+                    flexShrink: 0,
+                    alignSelf: "flex-start",
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    background: "rgba(18, 199, 194, 0.08)",
+                    border: "1px solid rgba(18, 199, 194, 0.12)",
+                    color: "var(--text2)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                }}
+            >
+                今日のAI相談 残り{aiRemaining}回
+            </div>
+
             <div
                 style={{
                     flex: 1,
                     minHeight: 0,
                     overflowY: "auto",
-                    padding: "16px 0 20px",
+                    padding: "8px 0 10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
                 }}
             >
-                {aiMsgs.map((msg, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", marginBottom: 12 }}>
-                        <div style={{
-                            maxWidth: "82%", padding: "13px 16px", fontSize: 14, lineHeight: 1.65,
-                            borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                            background: msg.role === "user" ? "linear-gradient(135deg, var(--accent2), #7DD3FC)" : "var(--card)",
-                            color: msg.role === "user" ? "#fff" : "var(--text)",
-                            border: msg.role === "assistant" ? "1px solid var(--border2)" : "none",
-                            boxShadow: msg.role === "user" ? "var(--shadow-soft)" : "var(--shadow-card)",
-                        }}>
-                            {msg.content}
+                {isInitialState && (
+                    <>
+                        <div
+                            style={{
+                                ...({
+                                    background: "var(--card)",
+                                    borderRadius: 20,
+                                    border: "1px solid rgba(18, 199, 194, 0.1)",
+                                    boxShadow: "var(--shadow-card)",
+                                    padding: 16,
+                                }),
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 8,
+                            }}
+                        >
+                            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.8, color: "var(--text3)" }}>
+                                AI COACH
+                            </div>
+                            <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.12, color: "var(--text)" }}>
+                                今日の判断を、すぐに。
+                            </div>
+                            <div style={{ fontSize: 13, lineHeight: 1.65, color: "var(--text2)" }}>
+                                メニュー提案・フォーム相談・重量相談ができます。
+                            </div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
+                                {["胸メニュー組んで", "ベンチ伸ばしたい", "今日の記録分析"].map((example) => (
+                                    <div
+                                        key={example}
+                                        style={{
+                                            padding: "6px 10px",
+                                            borderRadius: 999,
+                                            background: "rgba(18, 199, 194, 0.07)",
+                                            border: "1px solid rgba(18, 199, 194, 0.12)",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            color: "var(--text2)",
+                                        }}
+                                    >
+                                        {example}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+
+                        <div
+                            style={{
+                                background: "linear-gradient(180deg, rgba(18, 199, 194, 0.12), rgba(18, 199, 194, 0.04))",
+                                borderRadius: 18,
+                                border: "1px solid rgba(18, 199, 194, 0.12)",
+                                padding: 14,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 6,
+                            }}
+                        >
+                            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.6, color: "var(--text3)" }}>
+                                最近のおすすめ
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+                                最近の記録 {overview.latestSummary}
+                            </div>
+                            <div style={{ fontSize: 12, lineHeight: 1.65, color: "var(--text2)" }}>
+                                {overview.recommendation}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
+                                継続日数 {overview.trainingDays}日
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {visibleMessages.map((msg, i) => (
+                    <CompactBubble key={i} role={msg.role}>
+                        {msg.content}
+                    </CompactBubble>
                 ))}
-                {waitingForWorkoutPart && (
-                    <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
-                        <div style={{
-                            maxWidth: "82%", padding: "13px 16px", fontSize: 14, lineHeight: 1.65,
-                            borderRadius: "18px 18px 18px 4px",
-                            background: "var(--card)",
-                            color: "var(--text)",
-                            border: "1px solid var(--border2)",
-                            boxShadow: "var(--shadow-card)",
-                        }}>
-                            今日はどの部位をやりますか？<br />
-                            例：胸、背中、脚、肩、腕 など
-                        </div>
-                    </div>
-                )}
+
                 {aiLoad && (
-                    <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 12 }}>
-                        <div style={{ padding: "12px 16px", borderRadius: "18px 18px 18px 4px", background: "var(--card)", border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)", animation: "pulse 1s infinite", fontSize: 20 }}>💭</div>
-                    </div>
+                    <CompactBubble role="assistant">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ display: "flex", gap: 4 }}>
+                                {[0, 1, 2].map((item) => (
+                                    <span
+                                        key={item}
+                                        style={{
+                                            width: 6,
+                                            height: 6,
+                                            borderRadius: 999,
+                                            background: "var(--accent)",
+                                            opacity: 0.75,
+                                            animation: `pulse 1s ${item * 0.12}s infinite`,
+                                            display: "inline-block",
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                            <span style={{ fontSize: 12, color: "var(--text2)" }}>考えています…</span>
+                        </div>
+                    </CompactBubble>
                 )}
+
                 <div ref={aiEnd} />
             </div>
 
             <div
                 style={{
                     flexShrink: 0,
-                    padding: "8px 12px 10px",
-                    borderTop: "1px solid var(--border2)",
                     display: "flex",
                     gap: 6,
                     overflowX: "auto",
-                    background: "var(--card)",
-                    borderRadius: 18,
-                    boxShadow: "var(--shadow-soft)",
-                    border: "1px solid rgba(18, 199, 194, 0.08)",
-                    marginBottom: 8,
+                    padding: "2px 0 4px",
+                    WebkitOverflowScrolling: "touch",
                 }}
             >
-                {AI_SUGGESTIONS.map(({ label, prompt, mode }) => (
-                    <button key={label} onClick={() => handleSuggestion({ prompt, mode })}
-                        style={{ whiteSpace: "nowrap", padding: "8px 13px", borderRadius: 999, background: "linear-gradient(180deg, var(--card2), var(--card))", color: "var(--text2)", fontSize: 12, fontWeight: 700, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
+                {AI_SUGGESTIONS.map(({ label, prompt }) => (
+                    <button
+                        key={label}
+                        onClick={() => handleSuggestion({ label, prompt })}
+                        className="pressable"
+                        style={{
+                            whiteSpace: "nowrap",
+                            padding: "7px 11px",
+                            borderRadius: 999,
+                            background:
+                                activeQuickAction === label
+                                    ? "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))"
+                                    : "linear-gradient(180deg, var(--card2), var(--card))",
+                            color: activeQuickAction === label ? "var(--text)" : "var(--text2)",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            border: "1px solid rgba(18, 199, 194, 0.12)",
+                            boxShadow: "var(--shadow-card)",
+                            transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
+                        }}
+                    >
                         {label}
                     </button>
                 ))}
@@ -136,21 +306,59 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
             <div
                 style={{
                     flexShrink: 0,
-                    padding: `10px 12px ${FOOTER_SAFE_PADDING}`,
+                    padding: `9px 10px ${FOOTER_SAFE_PADDING}`,
                     display: "flex",
+                    flexDirection: "column",
                     gap: 8,
                     background: "var(--card)",
-                    borderRadius: 22,
+                    borderRadius: 20,
                     boxShadow: "var(--shadow-card)",
                     border: "1px solid rgba(18, 199, 194, 0.08)",
                 }}
             >
-                <input ref={inputRef} value={aiInput} onChange={e => setAiInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleSend()}
-                    placeholder="AI Coachに聞く..."
-                    style={{ flex: 1, padding: "13px 16px", borderRadius: 24, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 14, boxShadow: "none" }} />
-                <button onClick={() => handleSend()} disabled={aiLoad}
-                    style={{ width: 48, height: 48, borderRadius: 24, background: aiLoad ? "var(--border2)" : "linear-gradient(135deg, var(--accent), var(--accent2))", color: "#fff", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: aiLoad ? "none" : "var(--shadow-soft)" }}>↑</button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                        ref={inputRef}
+                        value={aiInput}
+                        onChange={(e) => setAiInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                        placeholder="今日は背中の日なんだけど…"
+                        style={{
+                            flex: 1,
+                            padding: "11px 14px",
+                            borderRadius: 20,
+                            background: "var(--card2)",
+                            border: "1px solid var(--border2)",
+                            color: "var(--text)",
+                            fontSize: 13,
+                            minHeight: 42,
+                            boxShadow: "none",
+                        }}
+                    />
+                    <button
+                        onClick={() => handleSend()}
+                        disabled={aiLoad}
+                        className="pressable"
+                        style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            background: aiLoad ? "var(--border2)" : "linear-gradient(135deg, var(--accent), var(--accent2))",
+                            color: "#fff",
+                            fontSize: 18,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: aiLoad ? "none" : "var(--shadow-soft)",
+                            flexShrink: 0,
+                        }}
+                    >
+                        ↑
+                    </button>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
+                    ベンチ伸ばしたい、減量中のメニュー、フォーム相談などをそのまま聞けます。
+                </div>
             </div>
         </div>
     );

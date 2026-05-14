@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "../utils/supabase";
 
+const AI_DAILY_LIMIT = 3;
+const getTodayKey = () => new Date().toISOString().slice(0, 10);
+const getAiUsageKey = () => `ai_usage_${getTodayKey()}`;
+
 export function useAI(history) {
   const [aiMsgs, setAiMsgs] = useState([{
     role: "assistant",
@@ -9,10 +13,25 @@ export function useAI(history) {
   const [aiInput, setAiInput] = useState("");
   const [aiLoad, setAiLoad] = useState(false);
   const aiEnd = useRef(null);
+  const [aiUsageCount, setAiUsageCount] = useState(() => {
+    try {
+      return Number(localStorage.getItem(getAiUsageKey()) || 0) || 0;
+    } catch {
+      return 0;
+    }
+  });
 
   useEffect(() => {
     aiEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [aiMsgs]);
+
+  useEffect(() => {
+    try {
+      setAiUsageCount(Number(localStorage.getItem(getAiUsageKey()) || 0) || 0);
+    } catch {
+      setAiUsageCount(0);
+    }
+  }, []);
 
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
@@ -21,6 +40,11 @@ export function useAI(history) {
     const newMsgs = [...aiMsgs, { role: "user", content: userMsg }];
     setAiMsgs(newMsgs);
     setAiLoad(true);
+    try {
+      const nextUsageCount = aiUsageCount + 1;
+      setAiUsageCount(nextUsageCount);
+      localStorage.setItem(getAiUsageKey(), String(nextUsageCount));
+    } catch {}
     try {
       const {
         data: { session },
@@ -67,5 +91,14 @@ export function useAI(history) {
     }
   };
 
-  return { aiMsgs, aiInput, setAiInput, aiLoad, aiEnd, sendAI };
+  return {
+    aiMsgs,
+    aiInput,
+    setAiInput,
+    aiLoad,
+    aiEnd,
+    sendAI,
+    aiRemaining: Math.max(0, AI_DAILY_LIMIT - aiUsageCount),
+    aiUsageCount,
+  };
 }

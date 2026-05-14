@@ -523,7 +523,7 @@ export default function GymApp() {
 
 
     // ─── AI Coach ─────────────────────────────────────
-    const { aiMsgs, aiInput, setAiInput, aiLoad, aiEnd, sendAI } = useAI(history);
+    const { aiMsgs, aiInput, setAiInput, aiLoad, aiEnd, sendAI, aiRemaining } = useAI(history);
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
@@ -2742,6 +2742,8 @@ export default function GymApp() {
                         sendAI={sendAI}
                         aiLoad={aiLoad}
                         aiEnd={aiEnd}
+                        history={history}
+                        aiRemaining={aiRemaining}
                     />
                 )}
 
