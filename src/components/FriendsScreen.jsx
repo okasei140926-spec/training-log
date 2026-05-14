@@ -1671,7 +1671,7 @@ export default function FriendsScreen({
         );
     }
     return (
-        <div className="fade-in" style={{ ...S.page, paddingBottom: 24 }}>
+        <div className="fade-in" style={{ ...S.page, paddingBottom: 20 }}>
             {showFeedSections && (
                 <>
                     <div
@@ -1801,34 +1801,34 @@ export default function FriendsScreen({
                                         style={{
                                             background: "var(--card)",
                                             borderRadius: 22,
-                                            padding: 14,
+                                            padding: 12,
                                             border: "1px solid var(--border2)",
                                             boxShadow: "var(--shadow-card)",
                                         }}
                                     >
-                                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                                            <div style={{ width: 40, height: 40, borderRadius: 20, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+                                            <div style={{ width: 38, height: 38, borderRadius: 19, background: "linear-gradient(135deg, var(--accent), var(--accent2))", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, overflow: "hidden", flexShrink: 0 }}>
                                                 {userGroup.profile?.avatar1_url
                                                     ? <img src={userGroup.profile.avatar1_url} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                                     : avatarSeed
                                                 }
                                             </div>
                                             <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ fontSize: 17, fontWeight: 900, color: "var(--text)", lineHeight: 1.2 }}>
+                                                <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)", lineHeight: 1.15 }}>
                                                     {userGroup.userName}
                                                 </div>
                                                 {userGroup.handle && (
-                                                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2, lineHeight: 1.25 }}>
+                                                    <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 1, lineHeight: 1.2 }}>
                                                         {userGroup.handle}
                                                     </div>
                                                 )}
-                                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4, fontWeight: 700 }}>
+                                                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 3, fontWeight: 700, lineHeight: 1.15 }}>
                                                     直近7日 {userGroup.activityDayCount}日記録
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div style={{ display: "grid", gap: 5 }}>
+                                        <div style={{ display: "grid", gap: 4 }}>
                                             {userGroup.dates.map((dateGroup) => {
                                                 const expandedKey = `${userGroup.userId}:${dateGroup.date}`;
                                                 const isExpanded = Boolean(expandedFeedDates[expandedKey]);
@@ -1841,8 +1841,12 @@ export default function FriendsScreen({
                                                         key={expandedKey}
                                                         style={{
                                                             borderRadius: 12,
-                                                            border: "1px solid rgba(217, 228, 239, 0.75)",
-                                                            background: "rgba(255,255,255,0.72)",
+                                                            border: isExpanded
+                                                                ? "1px solid rgba(18, 199, 194, 0.16)"
+                                                                : "1px solid rgba(18, 199, 194, 0.12)",
+                                                            background: isExpanded
+                                                                ? "rgba(18, 199, 194, 0.08)"
+                                                                : "rgba(18, 199, 194, 0.04)",
                                                             overflow: "hidden",
                                                         }}
                                                     >
@@ -1864,20 +1868,21 @@ export default function FriendsScreen({
                                                                 display: "flex",
                                                                 alignItems: "center",
                                                                 justifyContent: "space-between",
-                                                                gap: 8,
+                                                                gap: 7,
                                                                 minHeight: 44,
-                                                                padding: "6px 12px",
+                                                                padding: "3px 11px",
                                                                 border: "none",
                                                                 background: "transparent",
                                                                 color: "var(--text)",
-                                                                fontSize: 12,
+                                                                fontSize: 11,
                                                                 fontWeight: 800,
+                                                                lineHeight: 1.1,
                                                                 textAlign: "left",
                                                                 cursor: "pointer",
                                                             }}
                                                         >
-                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                                                                <span style={{ color: "var(--text2)", fontSize: 10, width: 11 }}>
+                                                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                                                <span style={{ color: "var(--text2)", fontSize: 9, width: 10 }}>
                                                                     {isExpanded ? "▼" : "▶"}
                                                                 </span>
                                                                 <span>{formatFeedDateShort(dateGroup.date, today)}</span>
@@ -1885,7 +1890,7 @@ export default function FriendsScreen({
                                                         </button>
 
                                                         {isExpanded && (
-                                                            <div style={{ padding: "0 12px 10px" }}>
+                                                            <div style={{ padding: "0 11px 9px" }}>
                                                                 <div style={{ display: "grid", gap: 2 }}>
                                                                     {dateGroup.detailedExercises.map((summaryItem, index) => {
                                                                         const showDivider = index !== dateGroup.detailedExercises.length - 1;
@@ -1893,7 +1898,7 @@ export default function FriendsScreen({
                                                                             <div
                                                                                 key={`${expandedKey}-${summaryItem.body_part || ""}-${summaryItem.exercise_name}-${index}`}
                                                                                 style={{
-                                                                                    padding: showDivider ? "5px 0 7px" : "5px 0 2px",
+                                                                                    padding: showDivider ? "4px 0 6px" : "4px 0 2px",
                                                                                     borderBottom: showDivider ? "1px solid rgba(217, 228, 239, 0.85)" : "none",
                                                                                 }}
                                                                             >
