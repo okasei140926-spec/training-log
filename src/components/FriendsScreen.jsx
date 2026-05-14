@@ -149,6 +149,13 @@ export default function FriendsScreen({
     const recentSevenStart = shiftDateKey(today, -6);
     const showFeedSections = mode !== "ranking";
     const showRankingSections = mode !== "feed";
+    const visibleFriendDatesCount = useMemo(
+        () => Object.values(friendSessionInsights.visibleDatesByUser || {}).reduce(
+            (sum, dates) => sum + (Array.isArray(dates) ? dates.length : 0),
+            0
+        ),
+        [friendSessionInsights.visibleDatesByUser]
+    );
 
     const hasTodayWorkoutRecord = useCallback((workoutData) => {
         return hasValidWorkoutOnDate(workoutData, today);
@@ -1259,12 +1266,18 @@ export default function FriendsScreen({
     }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion]);
 
     useEffect(() => {
+        if (!user || !showFeedSections) return;
+        if (!friendIds.length && visibleFriendDatesCount === 0) return;
+        fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
+    }, [user, showFeedSections, friendIds, visibleFriendDatesCount, fetchActivityFeed]);
+
+    useEffect(() => {
         if (!user) return undefined;
 
         const refreshVisibleData = () => {
             fetchFriendsData({ background: true }).catch(console.error);
             if (showFeedSections) {
-                fetchActivityFeed({ reset: true, background: true }).catch(console.error);
+                fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
             }
         };
 
@@ -1286,7 +1299,7 @@ export default function FriendsScreen({
     useEffect(() => {
         if (!user) return undefined;
         const intervalId = setInterval(() => {
-            fetchActivityFeed({ reset: true, background: true }).catch(console.error);
+            fetchActivityFeed({ reset: true, background: true, force: true }).catch(console.error);
         }, 90000);
 
         return () => clearInterval(intervalId);
@@ -1528,6 +1541,8 @@ export default function FriendsScreen({
 
     const groupedActivityFeed = useMemo(() => {
         const userMap = new Map();
+        const ownItemsCount = activityFeed.filter((item) => item?.user_id === user?.id).length;
+        const friendItemsCount = activityFeed.filter((item) => item?.user_id && item.user_id !== user?.id).length;
 
         activityFeed.forEach((item) => {
             const userId = item.user_id || item.userId || "unknown";
@@ -1565,7 +1580,7 @@ export default function FriendsScreen({
             group.datesMap.get(workoutDate).items.push(item);
         });
 
-        return Array.from(userMap.values())
+        const groupedUsers = Array.from(userMap.values())
             .map((group) => {
                 const dates = Array.from(group.datesMap.values())
                     .sort((a, b) => b.date.localeCompare(a.date))
@@ -1593,7 +1608,20 @@ export default function FriendsScreen({
                 };
             })
             .sort((a, b) => b.latestDate.localeCompare(a.latestDate));
-    }, [activityFeed, getDisplayUsername, myUsername, user?.id]);
+        console.log("[feed grouped] source counts", {
+            ownItemsCount,
+            friendItemsCount,
+            totalItemsCount: activityFeed.length,
+            acceptedFriendIds: friendIds,
+        });
+        console.log("[feed grouped] users", groupedUsers.map((u) => ({
+            userId: u.userId,
+            userName: u.userName,
+            dateCount: u.dates.length,
+            latestDate: u.latestDate,
+        })));
+        return groupedUsers;
+    }, [activityFeed, friendIds, getDisplayUsername, myUsername, user?.id]);
 
     const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
 
@@ -1794,6 +1822,11 @@ export default function FriendsScreen({
                                                         <button
                                                             type="button"
                                                             onClick={() => {
+                                                                console.log("[feed grouped] expand date", {
+                                                                    userId: userGroup.userId,
+                                                                    date: dateGroup.date,
+                                                                    exerciseCount: dateGroup.detailedExercises.length,
+                                                                });
                                                                 setExpandedFeedDates((prev) => ({
                                                                     ...prev,
                                                                     [expandedKey]: !prev[expandedKey],
