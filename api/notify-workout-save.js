@@ -128,8 +128,8 @@ export default async function handler(req, res) {
     for (const friendId of friendIds) {
       const friendWorkoutResult = await sendPushToUser({
         userId: friendId,
-        title: "PUMP",
-        body: `${actorName}さんが今日のトレーニングを記録しました`,
+        title: `${actorName}さんが記録しました`,
+        body: "今日のワークアウトをチェック",
         url: "/?screen=friends",
         type: "friend_workout",
         dedupeKey: `friend_workout:${user.id}:${workoutDate}`,
@@ -173,7 +173,7 @@ export default async function handler(req, res) {
 
         const result = await sendPushToUser({
           userId: friendId,
-          title: "PUMP",
+          title: `${actorName}さんが記録を更新しました`,
           body: candidate.body,
           url: "/?screen=friends",
           type: candidate.key === "total" ? "big3_overtake_total" : "big3_overtake_exercise",

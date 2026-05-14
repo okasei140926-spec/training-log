@@ -88,7 +88,7 @@ self.addEventListener("push", (event) => {
     payload = { body: event.data?.text?.() || "" };
   }
 
-  const title = payload.title || "PUMP";
+  const title = payload.title || "新しい通知";
   const options = {
     body: payload.body || "",
     icon: "/app-icon-192.png",

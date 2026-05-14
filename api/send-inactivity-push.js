@@ -77,7 +77,7 @@ export default async function handler(req, res) {
 
       const result = await sendPushToUser({
         userId,
-        title: "PUMP",
+        title: "トレーニングを再開しませんか",
         body: "最後のトレーニングから3日経ちました。軽く1種目だけでも記録しませんか？",
         url: "/?screen=history",
         type: "inactivity_reminder",

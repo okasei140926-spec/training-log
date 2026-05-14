@@ -83,8 +83,8 @@ export default async function handler(req, res) {
   }
 
   const payload = JSON.stringify({
-    title: "PUMP",
-    body: "通知テストです。記録リマインドやFriends通知に使われます。",
+    title: "通知テスト",
+    body: "記録リマインドや友達の更新通知はこのように届きます。",
     url: "/",
   });
 
