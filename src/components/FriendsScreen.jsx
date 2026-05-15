@@ -1340,6 +1340,16 @@ export default function FriendsScreen({
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
+        const hasCachedFriends = FRIENDS_SCREEN_CACHE.friendsData.userId === user.id
+            && Array.isArray(FRIENDS_SCREEN_CACHE.friendsData.friends)
+            && FRIENDS_SCREEN_CACHE.friendsData.fetchedAt > 0;
+        fetchFriendsData({
+            background: hasCachedFriends,
+        }).catch(console.error);
+    }, [user, showFeedSections, fetchFriendsData]);
+
+    useEffect(() => {
+        if (!user || !showFeedSections) return;
         const hasCachedFeed = FRIENDS_SCREEN_CACHE.feedData.userId === user.id
             && Array.isArray(FRIENDS_SCREEN_CACHE.feedData.activityFeed)
             && FRIENDS_SCREEN_CACHE.feedData.activityFeed.length > 0;
@@ -1636,6 +1646,42 @@ export default function FriendsScreen({
         const ownItemsCount = activityFeed.filter((item) => item?.user_id === user?.id).length;
         const friendItemsCount = activityFeed.filter((item) => item?.user_id && item.user_id !== user?.id).length;
 
+        const ensureUserGroup = ({ userId, username, avatar1Url, profile }) => {
+            if (!userId || userMap.has(userId)) return;
+            const isMe = userId === user?.id;
+            const displayName = isMe
+                ? getDisplayUsername(myUsername, { isMe: true })
+                : getDisplayUsername(username);
+            const rawHandle = isMe
+                ? (myUsername || "")
+                : (username || displayName || "");
+
+            userMap.set(userId, {
+                userId,
+                userName: displayName,
+                handle: rawHandle ? `@${String(rawHandle).replace(/^@+/, "")}` : "",
+                profile: profile || (avatar1Url ? { avatar1_url: avatar1Url } : null),
+                latestDate: "",
+                datesMap: new Map(),
+            });
+        };
+
+        ensureUserGroup({
+            userId: user?.id,
+            username: myUsername,
+            avatar1Url: avatarUrl,
+            profile: avatarUrl ? { avatar1_url: avatarUrl, username: myUsername } : { username: myUsername },
+        });
+
+        friends.forEach((friend) => {
+            ensureUserGroup({
+                userId: friend?.id,
+                username: friend?.username,
+                avatar1Url: friend?.avatar1_url,
+                profile: friend,
+            });
+        });
+
         activityFeed.forEach((item) => {
             const userId = item.user_id || item.userId || "unknown";
             const workoutDate = String(item.workout_date || item.date || "").slice(0, 10);
@@ -1694,12 +1740,21 @@ export default function FriendsScreen({
                     userName: group.userName,
                     handle: group.handle,
                     profile: group.profile,
-                    latestDate: group.latestDate,
+                    latestDate: dates[0]?.date || group.latestDate || "",
                     activityDayCount: dates.length,
                     dates,
                 };
             })
-            .sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+            .sort((a, b) => {
+                if (a.userId === user?.id && b.userId !== user?.id) return -1;
+                if (b.userId === user?.id && a.userId !== user?.id) return 1;
+                const aHasActivity = a.activityDayCount > 0;
+                const bHasActivity = b.activityDayCount > 0;
+                if (aHasActivity !== bHasActivity) return aHasActivity ? -1 : 1;
+                const dateCompare = String(b.latestDate || "").localeCompare(String(a.latestDate || ""));
+                if (dateCompare !== 0) return dateCompare;
+                return String(a.userName || "").localeCompare(String(b.userName || ""));
+            });
         console.log("[feed grouped] source counts", {
             ownItemsCount,
             friendItemsCount,
@@ -1714,9 +1769,10 @@ export default function FriendsScreen({
         })));
         console.timeEnd("[feed] build grouped");
         return groupedUsers;
-    }, [activityFeed, friendIds, getDisplayUsername, myUsername, user?.id]);
+    }, [activityFeed, avatarUrl, friendIds, friends, getDisplayUsername, myUsername, user?.id]);
 
     const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
+    const hasVisibleFeedUsers = groupedActivityFeed.length > 0;
 
     if (!user) {
         return (
@@ -1824,7 +1880,7 @@ export default function FriendsScreen({
                         )}
                     </div>
 
-                    {activityFeed.length === 0 && !activityFeedLoading && !feedRefreshing ? (
+                    {!hasVisibleFeedUsers && activityFeed.length === 0 && !activityFeedLoading && !feedRefreshing ? (
                         <div
                             style={{
                                 ...S.sectionCard,
@@ -1888,14 +1944,26 @@ export default function FriendsScreen({
                                                         {userGroup.handle}
                                                     </div>
                                                 )}
-                                                <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 3, fontWeight: 700, lineHeight: 1.15 }}>
-                                                    直近7日 {userGroup.activityDayCount}日記録
-                                                </div>
+                                            <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 3, fontWeight: 700, lineHeight: 1.15 }}>
+                                                直近7日 {userGroup.activityDayCount}日記録
                                             </div>
                                         </div>
+                                    </div>
 
-                                        <div style={{ display: "grid", gap: 4 }}>
-                                            {userGroup.dates.map((dateGroup) => {
+                                        {userGroup.activityDayCount === 0 ? (
+                                            <div
+                                                style={{
+                                                    fontSize: 12,
+                                                    color: "var(--text3)",
+                                                    lineHeight: 1.5,
+                                                    padding: "4px 2px 2px",
+                                                }}
+                                            >
+                                                直近7日の記録なし
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: "grid", gap: 4 }}>
+                                                {userGroup.dates.map((dateGroup) => {
                                                 const expandedKey = `${userGroup.userId}:${dateGroup.date}`;
                                                 const isExpanded = Boolean(expandedFeedDates[expandedKey]);
                                                 const primaryItem = dateGroup.primaryItem;
@@ -2052,8 +2120,9 @@ export default function FriendsScreen({
                                                         )}
                                                     </div>
                                                 );
-                                            })}
-                                        </div>
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
