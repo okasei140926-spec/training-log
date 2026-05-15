@@ -6,7 +6,10 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "calc(70px + var(--safe-bottom))",
+    // Keep enough space so content is not hidden by the fixed tab bar,
+    // but do not add safe-area here because the tab bar itself already
+    // consumes env(safe-area-inset-bottom).
+    paddingBottom: "70px",
   },
   page: {
     padding: "18px",
