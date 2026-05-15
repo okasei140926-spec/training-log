@@ -70,8 +70,8 @@ export const S = {
     borderTop: "1px solid rgba(18, 199, 194, 0.08)",
     boxShadow: "0 -1px 3px rgba(15,94,99,0.02)",
     display: "flex",
-    minHeight: "calc(50px + var(--safe-bottom))",
-    padding: "3px 6px var(--safe-bottom)",
+    minHeight: "50px",
+    padding: "3px 6px max(0px, var(--safe-bottom))",
   },
 };
 
