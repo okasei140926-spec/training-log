@@ -9,7 +9,7 @@ export const S = {
     // Keep enough space so content is not hidden by the fixed tab bar,
     // but do not add safe-area here because the tab bar itself already
     // consumes env(safe-area-inset-bottom).
-    paddingBottom: "58px",
+    paddingBottom: "54px",
   },
   page: {
     padding: "18px",
@@ -69,10 +69,13 @@ export const S = {
     WebkitBackdropFilter: "blur(24px)",
     borderTop: "1px solid rgba(18, 199, 194, 0.08)",
     boxShadow: "0 -1px 3px rgba(15,94,99,0.02)",
+    padding: "1px 4px max(0px, var(--safe-bottom))",
+  },
+  bottomNavInner: {
     display: "flex",
-    alignItems: "flex-start",
-    minHeight: "unset",
-    padding: "4px 6px max(0px, var(--safe-bottom))",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    width: "100%",
   },
 };
 
