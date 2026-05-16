@@ -323,6 +323,7 @@ export default function AnalyticsScreen({
   const [period, setPeriod] = useState(90);
   const [activeSummaryKey, setActiveSummaryKey] = useState(null);
   const [overviewScope, setOverviewScope] = useState("this_week");
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState("overview");
   const [selectedOverviewMetric, setSelectedOverviewMetric] = useState(null);
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
   const [showAllBodyPartPr, setShowAllBodyPartPr] = useState(false);
@@ -1092,6 +1093,124 @@ export default function AnalyticsScreen({
     <div ref={screenScrollRef} style={{ padding: "20px 20px calc(120px + var(--safe-bottom, 0px))", display: "flex", flexDirection: "column", gap: 18 }}>
       <div
         style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+          gap: 4,
+          padding: 5,
+          borderRadius: 16,
+          background: "var(--card)",
+          border: "1px solid rgba(18, 199, 194, 0.10)",
+          boxShadow: "var(--shadow-soft)",
+        }}
+      >
+        {[
+          { key: "overview", label: "概要" },
+          { key: "parts", label: "部位" },
+          { key: "exercises", label: "種目" },
+          { key: "pr", label: "PR履歴" },
+          { key: "trends", label: "推移" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveAnalysisTab(tab.key)}
+            style={{
+              padding: "10px 0",
+              borderRadius: 12,
+              border: "none",
+              background: activeAnalysisTab === tab.key
+                ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                : "transparent",
+              color: activeAnalysisTab === tab.key ? "#fff" : "var(--text2)",
+              fontSize: 11,
+              fontWeight: 900,
+              cursor: "pointer",
+              boxShadow: activeAnalysisTab === tab.key
+                ? "0 10px 22px rgba(15, 94, 99, 0.13)"
+                : "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeAnalysisTab === "parts" && (
+        <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>部位別分析</div>
+          <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {(overviewBodyPartStats || []).length > 0 ? overviewBodyPartStats.map((item) => {
+              const maxSets = Math.max(...overviewBodyPartStats.map((x) => Number(x.sets || 0)), 1);
+              const percent = Math.min(100, Math.round((Number(item.sets || 0) / maxSets) * 100));
+
+              return (
+                <div key={`part-tab-${item.bodyPart}`} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: 13 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 9 }}>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)" }}>{getBodyPartDisplayLabel(item.bodyPart)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 900, color: "var(--accent)" }}>{item.sets} set</div>
+                  </div>
+
+                  <div style={{ height: 8, borderRadius: 999, background: "rgba(18,199,194,0.10)", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${percent}%`, borderRadius: 999, background: BODY_PART_CHART_COLORS[item.bodyPart] || "var(--accent)" }} />
+                  </div>
+
+                  <div style={{ marginTop: 7, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text2)", fontWeight: 700 }}>
+                    <span>{Math.round(item.volume || 0).toLocaleString("ja-JP")}kg</span>
+                    <span>{item.frequency || item.workoutCount || 0}回</span>
+                  </div>
+                </div>
+              );
+            }) : (
+              <div style={{ color: "var(--text2)", fontSize: 13 }}>まだデータがありません</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeAnalysisTab === "exercises" && (
+        <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>種目分析</div>
+          <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {(overviewSummary.exerciseStats || []).length > 0 ? overviewSummary.exerciseStats.slice(0, 12).map((item) => (
+              <div key={`exercise-tab-${item.key}`} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: 13 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.exerciseName}</div>
+                    <div style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700, marginTop: 4 }}>{item.bodyPart} ・ {item.setCount} set</div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: "var(--accent)", whiteSpace: "nowrap" }}>{Math.round(item.volume || 0).toLocaleString("ja-JP")}kg</div>
+                </div>
+              </div>
+            )) : (
+              <div style={{ color: "var(--text2)", fontSize: 13 }}>まだデータがありません</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeAnalysisTab === "trends" && (
+        <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 12 }}>推移</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+            {[thisWeekSummary, lastWeekSummary, thisMonthSummary, lastMonthSummary].map((summary) => (
+              <div key={`trend-${summary.group}-${summary.shortLabel}`} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: 13 }}>
+                <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 7 }}>{summary.shortLabel}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "var(--text)" }}>{summary.totalVolume.toLocaleString("ja-JP")}kg</div>
+                <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 6, fontWeight: 700 }}>{summary.totalSets}set ・ {summary.workoutCount}回</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {activeAnalysisTab === "overview" && (<>
+      <div
+        style={{
           display: "inline-flex",
           gap: 8,
           padding: 6,
@@ -1327,6 +1446,9 @@ export default function AnalyticsScreen({
         </div>
       </div>
 
+      </>)}
+
+      {activeAnalysisTab === "pr" && (<>
       <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
         <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 12 }}>
           BIG3 PR
@@ -1418,6 +1540,10 @@ export default function AnalyticsScreen({
         )}
       </div>
 
+      </>)}
+
+      {activeAnalysisTab === "overview" && (
+        <>
       {onOpenPhotoCompare && (
         <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
@@ -1443,6 +1569,8 @@ export default function AnalyticsScreen({
             写真比較を開く
           </button>
         </div>
+      )}
+        </>
       )}
 
       <TrainingSummaryModal
