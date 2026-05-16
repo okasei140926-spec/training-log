@@ -1,66 +1,72 @@
 import { useMemo } from "react";
+import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
 
-const BODY_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
+const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
 
-const RECOVERY_COLORS = {
-    "非常に良好": "#12C7C2",
-    "良好": "#4FD29B",
-    "やや疲労": "#F59E0B",
-    "疲労あり": "#EF4444",
+const FALLBACK_PART_MAP = {
+    "ベンチ": "胸",
+    "インクライン": "胸",
+    "ペック": "胸",
+    "チェスト": "胸",
+    "ディップス": "胸",
+    "フライ": "胸",
+
+    "ラット": "背中",
+    "ロウ": "背中",
+    "ロー": "背中",
+    "デッド": "背中",
+    "懸垂": "背中",
+    "チンニング": "背中",
+    "プル": "背中",
+
+    "ショルダー": "肩",
+    "サイドレイズ": "肩",
+    "リアレイズ": "肩",
+    "フロントレイズ": "肩",
+
+    "カール": "二頭",
+    "二頭": "二頭",
+
+    "プレスダウン": "三頭",
+    "トライセプス": "三頭",
+    "エクステンション": "三頭",
+    "三頭": "三頭",
+
+    "スクワット": "四頭",
+    "レッグプレス": "四頭",
+    "レッグエクステンション": "四頭",
+    "四頭": "四頭",
+
+    "レッグカール": "ハム",
+    "ルーマニアン": "ハム",
+    "ハム": "ハム",
+
+    "腹": "腹筋",
+    "クランチ": "腹筋",
+    "レッグレイズ": "腹筋",
+    "プランク": "腹筋",
+};
+
+const RECOVERY_META = {
+    excellent: { label: "非常に良好", color: "#16d7d2" },
+    good: { label: "良好", color: "#55d89e" },
+    tired: { label: "やや疲労", color: "#f6a623" },
+    bad: { label: "疲労あり", color: "#ff4d4d" },
 };
 
 function resolveBodyPart(exName, muscleEx, overrides) {
     if (overrides?.[exName]) return overrides[exName];
+
     const found = Object.entries(muscleEx || {}).find(([, exs]) =>
-        exs.some(e => e.name === exName)
+        Array.isArray(exs) && exs.some(e => {
+            const name = typeof e === "string" ? e : e?.name;
+            return name === exName;
+        })
     );
-    return found?.[0] || "その他";
-}
+    if (found?.[0]) return found[0];
 
-function calcRecovery(history, bodyPart, muscleEx, overrides) {
-    const now = Date.now();
-    let lastTrainedMs = null;
-    let recentSets = 0;
-
-    Object.entries(history || {}).forEach(([exName, records]) => {
-        const bp = resolveBodyPart(exName, muscleEx, overrides);
-        if (bp !== bodyPart) return;
-
-        records?.forEach(record => {
-            const d = new Date(record.date);
-            if (isNaN(d)) return;
-            const ms = d.getTime();
-            if (!lastTrainedMs || ms > lastTrainedMs) lastTrainedMs = ms;
-
-            const hoursAgo = (now - ms) / 3600000;
-            if (hoursAgo < 168) {
-                recentSets += Array.isArray(record.sets)
-                    ? record.sets.filter(s => Number(s?.reps) > 0).length
-                    : Number(record.setCount || 0);
-            }
-        });
-    });
-
-    if (!lastTrainedMs) return { pct: 100, label: "非常に良好" };
-
-    const hoursAgo = (now - lastTrainedMs) / 3600000;
-    let pct;
-    if (hoursAgo >= 72) pct = 100;
-    else if (hoursAgo >= 48) pct = 80 + ((hoursAgo - 48) / 24) * 20;
-    else if (hoursAgo >= 24) pct = 50 + ((hoursAgo - 24) / 24) * 30;
-    else pct = Math.max(20, (hoursAgo / 24) * 50);
-
-    if (recentSets > 20) pct -= 20;
-    else if (recentSets > 12) pct -= 10;
-
-    pct = Math.max(20, Math.min(100, Math.round(pct)));
-
-    const label = pct >= 80 ? "非常に良好"
-        : pct >= 60 ? "良好"
-        : pct >= 40 ? "やや疲労"
-        : "疲労あり";
-
-    return { pct, label };
+    const key = Object.keys(FALLBACK_PART_MAP).find(k => exName.includes(k));
+    return key ? FALLBACK_PART_MAP[key] : "その他";
 }
 
 function getWeekRange() {
@@ -68,67 +74,133 @@ function getWeekRange() {
     const day = now.getDay();
     const diff = day === 0 ? -6 : 1 - day;
     const mon = new Date(now);
+    mon.setHours(0, 0, 0, 0);
     mon.setDate(now.getDate() + diff);
+
     const sun = new Date(mon);
     sun.setDate(mon.getDate() + 6);
+
     const fmt = d => `${d.getMonth() + 1}/${d.getDate()}`;
-    return { label: `${fmt(mon)} - ${fmt(sun)}`, mon, sun };
+    return {
+        label: `${fmt(mon)} - ${fmt(sun)}`,
+        start: mon.toISOString().slice(0, 10),
+        end: sun.toISOString().slice(0, 10),
+    };
 }
 
-function getWeekSets(history, muscleEx, overrides, bodyPart) {
-    const { mon, sun } = getWeekRange();
-    const monStr = mon.toISOString().slice(0, 10);
-    const sunStr = sun.toISOString().slice(0, 10);
-    let sets = 0;
+function getRecordSets(record) {
+    if (Array.isArray(record?.sets)) {
+        return record.sets.filter(s => Number(s?.reps) > 0);
+    }
+    return [];
+}
+
+function getRecordVolume(record) {
+    return getRecordSets(record).reduce((sum, s) => {
+        const weight = Number(s.weight || 0);
+        const reps = Number(s.reps || 0);
+        return sum + weight * reps;
+    }, 0);
+}
+
+function calcRecovery(history, bodyPart, muscleEx, overrides) {
+    const now = Date.now();
+    let lastMs = null;
+    let recentSetCount = 0;
 
     Object.entries(history || {}).forEach(([exName, records]) => {
         const bp = resolveBodyPart(exName, muscleEx, overrides);
         if (bp !== bodyPart) return;
 
-        records?.forEach(r => {
-            if (r.date >= monStr && r.date <= sunStr) {
-                sets += Array.isArray(r.sets)
-                    ? r.sets.filter(s => Number(s?.reps) > 0).length
-                    : Number(r.setCount || 0);
+        (records || []).forEach(record => {
+            const d = new Date(record.date + "T00:00:00");
+            if (Number.isNaN(d.getTime())) return;
+
+            const ms = d.getTime();
+            if (!lastMs || ms > lastMs) lastMs = ms;
+
+            const hoursAgo = (now - ms) / 3600000;
+            if (hoursAgo <= 168) {
+                const sets = getRecordSets(record);
+                recentSetCount += sets.length || Number(record.setCount || 0);
             }
         });
     });
 
-    return sets;
+    if (!lastMs) return { pct: 100, status: "excellent" };
+
+    const hours = (now - lastMs) / 3600000;
+    let pct = 25;
+
+    if (hours >= 96) pct = 100;
+    else if (hours >= 72) pct = 85 + ((hours - 72) / 24) * 15;
+    else if (hours >= 48) pct = 65 + ((hours - 48) / 24) * 20;
+    else if (hours >= 24) pct = 40 + ((hours - 24) / 24) * 25;
+    else pct = 20 + (hours / 24) * 20;
+
+    if (recentSetCount >= 18) pct -= 18;
+    else if (recentSetCount >= 12) pct -= 10;
+    else if (recentSetCount >= 8) pct -= 5;
+
+    pct = Math.max(20, Math.min(100, Math.round(pct)));
+
+    const status = pct >= 80 ? "excellent"
+        : pct >= 60 ? "good"
+        : pct >= 40 ? "tired"
+        : "bad";
+
+    return { pct, status };
 }
 
-function getRecentSessions(history, muscleEx, overrides) {
-    const sessionMap = {};
+function collectWeeklySets(history, muscleEx, overrides) {
+    const { start, end } = getWeekRange();
+    const map = {};
 
     Object.entries(history || {}).forEach(([exName, records]) => {
-        records?.forEach(r => {
-            if (!r.date) return;
+        const bp = resolveBodyPart(exName, muscleEx, overrides);
+        if (bp === "その他") return;
 
-            if (!sessionMap[r.date]) {
-                sessionMap[r.date] = {
-                    date: r.date,
+        (records || []).forEach(record => {
+            if (!record.date || record.date < start || record.date > end) return;
+            const sets = getRecordSets(record);
+            const count = sets.length || Number(record.setCount || 0);
+            map[bp] = (map[bp] || 0) + count;
+        });
+    });
+
+    return map;
+}
+
+function collectRecentSessions(history, muscleEx, overrides) {
+    const sessions = {};
+
+    Object.entries(history || {}).forEach(([exName, records]) => {
+        (records || []).forEach(record => {
+            const bp = resolveRecordedBodyPartLabel(record, exName, {
+                muscleEx,
+                exerciseBodyPartOverrides: overrides,
+            }) || resolveBodyPart(exName, muscleEx, overrides);
+            if (!record.date) return;
+
+            if (!sessions[record.date]) {
+                sessions[record.date] = {
+                    date: record.date,
                     parts: new Set(),
                     sets: 0,
                     volume: 0,
-                    minutes: r.elapsedMinutes || r.durationMinutes || null,
+                    minutes: record.elapsedMinutes || record.durationMinutes || null,
                 };
             }
 
-            const bp = resolveBodyPart(exName, muscleEx, overrides);
-            sessionMap[r.date].parts.add(bp);
+            if (bp !== "その他") sessions[record.date].parts.add(bp);
 
-            const sets = Array.isArray(r.sets) ? r.sets.filter(s => Number(s?.reps) > 0) : [];
-            sessionMap[r.date].sets += sets.length || Number(r.setCount || 0);
-
-            sets.forEach(s => {
-                const w = Number(s.weight || 0);
-                const reps = Number(s.reps || 0);
-                if (w > 0 && reps > 0) sessionMap[r.date].volume += w * reps;
-            });
+            const sets = getRecordSets(record);
+            sessions[record.date].sets += sets.length || Number(record.setCount || 0);
+            sessions[record.date].volume += getRecordVolume(record);
         });
     });
 
-    return Object.values(sessionMap)
+    return Object.values(sessions)
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 4)
         .map(s => ({
@@ -144,148 +216,194 @@ function formatDate(dateStr) {
     return `${d.getMonth() + 1}/${d.getDate()} (${days[d.getDay()]})`;
 }
 
-export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts }) {
-    const visibleParts = BODY_PARTS.filter(bp => !(hiddenBodyParts || []).includes(bp));
-
-    const recoveries = useMemo(() =>
-        visibleParts
-            .map(bp => ({ bp, ...calcRecovery(history, bp, muscleEx, exerciseBodyPartOverrides) }))
-            .slice(0, 8),
-        [history, muscleEx, exerciseBodyPartOverrides, visibleParts]
-    );
-
-    const { label: weekLabel } = getWeekRange();
-
-    const weekSets = useMemo(() =>
-        visibleParts
-            .map(bp => ({ bp, sets: getWeekSets(history, muscleEx, exerciseBodyPartOverrides, bp) }))
-            .filter(x => x.sets > 0)
-            .slice(0, 8),
-        [history, muscleEx, exerciseBodyPartOverrides, visibleParts]
-    );
-
-    const recentSessions = useMemo(() =>
-        getRecentSessions(history, muscleEx, exerciseBodyPartOverrides),
-        [history, muscleEx, exerciseBodyPartOverrides]
-    );
+function RecoveryCard({ part, pct, status }) {
+    const meta = RECOVERY_META[status];
+    const activeBars = Math.max(1, Math.round(pct / 20));
 
     return (
-        <div className="fade-in" style={{ padding: "18px 16px 22px" }}>
+        <button style={{
+            minWidth: 0,
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 15,
+            padding: "12px 6px 11px",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025))",
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.025)",
+        }}>
+            <div style={{ color: "#fff", fontSize: 14, fontWeight: 900, marginBottom: 10 }}>{part}</div>
+            <div style={{ color: meta.color, fontSize: 30, fontWeight: 950, lineHeight: 1 }}>{pct}%</div>
+            <div style={{ color: meta.color, fontSize: 12, fontWeight: 900, marginTop: 7 }}>{meta.label}</div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 3, marginTop: 12 }}>
+                {[1,2,3,4,5].map(i => (
+                    <span key={i} style={{
+                        width: 13,
+                        height: 5,
+                        borderRadius: 99,
+                        background: i <= activeBars ? meta.color : "rgba(255,255,255,0.14)",
+                        boxShadow: i <= activeBars ? `0 0 10px ${meta.color}55` : "none",
+                    }} />
+                ))}
+            </div>
+        </button>
+    );
+}
+
+export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts }) {
+    const week = getWeekRange();
+
+    const weeklySets = useMemo(() => (
+        collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides)
+    ), [history, muscleEx, exerciseBodyPartOverrides]);
+
+    const partsToShow = useMemo(() => {
+        const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));
+        const trained = Object.keys(weeklySets).filter(p => !base.includes(p));
+        return [...base, ...trained].slice(0, 8);
+    }, [hiddenBodyParts, weeklySets]);
+
+    const recoveries = useMemo(() => (
+        partsToShow.map(part => ({
+            part,
+            ...calcRecovery(history, part, muscleEx, exerciseBodyPartOverrides),
+        }))
+    ), [history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
+
+    const recentSessions = useMemo(() => (
+        collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides)
+    ), [history, muscleEx, exerciseBodyPartOverrides]);
+
+    const weeklyDisplay = partsToShow
+        .map(part => ({ part, sets: weeklySets[part] || 0 }))
+        .filter(x => x.sets > 0)
+        .slice(0, 8);
+
+    return (
+        <div className="fade-in" style={{
+            padding: "16px 14px 28px",
+            background: "linear-gradient(180deg, #05090b 0%, #071012 52%, #05090b 100%)",
+            color: "#fff",
+            minHeight: "calc(100vh - 170px)",
+        }}>
             <section style={{
-                background: "var(--card)",
-                borderRadius: 22,
-                padding: 14,
-                border: "1px solid rgba(18,199,194,0.10)",
-                boxShadow: "var(--shadow-card)",
+                borderRadius: 20,
+                padding: "14px 12px",
                 marginBottom: 14,
+                background: "linear-gradient(180deg, rgba(13,22,25,0.96), rgba(8,14,17,0.98))",
+                border: "1px solid rgba(255,255,255,0.07)",
+                boxShadow: "0 18px 40px rgba(0,0,0,0.42)",
+                overflow: "hidden",
             }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 13 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <div style={{ fontSize: 16, fontWeight: 900 }}>回復状況</div>
-                        <div style={{ color: "var(--text3)", fontSize: 12 }}>●</div>
+                        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, letterSpacing: 0.2 }}>回復状況</h2>
+                        <span style={{
+                            width: 17,
+                            height: 17,
+                            borderRadius: 99,
+                            display: "grid",
+                            placeItems: "center",
+                            background: "rgba(255,255,255,0.16)",
+                            color: "rgba(255,255,255,0.72)",
+                            fontSize: 11,
+                            fontWeight: 900,
+                        }}>i</span>
                     </div>
+
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {Object.entries(RECOVERY_COLORS).map(([label, color]) => (
-                            <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ width: 7, height: 7, borderRadius: 99, background: color, display: "inline-block" }} />
-                                <span style={{ fontSize: 10, color: "var(--text2)", fontWeight: 700 }}>{label}</span>
+                        {Object.values(RECOVERY_META).map(meta => (
+                            <div key={meta.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <span style={{ width: 7, height: 7, borderRadius: 99, background: meta.color }} />
+                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.78)", fontWeight: 750 }}>{meta.label}</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 9 }}>
-                    {recoveries.map(({ bp, pct, label }) => {
-                        const color = RECOVERY_COLORS[label];
-                        const bars = Math.round(pct / 20);
-                        return (
-                            <button key={bp} style={{
-                                background: "linear-gradient(180deg, var(--card2), var(--card))",
-                                border: "1px solid rgba(255,255,255,0.05)",
-                                borderRadius: 15,
-                                padding: "12px 6px",
-                                minHeight: 114,
-                                boxShadow: "inset 0 0 0 1px rgba(18,199,194,0.04)",
-                            }}>
-                                <div style={{ fontSize: 14, fontWeight: 900, color: "var(--text)" }}>{bp}</div>
-                                <div style={{ fontSize: 29, lineHeight: 1.1, fontWeight: 900, color, marginTop: 10 }}>{pct}%</div>
-                                <div style={{ fontSize: 12, fontWeight: 900, color, marginTop: 5 }}>{label}</div>
-                                <div style={{ display: "flex", gap: 3, justifyContent: "center", marginTop: 11 }}>
-                                    {[1,2,3,4,5].map(i => (
-                                        <span key={i} style={{
-                                            width: 13,
-                                            height: 5,
-                                            borderRadius: 99,
-                                            background: i <= bars ? color : "rgba(130,150,155,0.22)",
-                                        }} />
-                                    ))}
-                                </div>
-                            </button>
-                        );
-                    })}
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                    gap: 9,
+                }}>
+                    {recoveries.map(item => (
+                        <RecoveryCard key={item.part} {...item} />
+                    ))}
                 </div>
             </section>
 
             <section style={{
-                background: "var(--card)",
                 borderRadius: 18,
-                padding: "15px 18px",
-                border: "1px solid rgba(18,199,194,0.10)",
-                boxShadow: "var(--shadow-card)",
+                padding: "17px 18px",
                 marginBottom: 14,
+                background: "linear-gradient(180deg, rgba(13,22,25,0.96), rgba(8,14,17,0.98))",
+                border: "1px solid rgba(255,255,255,0.07)",
+                boxShadow: "0 16px 34px rgba(0,0,0,0.35)",
             }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-                    <div style={{ fontSize: 16, fontWeight: 900 }}>今週のトレーニング</div>
-                    <div style={{ fontSize: 13, color: "var(--text3)", fontWeight: 800 }}>{weekLabel}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>今週のトレーニング</h2>
+                    <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, fontWeight: 850 }}>{week.label}</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(Math.max(weekSets.length, 1), 8)}, 1fr)`, gap: 0 }}>
-                    {(weekSets.length ? weekSets : visibleParts.slice(0, 4).map(bp => ({ bp, sets: 0 }))).map(({ bp, sets }) => (
-                        <div key={bp} style={{
+
+                <div style={{
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${Math.min(Math.max(weeklyDisplay.length, 1), 8)}, minmax(0, 1fr))`,
+                    gap: 0,
+                }}>
+                    {(weeklyDisplay.length ? weeklyDisplay : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }))).map((x, index, arr) => (
+                        <div key={x.part} style={{
                             textAlign: "center",
-                            borderRight: "1px solid rgba(130,150,155,0.16)",
-                            padding: "2px 4px",
+                            borderRight: index !== arr.length - 1 ? "1px solid rgba(255,255,255,0.10)" : "none",
+                            padding: "0 5px",
                         }}>
-                            <div style={{ fontSize: 13, fontWeight: 900, color: "var(--text)" }}>{bp}</div>
-                            <div style={{ fontSize: 27, fontWeight: 900, color: "var(--text)", marginTop: 6 }}>{sets}</div>
-                            <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 800 }}>set</div>
+                            <div style={{ fontSize: 14, color: "#fff", fontWeight: 900 }}>{x.part}</div>
+                            <div style={{ fontSize: 30, color: "#fff", fontWeight: 950, marginTop: 7, lineHeight: 1 }}>{x.sets}</div>
+                            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.62)", fontWeight: 800, marginTop: 2 }}>set</div>
                         </div>
                     ))}
                 </div>
             </section>
 
             <section style={{
-                background: "var(--card)",
                 borderRadius: 18,
-                padding: "16px 18px",
-                border: "1px solid rgba(18,199,194,0.10)",
-                boxShadow: "var(--shadow-card)",
+                padding: "17px 18px 8px",
+                background: "linear-gradient(180deg, rgba(13,22,25,0.96), rgba(8,14,17,0.98))",
+                border: "1px solid rgba(255,255,255,0.07)",
+                boxShadow: "0 16px 34px rgba(0,0,0,0.35)",
             }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                    <div style={{ fontSize: 17, fontWeight: 900 }}>最近の記録</div>
-                    <button style={{ background: "transparent", color: "var(--accent)", fontSize: 13, fontWeight: 900 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>最近の記録</h2>
+                    <button style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "#16d7d2",
+                        fontSize: 13,
+                        fontWeight: 900,
+                    }}>
                         すべて見る 〉
                     </button>
                 </div>
 
                 {recentSessions.length === 0 ? (
-                    <div style={{ padding: "22px 0", color: "var(--text3)", textAlign: "center", fontWeight: 700 }}>
+                    <div style={{ padding: "28px 0", textAlign: "center", color: "rgba(255,255,255,0.55)", fontWeight: 800 }}>
                         まだ記録がありません
                     </div>
                 ) : recentSessions.map((s, index) => (
                     <div key={s.date} style={{
                         display: "grid",
-                        gridTemplateColumns: "86px 1fr 58px 82px 48px 18px",
+                        gridTemplateColumns: "82px 1fr 58px 82px 44px 16px",
                         alignItems: "center",
-                        gap: 8,
-                        padding: "12px 0",
-                        borderBottom: index < recentSessions.length - 1 ? "1px solid rgba(130,150,155,0.18)" : "none",
+                        gap: 7,
+                        padding: "13px 0",
+                        borderBottom: index !== recentSessions.length - 1 ? "1px solid rgba(255,255,255,0.08)" : "none",
                     }}>
-                        <div style={{ fontSize: 13, color: "var(--text2)", fontWeight: 800 }}>{formatDate(s.date)}</div>
-                        <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 900 }}>{s.parts.join("・")}</div>
-                        <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 800, textAlign: "right" }}>{s.sets} set</div>
-                        <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 800, textAlign: "right" }}>{s.volume.toLocaleString()} kg</div>
-                        <div style={{ fontSize: 13, color: "var(--text2)", fontWeight: 800, textAlign: "right" }}>{s.minutes || 72}分</div>
-                        <div style={{ color: "var(--text3)", fontSize: 24 }}>›</div>
+                        <div style={{ color: "rgba(255,255,255,0.66)", fontSize: 13, fontWeight: 850 }}>
+                            {formatDate(s.date)}
+                        </div>
+                        <div style={{ color: "#fff", fontSize: 14, fontWeight: 930, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {s.parts.length ? s.parts.join("・") : "記録"}
+                        </div>
+                        <div style={{ color: "#fff", textAlign: "right", fontSize: 13, fontWeight: 850 }}>{s.sets} set</div>
+                        <div style={{ color: "#fff", textAlign: "right", fontSize: 13, fontWeight: 850 }}>{s.volume.toLocaleString()} kg</div>
+                        <div style={{ color: "rgba(255,255,255,0.72)", textAlign: "right", fontSize: 13, fontWeight: 850 }}>{s.minutes || 72}分</div>
+                        <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 24 }}>›</div>
                     </div>
                 ))}
             </section>
