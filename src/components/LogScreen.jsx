@@ -90,11 +90,23 @@ export default function LogScreen({
     const editRef = useRef(null);
 
     const setCountByBodyPart = getSetCountByBodyPart(
-        exercises.map((exercise) => ({
-            bodyPart: exercise.bodyPart || exercise.label || "その他",
-            exerciseName: exercise.name,
-            sets: logData[exercise.name] || getExSets(exercise),
-        })),
+        exercises.map((exercise) => {
+            const sets = logData[exercise.name] || getExSets(exercise);
+
+            // 記録中サマリーは古い exercise.bodyPart を信用しすぎない
+            // 現在の種目名・label を優先して、過去に残った部位ラベル混入を防ぐ
+            const bodyPart =
+                exercise.label ||
+                exercise.currentBodyPart ||
+                exercise.displayBodyPart ||
+                "その他";
+
+            return {
+                bodyPart,
+                exerciseName: exercise.name,
+                sets,
+            };
+        }),
         { sort: "fixed" }
     );
 
