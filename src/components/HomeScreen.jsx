@@ -77,6 +77,36 @@ function toNumber(value) {
     return Number.isFinite(n) ? n : 0;
 }
 
+function isBodyWeight(value) {
+    return String(value ?? "").trim().toUpperCase() === "BW";
+}
+
+function isLbsValue(value) {
+    const raw = String(value ?? "").toLowerCase();
+    return raw.includes("lbs") || raw.includes("lb");
+}
+
+function weightToKg(value) {
+    if (isBodyWeight(value)) return 0;
+    const n = toNumber(value);
+    return isLbsValue(value) ? n * 0.45359237 : n;
+}
+
+function formatWeightForDisplay(value) {
+    if (isBodyWeight(value)) return "BW";
+
+    const n = toNumber(value);
+    if (!n) return "0kg";
+
+    if (isLbsValue(value)) {
+        const kg = n * 0.45359237;
+        const rounded = Math.round(kg * 10) / 10;
+        return `${rounded}kg`;
+    }
+
+    return `${n}kg`;
+}
+
 function resolveBodyPart(exName, muscleEx, overrides, record = null) {
     // 1. 記録に保存された部位を最優先
     if (record) {
@@ -152,7 +182,7 @@ function getRecordSetCount(record) {
 
 function getRecordVolume(record) {
     return getRecordSets(record).reduce((sum, s) => {
-        const weight = String(s?.weight || "").toUpperCase() === "BW" ? 0 : toNumber(s?.weight);
+        const weight = weightToKg(s?.weight);
         const reps = toNumber(s?.reps);
         return sum + weight * reps;
     }, 0);
@@ -253,7 +283,7 @@ function collectRecentSessions(history, muscleEx, overrides) {
                 setCount,
                 volume: Math.round(volume),
                 sets: getRecordSets(record).map(s => ({
-                    weight: s.weight,
+                    weight: formatWeightForDisplay(s.weight),
                     reps: s.reps,
                 })),
             });
@@ -592,7 +622,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                                                     }}
                                                 >
                                                     <span style={{ color: "var(--home-muted2)" }}>{setIdx + 1} set</span>
-                                                    <span>{set.weight}kg × {set.reps}</span>
+                                                    <span>{set.weight} × {set.reps}</span>
                                                 </div>
                                             ))
                                         ) : (
