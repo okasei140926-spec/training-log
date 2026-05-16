@@ -178,6 +178,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
           overflowY: "auto",
             overflowX: "hidden",
+            overscrollBehaviorX: "none",
         }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -188,6 +189,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             padding: "18px 16px calc(24px + var(--safe-bottom, 0px))",
             boxSizing: "border-box",
             overscrollBehavior: "contain",
+            overscrollBehaviorX: "none",
             
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",
@@ -301,6 +303,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             marginBottom: 14,
             overflowY: "auto",
             overflowX: "hidden",
+            overscrollBehaviorX: "none",
             width: "100%",
           }}
         >
@@ -313,6 +316,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
               alignItems: "flex-start",
               overflowY: "auto",
             overflowX: "hidden",
+            overscrollBehaviorX: "none",
             }}
           >
             <div
