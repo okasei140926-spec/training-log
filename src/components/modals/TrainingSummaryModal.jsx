@@ -298,10 +298,29 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             display: "flex",
             justifyContent: "center",
             marginBottom: 14,
-            overflowX: "hidden",
+            overflow: "hidden",
+            width: "100%",
           }}
         >
-          <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} />
+          <div
+            style={{
+              width: sizeKey === "story" ? 360 * 0.54 : 360 * 0.86,
+              height: sizeKey === "story" ? 640 * 0.54 : 360 * 0.86,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "flex-start",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                transform: sizeKey === "story" ? "scale(0.54)" : "scale(0.86)",
+                transformOrigin: "top center",
+              }}
+            >
+              <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} />
+            </div>
+          </div>
         </div>
 
         <button

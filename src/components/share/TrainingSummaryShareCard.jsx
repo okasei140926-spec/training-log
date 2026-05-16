@@ -117,6 +117,8 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
     : "記録なし";
   const monthLabel = formatMonthLabel(summary.startKey);
   const monthCalendarCells = buildMonthCalendarCells(summary);
+  const monthCalendarRowCount = Math.ceil(monthCalendarCells.length / 7) || 5;
+  const compactMonthCalendar = isMonthly && isStory && monthCalendarRowCount > 5;
 
   if (isMonthly) {
     return (
@@ -168,7 +170,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
             background: "linear-gradient(180deg, rgba(8, 16, 28, 0.96), rgba(15, 23, 42, 0.82))",
             borderRadius: 20,
             border: "1px solid rgba(56, 189, 248, 0.16)",
-            padding: isStory ? "12px 12px 10px" : "10px 10px 8px",
+            padding: compactMonthCalendar ? "8px 10px 8px" : isStory ? "12px 12px 10px" : "10px 10px 8px",
             marginBottom: isStory ? 12 : 10,
           }}
         >
@@ -205,7 +207,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
               <div
                 key={cell.key}
                 style={{
-                  height: isStory ? 30 : 24,
+                  height: compactMonthCalendar ? 24 : isStory ? 30 : 24,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
