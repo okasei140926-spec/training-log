@@ -155,8 +155,9 @@ export default function FriendsScreen({
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
     const recentSevenStart = shiftDateKey(today, -6);
-    const showFeedSections = mode !== "ranking";
-    const showRankingSections = mode !== "feed";
+    const [localMode, setLocalMode] = useState(mode === "ranking" ? "ranking" : "feed");
+    const showFeedSections = localMode === "feed";
+    const showRankingSections = localMode === "ranking";
     const visibleFriendDatesCount = useMemo(
         () => Object.values(friendSessionInsights.visibleDatesByUser || {}).reduce(
             (sum, dates) => sum + (Array.isArray(dates) ? dates.length : 0),
@@ -1794,6 +1795,45 @@ export default function FriendsScreen({
     }
     return (
         <div className="fade-in" style={{ ...S.page, paddingBottom: 20 }}>
+            {/* アクティビティ/ランキング切り替えタブ */}
+            <div style={{
+                display: "flex",
+                background: "var(--card)",
+                borderRadius: 16,
+                padding: 4,
+                gap: 4,
+                border: "1px solid var(--border2)",
+                marginBottom: 4,
+            }}>
+                <button
+                    onClick={() => setLocalMode("feed")}
+                    style={{
+                        flex: 1,
+                        padding: "10px 0",
+                        borderRadius: 12,
+                        fontSize: 13,
+                        fontWeight: 800,
+                        border: "none",
+                        background: localMode === "feed" ? "var(--accent)" : "transparent",
+                        color: localMode === "feed" ? "#fff" : "var(--text3)",
+                        cursor: "pointer",
+                    }}
+                >アクティビティ</button>
+                <button
+                    onClick={() => setLocalMode("ranking")}
+                    style={{
+                        flex: 1,
+                        padding: "10px 0",
+                        borderRadius: 12,
+                        fontSize: 13,
+                        fontWeight: 800,
+                        border: "none",
+                        background: localMode === "ranking" ? "var(--accent)" : "transparent",
+                        color: localMode === "ranking" ? "#fff" : "var(--text3)",
+                        cursor: "pointer",
+                    }}
+                >ランキング</button>
+            </div>
             {showFeedSections && (
                 <>
                     <div
