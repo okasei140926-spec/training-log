@@ -176,7 +176,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           background: "var(--card-modal)",
           borderRadius: 24,
           boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
-          overflow: "hidden",
+          overflow: "auto",
         }}
         onClick={(event) => event.stopPropagation()}
       >
