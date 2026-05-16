@@ -295,16 +295,10 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
 
         <div
           style={{
-            height: sizeKey === "story" ? "48vh" : "50vh",
-            overflowY: "auto",
-            overflowX: "hidden",
-            WebkitOverflowScrolling: "touch",
-            touchAction: "pan-y",
             display: "flex",
             justifyContent: "center",
             marginBottom: 14,
-            borderRadius: 18,
-            background: "rgba(15, 23, 42, 0.03)",
+            overflowX: "hidden",
           }}
         >
           <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} />
