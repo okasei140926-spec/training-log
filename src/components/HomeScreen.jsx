@@ -151,7 +151,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
         visibleParts
             .map(bp => ({ bp, ...calcRecovery(history, bp, muscleEx, exerciseBodyPartOverrides) }))
             .slice(0, 8),
-        [history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts, visibleParts]
+        [history, muscleEx, exerciseBodyPartOverrides, visibleParts]
     );
 
     const { label: weekLabel } = getWeekRange();
@@ -161,7 +161,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
             .map(bp => ({ bp, sets: getWeekSets(history, muscleEx, exerciseBodyPartOverrides, bp) }))
             .filter(x => x.sets > 0)
             .slice(0, 8),
-        [history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts, visibleParts]
+        [history, muscleEx, exerciseBodyPartOverrides, visibleParts]
     );
 
     const recentSessions = useMemo(() =>
