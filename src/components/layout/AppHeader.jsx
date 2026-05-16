@@ -9,6 +9,8 @@ export default function AppHeader({
     onToggleTheme,
     showSettingsButton = false,
     onOpenSettings,
+    showCalendarButton = false,
+    onOpenCalendar,
 }) {
     return (
         <div style={S.header}>
@@ -25,6 +27,16 @@ export default function AppHeader({
                         aria-label="設定を開く"
                     >
                         ⚙️
+                    </button>
+                )}
+                {showCalendarButton && (
+                    <button
+                        type="button"
+                        onClick={onOpenCalendar}
+                        style={S.pillBtn}
+                        aria-label="カレンダーを開く"
+                    >
+                        📅
                     </button>
                 )}
                 {showLogTimer && (

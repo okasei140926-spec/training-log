@@ -37,6 +37,7 @@ import AIScreen from "./components/AIScreen";
 import AppHeader from "./components/layout/AppHeader";
 import BottomNav from "./components/layout/BottomNav";
 import PushPromptModal from "./components/PushPromptModal";
+import CalendarView from "./components/CalendarView";
 
 import AddExModal from "./components/modals/AddExModal";
 import WorkoutDaySummaryModal from "./components/modals/WorkoutDaySummaryModal";
@@ -347,7 +348,7 @@ export default function GymApp() {
         const ref = params.get("ref");
         if (ref) {
             localStorage.setItem("pendingFriendId", ref);
-            setScreen("ranking");
+            setScreen("feed");
             setShowAuth(true);
         }
     }, []);
@@ -386,8 +387,8 @@ export default function GymApp() {
     });
 
     useEffect(() => {
-        if (screen === "friends") {
-            setScreen("ranking");
+        if (screen === "friends" || screen === "ranking") {
+            setScreen("feed");
         }
     }, [screen]);
 
@@ -503,6 +504,7 @@ export default function GymApp() {
     const [summary, setSummary] = useState(null);
     const [workoutDayShareTarget, setWorkoutDayShareTarget] = useState(null);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [showCalendarModal, setShowCalendarModal] = useState(false);
     const [historySyncDiagnostic, setHistorySyncDiagnostic] = useState({
         localHistoryDates: [],
         remoteWorkoutDates: [],
@@ -1221,7 +1223,7 @@ export default function GymApp() {
         const pendingWorkoutNotification = pendingWorkoutNotificationRef.current;
 
         historySaveQueueRef.current = historySaveQueueRef.current
-            .catch(() => {})
+            .catch(() => { })
             .then(async () => {
                 if (latestUserIdRef.current !== currentUserId) return;
                 const saveRevision = historyRevisionRef.current;
@@ -1849,7 +1851,7 @@ export default function GymApp() {
                 ? {
                     workoutDate: normalizedDate,
                     sessionPayload,
-                  }
+                }
                 : null,
         });
     }, [exercises, getExUnit, getPR, getPreviousPR, logData, todayLabels, unit, user?.id]);
@@ -2403,23 +2405,23 @@ export default function GymApp() {
     }
 
     // ─── Main render ──────────────────────────────────
+    const isWorkoutRecording = Boolean(workoutStartedAt && !workoutIsFinished);
     const headerTitle =
-        screen === "log" ? "ワークアウト記録"
+        screen === "log" ? "ワークアウト"
             : screen === "analytics" ? "分析"
                 : screen === "photos" ? "写真比較"
-                : screen === "feed" ? "フィード"
-                : screen === "ranking" ? "ランキング"
-                : screen === "ai" ? "AI Coach"
-                        : "記録";
+                    : screen === "feed" ? "フィード"
+                        : screen === "ai" ? "AI Coach"
+                            : "ホーム";
 
     const bottomTabs = [
-        { id: "history", icon: "📊", label: "記録" },
+        { id: "history", icon: "⌂", label: "ホーム" },
         { id: "analytics", icon: "📈", label: "分析" },
-        { id: "feed", icon: "📰", label: "フィード" },
-        { id: "ranking", icon: "🏆", label: "ランキング" },
-        { id: "ai", icon: "🤖", label: "AI" },
+        { id: "log", icon: isWorkoutRecording ? "●" : "🏋️", label: isWorkoutRecording ? "REC" : "記録", primary: true, recording: isWorkoutRecording },
+        { id: "feed", icon: "◌", label: "フィード" },
+        { id: "ai", icon: "AI", label: "AI" },
     ];
-    const showOfflineOnlyCard = !isOnline && ["feed", "ranking", "ai"].includes(screen);
+    const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
 
     if (!isSupabaseConfigured) {
         return (
@@ -2495,8 +2497,10 @@ export default function GymApp() {
                     }}
                     isDark={isDark}
                     onToggleTheme={() => setIsDark(p => !p)}
-                    showSettingsButton={screen !== "log"}
+                    showSettingsButton
                     onOpenSettings={() => setShowSettingsModal(true)}
+                    showCalendarButton
+                    onOpenCalendar={() => setShowCalendarModal(true)}
                 />
 
                 {!isOnline && (
@@ -2568,60 +2572,60 @@ export default function GymApp() {
                                 : 0;
 
                             return (
-                        <LogScreen
-                            user={user}
-                            manualBests={manualBests}
-                            customBodyParts={customBodyParts}
-                            hiddenBodyParts={hiddenBodyParts}
-                            onAddCustomBodyPart={(bodyPart) => {
-                                setCustomBodyParts((prev) =>
-                                    prev.includes(bodyPart) ? prev : [...prev, bodyPart]
-                                );
-                            }}
-                            onUpdateHiddenBodyParts={setHiddenBodyParts}
-                            todayLabels={todayLabels}
-                            dayColor={dayColor}
-                            exercises={exercises}
-                            logData={logData}
-                            getExSets={getExSets}
-                            setField={setField}
-                            addSet={addSet}
-                            removeEx={removeEx}
-                            timerLeft={timerLeft}
-                            intervalSec={intervalSec}
-                            setIntervalSec={setIntervalSec}
-                            startTimer={startTimer}
-                            stopTimer={stopTimer}
-                            saveLog={saveLog}
-                            onAddEx={addExToSession}
-                            onQuickAddEx={quickAddToSession}
-                            onReorderEx={reorderEx}
-                            onRenameEx={renameEx}
-                            getPrev={getPrev}
-                            getPR={getPR}
-                            getPreviousPR={getPreviousPR}
-                            onCopyDown={copySetDown}
-                            onCopyDownReps={copyRepDown}
-                            unit={unit}
-                            getExUnit={getExUnit}
-                            onToggleExUnit={toggleExUnit}
-                            muscleEx={muscleEx}
-                            setTodayLabels={updateTodayLabels}
-                            history={history}
-                            logDate={logDate}
-                            workoutElapsedSec={displayedWorkoutElapsedSec}
-                            workoutTimerStatus={displayedWorkoutTimerStatus}
-                            onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
-                            resetSession={() => {
-                                setSessionEx(null);
-                                setLogData({});
-                                setExerciseUnits({});
-                                save("draft_sessionEx", null);
-                                save("draft_logData", {});
-                                save("draft_exerciseUnits", {});
-                                resetWorkoutElapsedTimer();
-                            }}
-                        />
+                                <LogScreen
+                                    user={user}
+                                    manualBests={manualBests}
+                                    customBodyParts={customBodyParts}
+                                    hiddenBodyParts={hiddenBodyParts}
+                                    onAddCustomBodyPart={(bodyPart) => {
+                                        setCustomBodyParts((prev) =>
+                                            prev.includes(bodyPart) ? prev : [...prev, bodyPart]
+                                        );
+                                    }}
+                                    onUpdateHiddenBodyParts={setHiddenBodyParts}
+                                    todayLabels={todayLabels}
+                                    dayColor={dayColor}
+                                    exercises={exercises}
+                                    logData={logData}
+                                    getExSets={getExSets}
+                                    setField={setField}
+                                    addSet={addSet}
+                                    removeEx={removeEx}
+                                    timerLeft={timerLeft}
+                                    intervalSec={intervalSec}
+                                    setIntervalSec={setIntervalSec}
+                                    startTimer={startTimer}
+                                    stopTimer={stopTimer}
+                                    saveLog={saveLog}
+                                    onAddEx={addExToSession}
+                                    onQuickAddEx={quickAddToSession}
+                                    onReorderEx={reorderEx}
+                                    onRenameEx={renameEx}
+                                    getPrev={getPrev}
+                                    getPR={getPR}
+                                    getPreviousPR={getPreviousPR}
+                                    onCopyDown={copySetDown}
+                                    onCopyDownReps={copyRepDown}
+                                    unit={unit}
+                                    getExUnit={getExUnit}
+                                    onToggleExUnit={toggleExUnit}
+                                    muscleEx={muscleEx}
+                                    setTodayLabels={updateTodayLabels}
+                                    history={history}
+                                    logDate={logDate}
+                                    workoutElapsedSec={displayedWorkoutElapsedSec}
+                                    workoutTimerStatus={displayedWorkoutTimerStatus}
+                                    onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
+                                    resetSession={() => {
+                                        setSessionEx(null);
+                                        setLogData({});
+                                        setExerciseUnits({});
+                                        save("draft_sessionEx", null);
+                                        save("draft_logData", {});
+                                        save("draft_exerciseUnits", {});
+                                        resetWorkoutElapsedTimer();
+                                    }}
+                                />
                             );
                         })()}
                     </div>
@@ -2653,7 +2657,7 @@ export default function GymApp() {
                         sessionSyncVersion={sessionSyncVersion}
                         user={user}
                         onLogin={() => setShowAuth(true)}
-                        onOpenRecord={() => setScreen("history")}
+                        onOpenRecord={() => setScreen("log")}
                         onLogout={handleLogout}
 
                         onCopyMenu={(exs) => {
@@ -2680,7 +2684,7 @@ export default function GymApp() {
                         sessionSyncVersion={sessionSyncVersion}
                         user={user}
                         onLogin={() => setShowAuth(true)}
-                        onOpenRecord={() => setScreen("history")}
+                        onOpenRecord={() => setScreen("log")}
                         onLogout={handleLogout}
                         onCopyMenu={(exs) => {
                             setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
@@ -2764,9 +2768,7 @@ export default function GymApp() {
                             <div style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.7 }}>
                                 {screen === "feed"
                                     ? "フィードはオンライン時に表示できます。通信が戻ると最新の記録を取得します。"
-                                    : screen === "ranking"
-                                        ? "ランキングはオンライン時に表示できます。通信が戻ると最新順位を取得します。"
-                                        : "AI Coach はオンライン時に利用できます。"}
+                                    : "AI Coach はオンライン時に利用できます。"}
                             </div>
                             <div style={{
                                 ...S.subtleCard,
@@ -2807,7 +2809,7 @@ export default function GymApp() {
                                 const targetDate = summary.openWorkoutDate;
                                 setSummary(null);
                                 handleCalendarDayOpen(targetDate);
-                              }
+                            }
                             : undefined
                     }
                     onShare={
@@ -2828,6 +2830,58 @@ export default function GymApp() {
                     user={user}
                     onLogout={handleLogout}
                 />
+                {showCalendarModal && (
+                    <div
+                        style={{
+                            position: "fixed",
+                            inset: 0,
+                            zIndex: 120,
+                            background: "rgba(0,0,0,0.45)",
+                            display: "flex",
+                            alignItems: "flex-end",
+                            justifyContent: "center",
+                            padding: "18px",
+                        }}
+                        onClick={() => setShowCalendarModal(false)}
+                    >
+                        <div
+                            style={{
+                                width: "100%",
+                                maxWidth: 430,
+                                background: "var(--card)",
+                                border: "1px solid var(--border2)",
+                                borderRadius: 24,
+                                padding: 16,
+                                boxShadow: "var(--shadow-card)",
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                                <div>
+                                    <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 800, letterSpacing: 1.4 }}>CALENDAR</div>
+                                    <div style={{ fontSize: 20, fontWeight: 900, color: "var(--text)" }}>カレンダー</div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCalendarModal(false)}
+                                    style={S.pillBtn}
+                                >
+                                    閉じる
+                                </button>
+                            </div>
+                            <CalendarView
+                                history={history}
+                                muscleEx={muscleEx}
+                                hiddenBodyParts={hiddenBodyParts}
+                                exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                                onDayOpen={(date) => {
+                                    setShowCalendarModal(false);
+                                    handleCalendarDayOpen(date);
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
                 {showAuth && (
                     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
                         <Auth onClose={() => setShowAuth(false)} isDark={isDark} />
@@ -2853,8 +2907,7 @@ export default function GymApp() {
                     note={
                         pushPromptMessage ||
                         "iPhoneではホーム画面に追加したアプリで通知を受け取れます。"
-                    }
-                    onPrimary={enablePushFromPrompt}
+                    } onPrimary={enablePushFromPrompt}
                     onSecondary={dismissPushPromptForToday}
                     busy={pushPromptBusy}
                     showPrimary={pushStatus.support.supported && pushStatus.permission !== "denied"}
