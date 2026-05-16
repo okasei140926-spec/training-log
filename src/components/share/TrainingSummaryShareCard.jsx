@@ -11,7 +11,7 @@ const PRESET_STYLES = {
   },
   story: {
     width: 360,
-    height: 640,
+    height: 560,
   },
 };
 
@@ -133,7 +133,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
           boxShadow: "0 30px 60px rgba(15, 23, 42, 0.32)",
           display: "flex",
           flexDirection: "column",
-          padding: isStory ? "18px 18px 18px" : "16px",
+          padding: isStory ? "14px" : "16px",
           boxSizing: "border-box",
           color: "#fff",
         }}
@@ -142,7 +142,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
           <div style={{ fontSize: 10, letterSpacing: 2.6, color: "rgba(255,255,255,0.56)", marginBottom: 6 }}>PUMP</div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div>
-              <div style={{ fontSize: isStory ? 26 : 22, fontWeight: 900, lineHeight: 1.1, marginBottom: 4 }}>
+              <div style={{ fontSize: isStory ? 22 : 22, fontWeight: 900, lineHeight: 1.1, marginBottom: 4 }}>
                 月間サマリー
               </div>
               <div style={{ fontSize: isStory ? 13 : 12, color: "rgba(255,255,255,0.8)" }}>{monthLabel}</div>
@@ -168,7 +168,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
             background: "linear-gradient(180deg, rgba(8, 16, 28, 0.96), rgba(15, 23, 42, 0.82))",
             borderRadius: 20,
             border: "1px solid rgba(56, 189, 248, 0.16)",
-            padding: isStory ? "12px 12px 10px" : "10px 10px 8px",
+            padding: isStory ? "8px" : "10px 10px 8px",
             marginBottom: isStory ? 12 : 10,
           }}
         >
@@ -205,7 +205,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
               <div
                 key={cell.key}
                 style={{
-                  height: isStory ? 30 : 24,
+                  height: isStory ? 24 : 24,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
