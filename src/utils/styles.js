@@ -114,6 +114,17 @@ export const css = `
     --info-border: rgba(51, 225, 219, 0.28);
     --focus-ring: 0 0 0 4px rgba(51, 225, 219, 0.18);
     --danger: #ef4444;
+    --home-bg: linear-gradient(180deg, #05090B 0%, #071012 52%, #05090B 100%);
+    --home-card: linear-gradient(180deg, rgba(13,22,25,0.98), rgba(8,14,17,0.99));
+    --home-inner-card: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+    --home-card-border: rgba(255,255,255,0.07);
+    --home-inner-border: rgba(255,255,255,0.08);
+    --home-row-border: rgba(255,255,255,0.08);
+    --home-title: #ffffff;
+    --home-text: #ffffff;
+    --home-muted: rgba(255,255,255,0.58);
+    --home-muted2: rgba(255,255,255,0.72);
+    --home-shadow: 0 18px 40px rgba(0,0,0,0.42);
   }
   .theme-light {
     --bg: linear-gradient(180deg, #F7FBFB 0%, #F1F6F7 100%);
@@ -140,6 +151,17 @@ export const css = `
     --info-soft: #ECFCFD;
     --info-border: #C4F3F2;
     --focus-ring: 0 0 0 4px rgba(51, 225, 219, 0.2);
+    --home-bg: linear-gradient(180deg, #F7FBFB 0%, #F1F6F7 100%);
+    --home-card: #ffffff;
+    --home-inner-card: linear-gradient(180deg, #ffffff, #F8FBFB);
+    --home-card-border: rgba(18,199,194,0.10);
+    --home-inner-border: rgba(18,199,194,0.12);
+    --home-row-border: rgba(15,94,99,0.10);
+    --home-title: #0A3F44;
+    --home-text: #0A3F44;
+    --home-muted: #8BA4A8;
+    --home-muted2: #5D7A7E;
+    --home-shadow: 0 14px 30px rgba(15,94,99,0.08);
   }
   .app-shell {
     min-height: 100vh;
