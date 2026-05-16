@@ -2412,7 +2412,7 @@ export default function GymApp() {
                 : screen === "ai" ? "AI Coach"
                         : "記録";
 
-    const isRecording = screen === "log" || sessionEx !== null || Object.keys(logData).length > 0;
+    const isRecording = screen === "log" && (sessionEx !== null || Object.keys(logData).length > 0);
     const bottomTabs = [
         { id: "history", icon: "🏠", label: "ホーム" },
         { id: "analytics", icon: "📊", label: "分析" },
