@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
+import { resolveRecordedBodyPartLabel, resolveVisibleBodyPartLabel } from "../utils/bodyPartClassification";
 
 const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
 
@@ -36,6 +36,25 @@ const FALLBACK_PART_MAP = {
     "プランク": "腹筋",
 };
 
+
+function normalizeHomeBodyPart(label) {
+    const raw = String(label || "").trim();
+    if (!raw) return "その他";
+
+    const map = {
+        "ハムストリングス": "ハム",
+        "ハムストリング": "ハム",
+        "大腿二頭筋": "ハム",
+        "お尻": "尻",
+        "臀部": "尻",
+        "ケツ": "尻",
+        "腹": "腹筋",
+        "腹部": "腹筋",
+    };
+
+    return map[raw] || raw;
+}
+
 const RECOVERY_META = {
     excellent: { label: "非常に良好", color: "#16D7D2" },
     good: { label: "良好", color: "#55D89E" },
@@ -49,26 +68,45 @@ function toNumber(value) {
 }
 
 function resolveBodyPart(exName, muscleEx, overrides, record = null) {
+    // 1. 記録に保存された部位を最優先
     if (record) {
-        const resolved = resolveRecordedBodyPartLabel(record, exName, {
+        const recorded = resolveRecordedBodyPartLabel(record, exName, {
             muscleEx,
             exerciseBodyPartOverrides: overrides,
         });
-        if (resolved && resolved !== "その他") return resolved;
+        if (recorded && recorded !== "その他") {
+            return normalizeHomeBodyPart(recorded);
+        }
     }
 
-    if (overrides?.[exName]) return overrides[exName];
+    // 2. 既存の部位分類ロジックを使う
+    const visible = resolveVisibleBodyPartLabel(exName, {
+        muscleEx,
+        exerciseBodyPartOverrides: overrides,
+    });
+    if (visible && visible !== "その他") {
+        return normalizeHomeBodyPart(visible);
+    }
 
+    // 3. 手動override
+    if (overrides?.[exName]) {
+        return normalizeHomeBodyPart(overrides[exName]);
+    }
+
+    // 4. muscleExから直接探す
     const found = Object.entries(muscleEx || {}).find(([, exs]) =>
         Array.isArray(exs) && exs.some(e => {
             const name = typeof e === "string" ? e : e?.name;
             return name === exName;
         })
     );
-    if (found?.[0]) return found[0];
+    if (found?.[0]) {
+        return normalizeHomeBodyPart(found[0]);
+    }
 
+    // 5. 最後の保険
     const key = Object.keys(FALLBACK_PART_MAP).find(k => String(exName || "").includes(k));
-    return key ? FALLBACK_PART_MAP[key] : "その他";
+    return key ? normalizeHomeBodyPart(FALLBACK_PART_MAP[key]) : "その他";
 }
 
 function getWeekRange() {
