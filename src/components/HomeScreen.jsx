@@ -398,6 +398,60 @@ function collectPartDetail(history, muscleEx, overrides, targetPart) {
     };
 }
 
+function collectWeeklyPartDetail(history, muscleEx, overrides, targetPart) {
+    const { start, end } = getWeekRange();
+    const exerciseMap = {};
+    let totalSets = 0;
+    let totalVolume = 0;
+    let lastDate = null;
+
+    Object.entries(history || {}).forEach(([exName, records]) => {
+        (records || []).forEach(record => {
+            if (!record.date || record.date < start || record.date > end) return;
+
+            const bp = resolveBodyPart(exName, muscleEx, overrides, record);
+            if (bp !== targetPart) return;
+
+            const sets = getRecordSetCount(record);
+            const volume = getRecordVolume(record);
+
+            if (!exerciseMap[exName]) {
+                exerciseMap[exName] = {
+                    name: exName,
+                    sets: 0,
+                    volume: 0,
+                    dates: new Set(),
+                };
+            }
+
+            exerciseMap[exName].sets += sets;
+            exerciseMap[exName].volume += volume;
+            exerciseMap[exName].dates.add(record.date);
+
+            totalSets += sets;
+            totalVolume += volume;
+
+            if (!lastDate || record.date > lastDate) lastDate = record.date;
+        });
+    });
+
+    const exercises = Object.values(exerciseMap)
+        .map(x => ({
+            ...x,
+            volume: Math.round(x.volume),
+            dates: [...x.dates].sort().reverse(),
+        }))
+        .sort((a, b) => b.sets - a.sets || b.volume - a.volume);
+
+    return {
+        part: targetPart,
+        totalSets,
+        totalVolume: Math.round(totalVolume),
+        lastDate,
+        exercises,
+    };
+}
+
 function getRecoveryAdvice(part, pct, detail) {
     if (!detail.lastDate) {
         return `${part}は最近の記録がないので、今日は狙いやすい部位です。`;
@@ -462,6 +516,7 @@ function RecoveryCard({ part, pct, status, onClick }) {
 export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts }) {
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
+    const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
     const week = getWeekRange();
 
     const weeklySets = useMemo(() => (
@@ -569,15 +624,25 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                     gap: 0,
                 }}>
                     {(weeklyDisplay.length ? weeklyDisplay : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }))).map((x, index, arr) => (
-                        <div key={x.part} style={{
-                            textAlign: "center",
-                            borderRight: index !== arr.length - 1 ? "1px solid var(--home-row-border)" : "none",
-                            padding: "0 5px",
-                        }}>
+                        <button
+                            key={x.part}
+                            onClick={() => {
+                                const detail = collectWeeklyPartDetail(history, muscleEx, exerciseBodyPartOverrides, x.part);
+                                setSelectedWeeklyPart(detail);
+                            }}
+                            style={{
+                                textAlign: "center",
+                                border: "none",
+                                borderRight: index !== arr.length - 1 ? "1px solid var(--home-row-border)" : "none",
+                                padding: "0 5px",
+                                background: "transparent",
+                                cursor: "pointer",
+                            }}
+                        >
                             <div style={{ fontSize: 14, color: "var(--home-text)", fontWeight: 900 }}>{x.part}</div>
                             <div style={{ fontSize: 30, color: "var(--home-text)", fontWeight: 950, marginTop: 7, lineHeight: 1 }}>{x.sets}</div>
                             <div style={{ fontSize: 13, color: "var(--home-muted)", fontWeight: 800, marginTop: 2 }}>set</div>
-                        </div>
+                        </button>
                     ))}
                 </div>
             </section>
@@ -591,15 +656,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
             }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                     <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, color: "var(--home-title)" }}>最近の記録</h2>
-                    <button style={{
-                        background: "transparent",
-                        border: "none",
-                        color: "var(--accent)",
-                        fontSize: 13,
-                        fontWeight: 900,
-                    }}>
-                        すべて見る 〉
-                    </button>
+                    <span />
                 </div>
 
                 {recentSessions.length === 0 ? (
@@ -641,6 +698,129 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                 ))}
             </section>
 
+
+
+            {selectedWeeklyPart && (
+                <div
+                    onClick={() => setSelectedWeeklyPart(null)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 9998,
+                        background: "rgba(0,0,0,0.58)",
+                        backdropFilter: "blur(10px)",
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        padding: "18px 14px",
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "calc(100% - 28px)",
+                            maxWidth: 430,
+                            maxHeight: "82vh",
+                            overflowY: "auto",
+                            borderRadius: 24,
+                            background: "var(--home-card)",
+                            border: "1px solid var(--home-card-border)",
+                            boxShadow: "0 24px 60px rgba(0,0,0,0.45)",
+                            padding: 20,
+                            color: "var(--home-text)",
+                        }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                            <div>
+                                <div style={{ color: "var(--home-muted2)", fontSize: 13, fontWeight: 850 }}>
+                                    今週のトレーニング
+                                </div>
+                                <h2 style={{ margin: "6px 0 4px", fontSize: 28, fontWeight: 950, color: "var(--home-title)" }}>
+                                    {selectedWeeklyPart.part}
+                                </h2>
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                                    <span style={detailPill}>{selectedWeeklyPart.totalSets} set</span>
+                                    <span style={detailPill}>{selectedWeeklyPart.totalVolume.toLocaleString()} kg</span>
+                                    <span style={detailPill}>
+                                        {selectedWeeklyPart.lastDate ? `最終 ${formatDate(selectedWeeklyPart.lastDate)}` : "記録なし"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => setSelectedWeeklyPart(null)}
+                                style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 999,
+                                    border: "1px solid var(--home-card-border)",
+                                    background: "rgba(130,150,155,0.12)",
+                                    color: "var(--home-text)",
+                                    fontSize: 22,
+                                    fontWeight: 800,
+                                }}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div style={{ marginTop: 18 }}>
+                            <div style={{ color: "var(--home-title)", fontSize: 16, fontWeight: 950, marginBottom: 10 }}>
+                                種目内訳
+                            </div>
+
+                            {(selectedWeeklyPart.exercises || []).length > 0 ? (
+                                <div style={{ display: "grid", gap: 10 }}>
+                                    {selectedWeeklyPart.exercises.map((ex, idx) => (
+                                        <div
+                                            key={`${ex.name}-${idx}`}
+                                            style={{
+                                                borderRadius: 17,
+                                                border: "1px solid var(--home-inner-border)",
+                                                background: "var(--home-inner-card)",
+                                                padding: 14,
+                                            }}
+                                        >
+                                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                                                <div style={{
+                                                    color: "var(--home-title)",
+                                                    fontSize: 16,
+                                                    fontWeight: 950,
+                                                    whiteSpace: "nowrap",
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                }}>
+                                                    {ex.name}
+                                                </div>
+                                                <div style={{ color: "var(--accent)", fontSize: 14, fontWeight: 950 }}>
+                                                    {ex.sets} set
+                                                </div>
+                                            </div>
+
+                                            <div style={{
+                                                marginTop: 8,
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                gap: 8,
+                                                color: "var(--home-muted2)",
+                                                fontSize: 12,
+                                                fontWeight: 850,
+                                            }}>
+                                                <span>{ex.volume.toLocaleString()} kg</span>
+                                                <span>{ex.dates.join(" / ")}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div style={{ color: "var(--home-muted)", fontWeight: 800, padding: "10px 0" }}>
+                                    この部位の今週の記録はありません
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {selectedRecovery && (
                 <div
