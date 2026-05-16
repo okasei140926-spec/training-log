@@ -220,10 +220,60 @@ function getRecordVolume(record) {
     }, 0);
 }
 
+
+function getExerciseFatigueCoeff(exName) {
+    const name = String(exName || "");
+
+    if (name.includes("スクワット")) return 2.4;
+    if (name.includes("デッド") || name.includes("ルーマニアン")) return 2.5;
+    if (name.includes("レッグプレス")) return 2.0;
+    if (name.includes("ベンチ")) return 1.8;
+    if (name.includes("ショルダー") || name.includes("オーバーヘッド")) return 1.6;
+    if (name.includes("ラット") || name.includes("ロウ") || name.includes("ロー") || name.includes("懸垂")) return 1.5;
+    if (name.includes("カール") || name.includes("プレスダウン") || name.includes("レイズ")) return 1.1;
+    if (name.includes("フライ") || name.includes("フェイスプル")) return 1.0;
+    if (name.includes("腹") || name.includes("クランチ") || name.includes("プランク")) return 0.8;
+
+    return 1.2;
+}
+
+function getSetFatigueScore(exName, set) {
+    const coeff = getExerciseFatigueCoeff(exName);
+    const weight = weightToKg(set?.weight);
+    const reps = toNumber(set?.reps);
+
+    if (reps <= 0) return 0;
+
+    let intensity = 1.0;
+
+    if (weight >= 180) intensity = 2.4;
+    else if (weight >= 140) intensity = 2.0;
+    else if (weight >= 100) intensity = 1.65;
+    else if (weight >= 60) intensity = 1.3;
+    else if (weight >= 30) intensity = 1.1;
+
+    let repFactor = 1.0;
+    if (reps <= 5) repFactor = 1.18;
+    else if (reps <= 8) repFactor = 1.08;
+    else if (reps >= 15) repFactor = 0.92;
+
+    return coeff * intensity * repFactor;
+}
+
+function getRecordFatigueScore(exName, record) {
+    const sets = getRecordSets(record);
+
+    if (sets.length === 0) {
+        return getRecordSetCount(record) * getExerciseFatigueCoeff(exName);
+    }
+
+    return sets.reduce((sum, set) => sum + getSetFatigueScore(exName, set), 0);
+}
+
 function calcRecovery(history, bodyPart, muscleEx, overrides) {
     const now = Date.now();
     let lastMs = null;
-    let recentSetCount = 0;
+    let fatigueScore = 0;
 
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
@@ -237,26 +287,25 @@ function calcRecovery(history, bodyPart, muscleEx, overrides) {
             if (!lastMs || ms > lastMs) lastMs = ms;
 
             const hoursAgo = (now - ms) / 3600000;
-            if (hoursAgo <= 168) recentSetCount += getRecordSetCount(record);
+            if (hoursAgo <= 168) {
+                const decay = Math.max(0, 1 - hoursAgo / 168);
+                fatigueScore += getRecordFatigueScore(exName, record) * decay;
+            }
         });
     });
 
     if (!lastMs) return { pct: 100, status: "excellent" };
 
-    const hours = (now - lastMs) / 3600000;
-    let pct = 25;
+    const lastHours = Math.max(0, (now - lastMs) / 3600000);
 
-    if (hours >= 96) pct = 100;
-    else if (hours >= 72) pct = 85 + ((hours - 72) / 24) * 15;
-    else if (hours >= 48) pct = 65 + ((hours - 48) / 24) * 20;
-    else if (hours >= 24) pct = 40 + ((hours - 24) / 24) * 25;
-    else pct = 20 + (hours / 24) * 20;
+    // 疲労が大きいほど、最大低下量と回復に必要な時間が増える
+    const maxPenalty = Math.max(18, Math.min(82, 12 + fatigueScore * 8));
+    const recoveryHours = Math.max(24, Math.min(120, 18 + fatigueScore * 8));
 
-    if (recentSetCount >= 18) pct -= 18;
-    else if (recentSetCount >= 12) pct -= 10;
-    else if (recentSetCount >= 8) pct -= 5;
+    const recoveredRatio = Math.min(1, lastHours / recoveryHours);
+    let pct = 100 - maxPenalty * (1 - recoveredRatio);
 
-    pct = Math.max(20, Math.min(100, Math.round(pct)));
+    pct = Math.max(18, Math.min(100, Math.round(pct)));
 
     const status = pct >= 80 ? "excellent"
         : pct >= 60 ? "good"
