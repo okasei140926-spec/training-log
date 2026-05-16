@@ -82,7 +82,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
     body.style.position = "fixed";
     body.style.top = `-${scrollTop}px`;
     body.style.width = "100%";
-    body.style.touchAction = "none";
+    body.style.touchAction = "";
     html.style.overflow = "hidden";
     html.style.overscrollBehavior = "none";
 
@@ -176,7 +176,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           background: "var(--card-modal)",
           borderRadius: 24,
           boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
-          overflow: "auto",
+          overflow: "hidden",
         }}
         onClick={(event) => event.stopPropagation()}
       >
