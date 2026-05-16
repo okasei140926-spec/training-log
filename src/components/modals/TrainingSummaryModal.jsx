@@ -295,7 +295,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
 
         <div
           style={{
-            height: sizeKey === "story" ? "48vh" : "42vh",
+            height: sizeKey === "story" ? "48vh" : "50vh",
             overflowY: "auto",
             overflowX: "hidden",
             WebkitOverflowScrolling: "touch",
