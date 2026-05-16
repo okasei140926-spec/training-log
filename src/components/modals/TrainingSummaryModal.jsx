@@ -171,19 +171,18 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           position: "relative",
           width: "100%",
           maxWidth: 440,
-          maxHeight:
+          height:
             "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
           background: "var(--card-modal)",
           borderRadius: 24,
           boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
-          overflow: "visible",
+          overflow: "hidden",
         }}
         onClick={(event) => event.stopPropagation()}
       >
         <div
           style={{
-            maxHeight:
-              "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
+            height: "100%",
             overflowY: "auto",
             padding: "18px 16px calc(24px + var(--safe-bottom, 0px))",
             boxSizing: "border-box",
