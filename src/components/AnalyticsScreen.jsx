@@ -1544,32 +1544,6 @@ export default function AnalyticsScreen({
 
       {activeAnalysisTab === "overview" && (
         <>
-      {onOpenPhotoCompare && (
-        <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
-            写真比較
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 12, lineHeight: 1.5 }}>
-            見た目の変化を比較したい時だけ、ここから開けます。
-          </div>
-          <button
-            type="button"
-            onClick={onOpenPhotoCompare}
-            style={{
-              width: "100%",
-              padding: "11px 14px",
-              borderRadius: 14,
-              border: "1px solid rgba(18, 199, 194, 0.12)",
-              background: "linear-gradient(180deg, var(--card2), var(--card))",
-              color: "var(--text)",
-              fontSize: 13,
-              fontWeight: 800,
-            }}
-          >
-            写真比較を開く
-          </button>
-        </div>
-      )}
         </>
       )}
 
