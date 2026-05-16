@@ -33,6 +33,7 @@ import { useSettings } from "./hooks/useSettings";
 import LogScreen from "./components/LogScreen";
 import FriendsScreen from "./components/FriendsScreen";
 import HistoryScreen from "./components/HistoryScreen";
+import HomeScreen from "./components/HomeScreen";
 import AIScreen from "./components/AIScreen";
 import AppHeader from "./components/layout/AppHeader";
 import BottomNav from "./components/layout/BottomNav";
@@ -2408,9 +2409,9 @@ export default function GymApp() {
             : screen === "analytics" ? "分析"
                 : screen === "photos" ? "写真比較"
                 : screen === "feed" ? "フィード"
-                : screen === "ranking" ? "ランキング"
-                : screen === "ai" ? "AI Coach"
-                        : "記録";
+                : screen === "calendar" ? "カレンダー"
+                : screen === "ai" ? "AI"
+                    : "ホーム";
 
     const isRecording = false;
     const bottomTabs = [
@@ -2496,8 +2497,10 @@ export default function GymApp() {
                     }}
                     isDark={isDark}
                     onToggleTheme={() => setIsDark(p => !p)}
-                    showSettingsButton={screen !== "log"}
+                    showSettingsButton={true}
                     onOpenSettings={() => setShowSettingsModal(true)}
+                    showCalendarButton={true}
+                    onOpenCalendar={() => setScreen("calendar")}
                 />
 
                 {!isOnline && (
@@ -2699,6 +2702,17 @@ export default function GymApp() {
                 )}
 
                 {screen === "history" && (
+                    <HomeScreen
+                        history={history}
+                        muscleEx={muscleEx}
+                        exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                        hiddenBodyParts={hiddenBodyParts}
+                        onStartLog={() => setScreen("log")}
+                        user={user}
+                    />
+                )}
+
+                {screen === "calendar" && (
                     <HistoryScreen
                         history={history}
                         muscleEx={muscleEx}
@@ -2795,7 +2809,7 @@ export default function GymApp() {
                     </div>
                 )}
 
-                <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen} onSelectTab={setScreen} isRecording={isRecording} />
+                <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen} onSelectTab={setScreen} isRecording={isRecording} />
 
                 {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
                 <WorkoutDaySummaryModal

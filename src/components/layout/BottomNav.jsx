@@ -1,5 +1,46 @@
 import { S } from "../../utils/styles";
 
+function NavIcon({ id, active }) {
+    const stroke = active ? "var(--accent)" : "var(--text3)";
+    const common = {
+        width: 24,
+        height: 24,
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke,
+        strokeWidth: 2.2,
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+    };
+
+    if (id === "history") return (
+        <svg {...common}><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9 21v-6h6v6"/></svg>
+    );
+    if (id === "analytics") return (
+        <svg {...common}><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20V7"/></svg>
+    );
+    if (id === "feed") return (
+        <svg {...common}><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>
+    );
+    if (id === "ai") return (
+        <svg {...common}><path d="M12 3a8 8 0 0 0-8 8v3a4 4 0 0 0 4 4h1v3h6v-3h1a4 4 0 0 0 4-4v-3a8 8 0 0 0-8-8z"/><path d="M9 11h.01"/><path d="M15 11h.01"/><path d="M9 15h6"/></svg>
+    );
+
+    return null;
+}
+
+function DumbbellIcon() {
+    return (
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 8v8"/>
+            <path d="M18 8v8"/>
+            <path d="M3 9v6"/>
+            <path d="M21 9v6"/>
+            <path d="M6 12h12"/>
+        </svg>
+    );
+}
+
 export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording }) {
     return (
         <div style={S.bottomNav}>
@@ -10,7 +51,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                 width: "100%",
                 maxWidth: 430,
                 margin: "0 auto",
-                padding: "0 4px",
+                padding: "0 6px",
             }}>
                 {tabs.map((tab) => {
                     const isCenter = tab.id === "log";
@@ -29,23 +70,24 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "flex-end",
                                     background: "transparent",
                                     border: "none",
-                                    paddingBottom: 6,
+                                    paddingBottom: 2,
                                 }}
                             >
                                 <div style={{
-                                    width: 54,
-                                    height: 54,
+                                    width: 58,
+                                    height: 58,
                                     borderRadius: "50%",
                                     background: "linear-gradient(135deg, var(--accent), var(--accent2))",
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    boxShadow: "0 4px 18px rgba(18,199,194,0.45)",
+                                    boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -8,
+                                    top: -12,
+                                    border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
-                                        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                             <div style={{
                                                 width: 8,
                                                 height: 8,
@@ -53,10 +95,10 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                                 background: "#ff4444",
                                                 animation: "pulse 1.2s infinite",
                                             }} />
-                                            <span style={{ fontSize: 9, fontWeight: 900, color: "#fff", letterSpacing: 0.5 }}>REC</span>
+                                            <span style={{ fontSize: 10, fontWeight: 900, color: "#fff", letterSpacing: 0.5 }}>REC</span>
                                         </div>
                                     ) : (
-                                        <span style={{ fontSize: 22 }}>🏋️</span>
+                                        <DumbbellIcon />
                                     )}
                                 </div>
                             </button>
@@ -75,25 +117,31 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 flexDirection: "column",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                gap: 1,
-                                height: 48,
-                                padding: "2px 0 1px",
-                                borderRadius: 10,
+                                gap: 3,
+                                height: 52,
+                                padding: "4px 0 2px",
+                                borderRadius: 16,
                                 border: "none",
                             }}
                         >
                             <div style={{
-                                fontSize: 18,
-                                width: 26,
-                                height: 26,
-                                borderRadius: 13,
+                                width: 38,
+                                height: 32,
+                                borderRadius: 18,
                                 display: "grid",
                                 placeItems: "center",
-                                background: isActive ? "rgba(18,199,194,0.12)" : "transparent",
+                                background: isActive ? "rgba(18,199,194,0.16)" : "transparent",
+                                border: isActive ? "1px solid rgba(18,199,194,0.22)" : "1px solid transparent",
+                                boxShadow: isActive ? "0 8px 18px rgba(18,199,194,0.12)" : "none",
                             }}>
-                                {tab.icon}
+                                <NavIcon id={tab.id} active={isActive} />
                             </div>
-                            <div style={{ fontSize: 9, lineHeight: 1, fontWeight: isActive ? 800 : 600 }}>
+                            <div style={{
+                                fontSize: 10,
+                                lineHeight: 1,
+                                fontWeight: isActive ? 900 : 650,
+                                color: isActive ? "var(--accent)" : "var(--text3)",
+                            }}>
                                 {tab.label}
                             </div>
                         </button>
