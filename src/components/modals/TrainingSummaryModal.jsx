@@ -184,12 +184,13 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           style={{
             maxHeight:
               "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
-            overflowY: "visible",
+            overflowY: "auto",
             padding: "18px 16px calc(24px + var(--safe-bottom, 0px))",
             boxSizing: "border-box",
             overscrollBehavior: "contain",
             
             touchAction: "pan-y",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <div
