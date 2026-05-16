@@ -547,7 +547,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                     <div
                         onClick={(e) => e.stopPropagation()}
                         style={{
-                            width: "100%",
+                            width: "calc(100% - 28px)",
                             maxWidth: 430,
                             maxHeight: "82vh",
                             overflowY: "auto",
