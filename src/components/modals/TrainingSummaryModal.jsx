@@ -176,7 +176,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           background: "var(--card-modal)",
           borderRadius: 24,
           boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
-          overflow: "hidden",
+          overflow: "visible",
         }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -184,11 +184,11 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           style={{
             maxHeight:
               "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
-            overflowY: "auto",
+            overflowY: "visible",
             padding: "18px 16px calc(24px + var(--safe-bottom, 0px))",
             boxSizing: "border-box",
             overscrollBehavior: "contain",
-            WebkitOverflowScrolling: "touch",
+            
             touchAction: "pan-y",
           }}
         >
