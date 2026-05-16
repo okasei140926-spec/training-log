@@ -2412,14 +2412,15 @@ export default function GymApp() {
                 : screen === "ai" ? "AI Coach"
                         : "記録";
 
+    const isRecording = screen === "log" || sessionEx !== null || Object.keys(logData).length > 0;
     const bottomTabs = [
-        { id: "history", icon: "📊", label: "記録" },
-        { id: "analytics", icon: "📈", label: "分析" },
-        { id: "feed", icon: "📰", label: "フィード" },
-        { id: "ranking", icon: "🏆", label: "ランキング" },
+        { id: "history", icon: "🏠", label: "ホーム" },
+        { id: "analytics", icon: "📊", label: "分析" },
+        { id: "log", icon: null, label: "" },
+        { id: "feed", icon: "💬", label: "フィード" },
         { id: "ai", icon: "🤖", label: "AI" },
     ];
-    const showOfflineOnlyCard = !isOnline && ["feed", "ranking", "ai"].includes(screen);
+    const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
 
     if (!isSupabaseConfigured) {
         return (
@@ -2794,7 +2795,7 @@ export default function GymApp() {
                     </div>
                 )}
 
-                <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen} onSelectTab={setScreen} />
+                <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen} onSelectTab={setScreen} isRecording={isRecording} />
 
                 {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
                 <WorkoutDaySummaryModal
