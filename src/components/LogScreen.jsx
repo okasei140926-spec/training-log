@@ -172,8 +172,18 @@ export default function LogScreen({
     const formatDate = (d) =>
         `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
-    const title = todayLabels.length
-        ? todayLabels.join(" + ")
+    // 今日のタイトルは現在の種目から毎回再生成する
+    // 古い todayLabels の残留を防ぐ
+    const currentBodyParts = [
+        ...new Set(
+            setCountByBodyPart
+                .map((x) => x.bodyPart)
+                .filter(Boolean)
+        )
+    ];
+
+    const title = currentBodyParts.length
+        ? currentBodyParts.join(" + ")
         : formatDate(logDate);
 
     const sensors = useSensors(
