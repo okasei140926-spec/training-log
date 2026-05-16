@@ -93,16 +93,19 @@ function weightToKg(value) {
 }
 
 function formatWeightForDisplay(value) {
-    if (isBodyWeight(value)) return "BW";
+    if (isBodyWeight(value)) return "自重";
 
+    const raw = String(value ?? "").trim();
     const n = toNumber(value);
     if (!n) return "0kg";
 
     if (isLbsValue(value)) {
-        const kg = n * 0.45359237;
-        const rounded = Math.round(kg * 10) / 10;
-        return `${rounded}kg`;
+        return raw.toLowerCase().includes("lbs") || raw.toLowerCase().includes("lb")
+            ? raw
+            : `${n}lbs`;
     }
+
+    if (raw.toLowerCase().includes("kg")) return raw;
 
     return `${n}kg`;
 }
@@ -282,6 +285,10 @@ function collectRecentSessions(history, muscleEx, overrides) {
                 bodyPart: bp,
                 setCount,
                 volume: Math.round(volume),
+                order: Number.isFinite(Number(record.order)) ? Number(record.order)
+                    : Number.isFinite(Number(record.exerciseOrder)) ? Number(record.exerciseOrder)
+                    : Number.isFinite(Number(record.sortOrder)) ? Number(record.sortOrder)
+                    : sessions[record.date].exercises.length,
                 sets: getRecordSets(record).map(s => ({
                     weight: formatWeightForDisplay(s.weight),
                     reps: s.reps,
@@ -297,6 +304,7 @@ function collectRecentSessions(history, muscleEx, overrides) {
             ...s,
             parts: [...s.parts].slice(0, 3),
             volume: Number.isFinite(s.volume) ? Math.round(s.volume) : 0,
+            exercises: (s.exercises || []).sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999)),
         }));
 }
 
