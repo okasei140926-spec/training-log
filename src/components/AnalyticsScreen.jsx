@@ -1383,6 +1383,57 @@ export default function AnalyticsScreen({
 
       </>)}
 
+      {activeAnalysisTab === "overview" && (
+        <div style={{
+          background: "var(--card)",
+          borderRadius: 22,
+          padding: 16,
+          border: "1px solid rgba(18, 199, 194, 0.10)",
+          boxShadow: "var(--shadow-card)",
+        }}>
+          <div style={{ fontSize: 17, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>
+            サマリーをシェア
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 12 }}>
+            Instagramやストーリー用に記録サマリーを作成します
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => setActiveSummaryKey("weekly")}
+              style={{
+                padding: "14px 10px",
+                borderRadius: 16,
+                border: "1px solid rgba(18, 199, 194, 0.18)",
+                background: "linear-gradient(180deg, var(--card2), var(--card))",
+                color: "var(--text)",
+                fontSize: 13,
+                fontWeight: 900,
+              }}
+            >
+              週間サマリー
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSummaryKey("monthly")}
+              style={{
+                padding: "14px 10px",
+                borderRadius: 16,
+                border: "1px solid var(--success-border)",
+                background: "var(--success-soft)",
+                color: "var(--accent)",
+                fontSize: 13,
+                fontWeight: 900,
+              }}
+            >
+              月間サマリー
+            </button>
+          </div>
+        </div>
+      )}
+
       {activeAnalysisTab === "pr" && (<>
       <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
         <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 12 }}>
