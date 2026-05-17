@@ -365,11 +365,6 @@ export default function HistoryScreen({
     todayWorkoutDurationSec,
     todayPrEntries,
   ]);
-
-  const totalTrainingDays = useMemo(
-    () => getValidWorkoutDatesFromHistory(history || {}).length,
-    [history]
-  );
   const firstTrainingDate = useMemo(() => {
     const dates = getValidWorkoutDatesFromHistory(history || {});
     return dates.length ? [...dates].sort()[0] : null;
@@ -378,8 +373,6 @@ export default function HistoryScreen({
     () => formatElapsedFromStartDate(firstTrainingDate, new Date()),
     [firstTrainingDate]
   );
-
-  const heroWorkoutCards = todayEntries.slice(0, 3);
   const hasTodayWorkout = todayEntries.length > 0;
 
   const selectedSummary = useMemo(() => {
