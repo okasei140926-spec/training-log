@@ -51,7 +51,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                 width: "100%",
                 maxWidth: 430,
                 margin: "0 auto",
-                padding: "0 6px",
+                padding: "10px 18px calc(10px + var(--safe-bottom, 0px))",
             }}>
                 {tabs.map((tab) => {
                     const isCenter = tab.id === "log";
