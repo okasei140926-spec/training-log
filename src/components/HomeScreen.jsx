@@ -344,7 +344,11 @@ function collectRecentSessions(history, muscleEx, overrides) {
                     parts: new Set(),
                     sets: 0,
                     volume: 0,
-                    minutes: record.elapsedMinutes || record.durationMinutes || null,
+                    minutes:
+                        record.elapsedMinutes ||
+                        record.durationMinutes ||
+                        (record.duration_sec ? Math.round(Number(record.duration_sec) / 60) : null) ||
+                        (record.durationSec ? Math.round(Number(record.durationSec) / 60) : null),
                     exercises: [],
                 };
             }
