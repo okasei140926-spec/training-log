@@ -45,13 +45,18 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
     return (
         <div style={S.bottomNav}>
             <div style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 2,
                 display: "flex",
-                alignItems: "center",
+                alignItems: "flex-end",
                 justifyContent: "space-between",
                 width: "100%",
                 maxWidth: 430,
                 margin: "0 auto",
-                padding: "6px 18px 8px",
+                padding: "0 18px 0",
+                boxSizing: "border-box",
             }}>
                 {tabs.map((tab) => {
                     const isCenter = tab.id === "log";
