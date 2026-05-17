@@ -66,7 +66,7 @@ export const S = {
     transform: "translateX(-50%)",
     width: "100%",
     maxWidth: 430,
-    height: 86,
+    height: 64,
     background: "var(--nav-bg)",
     backdropFilter: "blur(24px)",
     WebkitBackdropFilter: "blur(24px)",

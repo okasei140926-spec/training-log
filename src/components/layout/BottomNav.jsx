@@ -48,14 +48,14 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                 position: "absolute",
                 left: 0,
                 right: 0,
-                bottom: 2,
+                bottom: 0,
                 display: "flex",
                 alignItems: "flex-end",
                 justifyContent: "space-between",
                 width: "100%",
                 maxWidth: 430,
                 margin: "0 auto",
-                padding: "0 18px 0",
+                padding: "0 18px 4px",
                 boxSizing: "border-box",
             }}>
                 {tabs.map((tab) => {
@@ -79,8 +79,8 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 }}
                             >
                                 <div style={{
-                                    width: 58,
-                                    height: 58,
+                                    width: 54,
+                                    height: 54,
                                     borderRadius: "50%",
                                     background: "linear-gradient(135deg, var(--accent), var(--accent2))",
                                     display: "flex",
@@ -123,7 +123,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 alignItems: "center",
                                 justifyContent: "center",
                                 gap: 3,
-                                height: 52,
+                                height: 48,
                                 padding: "4px 0 2px",
                                 borderRadius: 16,
                                 border: "none",
