@@ -741,7 +741,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                         </div>
                         <div style={{ color: "var(--home-text)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.sets} set</div>
                         <div style={{ color: "var(--home-text)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.volume.toLocaleString()} kg</div>
-                        <div style={{ color: "var(--home-muted2)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.minutes || 72}分</div>
+                        <div style={{ color: "var(--home-muted2)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.minutes ? `${s.minutes}分` : "-"}</div>
                         <div style={{ color: "var(--home-muted)", fontSize: 22 }}>›</div>
                     </div>
                 ))}
@@ -1113,7 +1113,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                                     <span style={detailPill}>{selectedSession.sets} set</span>
                                     <span style={detailPill}>{selectedSession.volume.toLocaleString()} kg</span>
-                                    <span style={detailPill}>{selectedSession.minutes || 72}分</span>
+                                    <span style={detailPill}>{selectedSession.minutes ? `${selectedSession.minutes}分` : "-"}</span>
                                 </div>
                             </div>
 
