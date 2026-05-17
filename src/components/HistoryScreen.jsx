@@ -34,6 +34,12 @@ import {
   getSetCountByBodyPart,
 } from "../utils/setCountByBodyPart";
 
+const formatDurationValue = (value) => {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n) || n <= 0) return "-";
+  return `${Math.round(n)}分`;
+};
+
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
 const formatWeight = (value, unit = "kg") => {
   if (value === "BW") return "自重";
@@ -43,27 +49,6 @@ const formatWeight = (value, unit = "kg") => {
 };
 const formatSetDisplay = (weight, reps, unit = "kg") =>
   `${formatWeight(weight, unit)} × ${Number(reps)}rep`;
-const isBodyweightOnlyEntry = (entry) =>
-  Array.isArray(entry?.sets) &&
-  entry.sets.length > 0 &&
-  entry.sets.every((set) => set?.weight === "BW");
-const getEntryBestReps = (entry) =>
-  Math.max(
-    0,
-    ...(entry?.sets || []).map((set) => {
-      const reps = Number(set?.reps);
-      return Number.isFinite(reps) && reps > 0 ? reps : 0;
-    })
-  );
-const formatDurationValue = (seconds) => {
-  const totalSec = Math.max(0, Math.floor(Number(seconds) || 0));
-  const totalMin = Math.floor(totalSec / 60);
-  const hours = Math.floor(totalMin / 60);
-  const minutes = totalMin % 60;
-
-  if (hours <= 0) return `${totalMin}分`;
-  return `${hours}時間${minutes}分`;
-};
 const formatTimeStamp = (value) => {
   if (!value) return "-";
   const date = new Date(value);
@@ -129,7 +114,6 @@ export default function HistoryScreen({
   const [editingManualBest, setEditingManualBest] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedSummaryKey, setSelectedSummaryKey] = useState(null);
-  const [showAllTodayWorkouts, setShowAllTodayWorkouts] = useState(false);
   const [openExercises, setOpenExercises] = useState({});
   const [todayWorkoutStartedAt, setTodayWorkoutStartedAt] = useState(null);
   const [todayWorkoutLastActivityAt, setTodayWorkoutLastActivityAt] = useState(null);
@@ -395,31 +379,8 @@ export default function HistoryScreen({
     [firstTrainingDate]
   );
 
-  const todayWorkedBodyParts = useMemo(
-    () => todaySummary.setCountByBodyPart || [],
-    [todaySummary.setCountByBodyPart]
-  );
-
   const heroWorkoutCards = todayEntries.slice(0, 3);
-  const visibleTodayWorkouts = showAllTodayWorkouts ? todayEntries : heroWorkoutCards;
   const hasTodayWorkout = todayEntries.length > 0;
-
-  const summaryCards = [
-    { key: "totalVolume", label: "ボリューム", value: formatVolume(todaySummary.totalVolume) },
-    {
-      key: "bodyPartSets",
-      label: "部位別セット",
-      value:
-        formatSetCountByBodyPart(todaySummary.setCountByBodyPart, {
-          separator: " / ",
-          sort: "fixed",
-          maxParts: 3,
-          suffix: "",
-        }) || "まだありません",
-    },
-    { key: "duration", label: "時間", value: formatDurationValue(todaySummary.durationSec) },
-    { key: "trainingDays", label: "累計", value: `${totalTrainingDays}日` },
-  ];
 
   const selectedSummary = useMemo(() => {
     if (!selectedSummaryKey) return null;
