@@ -600,10 +600,9 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
 
     return (
         <div className="fade-in" style={{
-            padding: "16px 14px 100px",
+            padding: "16px 14px calc(72px + var(--safe-bottom))",
             background: "var(--home-bg)",
             color: "var(--home-text)",
-            minHeight: "calc(100vh - 58px)",
         }}>
             <section style={{
                 borderRadius: 20,
