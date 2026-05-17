@@ -603,7 +603,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
             padding: "16px 14px 100px",
             background: "var(--home-bg)",
             color: "var(--home-text)",
-            minHeight: "calc(100vh - 170px)",
+            minHeight: "calc(100vh - 58px)",
         }}>
             <section style={{
                 borderRadius: 20,
