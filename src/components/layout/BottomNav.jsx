@@ -66,8 +66,8 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 }}
                             >
                                 <div style={{
-                                    width: 42,
-                                    height: 42,
+                                    width: 40,
+                                    height: 40,
                                     borderRadius: "50%",
                                     background: "linear-gradient(135deg, var(--accent), var(--accent2))",
                                     display: "flex",
@@ -75,7 +75,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -1,
+                                    top: -2,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
@@ -108,9 +108,9 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 display: "flex",
                                 flexDirection: "column",
                                 alignItems: "center",
-                                justifyContent: "center",
-                                gap: 1,
-                                height: 32,
+                                justifyContent: "flex-end",
+                                gap: 2,
+                                height: 34,
                                 padding: 0,
                                 borderRadius: 14,
                                 border: "none",
@@ -118,7 +118,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                         >
                             <div style={{
                                 width: 28,
-                                height: 22,
+                                height: 20,
                                 borderRadius: 14,
                                 display: "grid",
                                 placeItems: "center",
@@ -133,6 +133,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 lineHeight: 1,
                                 fontWeight: isActive ? 900 : 650,
                                 color: isActive ? "var(--accent)" : "var(--text3)",
+                                paddingBottom: 1,
                             }}>
                                 {tab.label}
                             </div>
