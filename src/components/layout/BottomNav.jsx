@@ -59,10 +59,10 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     display: "flex",
                                     flexDirection: "column",
                                     alignItems: "center",
-                                    justifyContent: "flex-end",
+                                    justifyContent: "center",
                                     background: "transparent",
                                     border: "none",
-                                    paddingBottom: 2,
+                                    padding: 0,
                                 }}
                             >
                                 <div style={{
@@ -75,7 +75,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -4,
+                                    top: -2,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
@@ -111,7 +111,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 justifyContent: "center",
                                 gap: 3,
                                 height: 46,
-                                padding: "3px 0 1px",
+                                padding: "1px 0 0",
                                 borderRadius: 16,
                                 border: "none",
                             }}
