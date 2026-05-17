@@ -600,15 +600,25 @@ export default function HistoryScreen({
 
       if (user?.id) {
         try {
-          const { data } = await supabase
-            .from("workout_sessions")
-            .select("duration_sec")
-            .eq("user_id", user.id)
-            .eq("workout_date", normalizedDate)
-            .maybeSingle();
+          const [{ data: sessionData }, { data: workoutData }] = await Promise.all([
+            supabase
+              .from("workout_sessions")
+              .select("duration_sec")
+              .eq("user_id", user.id)
+              .eq("workout_date", normalizedDate)
+              .maybeSingle(),
+            supabase
+              .from("workouts")
+              .select("duration_sec")
+              .eq("user_id", user.id)
+              .eq("date", normalizedDate)
+              .maybeSingle(),
+          ]);
+
           durationSec = Math.max(
             durationSec,
-            Math.floor(Number(data?.duration_sec) || 0)
+            Math.floor(Number(sessionData?.duration_sec) || 0),
+            Math.floor(Number(workoutData?.duration_sec) || 0)
           );
         } catch (error) {
           console.error("workout day summary duration fetch failed", error);
