@@ -676,17 +676,30 @@ export default function GymApp() {
             if (!user?.id || !logDate) return;
 
             try {
-                const { data } = await supabase
-                    .from("workout_sessions")
-                    .select("duration_sec")
-                    .eq("user_id", user.id)
-                    .eq("workout_date", logDate)
-                    .maybeSingle();
+                const [{ data: sessionData }, { data: workoutData }] = await Promise.all([
+                    supabase
+                        .from("workout_sessions")
+                        .select("duration_sec")
+                        .eq("user_id", user.id)
+                        .eq("workout_date", logDate)
+                        .maybeSingle(),
+                    supabase
+                        .from("workouts")
+                        .select("duration_sec")
+                        .eq("user_id", user.id)
+                        .eq("date", logDate)
+                        .maybeSingle(),
+                ]);
+
+                const durationSec = Math.max(
+                    Math.floor(Number(sessionData?.duration_sec) || 0),
+                    Math.floor(Number(workoutData?.duration_sec) || 0)
+                );
 
                 if (!cancelled) {
                     setSavedWorkoutDurationSecByDate((prev) => ({
                         ...prev,
-                        [logDate]: Math.floor(Number(data?.duration_sec) || 0),
+                        [logDate]: durationSec,
                     }));
                 }
             } catch (error) {
