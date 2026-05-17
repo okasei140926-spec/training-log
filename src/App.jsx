@@ -483,6 +483,7 @@ export default function GymApp() {
     const [workoutLastActivityAt, setWorkoutLastActivityAt] = useState(initialWorkoutTimerState.lastActivityAt);
     const [workoutIsFinished, setWorkoutIsFinished] = useState(initialWorkoutTimerState.isFinished);
     const [workoutFinishedAt, setWorkoutFinishedAt] = useState(initialWorkoutTimerState.finishedAt);
+    const [savedWorkoutDurationSecByDate, setSavedWorkoutDurationSecByDate] = useState({});
     const [workoutElapsedSec, setWorkoutElapsedSec] = useState(() =>
         computeWorkoutDisplayElapsedSec(initialWorkoutTimerState)
     );
@@ -667,6 +668,38 @@ export default function GymApp() {
         workoutStartedForDate,
         finishWorkoutTimer,
     ]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadSavedWorkoutDuration() {
+            if (!user?.id || !logDate) return;
+
+            try {
+                const { data } = await supabase
+                    .from("workout_sessions")
+                    .select("duration_sec")
+                    .eq("user_id", user.id)
+                    .eq("workout_date", logDate)
+                    .maybeSingle();
+
+                if (!cancelled) {
+                    setSavedWorkoutDurationSecByDate((prev) => ({
+                        ...prev,
+                        [logDate]: Math.floor(Number(data?.duration_sec) || 0),
+                    }));
+                }
+            } catch (error) {
+                console.error("load saved workout duration failed", error);
+            }
+        }
+
+        loadSavedWorkoutDuration();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id, logDate]);
 
     const workoutTimerStatus = getWorkoutTimerStatus(workoutTimerStateRef.current);
 
@@ -2581,7 +2614,7 @@ export default function GymApp() {
                                 : "idle";
                             const displayedWorkoutElapsedSec = showCurrentLogWorkoutTimer
                                 ? workoutElapsedSec
-                                : 0;
+                                : (savedWorkoutDurationSecByDate[logDate] || 0);
 
                             return (
                         <LogScreen
