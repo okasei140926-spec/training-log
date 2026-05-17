@@ -1504,6 +1504,10 @@ export default function GymApp() {
 
         setLogMode("today");
         setLogDate(today);
+        setTodayLabels([]);
+        setSessionEx(null);
+        setLogData({});
+        setExerciseUnits({});
         if (!new URLSearchParams(window.location.search).get("ref")) {
             setScreen("history");
         }
@@ -2718,6 +2722,10 @@ export default function GymApp() {
                             const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
                             setLogMode("today");
                             setLogDate(today);
+                            setTodayLabels([]);
+                            setSessionEx(null);
+                            setLogData({});
+                            setExerciseUnits({});
                             setScreen("log");
                         }}
                         user={user}
