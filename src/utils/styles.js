@@ -60,7 +60,7 @@ export const S = {
   },
   bottomNav: {
     position: "fixed",
-    bottom: -14,
+    bottom: -32,
     left: "50%",
     right: "auto",
     transform: "translateX(-50%)",
