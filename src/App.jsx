@@ -2829,7 +2829,24 @@ export default function GymApp() {
                     </div>
                 )}
 
-                <BottomNav tabs={bottomTabs} activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen} onSelectTab={setScreen} isRecording={isRecording} />
+                <BottomNav
+                    tabs={bottomTabs}
+                    activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
+                    onSelectTab={(nextScreen) => {
+                        if (nextScreen === "log") {
+                            const d = new Date();
+                            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                            setLogMode("today");
+                            setLogDate(today);
+                            setTodayLabels([]);
+                            setSessionEx(null);
+                            setLogData({});
+                            setExerciseUnits({});
+                        }
+                        setScreen(nextScreen);
+                    }}
+                    isRecording={isRecording}
+                />
 
                 {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
                 <WorkoutDaySummaryModal
