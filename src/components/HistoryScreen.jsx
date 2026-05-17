@@ -601,10 +601,10 @@ export default function HistoryScreen({
       if (user?.id) {
         try {
           const { data } = await supabase
-            .from("workouts")
+            .from("workout_sessions")
             .select("duration_sec")
             .eq("user_id", user.id)
-            .eq("date", normalizedDate)
+            .eq("workout_date", normalizedDate)
             .maybeSingle();
           durationSec = Math.max(
             durationSec,
