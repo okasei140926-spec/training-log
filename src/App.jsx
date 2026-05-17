@@ -439,6 +439,7 @@ export default function GymApp() {
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         })())
     );
+    const [logMode, setLogMode] = useState("today");
 
     const {
         addSet,
@@ -1485,7 +1486,7 @@ export default function GymApp() {
             Object.keys(exerciseUnits).length > 0 ||
             todayLabels.length > 0;
 
-        if (!hasDraft) return;
+        if (!hasDraft || logMode !== "today") return;
 
         save("draft_todayLabels", todayLabels);
         save("draft_logData", logData);
@@ -1501,6 +1502,7 @@ export default function GymApp() {
         const today =
             `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+        setLogMode("today");
         setLogDate(today);
         if (!new URLSearchParams(window.location.search).get("ref")) {
             setScreen("history");
@@ -2099,7 +2101,7 @@ export default function GymApp() {
             Object.keys(exerciseUnits).length > 0 ||
             todayLabels.length > 0;
 
-        if (hasCurrentDraft) {
+        if (hasCurrentDraft && logMode === "today") {
             save("draft_todayLabels", todayLabels);
             save("draft_logData", logData);
             save("draft_sessionEx", sessionEx);
@@ -2110,6 +2112,7 @@ export default function GymApp() {
         setLogData({});
         setExerciseUnits({});
 
+        setLogMode("past");
         setLogDate(dateStr);
 
         const dayExercises = Object.entries(history)
@@ -2171,6 +2174,7 @@ export default function GymApp() {
             );
 
         if (hasRealDraftForDate) {
+            setLogMode("past");
             setLogDate(dateStr);
             setSessionEx(draftSession);
             setLogData(draftLog);
@@ -2670,6 +2674,7 @@ export default function GymApp() {
                                     { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
                                 ],
                             }), {}));
+                            setLogMode("today");
                             setScreen("log");
                         }}
                     />
@@ -2696,6 +2701,7 @@ export default function GymApp() {
                                     { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
                                 ],
                             }), {}));
+                            setLogMode("today");
                             setScreen("log");
                         }}
                     />
@@ -2707,7 +2713,13 @@ export default function GymApp() {
                         muscleEx={muscleEx}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                         hiddenBodyParts={hiddenBodyParts}
-                        onStartLog={() => setScreen("log")}
+                        onStartLog={() => {
+                            const d = new Date();
+                            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                            setLogMode("today");
+                            setLogDate(today);
+                            setScreen("log");
+                        }}
                         user={user}
                     />
                 )}
