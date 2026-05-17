@@ -44,16 +44,7 @@ function DumbbellIcon() {
 export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording }) {
     return (
         <div style={S.bottomNav}>
-            <div style={{
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "space-between",
-                width: "100%",
-                maxWidth: 430,
-                margin: "0 auto",
-                padding: "0 18px 6px",
-                boxSizing: "border-box",
-            }}>
+            <div style={S.bottomNavInner}>
                 {tabs.map((tab) => {
                     const isCenter = tab.id === "log";
                     const isActive = activeTab === tab.id;
@@ -84,7 +75,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -6,
+                                    top: -4,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
@@ -119,8 +110,8 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 alignItems: "center",
                                 justifyContent: "center",
                                 gap: 3,
-                                height: 48,
-                                padding: "4px 0 2px",
+                                height: 46,
+                                padding: "3px 0 1px",
                                 borderRadius: 16,
                                 border: "none",
                             }}
