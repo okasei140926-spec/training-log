@@ -239,7 +239,10 @@ export default function LogScreen({
             <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2.5, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 700 }}>{title}</div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2.5, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 700 }}>{title}</div>
+                            <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 900, marginTop: 3 }}>{formatDate(logDate)}</div>
+                        </div>
                     </div>
                     <WorkoutElapsedTimer
                         elapsedSec={workoutElapsedSec}
