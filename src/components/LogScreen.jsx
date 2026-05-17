@@ -241,7 +241,9 @@ export default function LogScreen({
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                         <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2.5, textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 700 }}>{title}</div>
-                            <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 900, marginTop: 3 }}>{formatDate(logDate)}</div>
+                            {title !== formatDate(logDate) && (
+                                <div style={{ fontSize: 13, color: "var(--text)", fontWeight: 900, marginTop: 3 }}>{formatDate(logDate)}</div>
+                            )}
                         </div>
                     </div>
                     <WorkoutElapsedTimer
