@@ -681,8 +681,7 @@ export default function HistoryScreen({
         gap: 14,
       }}
     >
-      <details
-        style={{
+      <div style={{
           background: "var(--card)",
           borderRadius: 24,
           border: "1px solid rgba(18, 199, 194, 0.1)",
@@ -690,18 +689,6 @@ export default function HistoryScreen({
           overflow: "hidden",
         }}
       >
-        <summary
-          style={{
-            listStyle: "none",
-            cursor: "pointer",
-            padding: "14px 16px",
-            fontSize: 14,
-            fontWeight: 800,
-            color: "var(--text)",
-          }}
-        >
-          カレンダーを見る
-        </summary>
         <div style={{ padding: "0 16px 16px" }}>
           <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
             過去日の記録確認や編集もここからできます
@@ -733,7 +720,7 @@ export default function HistoryScreen({
             />
           </div>
         </div>
-      </details>
+      </div>
 
       {editTarget && (
         <HistoryEditModal
