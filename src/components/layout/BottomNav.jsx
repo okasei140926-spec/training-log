@@ -46,12 +46,12 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
         <div style={S.bottomNav}>
             <div style={{
                 display: "flex",
-                alignItems: "flex-end",
+                alignItems: "center",
                 justifyContent: "space-between",
                 width: "100%",
                 maxWidth: 430,
                 margin: "0 auto",
-                padding: "10px 18px calc(10px + var(--safe-bottom, 0px))",
+                padding: "0 18px calc(4px + var(--safe-bottom, 0px))",
             }}>
                 {tabs.map((tab) => {
                     const isCenter = tab.id === "log";
@@ -83,7 +83,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -2,
+                                    top: 0,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
