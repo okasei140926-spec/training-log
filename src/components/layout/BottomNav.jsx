@@ -66,8 +66,8 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 }}
                             >
                                 <div style={{
-                                    width: 54,
-                                    height: 54,
+                                    width: 50,
+                                    height: 50,
                                     borderRadius: "50%",
                                     background: "linear-gradient(135deg, var(--accent), var(--accent2))",
                                     display: "flex",
@@ -75,7 +75,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -2,
+                                    top: -1,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
@@ -109,16 +109,16 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 flexDirection: "column",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                gap: 3,
-                                height: 46,
+                                gap: 2,
+                                height: 40,
                                 padding: "1px 0 0",
                                 borderRadius: 16,
                                 border: "none",
                             }}
                         >
                             <div style={{
-                                width: 38,
-                                height: 32,
+                                width: 34,
+                                height: 28,
                                 borderRadius: 18,
                                 display: "grid",
                                 placeItems: "center",
@@ -129,7 +129,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 <NavIcon id={tab.id} active={isActive} />
                             </div>
                             <div style={{
-                                fontSize: 10,
+                                fontSize: 9,
                                 lineHeight: 1,
                                 fontWeight: isActive ? 900 : 650,
                                 color: isActive ? "var(--accent)" : "var(--text3)",
