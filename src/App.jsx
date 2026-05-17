@@ -166,6 +166,10 @@ const applyHistoryDeleteMarkers = (historyMap, markers) => {
 };
 
 export default function GymApp() {
+    const getTodayKey = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
@@ -2116,7 +2120,7 @@ export default function GymApp() {
         setLogData({});
         setExerciseUnits({});
 
-        setLogMode("past");
+        setLogMode(dateStr === getTodayKey() ? "today" : "past");
         setLogDate(dateStr);
 
         const dayExercises = Object.entries(history)
@@ -2834,14 +2838,8 @@ export default function GymApp() {
                     activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
                     onSelectTab={(nextScreen) => {
                         if (nextScreen === "log") {
-                            const d = new Date();
-                            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-                            setLogMode("today");
-                            setLogDate(today);
-                            setTodayLabels([]);
-                            setSessionEx(null);
-                            setLogData({});
-                            setExerciseUnits({});
+                            handleLogForDate(getTodayKey());
+                            return;
                         }
                         setScreen(nextScreen);
                     }}
