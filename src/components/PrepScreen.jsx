@@ -107,7 +107,12 @@ export default function PrepScreen({
       </div>
 
       {exercises.length === 0 && lastWorkoutExercises.length > 0 && (
-        <button onClick={() => setExercises(lastWorkoutExercises)}
+        <button onClick={() => setExercises(
+            lastWorkoutExercises.map((ex) => ({
+              ...ex,
+              sets: [{ weight: "", reps: "" }],
+            }))
+          )}
           style={{ width: "100%", padding: "14px 16px", borderRadius: 14, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 14, fontWeight: 700, marginBottom: 12, textAlign: "left" }}>
           前回と同じメニューで始める <span style={{ color: "var(--text2)" }}>→</span>
         </button>
