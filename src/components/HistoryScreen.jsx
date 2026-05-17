@@ -184,7 +184,7 @@ export default function HistoryScreen({
         .from("workouts")
         .select("started_at, ended_at, duration_sec")
         .eq("user_id", user.id)
-        .eq("date", todayKey)
+        .eq("workout_date", todayKey)
         .maybeSingle();
 
       if (error) {
