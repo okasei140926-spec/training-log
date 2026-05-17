@@ -66,8 +66,8 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 }}
                             >
                                 <div style={{
-                                    width: 50,
-                                    height: 50,
+                                    width: 46,
+                                    height: 46,
                                     borderRadius: "50%",
                                     background: "linear-gradient(135deg, var(--accent), var(--accent2))",
                                     display: "flex",
@@ -75,7 +75,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -1,
+                                    top: -3,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
@@ -109,27 +109,27 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 flexDirection: "column",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                gap: 2,
-                                height: 40,
-                                padding: "1px 0 0",
-                                borderRadius: 16,
+                                gap: 1,
+                                height: 34,
+                                padding: 0,
+                                borderRadius: 14,
                                 border: "none",
                             }}
                         >
                             <div style={{
-                                width: 34,
-                                height: 28,
-                                borderRadius: 18,
+                                width: 30,
+                                height: 24,
+                                borderRadius: 14,
                                 display: "grid",
                                 placeItems: "center",
                                 background: isActive ? "rgba(18,199,194,0.16)" : "transparent",
                                 border: isActive ? "1px solid rgba(18,199,194,0.22)" : "1px solid transparent",
-                                boxShadow: isActive ? "0 8px 18px rgba(18,199,194,0.12)" : "none",
+                                boxShadow: isActive ? "0 6px 14px rgba(18,199,194,0.10)" : "none",
                             }}>
                                 <NavIcon id={tab.id} active={isActive} />
                             </div>
                             <div style={{
-                                fontSize: 9,
+                                fontSize: 8,
                                 lineHeight: 1,
                                 fontWeight: isActive ? 900 : 650,
                                 color: isActive ? "var(--accent)" : "var(--text3)",
