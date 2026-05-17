@@ -45,17 +45,13 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
     return (
         <div style={S.bottomNav}>
             <div style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
                 display: "flex",
-                alignItems: "flex-end",
+                alignItems: "flex-start",
                 justifyContent: "space-between",
                 width: "100%",
                 maxWidth: 430,
                 margin: "0 auto",
-                padding: "0 18px 4px",
+                padding: "4px 18px 0",
                 boxSizing: "border-box",
             }}>
                 {tabs.map((tab) => {
@@ -72,7 +68,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     display: "flex",
                                     flexDirection: "column",
                                     alignItems: "center",
-                                    justifyContent: "flex-end",
+                                    justifyContent: "flex-start",
                                     background: "transparent",
                                     border: "none",
                                     paddingBottom: 2,
@@ -88,7 +84,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: 0,
+                                    top: -8,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
