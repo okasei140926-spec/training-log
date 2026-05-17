@@ -26,7 +26,7 @@ export const S = {
     position: "sticky",
     top: 0,
     zIndex: 50,
-    background: "var(--nav-bg)",
+    background: "#fff",
     backdropFilter: "blur(24px)",
     boxShadow: "0 10px 26px rgba(15,94,99,0.06)",
   },
