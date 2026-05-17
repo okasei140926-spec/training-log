@@ -1493,7 +1493,7 @@ export default function GymApp() {
         save("draft_sessionEx", sessionEx);
         save("draft_exerciseUnits", exerciseUnits);
         save("draft_logDate", logDate);
-    }, [screen, todayLabels, logData, sessionEx, exerciseUnits, logDate]);
+    }, [screen, todayLabels, logData, sessionEx, exerciseUnits, logDate, logMode]);
 
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
