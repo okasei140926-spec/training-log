@@ -6,7 +6,7 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "calc(56px + var(--safe-bottom))",
+    paddingBottom: "calc(52px + var(--safe-bottom))",
   },
   page: {
     padding: "18px",
@@ -61,28 +61,27 @@ export const S = {
     left: 0,
     right: 0,
     width: "100%",
+    height: "calc(52px + var(--safe-bottom))",
     display: "flex",
-    alignItems: "flex-end",
-    background: "transparent",
-    padding: "0 0 var(--safe-bottom)",
+    alignItems: "stretch",
+    background: "#fff",
     zIndex: 100,
     overflow: "visible",
     pointerEvents: "none",
+    borderTop: "1px solid rgba(18, 199, 194, 0.08)",
+    boxShadow: "0 -1px 2px rgba(15,94,99,0.01)",
   },
   bottomNavInner: {
     display: "flex",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    minHeight: 0,
-    height: 44,
-    padding: "0 10px 0",
+    height: "100%",
+    padding: "0 10px var(--safe-bottom)",
     boxSizing: "border-box",
-    background: "#fff",
+    background: "transparent",
     backdropFilter: "blur(24px)",
     WebkitBackdropFilter: "blur(24px)",
-    borderTop: "1px solid rgba(18, 199, 194, 0.08)",
-    boxShadow: "0 -1px 2px rgba(15,94,99,0.01)",
     pointerEvents: "auto",
   },
 };
@@ -164,8 +163,8 @@ export const css = `
     --home-shadow: 0 14px 30px rgba(15,94,99,0.08);
   }
   .app-shell {
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: var(--app-height);
+    min-height: var(--app-height);
     background: var(--bg);
   }
   * { box-sizing: border-box; }

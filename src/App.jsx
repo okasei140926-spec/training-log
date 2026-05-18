@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { isSupabaseConfigured, missingSupabaseEnvKeys, supabase, supabaseConfigError } from "./utils/supabase";
 import {
     load,
@@ -473,6 +473,45 @@ export default function GymApp() {
     // eslint-disable-next-line no-unused-vars
     const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
     const appThemeClassName = isDark ? "app-shell" : "theme-light app-shell";
+
+    useLayoutEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") return undefined;
+
+        const root = document.documentElement;
+        let rafId = 0;
+        let timeoutId = 0;
+
+        const applyViewportHeight = () => {
+            const viewportHeight = window.visualViewport?.height || window.innerHeight;
+            root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+        };
+
+        const scheduleViewportHeightUpdate = () => {
+            cancelAnimationFrame(rafId);
+            clearTimeout(timeoutId);
+            rafId = window.requestAnimationFrame(() => {
+                applyViewportHeight();
+                timeoutId = window.setTimeout(applyViewportHeight, 80);
+            });
+        };
+
+        applyViewportHeight();
+        scheduleViewportHeightUpdate();
+
+        window.addEventListener("resize", scheduleViewportHeightUpdate);
+        window.addEventListener("orientationchange", scheduleViewportHeightUpdate);
+        window.visualViewport?.addEventListener("resize", scheduleViewportHeightUpdate);
+        window.visualViewport?.addEventListener("scroll", scheduleViewportHeightUpdate);
+
+        return () => {
+            cancelAnimationFrame(rafId);
+            clearTimeout(timeoutId);
+            window.removeEventListener("resize", scheduleViewportHeightUpdate);
+            window.removeEventListener("orientationchange", scheduleViewportHeightUpdate);
+            window.visualViewport?.removeEventListener("resize", scheduleViewportHeightUpdate);
+            window.visualViewport?.removeEventListener("scroll", scheduleViewportHeightUpdate);
+        };
+    }, []);
 
 
     const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
