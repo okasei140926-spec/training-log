@@ -2823,6 +2823,7 @@ export default function GymApp() {
                 {screen === "calendar" && (
                     <HistoryScreen
                         history={history}
+                        todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
                         muscleEx={muscleEx}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                         hiddenBodyParts={hiddenBodyParts}
