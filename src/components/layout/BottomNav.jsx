@@ -141,6 +141,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                     );
                 })}
             </div>
+            <div style={{ height: "env(safe-area-inset-bottom, 0px)", flexShrink: 0 }} />
         </div>
     );
 }
