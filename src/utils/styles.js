@@ -6,7 +6,7 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "calc(58px + var(--safe-bottom))",
+    paddingBottom: 50,
   },
   page: {
     padding: "18px",
@@ -63,9 +63,9 @@ export const S = {
     width: "100%",
     zIndex: 100,
     display: "flex",
-    alignItems: "flex-end",
-    height: "calc(48px + var(--safe-bottom))",
-    paddingBottom: "var(--safe-bottom)",
+    alignItems: "stretch",
+    height: "calc(50px + var(--safe-bottom))",
+    paddingBottom: 0,
     pointerEvents: "auto",
     background: "#fff",
     borderTop: "1px solid rgba(18, 199, 194, 0.08)",
@@ -73,17 +73,20 @@ export const S = {
   },
   bottomNavInner: {
     display: "flex",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    height: 48,
-    padding: "0 10px 2px",
+    height: "100%",
+    padding: "0 10px env(safe-area-inset-bottom)",
     boxSizing: "border-box",
     background: "transparent",
   },
 };
 
 export const css = `
+  :root {
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
   :root {
     --bg: #0f0f0f;
     --card: #1a1a1a;
