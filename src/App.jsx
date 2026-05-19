@@ -931,7 +931,7 @@ export default function GymApp() {
         const payload = buildWorkoutSessionPayloadFromHistory(historyMap, normalizedDate);
         const { data: existingSession, error: existingSessionError } = await supabase
             .from("workout_sessions")
-            .select("id, started_at")
+            .select("id, started_at, duration_sec")
             .eq("user_id", userId)
             .eq("workout_date", normalizedDate)
             .maybeSingle();
@@ -973,10 +973,9 @@ export default function GymApp() {
         const endedAt = timing?.endedAtIso || new Date().toISOString();
         const durationSec = Number.isFinite(timing?.durationSec)
             ? Math.max(0, Math.floor(timing.durationSec))
-            : Math.max(
-                0,
-                Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000)
-            );
+            : Number.isFinite(Number(existingSession?.duration_sec)) && Number(existingSession?.duration_sec) > 0
+                ? Math.floor(Number(existingSession.duration_sec))
+                : 0;
 
         const { data: upsertedSession, error: sessionUpsertError } = await supabase
             .from("workout_sessions")
@@ -1908,7 +1907,7 @@ export default function GymApp() {
         const durationSec =
             currentTimerState.startedForDate === normalizedDate && currentTimerState.startedAt
                 ? Math.max(0, Math.floor((timerEndedAt - currentTimerState.startedAt) / 1000))
-                : 0;
+                : (savedWorkoutDurationSecByDate[normalizedDate] || 0);
 
         const sessionPayload = buildWorkoutSessionPayloadFromDraft({
             exercises,
@@ -1948,7 +1947,7 @@ export default function GymApp() {
                   }
                 : null,
         });
-    }, [exercises, getExUnit, getPR, getPreviousPR, logData, todayLabels, unit, user?.id]);
+    }, [exercises, getExUnit, getPR, getPreviousPR, logData, savedWorkoutDurationSecByDate, todayLabels, unit, user?.id]);
 
     const handleFinishWorkoutTimerAndShowSummary = useCallback(async () => {
         const endedAt = Date.now();

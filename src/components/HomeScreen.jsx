@@ -579,7 +579,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
     const partsToShow = useMemo(() => {
         const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));
         const trained = Object.keys(weeklySets).filter(p => !base.includes(p));
-        return [...base, ...trained].slice(0, 8);
+        return [...base, ...trained];
     }, [hiddenBodyParts, weeklySets]);
 
     const recoveries = useMemo(() => (
@@ -595,8 +595,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
 
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))
-        .filter(x => x.sets > 0)
-        .slice(0, 8);
+        .filter(x => x.sets > 0);
 
     return (
         <div className="fade-in" style={{
