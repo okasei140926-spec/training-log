@@ -129,7 +129,7 @@ export default async function handler(req, res) {
       const friendWorkoutResult = await sendPushToUser({
         userId: friendId,
         title: `${actorName}さんが記録しました`,
-        body: "今日のワークアウトをチェック",
+        body: "",
         url: "/?screen=friends",
         type: "friend_workout",
         dedupeKey: `friend_workout:${user.id}:${workoutDate}`,
