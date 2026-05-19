@@ -75,7 +75,6 @@ export const S = {
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    height: "100%",
     height: 58,
     padding: "0 10px",
     boxSizing: "border-box",
