@@ -64,7 +64,7 @@ export const S = {
     zIndex: 100,
     display: "flex",
     alignItems: "stretch",
-    height: "calc(50px + var(--safe-bottom))",
+    height: "58px",
     paddingBottom: 0,
     pointerEvents: "auto",
     background: "#fff",
