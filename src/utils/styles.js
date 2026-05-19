@@ -6,7 +6,7 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "calc(58px + var(--safe-bottom))",
+    paddingBottom: 58,
   },
   page: {
     padding: "18px",
