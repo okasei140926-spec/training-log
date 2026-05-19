@@ -180,23 +180,36 @@ export default function HistoryScreen({
         return;
       }
 
-      const { data, error } = await supabase
-        .from("workouts")
-        .select("started_at, ended_at, duration_sec")
-        .eq("user_id", user.id)
-        .eq("workout_date", todayKey)
-        .maybeSingle();
+      const [{ data: sessionData, error: sessionError }, { data: workoutData }] = await Promise.all([
+        supabase
+          .from("workout_sessions")
+          .select("started_at, ended_at, duration_sec")
+          .eq("user_id", user.id)
+          .eq("workout_date", todayKey)
+          .maybeSingle(),
+        supabase
+          .from("workouts")
+          .select("started_at, ended_at, duration_sec")
+          .eq("user_id", user.id)
+          .eq("date", todayKey)
+          .maybeSingle(),
+      ]);
 
-      if (error) {
-        console.error(error);
+      if (sessionError) {
+        console.error(sessionError);
         applyTodayWorkoutTiming();
         return;
       }
 
+      const durationSec = Math.max(
+        Math.floor(Number(sessionData?.duration_sec) || 0),
+        Math.floor(Number(workoutData?.duration_sec) || 0),
+      );
+
       applyTodayWorkoutTiming({
-        startedAt: data?.started_at || null,
-        lastActivityAt: data?.ended_at || null,
-        durationSec: data?.duration_sec || 0,
+        startedAt: sessionData?.started_at || workoutData?.started_at || null,
+        lastActivityAt: sessionData?.ended_at || workoutData?.ended_at || null,
+        durationSec,
       });
     };
 

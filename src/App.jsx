@@ -166,10 +166,82 @@ const applyHistoryDeleteMarkers = (historyMap, markers) => {
 };
 
 export default function GymApp() {
-    const getTodayKey = () => {
+    const getTodayKey = useCallback(() => {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    };
+    }, []);
+
+    const getDraftKey = useCallback((baseKey, dateStr) => `${baseKey}_${dateStr}`, []);
+
+    const loadDraftForDate = useCallback((dateStr) => {
+        const legacyDraftDate = load("draft_logDate", "");
+        const useLegacyFallback = legacyDraftDate === dateStr;
+
+        return {
+            todayLabels: load(
+                getDraftKey("draft_todayLabels", dateStr),
+                useLegacyFallback ? load("draft_todayLabels", []) : []
+            ),
+            logData: load(
+                getDraftKey("draft_logData", dateStr),
+                useLegacyFallback ? load("draft_logData", {}) : {}
+            ),
+            sessionEx: load(
+                getDraftKey("draft_sessionEx", dateStr),
+                useLegacyFallback ? load("draft_sessionEx", null) : null
+            ),
+            exerciseUnits: load(
+                getDraftKey("draft_exerciseUnits", dateStr),
+                useLegacyFallback ? load("draft_exerciseUnits", {}) : {}
+            ),
+        };
+    }, [getDraftKey]);
+
+    const hasDraftContent = useCallback((draft) => (
+        draft.sessionEx !== null ||
+        Object.keys(draft.logData || {}).length > 0 ||
+        Object.keys(draft.exerciseUnits || {}).length > 0 ||
+        (draft.todayLabels || []).length > 0
+    ), []);
+
+    const saveDraftForDate = useCallback((dateStr, draft) => {
+        if (!dateStr) return;
+
+        save(getDraftKey("draft_todayLabels", dateStr), draft.todayLabels || []);
+        save(getDraftKey("draft_logData", dateStr), draft.logData || {});
+        save(getDraftKey("draft_sessionEx", dateStr), draft.sessionEx ?? null);
+        save(getDraftKey("draft_exerciseUnits", dateStr), draft.exerciseUnits || {});
+
+        save("draft_todayLabels", draft.todayLabels || []);
+        save("draft_logData", draft.logData || {});
+        save("draft_sessionEx", draft.sessionEx ?? null);
+        save("draft_exerciseUnits", draft.exerciseUnits || {});
+        save("draft_logDate", dateStr);
+    }, [getDraftKey]);
+
+    const clearDraftForDate = useCallback((dateStr) => {
+        if (!dateStr) return;
+
+        [
+            getDraftKey("draft_todayLabels", dateStr),
+            getDraftKey("draft_logData", dateStr),
+            getDraftKey("draft_sessionEx", dateStr),
+            getDraftKey("draft_exerciseUnits", dateStr),
+        ].forEach((key) => {
+            try {
+                localStorage.removeItem(key);
+            } catch {}
+        });
+
+        if (load("draft_logDate", "") === dateStr) {
+            save("draft_todayLabels", []);
+            save("draft_logData", {});
+            save("draft_sessionEx", null);
+            save("draft_exerciseUnits", {});
+            save("draft_logDate", "");
+        }
+    }, [getDraftKey]);
+
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
@@ -409,7 +481,7 @@ export default function GymApp() {
         };
     }, []);
 
-    const [todayLabels, setTodayLabels] = useState(() => load("draft_todayLabels", []));
+    const [todayLabels, setTodayLabels] = useState(() => loadDraftForDate(getTodayKey()).todayLabels);
     const updateTodayLabels = (nextOrUpdater) => {
         setTodayLabels((prev) => {
             const next =
@@ -417,14 +489,18 @@ export default function GymApp() {
                     ? nextOrUpdater(prev)
                     : nextOrUpdater;
 
-            save("draft_todayLabels", next);
-            save("draft_logDate", logDate);
+            saveDraftForDate(logDate, {
+                todayLabels: next,
+                logData,
+                sessionEx,
+                exerciseUnits,
+            });
             return next;
         });
     };
-    const [logData, setLogData] = useState(() => load("draft_logData", {}));
+    const [logData, setLogData] = useState(() => loadDraftForDate(getTodayKey()).logData);
     const [sessionHistory, setSessionHistory] = useState(null);
-    const [sessionEx, setSessionEx] = useState(() => load("draft_sessionEx", null));
+    const [sessionEx, setSessionEx] = useState(() => loadDraftForDate(getTodayKey()).sessionEx);
 
     const [routineOrder, setRoutineOrder] = useState(() => load("routineOrder", {}));
 
@@ -437,12 +513,7 @@ export default function GymApp() {
         });
     };
 
-    const [logDate, setLogDate] = useState(() =>
-        load("draft_logDate", (() => {
-            const d = new Date();
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        })())
-    );
+    const [logDate, setLogDate] = useState(() => getTodayKey());
     const [logMode, setLogMode] = useState("today");
 
     const {
@@ -461,6 +532,11 @@ export default function GymApp() {
         getExSets,
         logDate,
     });
+
+    const handleSaveLog = useCallback(() => {
+        saveLog();
+        clearDraftForDate(logDate);
+    }, [saveLog, clearDraftForDate, logDate]);
 
     // GymApp()の中に追加
     const {
@@ -514,7 +590,7 @@ export default function GymApp() {
     }, []);
 
 
-    const [exerciseUnits, setExerciseUnits] = useState(() => load("draft_exerciseUnits", {}));
+    const [exerciseUnits, setExerciseUnits] = useState(() => loadDraftForDate(getTodayKey()).exerciseUnits);
     const [sessionSyncVersion, setSessionSyncVersion] = useState(0);
     const initialWorkoutTimerState = readWorkoutTimerState();
     const [workoutStartedAt, setWorkoutStartedAt] = useState(initialWorkoutTimerState.startedAt);
@@ -1568,38 +1644,41 @@ export default function GymApp() {
     useEffect(() => {
         if (screen !== "log") return;
 
-        const hasDraft =
-            sessionEx !== null ||
-            Object.keys(logData).length > 0 ||
-            Object.keys(exerciseUnits).length > 0 ||
-            todayLabels.length > 0;
+        const draft = {
+            todayLabels,
+            logData,
+            sessionEx,
+            exerciseUnits,
+        };
 
-        if (!hasDraft || logMode !== "today") return;
+        if (!hasDraftContent(draft)) return;
 
-        save("draft_todayLabels", todayLabels);
-        save("draft_logData", logData);
-        save("draft_sessionEx", sessionEx);
-        save("draft_exerciseUnits", exerciseUnits);
-        save("draft_logDate", logDate);
-    }, [screen, todayLabels, logData, sessionEx, exerciseUnits, logDate, logMode]);
+        saveDraftForDate(logDate, draft);
+    }, [screen, todayLabels, logData, sessionEx, exerciseUnits, logDate, logMode, hasDraftContent, saveDraftForDate]);
 
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
 
     useEffect(() => {
-        const d = new Date();
-        const today =
-            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const today = getTodayKey();
+        const todayDraft = loadDraftForDate(today);
 
         setLogMode("today");
         setLogDate(today);
-        setTodayLabels([]);
-        setSessionEx(null);
-        setLogData({});
-        setExerciseUnits({});
+        if (hasDraftContent(todayDraft)) {
+            setTodayLabels(todayDraft.todayLabels);
+            setSessionEx(todayDraft.sessionEx);
+            setLogData(todayDraft.logData);
+            setExerciseUnits(todayDraft.exerciseUnits);
+        } else {
+            setTodayLabels([]);
+            setSessionEx(null);
+            setLogData({});
+            setExerciseUnits({});
+        }
         if (!new URLSearchParams(window.location.search).get("ref")) {
             setScreen("history");
         }
-    }, []);
+    }, [getTodayKey, hasDraftContent, loadDraftForDate]);
 
     useEffect(() => {
         if (screen !== "log") {
@@ -1665,8 +1744,12 @@ export default function GymApp() {
 
         setExerciseUnits((p) => {
             const next = { ...p, [name]: newUnit };
-            save("draft_exerciseUnits", next);
-            save("draft_logDate", logDate);
+            saveDraftForDate(logDate, {
+                todayLabels,
+                logData,
+                sessionEx,
+                exerciseUnits: next,
+            });
             return next;
         });
     };
@@ -1976,16 +2059,24 @@ export default function GymApp() {
         setLogData(p => {
             const n = { ...p };
             delete n[targetName];
-            save("draft_logData", n);
-            save("draft_logDate", logDate);
+            saveDraftForDate(logDate, {
+                todayLabels,
+                logData: n,
+                sessionEx,
+                exerciseUnits,
+            });
             return n;
         });
 
         setExerciseUnits(p => {
             const n = { ...p };
             delete n[targetName];
-            save("draft_exerciseUnits", n);
-            save("draft_logDate", logDate);
+            saveDraftForDate(logDate, {
+                todayLabels,
+                logData,
+                sessionEx,
+                exerciseUnits: n,
+            });
             return n;
         });
 
@@ -2062,8 +2153,12 @@ export default function GymApp() {
 
             didAddExercise = true;
             const next = [...current, ex];
-            save("draft_sessionEx", next);
-            save("draft_logDate", logDate);
+            saveDraftForDate(logDate, {
+                todayLabels,
+                logData,
+                sessionEx: next,
+                exerciseUnits,
+            });
             return next;
         });
 
@@ -2090,8 +2185,12 @@ export default function GymApp() {
             const current = [...(p !== null ? p : baseExercises)];
             const [moved] = current.splice(fromIdx, 1);
             current.splice(toIdx, 0, moved);
-            save("draft_sessionEx", current);
-            save("draft_logDate", logDate);
+            saveDraftForDate(logDate, {
+                todayLabels,
+                logData,
+                sessionEx: current,
+                exerciseUnits,
+            });
             return current;
         });
     };
@@ -2187,25 +2286,29 @@ export default function GymApp() {
     };
 
     const handleLogForDate = (dateStr) => {
-        const hasCurrentDraft =
-            sessionEx !== null ||
-            Object.keys(logData).length > 0 ||
-            Object.keys(exerciseUnits).length > 0 ||
-            todayLabels.length > 0;
+        const currentDraft = {
+            todayLabels,
+            logData,
+            sessionEx,
+            exerciseUnits,
+        };
 
-        if (hasCurrentDraft && logMode === "today") {
-            save("draft_todayLabels", todayLabels);
-            save("draft_logData", logData);
-            save("draft_sessionEx", sessionEx);
-            save("draft_exerciseUnits", exerciseUnits);
-            save("draft_logDate", logDate);
+        if (hasDraftContent(currentDraft)) {
+            saveDraftForDate(logDate, currentDraft);
         }
-        setSessionEx(null);
-        setLogData({});
-        setExerciseUnits({});
 
         setLogMode(dateStr === getTodayKey() ? "today" : "past");
         setLogDate(dateStr);
+
+        const draftForDate = loadDraftForDate(dateStr);
+        if (hasDraftContent(draftForDate)) {
+            setTodayLabels(draftForDate.todayLabels);
+            setSessionEx(draftForDate.sessionEx);
+            setLogData(draftForDate.logData);
+            setExerciseUnits(draftForDate.exerciseUnits);
+            setScreen("log");
+            return;
+        }
 
         const dayExercises = Object.entries(history)
             .map(([name, recs]) => {
@@ -2246,6 +2349,7 @@ export default function GymApp() {
             setSessionEx(null);
             setLogData({});
         }
+        setExerciseUnits({});
 
         setScreen("log");
     };
@@ -2253,29 +2357,6 @@ export default function GymApp() {
 
     // ② カレンダークリック用（分岐だけ）
     const handleCalendarDayOpen = (dateStr) => {
-        const draftDate = load("draft_logDate", "");
-        const draftSession = load("draft_sessionEx", null);
-        const draftLog = load("draft_logData", {});
-        const draftUnits = load("draft_exerciseUnits", {});
-        const draftLabels = load("draft_todayLabels", []);
-
-        const hasRealDraftForDate =
-            draftDate === dateStr &&
-            Object.values(draftLog).some((sets) =>
-                (sets || []).some((s) => s.weight || s.reps)
-            );
-
-        if (hasRealDraftForDate) {
-            setLogMode("past");
-            setLogDate(dateStr);
-            setSessionEx(draftSession);
-            setLogData(draftLog);
-            setExerciseUnits(draftUnits);
-            setTodayLabels(draftLabels);
-            setScreen("log");
-            return;
-        }
-
         handleLogForDate(dateStr);
     };
 
@@ -2358,12 +2439,12 @@ export default function GymApp() {
         queueWorkoutSessionSync(recordDate);
 
         // ===== draft側も更新する =====
-        const draftDate = load("draft_logDate", "");
-        if (draftDate !== recordDate) return;
+        const dateDraft = loadDraftForDate(recordDate);
+        if (!hasDraftContent(dateDraft)) return;
 
-        const draftLog = load("draft_logData", {});
-        const draftSession = load("draft_sessionEx", null);
-        const draftUnits = load("draft_exerciseUnits", {});
+        const draftLog = dateDraft.logData || {};
+        const draftSession = dateDraft.sessionEx;
+        const draftUnits = dateDraft.exerciseUnits || {};
 
         // その種目のdraftが無ければ終了
         if (!draftLog[exName]) return;
@@ -2397,9 +2478,12 @@ export default function GymApp() {
             }
         }
 
-        save("draft_logData", nextDraftLog);
-        save("draft_sessionEx", nextDraftSession);
-        save("draft_exerciseUnits", nextDraftUnits);
+        saveDraftForDate(recordDate, {
+            todayLabels: dateDraft.todayLabels,
+            logData: nextDraftLog,
+            sessionEx: nextDraftSession,
+            exerciseUnits: nextDraftUnits,
+        });
 
         // 今まさにその日を編集中なら画面状態にも反映
         if (logDate === recordDate) {
@@ -2442,14 +2526,7 @@ export default function GymApp() {
         }
 
         // その日のdraftも消す
-        const draftDate = load("draft_logDate", "");
-        if (draftDate === targetDate) {
-            save("draft_todayLabels", []);
-            save("draft_logData", {});
-            save("draft_sessionEx", null);
-            save("draft_exerciseUnits", {});
-            save("draft_logDate", "");
-        }
+        clearDraftForDate(targetDate);
     };
 
     // ─── 設定画面用 exercise 追加 ──────────────────────
@@ -2692,7 +2769,7 @@ export default function GymApp() {
                             setIntervalSec={setIntervalSec}
                             startTimer={startTimer}
                             stopTimer={stopTimer}
-                            saveLog={saveLog}
+                            saveLog={handleSaveLog}
                             onAddEx={addExToSession}
                             onQuickAddEx={quickAddToSession}
                             onReorderEx={reorderEx}
@@ -2716,9 +2793,7 @@ export default function GymApp() {
                                 setSessionEx(null);
                                 setLogData({});
                                 setExerciseUnits({});
-                                save("draft_sessionEx", null);
-                                save("draft_logData", {});
-                                save("draft_exerciseUnits", {});
+                                clearDraftForDate(logDate);
                                 resetWorkoutElapsedTimer();
                             }}
                         />
@@ -2806,15 +2881,7 @@ export default function GymApp() {
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                         hiddenBodyParts={hiddenBodyParts}
                         onStartLog={() => {
-                            const d = new Date();
-                            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-                            setLogMode("today");
-                            setLogDate(today);
-                            setTodayLabels([]);
-                            setSessionEx(null);
-                            setLogData({});
-                            setExerciseUnits({});
-                            setScreen("log");
+                            handleLogForDate(getTodayKey());
                         }}
                         user={user}
                     />
