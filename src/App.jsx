@@ -2884,6 +2884,7 @@ export default function GymApp() {
                             handleLogForDate(getTodayKey());
                         }}
                         user={user}
+                        workoutDurationSecByDate={savedWorkoutDurationSecByDate}
                     />
                 )}
 

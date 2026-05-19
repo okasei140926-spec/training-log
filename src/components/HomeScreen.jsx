@@ -348,7 +348,8 @@ function collectRecentSessions(history, muscleEx, overrides) {
                         record.elapsedMinutes ||
                         record.durationMinutes ||
                         (record.duration_sec ? Math.round(Number(record.duration_sec) / 60) : null) ||
-                        (record.durationSec ? Math.round(Number(record.durationSec) / 60) : null),
+                        (record.durationSec ? Math.round(Number(record.durationSec) / 60) : null) ||
+                        (workoutDurationSecByDate[record.date] ? Math.round(Number(workoutDurationSecByDate[record.date]) / 60) : null),
                     exercises: [],
                 };
             }
@@ -566,7 +567,7 @@ function RecoveryCard({ part, pct, status, onClick }) {
     );
 }
 
-export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts }) {
+export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts, onStartLog, user, workoutDurationSecByDate = {} }) {
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
     const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
