@@ -751,11 +751,14 @@ export default function GymApp() {
     const historyDeleteMarkersRef = useRef(createEmptyHistoryDeleteMarkers());
     const pendingWorkoutSessionSyncDatesRef = useRef(new Set());
     const syncFailuresByDateRef = useRef({});
+    const dismissedSyncFailureSignaturesRef = useRef(new Set());
     const pendingDeleteUndoRef = useRef(null);
     const previousWorkoutActivitySignatureRef = useRef("");
     const previousWorkoutActivityDateRef = useRef("");
     const workoutTimerStateRef = useRef(initialWorkoutTimerState);
     const previousOnlineStateRef = useRef(isOnline);
+    const undoToastTouchStartYRef = useRef(null);
+    const syncBannerTouchStartYRef = useRef(null);
 
     // 設定画面用モーダル
     const [showAddEx, setShowAddEx] = useState(false);
@@ -1176,6 +1179,31 @@ export default function GymApp() {
         setSyncFailuresByDate(nextFailures);
     }, []);
 
+    const dismissPendingDeleteUndo = useCallback(() => {
+        const pending = pendingDeleteUndoRef.current;
+        if (pending?.timeoutId) window.clearTimeout(pending.timeoutId);
+        pendingDeleteUndoRef.current = null;
+        setPendingDeleteUndo(null);
+    }, []);
+
+    const getSyncFailureSignature = useCallback((failures) => (
+        Object.entries(failures || {})
+            .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+            .map(([date, failure]) => [
+                date,
+                failure?.stage || "",
+                failure?.code || "",
+                failure?.message || "",
+            ].join(":"))
+            .join("|")
+    ), []);
+
+    const dismissSyncFailureBanner = useCallback(() => {
+        const signature = getSyncFailureSignature(syncFailuresByDateRef.current);
+        if (signature) dismissedSyncFailureSignaturesRef.current.add(signature);
+        setSyncFailuresByDate({ ...syncFailuresByDateRef.current });
+    }, [getSyncFailureSignature]);
+
     const syncWorkoutRowsForDates = useCallback(async (userId, historyMap, dates = [], durationSecByDate = {}) => {
         const normalizedDates = [...new Set((dates || []).map((date) => String(date || "").trim()).filter(Boolean))];
         const results = {
@@ -1529,6 +1557,9 @@ export default function GymApp() {
                 prefix: failedDates[0]?.slice(0, 7) || "",
             });
             setSessionSyncVersion((prev) => prev + 1);
+            if (Object.keys(syncFailuresByDateRef.current).length === 0) {
+                setSyncFailuresByDate({});
+            }
         } finally {
             setSyncRetrying(false);
         }
@@ -3073,7 +3104,6 @@ export default function GymApp() {
 
         if (pendingDeleteUndoRef.current?.timeoutId) {
             window.clearTimeout(pendingDeleteUndoRef.current.timeoutId);
-            pendingDeleteUndoRef.current.remoteDelete?.();
         }
 
         latestHistoryRef.current = nextHistory;
@@ -3145,7 +3175,6 @@ export default function GymApp() {
             previousDraft,
             previousDurationSec,
             timeoutId,
-            remoteDelete,
         };
         pendingDeleteUndoRef.current = undoState;
         setPendingDeleteUndo({
@@ -3270,6 +3299,12 @@ export default function GymApp() {
     ];
     const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
     const syncFailureDates = Object.keys(syncFailuresByDate);
+    const syncFailureSignature = getSyncFailureSignature(syncFailuresByDate);
+    const shouldShowSyncFailureBanner =
+        isOnline &&
+        syncFailureDates.length > 0 &&
+        Boolean(syncFailureSignature) &&
+        !dismissedSyncFailureSignaturesRef.current.has(syncFailureSignature);
 
     if (!isSupabaseConfigured) {
         return (
@@ -3367,8 +3402,19 @@ export default function GymApp() {
                     </div>
                 )}
 
-                {isOnline && syncFailureDates.length > 0 && (
-                    <div style={{ padding: "10px 18px 0" }}>
+                {shouldShowSyncFailureBanner && (
+                    <div
+                        onTouchStart={(event) => {
+                            syncBannerTouchStartYRef.current = event.touches[0].clientY;
+                        }}
+                        onTouchEnd={(event) => {
+                            if (syncBannerTouchStartYRef.current == null) return;
+                            const dy = event.changedTouches[0].clientY - syncBannerTouchStartYRef.current;
+                            syncBannerTouchStartYRef.current = null;
+                            if (dy < -28 || dy > 28) dismissSyncFailureBanner();
+                        }}
+                        style={{ padding: "10px 18px 0" }}
+                    >
                         <div style={{
                             background: "rgba(245, 158, 11, 0.10)",
                             color: "var(--text)",
@@ -3382,37 +3428,66 @@ export default function GymApp() {
                             justifyContent: "space-between",
                             gap: 12,
                         }}>
-                            <div>
+                            <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: 900 }}>同期できていない記録があります</div>
                                 <div style={{ color: "var(--text2)", fontSize: 12 }}>
                                     {syncFailureDates.slice(0, 3).join(" / ")}
                                     {syncFailureDates.length > 3 ? ` ほか${syncFailureDates.length - 3}件` : ""}
                                 </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={retryFailedSync}
-                                disabled={syncRetrying}
-                                style={{
-                                    flexShrink: 0,
-                                    border: "none",
-                                    borderRadius: 999,
-                                    padding: "9px 12px",
-                                    background: "linear-gradient(135deg, #F59E0B, #FACC15)",
-                                    color: "#fff",
-                                    fontSize: 12,
-                                    fontWeight: 900,
-                                    opacity: syncRetrying ? 0.7 : 1,
-                                }}
-                            >
-                                {syncRetrying ? "再同期中" : "再同期"}
-                            </button>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                                <button
+                                    type="button"
+                                    onClick={retryFailedSync}
+                                    disabled={syncRetrying}
+                                    style={{
+                                        border: "none",
+                                        borderRadius: 999,
+                                        padding: "9px 12px",
+                                        background: "linear-gradient(135deg, #F59E0B, #FACC15)",
+                                        color: "#fff",
+                                        fontSize: 12,
+                                        fontWeight: 900,
+                                        opacity: syncRetrying ? 0.7 : 1,
+                                    }}
+                                >
+                                    {syncRetrying ? "再同期中" : "再同期"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={dismissSyncFailureBanner}
+                                    aria-label="同期失敗バナーを閉じる"
+                                    style={{
+                                        width: 34,
+                                        height: 34,
+                                        borderRadius: 999,
+                                        border: "1px solid rgba(245, 158, 11, 0.24)",
+                                        background: "rgba(255,255,255,0.50)",
+                                        color: "var(--text2)",
+                                        fontSize: 20,
+                                        lineHeight: 1,
+                                        fontWeight: 800,
+                                    }}
+                                >
+                                    ×
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {pendingDeleteUndo && (
-                    <div style={{
+                    <div
+                        onTouchStart={(event) => {
+                            undoToastTouchStartYRef.current = event.touches[0].clientY;
+                        }}
+                        onTouchEnd={(event) => {
+                            if (undoToastTouchStartYRef.current == null) return;
+                            const dy = event.changedTouches[0].clientY - undoToastTouchStartYRef.current;
+                            undoToastTouchStartYRef.current = null;
+                            if (dy > 32) dismissPendingDeleteUndo();
+                        }}
+                        style={{
                         position: "fixed",
                         left: 18,
                         right: 18,
