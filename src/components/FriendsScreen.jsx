@@ -38,6 +38,10 @@ const RANKING_TABS = [
     { key: "consistency", label: "継続" },
     { key: "monthly", label: "Volume" },
 ];
+const VOLUME_PERIOD_TABS = [
+    { key: "thisMonth", label: "今月" },
+    { key: "lastMonth", label: "先月" },
+];
 const STALE_MS = 30000;
 const EMPTY_FRIEND_SESSION_INSIGHTS = {
     rawMonthlySessions: [],
@@ -146,6 +150,7 @@ export default function FriendsScreen({
     const [commentsSessionTarget, setCommentsSessionTarget] = useState(null);
     const [rankingTab, setRankingTab] = useState("big3");
     const [selectedBig3Entry, setSelectedBig3Entry] = useState(null);
+    const [volumePeriod, setVolumePeriod] = useState("thisMonth");
     const [expandedFeedDates, setExpandedFeedDates] = useState({});
     const [friendSessionInsights, setFriendSessionInsights] = useState(() => (
         FRIENDS_SCREEN_CACHE.friendsData.friendSessionInsights || EMPTY_FRIEND_SESSION_INSIGHTS
@@ -156,6 +161,30 @@ export default function FriendsScreen({
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
     const recentSevenStart = shiftDateKey(today, -6);
+    const volumePeriodRange = useMemo(() => {
+        const todayDate = parseDateKey(today);
+        const thisMonthStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
+        const lastMonthStart = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(todayDate.getFullYear(), todayDate.getMonth(), 0);
+        const range = volumePeriod === "lastMonth"
+            ? {
+                key: "lastMonth",
+                label: "先月",
+                start: formatDateKey(lastMonthStart),
+                end: formatDateKey(lastMonthEnd),
+            }
+            : {
+                key: "thisMonth",
+                label: "今月",
+                start: formatDateKey(thisMonthStart),
+                end: today,
+            };
+
+        return {
+            ...range,
+            display: `${Number(range.start.slice(5, 7))}/${Number(range.start.slice(8, 10))} - ${Number(range.end.slice(5, 7))}/${Number(range.end.slice(8, 10))}`,
+        };
+    }, [today, volumePeriod]);
     const [localMode, setLocalMode] = useState(mode === "ranking" ? "ranking" : "feed");
     const showFeedSections = localMode === "feed";
     const showRankingSections = localMode === "ranking";
@@ -203,12 +232,12 @@ export default function FriendsScreen({
         return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
     }, []);
 
-    const computeMonthlyVolumeFromHistory = useCallback((historyData) => {
+    const computeVolumeFromHistoryForRange = useCallback((historyData, range) => {
         return Math.round(
             Object.values(historyData || {}).reduce((total, records) => (
                 total + (records || []).reduce((recordTotal, record) => {
                     const recordDate = String(record?.date || "").slice(0, 10);
-                    if (!recordDate.startsWith(currentMonthPrefix)) return recordTotal;
+                    if (!recordDate || recordDate < range.start || recordDate > range.end) return recordTotal;
 
                     const setVolume = getRecordSets(record).reduce((sum, set) => {
                         const weight = Number(set?.weight);
@@ -222,7 +251,7 @@ export default function FriendsScreen({
                 }, 0)
             ), 0)
         );
-    }, [currentMonthPrefix, getRecordSets]);
+    }, [getRecordSets]);
 
     const matchBig3Exercise = useCallback((name) => {
         return getBig3ExerciseKey(name);
@@ -1515,19 +1544,19 @@ export default function FriendsScreen({
         })),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
-    const monthlyVolumeRanking = [
+    const volumeRanking = [
         {
             id: user?.id || "me",
             name: getDisplayUsername(myUsername, { isMe: true }),
             isMe: true,
-            value: computeMonthlyVolumeFromHistory(history),
+            value: computeVolumeFromHistoryForRange(history, volumePeriodRange),
             avatarUrl,
         },
         ...friends.map((friend) => ({
             id: friend.id,
             name: getDisplayUsername(friend.username),
             isMe: false,
-            value: computeMonthlyVolumeFromHistory(friend.history),
+            value: computeVolumeFromHistoryForRange(friend.history, volumePeriodRange),
             avatarUrl: friend.avatar1_url || null,
         })),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
@@ -1553,7 +1582,7 @@ export default function FriendsScreen({
         console.log("[ranking] friend monthly sessions count by user", friendSessionCountByUser);
         console.log("[ranking] visibility by user/date", friendSessionInsights.visibilityByUserDate || {});
         console.log("[ranking] excluded monthly sessions", friendSessionInsights.excludedSessions || []);
-        console.log("[ranking] final ranking rows", monthlyVolumeRanking);
+        console.log("[ranking] final ranking rows", volumeRanking);
         console.log("[profile] viewed user id", user?.id);
         console.log("[profile] current user id", user?.id);
         console.log("[profile] accepted friend ids", friendIds);
@@ -1566,11 +1595,12 @@ export default function FriendsScreen({
         console.log("[profile] valid sets by date", friendSessionInsights.validSetsByDate || {});
     }, [
         countMonthlyWorkoutDays,
-        computeMonthlyVolumeFromHistory,
+        computeVolumeFromHistoryForRange,
         friendIds,
         friendSessionInsights,
         friends,
-        monthlyVolumeRanking,
+        volumeRanking,
+        volumePeriodRange,
         selfMonthlySessions,
         user?.id,
     ]);
@@ -1629,9 +1659,9 @@ export default function FriendsScreen({
             label: "Volume",
             emptyValue: "0kg",
             unit: "kg",
-            description: "今月のVolumeランキング",
-            data: monthlyVolumeRanking,
-            detailLabel: () => "今月の総重量",
+            description: `${volumePeriodRange.label}のVolumeランキング`,
+            data: volumeRanking,
+            detailLabel: () => `${volumePeriodRange.label}の総重量`,
             metricLabel: (entry) => `${entry.value.toLocaleString("ja-JP")}kg`,
             mySummary: (rankIndex, myEntry, aboveEntry) => {
                 if (!myEntry) return null;
@@ -1639,7 +1669,7 @@ export default function FriendsScreen({
                     return {
                         headline: "あなたは 1位",
                         metric: `${myEntry.value.toLocaleString("ja-JP")}kg`,
-                        note: myEntry.value > 0 ? "今月トップです" : "まだ今月の記録はありません",
+                        note: myEntry.value > 0 ? `${volumePeriodRange.label}トップです` : `まだ${volumePeriodRange.label}の記録はありません`,
                     };
                 }
                 return {
@@ -2412,7 +2442,11 @@ export default function FriendsScreen({
                                     {activeRanking.description}
                                 </div>
                                 <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
-                                    {rankingTab === "big3" ? "通算PRの合計" : "順位・ユーザー・数値"}
+                                    {rankingTab === "big3"
+                                        ? "通算PRの合計"
+                                        : rankingTab === "monthly"
+                                            ? `集計期間 ${volumePeriodRange.display}`
+                                            : "順位・ユーザー・数値"}
                                 </div>
                             </div>
                             {friendsRefreshing && (
@@ -2421,6 +2455,47 @@ export default function FriendsScreen({
                                 </div>
                             )}
                         </div>
+
+                        {rankingTab === "monthly" && (
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                    gap: 6,
+                                    padding: 3,
+                                    marginBottom: 10,
+                                    borderRadius: 14,
+                                    background: "rgba(15, 94, 99, 0.04)",
+                                    border: "1px solid rgba(18, 199, 194, 0.10)",
+                                }}
+                            >
+                                {VOLUME_PERIOD_TABS.map((period) => {
+                                    const selected = volumePeriod === period.key;
+                                    return (
+                                        <button
+                                            key={period.key}
+                                            type="button"
+                                            onClick={() => setVolumePeriod(period.key)}
+                                            style={{
+                                                minWidth: 0,
+                                                padding: "8px 10px",
+                                                borderRadius: 11,
+                                                border: selected ? "1px solid rgba(255,255,255,0.8)" : "1px solid transparent",
+                                                background: selected
+                                                    ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                                                    : "rgba(255,255,255,0.66)",
+                                                color: selected ? "#fff" : "var(--text2)",
+                                                fontSize: 12,
+                                                fontWeight: 900,
+                                                boxShadow: selected ? "0 10px 18px rgba(18, 199, 194, 0.16)" : "none",
+                                            }}
+                                        >
+                                            {period.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
 
                         {shouldShowRankingLoading ? (
                             <div style={{ textAlign: "center", padding: 26, color: "var(--text2)", fontSize: 14 }}>読み込み中...</div>
