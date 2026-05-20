@@ -165,6 +165,39 @@ const applyHistoryDeleteMarkers = (historyMap, markers) => {
     return next;
 };
 
+const attachWorkoutDurationsToHistory = (historyMap, workoutRows = []) => {
+    const durationByDate = {};
+    (workoutRows || []).forEach((row) => {
+        const date = String(row?.date || "").slice(0, 10);
+        const durationSec = Math.floor(Number(row?.duration_sec) || 0);
+        if (date && durationSec > 0 && durationSec < 86400) {
+            durationByDate[date] = Math.max(durationByDate[date] || 0, durationSec);
+        }
+    });
+
+    if (!Object.keys(durationByDate).length) return historyMap;
+
+    const next = {};
+    Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+        next[exerciseName] = (records || []).map((record) => {
+            const recordDate = String(record?.date || "").slice(0, 10);
+            const durationSec = durationByDate[recordDate];
+            if (!durationSec) return record;
+
+            const durationMinutes = Math.max(1, Math.round(durationSec / 60));
+            return {
+                ...record,
+                duration_sec: durationSec,
+                durationSec,
+                durationMinutes,
+                elapsedMinutes: durationMinutes,
+            };
+        });
+    });
+
+    return next;
+};
+
 export default function GymApp() {
     const getTodayKey = useCallback(() => {
         const d = new Date();
@@ -1457,14 +1490,14 @@ export default function GymApp() {
             try {
                 const { data, error } = await supabase
                     .from("workouts")
-                    .select("date, data")
+                    .select("date, data, duration_sec")
                     .eq("user_id", user.id)
                     .order("date", { ascending: true });
 
                 if (error) throw error;
 
                 const remoteHistory = applyHistoryDeleteMarkers(
-                    buildHistoryFromWorkoutRows(data),
+                    attachWorkoutDurationsToHistory(buildHistoryFromWorkoutRows(data), data),
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
@@ -1515,7 +1548,7 @@ export default function GymApp() {
 
                 const { data, error } = await supabase
                     .from("workouts")
-                    .select("date, data")
+                    .select("date, data, duration_sec")
                     .eq("user_id", currentUserId)
                     .order("date", { ascending: true });
 
@@ -1523,7 +1556,7 @@ export default function GymApp() {
                 if (latestUserIdRef.current !== currentUserId) return;
 
                 const remoteHistory = applyHistoryDeleteMarkers(
-                    buildHistoryFromWorkoutRows(data),
+                    attachWorkoutDurationsToHistory(buildHistoryFromWorkoutRows(data), data),
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
@@ -1969,6 +2002,15 @@ export default function GymApp() {
             logDate,
         };
         queueWorkoutSessionSync(logDate);
+        const timerPersistence =
+            workoutStartedForDate === logDate
+                ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
+                : null;
+        const durationSec = Math.max(
+            0,
+            Math.floor(Number(timerPersistence?.durationSec || savedWorkoutDurationSecByDate[logDate] || 0))
+        );
+        const durationMinutes = durationSec > 0 ? Math.max(1, Math.round(durationSec / 60)) : 0;
 
         setHistory((prev) => {
             const nh = { ...prev };
@@ -1998,12 +2040,20 @@ export default function GymApp() {
                     date: logDate,
                     order: index,
                     bodyPart,
+                    ...(durationSec > 0
+                        ? {
+                            duration_sec: durationSec,
+                            durationSec,
+                            durationMinutes,
+                            elapsedMinutes: durationMinutes,
+                        }
+                        : {}),
                 });
             });
 
             return nh;
         });
-    }, [exercises, logData, logDate, getExUnit, todayLabels, user?.id, queueWorkoutSessionSync]); // ← 依存配列
+    }, [exercises, logData, logDate, getExUnit, todayLabels, user?.id, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, workoutStartedForDate]); // ← 依存配列
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
@@ -2166,10 +2216,28 @@ export default function GymApp() {
         });
         const durationSec = Math.max(0, Math.floor(Number(nextSummary?.durationSec) || 0));
         if (durationSec > 0) {
+            const durationMinutes = Math.max(1, Math.round(durationSec / 60));
             setSavedWorkoutDurationSecByDate((prev) => ({
                 ...prev,
                 [logDate]: Math.max(prev[logDate] || 0, durationSec),
             }));
+            setHistory((prev) => {
+                const next = {};
+                Object.entries(prev || {}).forEach(([exerciseName, records]) => {
+                    next[exerciseName] = (records || []).map((record) => (
+                        String(record?.date || "").slice(0, 10) === logDate
+                            ? {
+                                ...record,
+                                duration_sec: durationSec,
+                                durationSec,
+                                durationMinutes,
+                                elapsedMinutes: durationMinutes,
+                            }
+                            : record
+                    ));
+                });
+                return next;
+            });
             queueWorkoutSessionSync(logDate);
         }
         setSummary(nextSummary);
@@ -3157,6 +3225,7 @@ export default function GymApp() {
                         onEditHistory={handleEditHistory}
                         onDeleteHistory={handleDeleteHistory}
                         onDeleteDate={deleteAllHistoryForDate}
+                        workoutDurationSecByDate={savedWorkoutDurationSecByDate}
                         unit={unit}
                         getExUnit={getExUnit}
                         onLogForDate={handleCalendarDayOpen}

@@ -106,6 +106,7 @@ export default function HistoryScreen({
   onDeleteManualBest,
   onAddCustomBodyPart,
   onOpenWorkoutDaySummary,
+  workoutDurationSecByDate = {},
 }) {
   const [editTarget, setEditTarget] = useState(null);
   const [showManualBestModal, setShowManualBestModal] = useState(false);
@@ -370,13 +371,15 @@ export default function HistoryScreen({
       setCountByBodyPart,
       setCount: todayEntries.reduce((sum, entry) => sum + entry.setCount, 0),
       totalVolume: Math.round(todayEntries.reduce((sum, entry) => sum + entry.volume, 0)),
-      durationSec: todayWorkoutDurationSec,
+      durationSec: Math.max(todayWorkoutDurationSec, Math.floor(Number(workoutDurationSecByDate[todayKey]) || 0)),
       prCount: todayPrEntries.length,
     };
   }, [
     todayEntries,
     todayWorkoutDurationSec,
     todayPrEntries,
+    todayKey,
+    workoutDurationSecByDate,
   ]);
   const firstTrainingDate = useMemo(() => {
     const dates = getValidWorkoutDatesFromHistory(history || {});
@@ -605,7 +608,7 @@ export default function HistoryScreen({
         })
         .filter(Boolean);
 
-      let durationSec = 0;
+      let durationSec = Math.floor(Number(workoutDurationSecByDate[normalizedDate]) || 0);
       let isShared = false;
       if (normalizedDate === todayKey && todayWorkoutDurationSec > 0) {
         durationSec = todayWorkoutDurationSec;
@@ -688,6 +691,7 @@ export default function HistoryScreen({
       user?.id,
       todayKey,
       todayWorkoutDurationSec,
+      workoutDurationSecByDate,
       getExUnit,
       unit,
     ]
