@@ -37,6 +37,7 @@ import AIScreen from "./components/AIScreen";
 import AppHeader from "./components/layout/AppHeader";
 import BottomNav from "./components/layout/BottomNav";
 import PushPromptModal from "./components/PushPromptModal";
+import SplashScreen from "./components/SplashScreen";
 
 import AddExModal from "./components/modals/AddExModal";
 import WorkoutDaySummaryModal from "./components/modals/WorkoutDaySummaryModal";
@@ -359,6 +360,9 @@ export default function GymApp() {
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
+    const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
+    const [splashMinElapsed, setSplashMinElapsed] = useState(false);
+    const [splashForceDone, setSplashForceDone] = useState(false);
 
     const ensureProfileForUser = useCallback(async (nextUser) => {
         if (!nextUser?.id) return;
@@ -424,12 +428,24 @@ export default function GymApp() {
     }, []);
 
     useEffect(() => {
+        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 620);
+        const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 1500);
+
+        return () => {
+            window.clearTimeout(minTimerId);
+            window.clearTimeout(maxTimerId);
+        };
+    }, []);
+
+    useEffect(() => {
         if (!isSupabaseConfigured) {
             setUser(null);
+            setAuthReady(true);
             return undefined;
         }
 
         let isMounted = true;
+        setAuthReady(false);
 
         const syncAuthenticatedUser = async (nextUser) => {
             if (!isMounted) return;
@@ -452,11 +468,18 @@ export default function GymApp() {
             }
         };
 
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            void syncAuthenticatedUser(session?.user ?? null);
-        });
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => syncAuthenticatedUser(session?.user ?? null))
+            .catch((error) => {
+                console.error("initial auth session load failed", error);
+                if (isMounted) setUser(null);
+            })
+            .finally(() => {
+                if (isMounted) setAuthReady(true);
+            });
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             void syncAuthenticatedUser(session?.user ?? null);
+            if (isMounted) setAuthReady(true);
         });
 
         return () => {
@@ -3305,6 +3328,9 @@ export default function GymApp() {
         syncFailureDates.length > 0 &&
         Boolean(syncFailureSignature) &&
         !dismissedSyncFailureSignaturesRef.current.has(syncFailureSignature);
+    const showSplashScreen =
+        !splashForceDone &&
+        (!splashMinElapsed || !authReady || !historySyncReady);
 
     if (!isSupabaseConfigured) {
         return (
@@ -3902,6 +3928,7 @@ export default function GymApp() {
                     showPrimary={pushStatus.support.supported && pushStatus.permission !== "denied"}
                 />
 
+                <SplashScreen visible={showSplashScreen} />
                 <Analytics />
             </div>
         </>
