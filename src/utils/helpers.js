@@ -166,6 +166,18 @@ export function buildHistoryRecordSignature(record) {
   return `${sanitizedRecord.date}::${sanitizedRecord.bodyPart || ""}::${setsSignature}`;
 }
 
+const getHistoryRecordDurationSec = (record) => {
+  const candidates = [
+    Number(record?.duration_sec),
+    Number(record?.durationSec),
+    Number(record?.durationMinutes) * 60,
+    Number(record?.elapsedMinutes) * 60,
+  ];
+
+  const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
+  return durationSec ? Math.floor(durationSec) : 0;
+};
+
 const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
   if (!existingRecord) return incomingRecord;
 
@@ -174,7 +186,20 @@ const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
 
   if (!existingSignature) return incomingRecord;
   if (!incomingSignature) return existingRecord;
-  if (existingSignature === incomingSignature) return existingRecord;
+  if (existingSignature === incomingSignature) {
+    const existingDurationSec = getHistoryRecordDurationSec(existingRecord);
+    const incomingDurationSec = getHistoryRecordDurationSec(incomingRecord);
+    const durationSec = Math.max(existingDurationSec, incomingDurationSec);
+    if (durationSec <= 0) return existingRecord;
+    const durationMinutes = Math.max(1, Math.round(durationSec / 60));
+    return {
+      ...existingRecord,
+      duration_sec: durationSec,
+      durationSec,
+      durationMinutes,
+      elapsedMinutes: durationMinutes,
+    };
+  }
   return incomingRecord;
 };
 

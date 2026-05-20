@@ -59,6 +59,16 @@ const formatTimeStamp = (value) => {
   });
 };
 const formatSlashDate = (value) => String(value || "").replace(/-/g, "/");
+const getHistoryDurationSec = (record) => {
+  const candidates = [
+    Number(record?.duration_sec),
+    Number(record?.durationSec),
+    Number(record?.durationMinutes) * 60,
+    Number(record?.elapsedMinutes) * 60,
+  ];
+  const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
+  return durationSec ? Math.floor(durationSec) : 0;
+};
 const formatElapsedFromStartDate = (startDateKey, endDate = new Date()) => {
   if (!startDateKey) return "";
   const start = new Date(`${startDateKey}T00:00:00`);
@@ -275,6 +285,7 @@ export default function HistoryScreen({
             setCount: sanitized.sets.length,
             volume,
             maxWeight,
+            durationSec: getHistoryDurationSec(sanitized),
             order: typeof sanitized.order === "number" ? sanitized.order : 999,
           };
         })
@@ -365,13 +376,21 @@ export default function HistoryScreen({
     const setCountByBodyPart = getSetCountByBodyPart(todayEntries, {
       sort: "fixed",
     });
+    const historyDurationSec = todayEntries.reduce(
+      (max, entry) => Math.max(max, Math.floor(Number(entry.durationSec) || 0)),
+      0
+    );
     return {
       exerciseCount: getExerciseCountTotal(exerciseCountByBodyPart),
       exerciseCountByBodyPart,
       setCountByBodyPart,
       setCount: todayEntries.reduce((sum, entry) => sum + entry.setCount, 0),
       totalVolume: Math.round(todayEntries.reduce((sum, entry) => sum + entry.volume, 0)),
-      durationSec: Math.max(todayWorkoutDurationSec, Math.floor(Number(workoutDurationSecByDate[todayKey]) || 0)),
+      durationSec: Math.max(
+        historyDurationSec,
+        todayWorkoutDurationSec,
+        Math.floor(Number(workoutDurationSecByDate[todayKey]) || 0)
+      ),
       prCount: todayPrEntries.length,
     };
   }, [
@@ -608,7 +627,14 @@ export default function HistoryScreen({
         })
         .filter(Boolean);
 
-      let durationSec = Math.floor(Number(workoutDurationSecByDate[normalizedDate]) || 0);
+      const historyDurationSec = entries.reduce(
+        (max, entry) => Math.max(max, Math.floor(Number(entry.durationSec) || 0)),
+        0
+      );
+      let durationSec = Math.max(
+        historyDurationSec,
+        Math.floor(Number(workoutDurationSecByDate[normalizedDate]) || 0)
+      );
       let isShared = false;
       if (normalizedDate === todayKey && todayWorkoutDurationSec > 0) {
         durationSec = todayWorkoutDurationSec;

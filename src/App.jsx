@@ -198,6 +198,55 @@ const attachWorkoutDurationsToHistory = (historyMap, workoutRows = []) => {
     return next;
 };
 
+const attachWorkoutDurationToHistoryDate = (historyMap, targetDate, durationSecValue) => {
+    const normalizedDate = String(targetDate || "").slice(0, 10);
+    const durationSec = Math.floor(Number(durationSecValue) || 0);
+    if (!normalizedDate || durationSec <= 0) return historyMap || {};
+
+    const durationMinutes = Math.max(1, Math.round(durationSec / 60));
+    const next = {};
+    Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+        next[exerciseName] = (records || []).map((record) => (
+            String(record?.date || "").slice(0, 10) === normalizedDate
+                ? {
+                    ...record,
+                    duration_sec: durationSec,
+                    durationSec,
+                    durationMinutes,
+                    elapsedMinutes: durationMinutes,
+                }
+                : record
+        ));
+    });
+
+    return next;
+};
+
+const getHistoryDurationSecForDate = (historyMap, targetDate) => {
+    const normalizedDate = String(targetDate || "").slice(0, 10);
+    if (!normalizedDate) return 0;
+
+    let durationSec = 0;
+    Object.values(historyMap || {}).forEach((records) => {
+        (records || []).forEach((record) => {
+            if (String(record?.date || "").slice(0, 10) !== normalizedDate) return;
+            const candidates = [
+                Number(record?.duration_sec),
+                Number(record?.durationSec),
+                Number(record?.durationMinutes) * 60,
+                Number(record?.elapsedMinutes) * 60,
+            ];
+            candidates.forEach((value) => {
+                if (Number.isFinite(value) && value > durationSec) {
+                    durationSec = Math.floor(value);
+                }
+            });
+        });
+    });
+
+    return durationSec;
+};
+
 export default function GymApp() {
     const getTodayKey = useCallback(() => {
         const d = new Date();
@@ -974,7 +1023,10 @@ export default function GymApp() {
             normalizedDates.map(async (workoutDate) => {
                 try {
                     const hasWorkoutForDate = hasValidWorkoutOnDate(historyMap, workoutDate);
-                    const durationSec = Math.floor(Number(durationSecByDate?.[workoutDate]) || 0);
+                    const durationSec = Math.max(
+                        Math.floor(Number(durationSecByDate?.[workoutDate]) || 0),
+                        getHistoryDurationSecForDate(historyMap, workoutDate)
+                    );
                     const { error } = hasWorkoutForDate
                         ? await supabase
                             .from("workouts")
@@ -1573,12 +1625,18 @@ export default function GymApp() {
                     ]),
                 ];
                 const currentTimerPersistence = workoutStartedForDate
-                    ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
+                    ? getWorkoutTimerPersistence(workoutTimerStateRef.current, Date.now())
                     : null;
+                const currentTimerDurationSec = workoutStartedForDate
+                    ? Math.max(
+                        Math.floor(Number(currentTimerPersistence?.durationSec) || 0),
+                        computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current)
+                    )
+                    : 0;
                 const durationSecByDate = {
                     ...savedWorkoutDurationSecByDate,
-                    ...(workoutStartedForDate && currentTimerPersistence?.durationSec > 0
-                        ? { [workoutStartedForDate]: currentTimerPersistence.durationSec }
+                    ...(workoutStartedForDate && currentTimerDurationSec > 0
+                        ? { [workoutStartedForDate]: currentTimerDurationSec }
                         : {}),
                 };
 
@@ -2004,11 +2062,19 @@ export default function GymApp() {
         queueWorkoutSessionSync(logDate);
         const timerPersistence =
             workoutStartedForDate === logDate
-                ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
+                ? getWorkoutTimerPersistence(workoutTimerStateRef.current, Date.now())
                 : null;
+        const timerDurationSec =
+            workoutStartedForDate === logDate
+                ? Math.max(
+                    Math.floor(Number(timerPersistence?.durationSec) || 0),
+                    computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current)
+                )
+                : 0;
         const durationSec = Math.max(
             0,
-            Math.floor(Number(timerPersistence?.durationSec || savedWorkoutDurationSecByDate[logDate] || 0))
+            timerDurationSec,
+            Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
         );
         const durationMinutes = durationSec > 0 ? Math.max(1, Math.round(durationSec / 60)) : 0;
 
@@ -2216,32 +2282,21 @@ export default function GymApp() {
         });
         const durationSec = Math.max(0, Math.floor(Number(nextSummary?.durationSec) || 0));
         if (durationSec > 0) {
-            const durationMinutes = Math.max(1, Math.round(durationSec / 60));
             setSavedWorkoutDurationSecByDate((prev) => ({
                 ...prev,
                 [logDate]: Math.max(prev[logDate] || 0, durationSec),
             }));
             setHistory((prev) => {
-                const next = {};
-                Object.entries(prev || {}).forEach(([exerciseName, records]) => {
-                    next[exerciseName] = (records || []).map((record) => (
-                        String(record?.date || "").slice(0, 10) === logDate
-                            ? {
-                                ...record,
-                                duration_sec: durationSec,
-                                durationSec,
-                                durationMinutes,
-                                elapsedMinutes: durationMinutes,
-                            }
-                            : record
-                    ));
-                });
+                const next = attachWorkoutDurationToHistoryDate(prev, logDate, durationSec);
+                latestHistoryRef.current = next;
+                historyRevisionRef.current += 1;
+                persistHistoryForUser(user?.id, next);
                 return next;
             });
             queueWorkoutSessionSync(logDate);
         }
         setSummary(nextSummary);
-    }, [buildDraftWorkoutDaySummary, finishWorkoutTimer, logDate, queueWorkoutSessionSync]);
+    }, [buildDraftWorkoutDaySummary, finishWorkoutTimer, logDate, queueWorkoutSessionSync, user?.id]);
 
 
 

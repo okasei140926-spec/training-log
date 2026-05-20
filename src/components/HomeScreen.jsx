@@ -338,6 +338,13 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
         (records || []).forEach(record => {
             if (!record.date) return;
             const dateKey = String(record.date || "").slice(0, 10);
+            const recordMinutes =
+                Number(record.elapsedMinutes) > 0 ? Math.round(Number(record.elapsedMinutes))
+                : Number(record.durationMinutes) > 0 ? Math.round(Number(record.durationMinutes))
+                : Number(record.duration_sec) > 0 ? Math.round(Number(record.duration_sec) / 60)
+                : Number(record.durationSec) > 0 ? Math.round(Number(record.durationSec) / 60)
+                : Number(workoutDurationSecByDate[dateKey]) > 0 ? Math.round(Number(workoutDurationSecByDate[dateKey]) / 60)
+                : null;
 
             if (!sessions[dateKey]) {
                 sessions[dateKey] = {
@@ -345,14 +352,11 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
                     parts: new Set(),
                     sets: 0,
                     volume: 0,
-                    minutes:
-                        record.elapsedMinutes ||
-                        record.durationMinutes ||
-                        (record.duration_sec ? Math.round(Number(record.duration_sec) / 60) : null) ||
-                        (record.durationSec ? Math.round(Number(record.durationSec) / 60) : null) ||
-                        (workoutDurationSecByDate[dateKey] ? Math.round(Number(workoutDurationSecByDate[dateKey]) / 60) : null),
+                    minutes: recordMinutes,
                     exercises: [],
                 };
+            } else if (!sessions[dateKey].minutes && recordMinutes) {
+                sessions[dateKey].minutes = recordMinutes;
             }
 
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
