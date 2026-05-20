@@ -38,15 +38,20 @@ const formatDuration = (durationSec) => {
 
 const resolveDurationSec = (payload) => {
     const session = payload?.session || {};
+    const summary = session?.summary_json || {};
     const candidates = [
         Number(payload?.durationSec),
         Number(session?.durationSec),
+        Number(summary?.durationSec),
         Number(session?.duration_sec),
         Number(payload?.duration_sec),
+        Number(summary?.duration_sec),
         Number(session?.durationMinutes) * 60,
         Number(payload?.durationMinutes) * 60,
+        Number(summary?.durationMinutes) * 60,
         Number(session?.elapsedMinutes) * 60,
         Number(payload?.elapsedMinutes) * 60,
+        Number(summary?.elapsedMinutes) * 60,
     ];
     const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
     return durationSec ? Math.floor(durationSec) : 0;
@@ -62,9 +67,21 @@ const formatSetLine = (set) => {
     if (!set) return "";
     const reps = Math.max(0, Number(set.reps || 0));
     const weight = String(set.weight || "").toUpperCase();
-    if (weight === "BW") return `自重 × ${reps}`;
+    if (weight === "BW") return `自重×${reps}`;
     const weightNum = Math.round(Number(set.weight || 0) * 10) / 10;
-    return `${weightNum}kg × ${reps}`;
+    return `${weightNum}kg×${reps}`;
+};
+
+const getExerciseSetLine = (item) => {
+    if (Array.isArray(item?.sets) && item.sets.length > 0) {
+        return item.sets.map(formatSetLine).filter(Boolean).join(" / ");
+    }
+
+    if (item?.best_set_json?.weight) {
+        return formatSetLine(item.best_set_json);
+    }
+
+    return `最大 ${getMaxWeightLabel(item?.max_weight)}`;
 };
 
 export default function WorkoutSessionShareModal({
@@ -107,13 +124,16 @@ export default function WorkoutSessionShareModal({
         return "まだありません";
     }, [items, summary]);
 
-    const visibleItems = useMemo(() => items.slice(0, sizeKey === "story" ? 7 : 5), [items, sizeKey]);
+    const maxExerciseCount = sizeKey === "story" ? 7 : 4;
+    const visibleItems = useMemo(() => items.slice(0, maxExerciseCount), [items, maxExerciseCount]);
     const hiddenItemCount = Math.max(0, items.length - visibleItems.length);
     const durationLabel = formatDuration(resolveDurationSec(sessionPayload));
     const totalSetLabel = `${Number(summary?.setCount || 0)}セット`;
     const totalVolumeLabel = `${Math.round(Number(summary?.totalVolume || 0)).toLocaleString("ja-JP")}kg`;
     const prCount = Number(summary?.prCount || 0);
     const previewScale = preset.scale || 0.58;
+    const isStory = sizeKey === "story";
+    const compactCard = visibleItems.length >= 5;
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -324,15 +344,15 @@ export default function WorkoutSessionShareModal({
                                         flexDirection: "column",
                                         color: "#fff",
                                         boxSizing: "border-box",
-                                        padding: sizeKey === "story" ? "28px 24px 24px" : "20px",
+                                        padding: isStory ? "24px 22px 20px" : "18px",
                                     }}
                                 >
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: sizeKey === "story" ? 22 : 14 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: isStory ? 16 : 10 }}>
                                         <div>
-                                            <div style={{ fontSize: 11, letterSpacing: 3.2, color: "rgba(255,255,255,0.62)", fontWeight: 900, marginBottom: 8 }}>
+                                            <div style={{ fontSize: 10, letterSpacing: 3.2, color: "rgba(255,255,255,0.62)", fontWeight: 900, marginBottom: 7 }}>
                                                 PUMP
                                             </div>
-                                            <div style={{ fontSize: sizeKey === "story" ? 13 : 11, color: "rgba(255,255,255,0.74)", fontWeight: 700 }}>
+                                            <div style={{ fontSize: isStory ? 13 : 11, color: "rgba(255,255,255,0.74)", fontWeight: 700 }}>
                                                 {dateLabel}
                                             </div>
                                         </div>
@@ -341,64 +361,67 @@ export default function WorkoutSessionShareModal({
                                         </div>
                                     </div>
 
-                                    <div style={{ marginBottom: sizeKey === "story" ? 22 : 14 }}>
-                                        <div style={{ fontSize: sizeKey === "story" ? 46 : 32, fontWeight: 950, lineHeight: 0.95, letterSpacing: -0.5 }}>
+                                    <div style={{ marginBottom: isStory ? 16 : 11 }}>
+                                        <div style={{ fontSize: isStory ? 44 : 31, fontWeight: 950, lineHeight: 0.95, letterSpacing: -0.5 }}>
                                             {totalVolumeLabel}
                                         </div>
-                                        <div style={{ marginTop: 10, fontSize: sizeKey === "story" ? 18 : 13, color: "#E6FFFD", fontWeight: 900, lineHeight: 1.35 }}>
+                                        <div style={{ marginTop: 8, fontSize: isStory ? 17 : 12, color: "#E6FFFD", fontWeight: 900, lineHeight: 1.25 }}>
                                             {setCountByBodyPartLabel}
                                         </div>
                                     </div>
 
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: sizeKey === "story" ? 18 : 12 }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: isStory ? 14 : 10 }}>
                                         {[
                                             { label: "SETS", value: totalSetLabel },
                                             { label: "PR", value: `${prCount}件` },
                                             { label: "TIME", value: durationLabel || "-" },
                                         ].map((metric) => (
-                                            <div key={metric.label} style={{ borderRadius: 16, background: "rgba(17, 24, 39, 0.72)", border: "1px solid rgba(255,255,255,0.10)", padding: "10px 9px" }}>
+                                            <div key={metric.label} style={{ borderRadius: 15, background: "rgba(17, 24, 39, 0.72)", border: "1px solid rgba(255,255,255,0.10)", padding: isStory ? "9px 9px" : "8px 8px" }}>
                                                 <div style={{ fontSize: 9, letterSpacing: 1.4, color: "rgba(255,255,255,0.46)", fontWeight: 800 }}>
                                                     {metric.label}
                                                 </div>
-                                                <div style={{ marginTop: 5, fontSize: sizeKey === "story" ? 16 : 13, color: "#fff", fontWeight: 950, whiteSpace: "nowrap" }}>
+                                                <div style={{ marginTop: 5, fontSize: isStory ? 15 : 12, color: "#fff", fontWeight: 950, whiteSpace: "nowrap" }}>
                                                     {metric.value}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
 
-                                    <div style={{ display: "grid", gap: sizeKey === "story" ? 8 : 6, flex: 1, minHeight: 0 }}>
+                                    <div style={{ display: "grid", gap: isStory ? 8 : 6, alignContent: "start", flex: 1, minHeight: 0, overflow: "hidden" }}>
                                         {visibleItems.map((item) => {
-                                            const bestSet = item.best_set_json?.weight
-                                                ? `${getMaxWeightLabel(item.best_set_json.weight)} × ${Number(item.best_set_json.reps || 0)}`
-                                                : Array.isArray(item.sets) && item.sets.length > 0
-                                                    ? formatSetLine(item.sets[0])
-                                                    : `最大 ${getMaxWeightLabel(item.max_weight)}`;
+                                            const setLine = getExerciseSetLine(item);
 
                                             return (
                                                 <div
                                                     key={`${item.body_part || ""}-${item.exercise_name}`}
                                                     style={{
                                                         background: "rgba(17, 24, 39, 0.70)",
-                                                        borderRadius: 15,
-                                                        padding: sizeKey === "story" ? "10px 12px" : "8px 10px",
+                                                        borderRadius: isStory ? 15 : 13,
+                                                        padding: isStory
+                                                            ? (compactCard ? "8px 11px" : "10px 12px")
+                                                            : "7px 9px",
                                                         border: "1px solid rgba(255,255,255,0.08)",
-                                                        display: "grid",
-                                                        gridTemplateColumns: "minmax(0, 1fr) auto",
-                                                        alignItems: "center",
-                                                        gap: 10,
                                                     }}
                                                 >
                                                     <div style={{ minWidth: 0 }}>
-                                                        <div style={{ fontSize: sizeKey === "story" ? 14 : 12, fontWeight: 900, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                        <div style={{ fontSize: isStory ? (compactCard ? 12 : 13) : 11, fontWeight: 900, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                             {item.exercise_name}
                                                         </div>
-                                                        <div style={{ marginTop: 3, fontSize: 10, color: "rgba(255,255,255,0.52)", fontWeight: 800 }}>
-                                                            {item.set_count || item.sets?.length || 0} set
+                                                        <div
+                                                            style={{
+                                                                marginTop: isStory ? 5 : 4,
+                                                                fontSize: isStory ? (compactCard ? 10 : 11) : 9,
+                                                                color: "#7DE7E2",
+                                                                fontWeight: 850,
+                                                                lineHeight: 1.34,
+                                                                overflow: "hidden",
+                                                                display: "-webkit-box",
+                                                                WebkitBoxOrient: "vertical",
+                                                                WebkitLineClamp: isStory ? 2 : 1,
+                                                            }}
+                                                        >
+                                                            {setLine}
                                                         </div>
-                                                    </div>
-                                                    <div style={{ fontSize: sizeKey === "story" ? 14 : 12, fontWeight: 950, color: "#7DE7E2", whiteSpace: "nowrap" }}>
-                                                        {bestSet}
                                                     </div>
                                                 </div>
                                             );
@@ -410,7 +433,7 @@ export default function WorkoutSessionShareModal({
                                         )}
                                     </div>
 
-                                    <div style={{ marginTop: sizeKey === "story" ? 14 : 8, fontSize: 10, color: "rgba(255,255,255,0.42)", letterSpacing: 2 }}>
+                                    <div style={{ marginTop: isStory ? 12 : 7, fontSize: 10, color: "rgba(255,255,255,0.42)", letterSpacing: 2 }}>
                                         SHARE YOUR PUMP
                                     </div>
                                 </div>
