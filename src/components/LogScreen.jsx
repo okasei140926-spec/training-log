@@ -53,6 +53,21 @@ function SortableExerciseItem({ id, children }) {
 }
 
 const roundTo1Decimal = (value) => Math.round(Number(value || 0) * 10) / 10;
+const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
+
+const normalizeDurationSec = (value) => {
+    const durationSec = Math.floor(Number(value) || 0);
+    if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
+    if (durationSec > MAX_REASONABLE_DURATION_SEC) return 0;
+    return durationSec;
+};
+
+const normalizeDurationMinutesAsSec = (value) => {
+    const durationMinutes = Number(value);
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0;
+    if (durationMinutes > MAX_REASONABLE_DURATION_SEC / 60) return 0;
+    return Math.floor(durationMinutes * 60);
+};
 
 const getHistoryDurationSecForDate = (history, date) => {
     const normalizedDate = String(date || "").slice(0, 10);
@@ -62,16 +77,16 @@ const getHistoryDurationSecForDate = (history, date) => {
     Object.values(history || {}).forEach((records) => {
         (records || []).forEach((record) => {
             if (String(record?.date || "").slice(0, 10) !== normalizedDate) return;
-            [
-                Number(record?.durationSec),
-                Number(record?.duration_sec),
-                Number(record?.durationMinutes) * 60,
-                Number(record?.elapsedMinutes) * 60,
-            ].forEach((value) => {
-                if (Number.isFinite(value) && value > durationSec) {
-                    durationSec = Math.floor(value);
-                }
-            });
+            const recordDurationSec = [
+                record?.durationSec,
+                record?.duration_sec,
+            ].map(normalizeDurationSec).find((value) => value > 0)
+                || [
+                    record?.durationMinutes,
+                    record?.elapsedMinutes,
+                ].map(normalizeDurationMinutesAsSec).find((value) => value > 0)
+                || 0;
+            durationSec = Math.max(durationSec, recordDurationSec);
         });
     });
 

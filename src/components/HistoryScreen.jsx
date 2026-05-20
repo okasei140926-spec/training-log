@@ -59,15 +59,30 @@ const formatTimeStamp = (value) => {
   });
 };
 const formatSlashDate = (value) => String(value || "").replace(/-/g, "/");
+const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
+const normalizeDurationSec = (value) => {
+  const durationSec = Math.floor(Number(value) || 0);
+  if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
+  if (durationSec > MAX_REASONABLE_DURATION_SEC) return 0;
+  return durationSec;
+};
+const normalizeDurationMinutesAsSec = (value) => {
+  const durationMinutes = Number(value);
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0;
+  if (durationMinutes > MAX_REASONABLE_DURATION_SEC / 60) return 0;
+  return Math.floor(durationMinutes * 60);
+};
 const getHistoryDurationSec = (record) => {
-  const candidates = [
-    Number(record?.duration_sec),
-    Number(record?.durationSec),
-    Number(record?.durationMinutes) * 60,
-    Number(record?.elapsedMinutes) * 60,
-  ];
-  const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
-  return durationSec ? Math.floor(durationSec) : 0;
+  const durationSec = [
+    record?.durationSec,
+    record?.duration_sec,
+  ].map(normalizeDurationSec).find((value) => value > 0);
+  if (durationSec) return durationSec;
+
+  return [
+    record?.durationMinutes,
+    record?.elapsedMinutes,
+  ].map(normalizeDurationMinutesAsSec).find((value) => value > 0) || 0;
 };
 const formatElapsedFromStartDate = (startDateKey, endDate = new Date()) => {
   if (!startDateKey) return "";
@@ -629,16 +644,17 @@ export default function HistoryScreen({
         .filter(Boolean);
 
       const historyDurationSec = entries.reduce(
-        (max, entry) => Math.max(max, Math.floor(Number(entry.durationSec) || 0)),
+        (max, entry) => Math.max(max, normalizeDurationSec(entry.durationSec)),
         0
       );
       let durationSec = Math.max(
         historyDurationSec,
-        Math.floor(Number(workoutDurationSecByDate[normalizedDate]) || 0)
+        normalizeDurationSec(workoutDurationSecByDate[normalizedDate])
       );
       let isShared = false;
-      if (normalizedDate === todayKey && todayWorkoutDurationSec > 0) {
-        durationSec = todayWorkoutDurationSec;
+      const safeTodayWorkoutDurationSec = normalizeDurationSec(todayWorkoutDurationSec);
+      if (normalizedDate === todayKey && safeTodayWorkoutDurationSec > 0) {
+        durationSec = safeTodayWorkoutDurationSec;
       }
 
       if (user?.id) {
@@ -660,8 +676,8 @@ export default function HistoryScreen({
 
           durationSec = Math.max(
             durationSec,
-            Math.floor(Number(sessionData?.duration_sec) || 0),
-            Math.floor(Number(workoutData?.duration_sec) || 0)
+            normalizeDurationSec(sessionData?.duration_sec),
+            normalizeDurationSec(workoutData?.duration_sec)
           );
         } catch (error) {
           console.error("workout day summary duration fetch failed", error);

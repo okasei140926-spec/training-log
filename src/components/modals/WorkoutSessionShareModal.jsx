@@ -19,6 +19,22 @@ const CARD_PRESETS = {
     },
 };
 
+const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
+
+const getSafeDurationSeconds = (value) => {
+    const durationSec = Math.floor(Number(value) || 0);
+    if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
+    if (durationSec > MAX_REASONABLE_DURATION_SEC) return 0;
+    return durationSec;
+};
+
+const getSafeDurationMinutesAsSeconds = (value) => {
+    const durationMinutes = Number(value);
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0;
+    if (durationMinutes > MAX_REASONABLE_DURATION_SEC / 60) return 0;
+    return Math.floor(durationMinutes * 60);
+};
+
 const formatDate = (date) => {
     const value = String(date || "");
     if (!value) return "";
@@ -39,22 +55,26 @@ const formatDuration = (durationSec) => {
 const resolveDurationSec = (payload) => {
     const session = payload?.session || {};
     const summary = session?.summary_json || {};
-    const candidates = [
-        Number(payload?.durationSec),
-        Number(session?.durationSec),
-        Number(summary?.durationSec),
-        Number(session?.duration_sec),
-        Number(payload?.duration_sec),
-        Number(summary?.duration_sec),
-        Number(session?.durationMinutes) * 60,
-        Number(payload?.durationMinutes) * 60,
-        Number(summary?.durationMinutes) * 60,
-        Number(session?.elapsedMinutes) * 60,
-        Number(payload?.elapsedMinutes) * 60,
-        Number(summary?.elapsedMinutes) * 60,
-    ];
-    const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
-    return durationSec ? Math.floor(durationSec) : 0;
+    const secondCandidates = [
+        payload?.durationSec,
+        session?.durationSec,
+        summary?.durationSec,
+        session?.duration_sec,
+        payload?.duration_sec,
+        summary?.duration_sec,
+    ].map(getSafeDurationSeconds);
+    const durationSec = secondCandidates.find((value) => value > 0);
+    if (durationSec) return durationSec;
+
+    const minuteCandidates = [
+        session?.durationMinutes,
+        payload?.durationMinutes,
+        summary?.durationMinutes,
+        session?.elapsedMinutes,
+        payload?.elapsedMinutes,
+        summary?.elapsedMinutes,
+    ].map(getSafeDurationMinutesAsSeconds);
+    return minuteCandidates.find((value) => value > 0) || 0;
 };
 
 const getMaxWeightLabel = (weight) => {

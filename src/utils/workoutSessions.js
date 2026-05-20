@@ -22,21 +22,33 @@ const roundNumeric = (value, digits = 1) => {
   return Math.round(num * factor) / factor;
 };
 
+const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
+
 const normalizeDurationSec = (value) => {
   const durationSec = Math.floor(Number(value) || 0);
   if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
+  if (durationSec > MAX_REASONABLE_DURATION_SEC) return 0;
   return durationSec;
 };
 
+const normalizeDurationMinutesAsSec = (value) => {
+  const durationMinutes = Number(value);
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0;
+  if (durationMinutes > MAX_REASONABLE_DURATION_SEC / 60) return 0;
+  return Math.floor(durationMinutes * 60);
+};
+
 const getRecordDurationSec = (record) => {
-  const candidates = [
-    Number(record?.durationSec),
-    Number(record?.duration_sec),
-    Number(record?.durationMinutes) * 60,
-    Number(record?.elapsedMinutes) * 60,
-  ];
-  const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
-  return durationSec ? Math.floor(durationSec) : 0;
+  const durationSec = [
+    record?.durationSec,
+    record?.duration_sec,
+  ].map(normalizeDurationSec).find((value) => value > 0);
+  if (durationSec) return durationSec;
+
+  return [
+    record?.durationMinutes,
+    record?.elapsedMinutes,
+  ].map(normalizeDurationMinutesAsSec).find((value) => value > 0) || 0;
 };
 
 const getBestNumericSet = (sets) => {
