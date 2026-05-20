@@ -6,6 +6,9 @@ export default function SettingsModal({
   onClose,
   user,
   onLogout,
+  onExportData,
+  onDeleteAccount,
+  accountActionBusy = false,
 }) {
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
 
@@ -141,6 +144,45 @@ export default function SettingsModal({
 
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
+                データ
+              </div>
+              <div
+                style={{
+                  background: "var(--card)",
+                  borderRadius: 20,
+                  padding: 16,
+                  border: "1px solid var(--border2)",
+                  boxShadow: "var(--shadow-card)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={onExportData}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                    border: "1px solid transparent",
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 900,
+                    boxShadow: "var(--shadow-soft)",
+                  }}
+                >
+                  データを書き出す
+                </button>
+                <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7 }}>
+                  履歴、種目設定、下書きなどをJSONで保存します。
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
                 アカウント
               </div>
               <div
@@ -150,6 +192,9 @@ export default function SettingsModal({
                   padding: 16,
                   border: "1px solid var(--border2)",
                   boxShadow: "var(--shadow-card)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
                 }}
               >
                 <button
@@ -171,6 +216,26 @@ export default function SettingsModal({
                 >
                   ログアウト
                 </button>
+                {user?.id && (
+                  <button
+                    type="button"
+                    onClick={onDeleteAccount}
+                    disabled={accountActionBusy}
+                    style={{
+                      width: "100%",
+                      padding: "14px 16px",
+                      borderRadius: 14,
+                      background: "rgba(239, 68, 68, 0.10)",
+                      border: "1px solid rgba(239, 68, 68, 0.24)",
+                      color: "#DC2626",
+                      fontSize: 14,
+                      fontWeight: 900,
+                      opacity: accountActionBusy ? 0.65 : 1,
+                    }}
+                  >
+                    {accountActionBusy ? "削除中..." : "アカウントとデータを削除"}
+                  </button>
+                )}
               </div>
             </div>
           </div>

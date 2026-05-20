@@ -11,6 +11,7 @@ import {
 
 export default function NotificationSettings({ user }) {
   const support = useMemo(() => getPushSupportState(), []);
+  const showTestNotificationButton = process.env.NODE_ENV !== "production";
   const [permission, setPermission] = useState(
     getNotificationPermission()
   );
@@ -215,22 +216,24 @@ export default function NotificationSettings({ user }) {
               </button>
             )}
 
-            <button
-              onClick={handleSendTest}
-              disabled={busy || !enabled}
-              style={{
-                padding: "10px 14px",
-                borderRadius: 12,
-                background: enabled ? "linear-gradient(135deg, var(--accent2), #7DD3FC)" : "var(--card2)",
-                border: "1px solid transparent",
-                color: enabled ? "#fff" : "var(--text4)",
-                fontSize: 12,
-                fontWeight: 800,
-                opacity: enabled ? 1 : 0.7,
-              }}
-            >
-              テスト通知を送る
-            </button>
+            {showTestNotificationButton && (
+              <button
+                onClick={handleSendTest}
+                disabled={busy || !enabled}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  background: enabled ? "linear-gradient(135deg, var(--accent2), #7DD3FC)" : "var(--card2)",
+                  border: "1px solid transparent",
+                  color: enabled ? "#fff" : "var(--text4)",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  opacity: enabled ? 1 : 0.7,
+                }}
+              >
+                テスト通知を送る
+              </button>
+            )}
           </div>
 
           <div style={{ fontSize: 11, color: "var(--text3)", lineHeight: 1.7 }}>

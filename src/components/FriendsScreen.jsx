@@ -23,6 +23,19 @@ import EditUsernameModal from "./friends/EditUsernameModal";
 import InviteCard from "./friends/InviteCard";
 import WorkoutCommentsModal from "./modals/WorkoutCommentsModal";
 
+const debugLog = (...args) => {
+    if (process.env.NODE_ENV !== "production") console.debug(...args);
+};
+const debugWarn = (...args) => {
+    if (process.env.NODE_ENV !== "production") console.warn(...args);
+};
+const debugTime = (label) => {
+    if (process.env.NODE_ENV !== "production") console.time(label);
+};
+const debugTimeEnd = (label) => {
+    if (process.env.NODE_ENV !== "production") console.timeEnd(label);
+};
+
 const RESERVED_USERNAMES = [
     "あなた",
     "自分",
@@ -462,7 +475,7 @@ export default function FriendsScreen({
                 )
             )];
 
-            console.log("[feed] accepted friend ids", {
+            debugLog("[feed] accepted friend ids", {
                 currentUserId: user.id,
                 friendIds: nextFriendIds,
             });
@@ -527,7 +540,7 @@ export default function FriendsScreen({
                 });
             }
 
-            console.log("[feed] friend workouts count", {
+            debugLog("[feed] friend workouts count", {
                 currentUserId: user.id,
                 friendIds: nextFriendIds,
                 count: workouts.length,
@@ -569,7 +582,7 @@ export default function FriendsScreen({
                         isAcceptedFriend,
                         reason,
                     });
-                    console.warn("[ranking] session excluded", {
+                    debugWarn("[ranking] session excluded", {
                         userId: session.user_id,
                         sessionId: session.id,
                         workoutDate: session.workout_date,
@@ -823,9 +836,9 @@ export default function FriendsScreen({
         }
         const requestId = Date.now();
         latestFeedRequestIdRef.current = requestId;
-        console.time("[feed] load total");
+        debugTime("[feed] load total");
 
-        console.log("[feed] current user id", user?.id);
+        debugLog("[feed] current user id", user?.id);
         const effectiveFriendIds = await resolveAcceptedFriendIds();
         const feedUserIds = [...new Set([user.id, ...effectiveFriendIds])];
 
@@ -844,7 +857,7 @@ export default function FriendsScreen({
             && cachedFriendCount < expectedFriendCount;
 
         if (!force && hasCache && !shouldBypassFreshCache && now - FRIENDS_SCREEN_CACHE.feedData.fetchedAt < STALE_MS) {
-            console.timeEnd("[feed] load total");
+            debugTimeEnd("[feed] load total");
             return true;
         }
 
@@ -863,8 +876,8 @@ export default function FriendsScreen({
             const beforeCount = previousItems.length;
             const beforeFriendCount = previousItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
             const profileIds = [...new Set(feedUserIds.filter(Boolean))];
-            console.time("[feed] fetch own");
-            console.time("[feed] fetch friends");
+            debugTime("[feed] fetch own");
+            debugTime("[feed] fetch friends");
             const [sessionsRes, workoutsRes, profilesRes] = await Promise.all([
                 supabase
                     .from("workout_sessions")
@@ -886,8 +899,8 @@ export default function FriendsScreen({
                     ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
                     : Promise.resolve({ data: [], error: null }),
             ]);
-            console.timeEnd("[feed] fetch own");
-            console.timeEnd("[feed] fetch friends");
+            debugTimeEnd("[feed] fetch own");
+            debugTimeEnd("[feed] fetch friends");
 
             const sessions = sessionsRes.data;
             const sessionsError = sessionsRes.error;
@@ -907,8 +920,8 @@ export default function FriendsScreen({
                 stats[visibility] = (stats[visibility] || 0) + 1;
                 return stats;
             }, {});
-            console.log("[feed] accepted friend ids", effectiveFriendIds);
-            console.log("[feed] friend visibility stats", {
+            debugLog("[feed] accepted friend ids", effectiveFriendIds);
+            debugLog("[feed] friend visibility stats", {
                 currentUserId: user.id,
                 friendIds: effectiveFriendIds,
                 count: friendSessions.length,
@@ -1086,27 +1099,27 @@ export default function FriendsScreen({
                 )
             );
 
-            console.log("[feed] own sessions count", {
+            debugLog("[feed] own sessions count", {
                 currentUserId: user.id,
                 count: ownItems.length,
             });
-            console.log("[feed] own sessions count", ownItems.length);
-            console.log("[feed] friend sessions count", {
+            debugLog("[feed] own sessions count", ownItems.length);
+            debugLog("[feed] friend sessions count", {
                 currentUserId: user.id,
                 friendIds: effectiveFriendIds,
                 count: friendSessions.length,
             });
-            console.log("[feed] friend sessions count", friendSessions.length);
-            console.log("[feed] friend workouts count", {
+            debugLog("[feed] friend sessions count", friendSessions.length);
+            debugLog("[feed] friend workouts count", {
                 currentUserId: user.id,
                 friendIds: effectiveFriendIds,
                 count: (workoutsRes.data || []).filter((row) => effectiveFriendIds.includes(row.user_id)).length,
             });
-            console.log("[feed] friend workouts count", (workoutsRes.data || []).filter((row) => effectiveFriendIds.includes(row.user_id)).length);
+            debugLog("[feed] friend workouts count", (workoutsRes.data || []).filter((row) => effectiveFriendIds.includes(row.user_id)).length);
             excludedItems
                 .filter((item) => item.isFriendWorkout)
                 .forEach((item) => {
-                    console.warn("[feed] friend workout excluded reason", {
+                    debugWarn("[feed] friend workout excluded reason", {
                         userId: item.userId || null,
                         workoutId: item.workoutId,
                         sessionId: item.sessionId || item.workoutId || null,
@@ -1127,7 +1140,7 @@ export default function FriendsScreen({
                     return timeA - timeB;
                 });
 
-            console.log("[feed] normalized feed items", {
+            debugLog("[feed] normalized feed items", {
                 currentUserId: user.id,
                 friendIds: effectiveFriendIds,
                 ownWorkoutsLast7DaysCount: ownItems.length,
@@ -1141,12 +1154,12 @@ export default function FriendsScreen({
                 last7StartDate: recentSevenStart,
                 excludedReason: excludedItems,
             });
-            console.log("[feed] displayed cards count", {
+            debugLog("[feed] displayed cards count", {
                 currentUserId: user.id,
                 displayedCardsCount: allItems.length,
             });
-            console.log("[feed] displayed cards count", allItems.length);
-            console.log("[feed] final cards", {
+            debugLog("[feed] displayed cards count", allItems.length);
+            debugLog("[feed] final cards", {
                 ownCount: ownItems.length,
                 friendCount: friendItems.length,
                 totalCount: allItems.length,
@@ -1169,7 +1182,7 @@ export default function FriendsScreen({
             };
             if (background) {
                 const afterFriendCount = allItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
-                console.log("[feed] auto refresh result", {
+                debugLog("[feed] auto refresh result", {
                     beforeCount,
                     afterCount: allItems.length,
                     beforeFriendCount,
@@ -1258,7 +1271,7 @@ export default function FriendsScreen({
                     console.error("[feed] async enrichment failed", { error, currentUserId: user.id });
                 });
             }
-            console.timeEnd("[feed] load total");
+            debugTimeEnd("[feed] load total");
             return true;
         } catch (error) {
             console.error("[feed] RLS or Supabase error", {
@@ -1277,7 +1290,7 @@ export default function FriendsScreen({
                 feedItemsLength: 0,
                 displayedCardsCount: 0,
             });
-            console.timeEnd("[feed] load total");
+            debugTimeEnd("[feed] load total");
             return false;
         } finally {
             setActivityFeedLoading(false);
@@ -1591,24 +1604,24 @@ export default function FriendsScreen({
                 ),
             ])
         );
-        console.log("[ranking] current user id", user?.id);
-        console.log("[ranking] accepted friend ids", friendIds);
-        console.log("[ranking] self monthly sessions count", selfMonthlySessions?.length);
-        console.log("[ranking] friend monthly sessions raw", friendMonthlySessionsRaw);
-        console.log("[ranking] friend monthly sessions count by user", friendSessionCountByUser);
-        console.log("[ranking] visibility by user/date", friendSessionInsights.visibilityByUserDate || {});
-        console.log("[ranking] excluded monthly sessions", friendSessionInsights.excludedSessions || []);
-        console.log("[ranking] final ranking rows", volumeRanking);
-        console.log("[profile] viewed user id", user?.id);
-        console.log("[profile] current user id", user?.id);
-        console.log("[profile] accepted friend ids", friendIds);
-        console.log("[profile] self visible training days", selfMonthlySessions);
-        console.log("[profile] friend visible training days", friendSessionInsights.visibleDatesByUser || {});
-        console.log("[profile] missing dates for friend", friendSessionInsights.missingDates || {});
-        console.log("[profile] visibility by date", friendSessionInsights.visibilityByUserDate || {});
-        console.log("[profile] workout_sessions by date", friendSessionInsights.sessionsByDate || {});
-        console.log("[profile] workouts by date", friendSessionInsights.workoutsByDate || {});
-        console.log("[profile] valid sets by date", friendSessionInsights.validSetsByDate || {});
+        debugLog("[ranking] current user id", user?.id);
+        debugLog("[ranking] accepted friend ids", friendIds);
+        debugLog("[ranking] self monthly sessions count", selfMonthlySessions?.length);
+        debugLog("[ranking] friend monthly sessions raw", friendMonthlySessionsRaw);
+        debugLog("[ranking] friend monthly sessions count by user", friendSessionCountByUser);
+        debugLog("[ranking] visibility by user/date", friendSessionInsights.visibilityByUserDate || {});
+        debugLog("[ranking] excluded monthly sessions", friendSessionInsights.excludedSessions || []);
+        debugLog("[ranking] final ranking rows", volumeRanking);
+        debugLog("[profile] viewed user id", user?.id);
+        debugLog("[profile] current user id", user?.id);
+        debugLog("[profile] accepted friend ids", friendIds);
+        debugLog("[profile] self visible training days", selfMonthlySessions);
+        debugLog("[profile] friend visible training days", friendSessionInsights.visibleDatesByUser || {});
+        debugLog("[profile] missing dates for friend", friendSessionInsights.missingDates || {});
+        debugLog("[profile] visibility by date", friendSessionInsights.visibilityByUserDate || {});
+        debugLog("[profile] workout_sessions by date", friendSessionInsights.sessionsByDate || {});
+        debugLog("[profile] workouts by date", friendSessionInsights.workoutsByDate || {});
+        debugLog("[profile] valid sets by date", friendSessionInsights.validSetsByDate || {});
     }, [
         countMonthlyWorkoutDays,
         computeVolumeFromHistoryForRange,
@@ -1720,7 +1733,7 @@ export default function FriendsScreen({
     };
 
     const groupedActivityFeed = useMemo(() => {
-        console.time("[feed] build grouped");
+        debugTime("[feed] build grouped");
         const userMap = new Map();
         const ownItemsCount = activityFeed.filter((item) => item?.user_id === user?.id).length;
         const friendItemsCount = activityFeed.filter((item) => item?.user_id && item.user_id !== user?.id).length;
@@ -1834,19 +1847,19 @@ export default function FriendsScreen({
                 if (dateCompare !== 0) return dateCompare;
                 return String(a.userName || "").localeCompare(String(b.userName || ""));
             });
-        console.log("[feed grouped] source counts", {
+        debugLog("[feed grouped] source counts", {
             ownItemsCount,
             friendItemsCount,
             totalItemsCount: activityFeed.length,
             acceptedFriendIds: friendIds,
         });
-        console.log("[feed grouped] users", groupedUsers.map((u) => ({
+        debugLog("[feed grouped] users", groupedUsers.map((u) => ({
             userId: u.userId,
             userName: u.userName,
             dateCount: u.dates.length,
             latestDate: u.latestDate,
         })));
-        console.timeEnd("[feed] build grouped");
+        debugTimeEnd("[feed] build grouped");
         return groupedUsers;
     }, [activityFeed, avatarUrl, friendIds, friends, getDisplayUsername, myUsername, user?.id]);
 
@@ -2139,7 +2152,7 @@ export default function FriendsScreen({
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                console.log("[feed grouped] expand date", {
+                                                                debugLog("[feed grouped] expand date", {
                                                                     userId: userGroup.userId,
                                                                     date: dateGroup.date,
                                                                     exerciseCount: dateGroup.detailedExercises.length,

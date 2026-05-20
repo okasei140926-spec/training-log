@@ -23,7 +23,6 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import AnalyticsScreen from "./components/AnalyticsScreen";
 import PhotoScreen from "./components/PhotoScreen";
-
 // eslint-disable-next-line no-unused-vars
 import Auth from "./components/Auth";
 
@@ -81,6 +80,10 @@ import {
     readWorkoutTimerState,
 } from "./utils/workoutTimer";
 
+
+const debugLog = (...args) => {
+    if (process.env.NODE_ENV !== "production") console.debug(...args);
+};
 
 const EX_TO_LABEL = {};
 Object.entries(SUGGESTIONS).forEach(([label, names]) => {
@@ -592,6 +595,12 @@ export default function GymApp() {
         };
     }, []);
 
+    useEffect(() => () => {
+        if (pendingDeleteUndoRef.current?.timeoutId) {
+            window.clearTimeout(pendingDeleteUndoRef.current.timeoutId);
+        }
+    }, []);
+
     const [todayLabels, setTodayLabels] = useState(() => loadDraftForDate(getTodayKey()).todayLabels);
     const updateTodayLabels = (nextOrUpdater) => {
         setTodayLabels((prev) => {
@@ -742,6 +751,7 @@ export default function GymApp() {
     const historyDeleteMarkersRef = useRef(createEmptyHistoryDeleteMarkers());
     const pendingWorkoutSessionSyncDatesRef = useRef(new Set());
     const syncFailuresByDateRef = useRef({});
+    const pendingDeleteUndoRef = useRef(null);
     const previousWorkoutActivitySignatureRef = useRef("");
     const previousWorkoutActivityDateRef = useRef("");
     const workoutTimerStateRef = useRef(initialWorkoutTimerState);
@@ -754,6 +764,10 @@ export default function GymApp() {
     const [summary, setSummary] = useState(null);
     const [workoutDayShareTarget, setWorkoutDayShareTarget] = useState(null);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [syncFailuresByDate, setSyncFailuresByDate] = useState({});
+    const [syncRetrying, setSyncRetrying] = useState(false);
+    const [pendingDeleteUndo, setPendingDeleteUndo] = useState(null);
+    const [accountActionBusy, setAccountActionBusy] = useState(false);
     const [historySyncDiagnostic, setHistorySyncDiagnostic] = useState({
         localHistoryDates: [],
         remoteWorkoutDates: [],
@@ -979,6 +993,156 @@ export default function GymApp() {
         await supabase.auth.signOut();
     }, []);
 
+    const handleExportData = useCallback(() => {
+        const localStorageSnapshot = {};
+        try {
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (!key) continue;
+                if (
+                    key.startsWith("draft_") ||
+                    key.startsWith("history") ||
+                    key.startsWith("history_cache_") ||
+                    key.startsWith("historyDeleteMarkers_") ||
+                    [
+                        "routineEx",
+                        "routineOrder",
+                        "manualBests",
+                        "customBodyParts",
+                        "hiddenBodyParts",
+                        EXERCISE_BODY_PART_OVERRIDES_KEY,
+                    ].includes(key)
+                ) {
+                    localStorageSnapshot[key] = localStorage.getItem(key);
+                }
+            }
+        } catch (error) {
+            console.error("data export localStorage snapshot failed", error);
+        }
+
+        const payload = {
+            exportedAt: new Date().toISOString(),
+            userId: user?.id || null,
+            history,
+            routineEx: muscleEx,
+            routineOrder,
+            manualBests,
+            customBodyParts,
+            hiddenBodyParts,
+            exerciseBodyPartOverrides,
+            savedWorkoutDurationSecByDate,
+            localStorage: localStorageSnapshot,
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], {
+            type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `pump-backup-${formatDateKey(new Date())}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }, [
+        customBodyParts,
+        exerciseBodyPartOverrides,
+        hiddenBodyParts,
+        history,
+        manualBests,
+        muscleEx,
+        routineOrder,
+        savedWorkoutDurationSecByDate,
+        user?.id,
+    ]);
+
+    const clearLocalAppState = useCallback(() => {
+        try {
+            const removableKeys = [];
+            for (let i = 0; i < localStorage.length; i += 1) {
+                const key = localStorage.key(i);
+                if (!key) continue;
+                if (
+                    key.startsWith("draft_") ||
+                    key.startsWith("history") ||
+                    key.startsWith("history_cache_") ||
+                    key.startsWith("historyDeleteMarkers_") ||
+                    key.startsWith("pushPrompt") ||
+                    [
+                        "routineEx",
+                        "routineOrder",
+                        "manualBests",
+                        "customBodyParts",
+                        "hiddenBodyParts",
+                        "onboardingDone",
+                        HISTORY_OWNER_KEY,
+                        EXERCISE_BODY_PART_OVERRIDES_KEY,
+                    ].includes(key)
+                ) {
+                    removableKeys.push(key);
+                }
+            }
+            removableKeys.forEach((key) => localStorage.removeItem(key));
+        } catch (error) {
+            console.error("local app data clear failed", error);
+        }
+
+        setHistory({});
+        latestHistoryRef.current = {};
+        setManualBests([]);
+        setMuscleEx({});
+        setRoutineOrder({});
+        setCustomBodyParts([]);
+        setHiddenBodyParts([]);
+        setExerciseBodyPartOverrides({});
+        setSavedWorkoutDurationSecByDate({});
+        setTodayLabels([]);
+        setLogData({});
+        setSessionEx(null);
+        setExerciseUnits({});
+        setSummary(null);
+        setWorkoutDayShareTarget(null);
+        setSyncFailuresByDate({});
+        syncFailuresByDateRef.current = {};
+        resetWorkoutElapsedTimer();
+    }, [resetWorkoutElapsedTimer]);
+
+    const handleDeleteAccount = useCallback(async () => {
+        if (!user?.id || accountActionBusy) return;
+        const confirmed = window.confirm("アカウントとPUMP上のデータを完全に削除します。元に戻せません。続行しますか？");
+        if (!confirmed) return;
+
+        setAccountActionBusy(true);
+        try {
+            const {
+                data: { session },
+            } = await supabase.auth.getSession();
+            const accessToken = session?.access_token;
+            if (!accessToken) throw new Error("ログインが必要です。");
+
+            const response = await fetch("/api/delete-account", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${accessToken}`,
+                },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data?.error || "アカウント削除に失敗しました。");
+            }
+
+            clearLocalAppState();
+            await supabase.auth.signOut();
+            setShowSettingsModal(false);
+            setShowAuth(true);
+        } catch (error) {
+            window.alert(error?.message || "アカウント削除に失敗しました。");
+        } finally {
+            setAccountActionBusy(false);
+        }
+    }, [accountActionBusy, clearLocalAppState, user?.id]);
+
     const queueWorkoutSessionSync = useCallback((date) => {
         const normalizedDate = String(date || "").trim();
         if (!normalizedDate) return;
@@ -1000,6 +1164,7 @@ export default function GymApp() {
                 updatedAt: new Date().toISOString(),
             },
         };
+        setSyncFailuresByDate(syncFailuresByDateRef.current);
     }, []);
 
     const clearSyncFailure = useCallback((workoutDate) => {
@@ -1008,6 +1173,7 @@ export default function GymApp() {
         const nextFailures = { ...syncFailuresByDateRef.current };
         delete nextFailures[normalizedDate];
         syncFailuresByDateRef.current = nextFailures;
+        setSyncFailuresByDate(nextFailures);
     }, []);
 
     const syncWorkoutRowsForDates = useCallback(async (userId, historyMap, dates = [], durationSecByDate = {}) => {
@@ -1184,7 +1350,7 @@ export default function GymApp() {
             };
 
             setHistorySyncDiagnostic(diagnosticPayload);
-            console.log("[sync] history remote diagnostic", {
+            debugLog("[sync] history remote diagnostic", {
                 userId,
                 prefix,
                 ...diagnosticPayload,
@@ -1333,6 +1499,50 @@ export default function GymApp() {
 
         if (deleteError) throw deleteError;
     }, []);
+
+    const retryFailedSync = useCallback(async () => {
+        if (!user?.id || syncRetrying) return;
+
+        const failedDates = Object.keys(syncFailuresByDateRef.current);
+        if (!failedDates.length) return;
+
+        setSyncRetrying(true);
+        try {
+            const currentHistory = latestHistoryRef.current || history || {};
+            await Promise.all(failedDates.map(async (date) => {
+                const hasWorkoutForDate = hasValidWorkoutOnDate(currentHistory, date);
+                if (hasWorkoutForDate) {
+                    await syncWorkoutRowsForDates(
+                        user.id,
+                        currentHistory,
+                        [date],
+                        savedWorkoutDurationSecByDate
+                    );
+                    await syncWorkoutSessionSnapshot(user.id, currentHistory, date);
+                } else {
+                    await deleteRemoteWorkoutArtifactsForDate(user.id, date, currentHistory);
+                }
+                clearSyncFailure(date);
+            }));
+
+            await refreshHistorySyncDiagnostic(user.id, currentHistory, {
+                prefix: failedDates[0]?.slice(0, 7) || "",
+            });
+            setSessionSyncVersion((prev) => prev + 1);
+        } finally {
+            setSyncRetrying(false);
+        }
+    }, [
+        clearSyncFailure,
+        deleteRemoteWorkoutArtifactsForDate,
+        history,
+        refreshHistorySyncDiagnostic,
+        savedWorkoutDurationSecByDate,
+        syncRetrying,
+        syncWorkoutRowsForDates,
+        syncWorkoutSessionSnapshot,
+        user?.id,
+    ]);
 
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
@@ -2858,6 +3068,14 @@ export default function GymApp() {
 
         const currentHistory = latestHistoryRef.current || history || {};
         const nextHistory = removeHistoryDate(currentHistory, normalizedTargetDate);
+        const previousDraft = loadDraftForDate(normalizedTargetDate);
+        const previousDurationSec = savedWorkoutDurationSecByDate[normalizedTargetDate] || 0;
+
+        if (pendingDeleteUndoRef.current?.timeoutId) {
+            window.clearTimeout(pendingDeleteUndoRef.current.timeoutId);
+            pendingDeleteUndoRef.current.remoteDelete?.();
+        }
+
         latestHistoryRef.current = nextHistory;
         historyRevisionRef.current += 1;
         persistHistoryForUser(user?.id, nextHistory);
@@ -2895,7 +3113,9 @@ export default function GymApp() {
         if (workoutDayShareTarget?.workoutDate === normalizedTargetDate) setWorkoutDayShareTarget(null);
         if (workoutStartedForDate === normalizedTargetDate) resetWorkoutElapsedTimer();
 
-        if (user?.id) {
+        const remoteDelete = () => {
+            if (!user?.id) return;
+
             deleteRemoteWorkoutArtifactsForDate(user.id, normalizedTargetDate, nextHistory)
                 .then(() => {
                     clearSyncFailure(normalizedTargetDate);
@@ -2912,8 +3132,76 @@ export default function GymApp() {
                         workoutDate: normalizedTargetDate,
                     });
                 });
-        }
+        };
+
+        remoteDelete();
+        const timeoutId = window.setTimeout(() => {
+            pendingDeleteUndoRef.current = null;
+            setPendingDeleteUndo(null);
+        }, 6500);
+        const undoState = {
+            date: normalizedTargetDate,
+            previousHistory: currentHistory,
+            previousDraft,
+            previousDurationSec,
+            timeoutId,
+            remoteDelete,
+        };
+        pendingDeleteUndoRef.current = undoState;
+        setPendingDeleteUndo({
+            date: normalizedTargetDate,
+        });
     };
+
+    const undoDeleteAllHistoryForDate = useCallback(() => {
+        const pending = pendingDeleteUndoRef.current;
+        if (!pending?.date) return;
+
+        if (pending.timeoutId) window.clearTimeout(pending.timeoutId);
+        pendingDeleteUndoRef.current = null;
+        setPendingDeleteUndo(null);
+
+        latestHistoryRef.current = pending.previousHistory || {};
+        historyRevisionRef.current += 1;
+        persistHistoryForUser(user?.id, latestHistoryRef.current);
+        setHistory(latestHistoryRef.current);
+
+        saveDraftForDate(pending.date, pending.previousDraft || {});
+        if (logDate === pending.date) {
+            setTodayLabels(pending.previousDraft?.todayLabels || []);
+            setLogData(pending.previousDraft?.logData || {});
+            setSessionEx(pending.previousDraft?.sessionEx ?? null);
+            setExerciseUnits(pending.previousDraft?.exerciseUnits || {});
+        }
+
+        if (pending.previousDurationSec > 0) {
+            setSavedWorkoutDurationSecByDate((prev) => ({
+                ...prev,
+                [pending.date]: pending.previousDurationSec,
+            }));
+        }
+        queueWorkoutSessionSync(pending.date);
+        if (user?.id) {
+            syncWorkoutRowsForDates(user.id, latestHistoryRef.current, [pending.date], {
+                [pending.date]: pending.previousDurationSec,
+            })
+                .then(() => syncWorkoutSessionSnapshot(user.id, latestHistoryRef.current, pending.date))
+                .then(() => clearSyncFailure(pending.date))
+                .catch((error) => {
+                    recordSyncFailure(pending.date, error, "undo_delete_restore");
+                    console.error("undo delete restore sync failed", error);
+                });
+        }
+    }, [
+        clearSyncFailure,
+        logDate,
+        queueWorkoutSessionSync,
+        recordSyncFailure,
+        saveDraftForDate,
+        syncWorkoutRowsForDates,
+        syncWorkoutSessionSnapshot,
+        user?.id,
+    ]);
 
     // ─── 設定画面用 exercise 追加 ──────────────────────
     const openAddEx = (target) => { setAddTarget(target); setNewExName(""); setShowAddEx(true); };
@@ -2981,6 +3269,7 @@ export default function GymApp() {
         { id: "ai", icon: "🤖", label: "AI" },
     ];
     const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
+    const syncFailureDates = Object.keys(syncFailuresByDate);
 
     if (!isSupabaseConfigured) {
         return (
@@ -3074,6 +3363,95 @@ export default function GymApp() {
                             lineHeight: 1.6,
                         }}>
                             オフラインです。端末内の記録は表示できます。通信が戻ると自動で同期します。
+                        </div>
+                    </div>
+                )}
+
+                {isOnline && syncFailureDates.length > 0 && (
+                    <div style={{ padding: "10px 18px 0" }}>
+                        <div style={{
+                            background: "rgba(245, 158, 11, 0.10)",
+                            color: "var(--text)",
+                            border: "1px solid rgba(245, 158, 11, 0.28)",
+                            borderRadius: 18,
+                            padding: "12px 14px",
+                            fontSize: 13,
+                            lineHeight: 1.6,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                        }}>
+                            <div>
+                                <div style={{ fontWeight: 900 }}>同期できていない記録があります</div>
+                                <div style={{ color: "var(--text2)", fontSize: 12 }}>
+                                    {syncFailureDates.slice(0, 3).join(" / ")}
+                                    {syncFailureDates.length > 3 ? ` ほか${syncFailureDates.length - 3}件` : ""}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={retryFailedSync}
+                                disabled={syncRetrying}
+                                style={{
+                                    flexShrink: 0,
+                                    border: "none",
+                                    borderRadius: 999,
+                                    padding: "9px 12px",
+                                    background: "linear-gradient(135deg, #F59E0B, #FACC15)",
+                                    color: "#fff",
+                                    fontSize: 12,
+                                    fontWeight: 900,
+                                    opacity: syncRetrying ? 0.7 : 1,
+                                }}
+                            >
+                                {syncRetrying ? "再同期中" : "再同期"}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {pendingDeleteUndo && (
+                    <div style={{
+                        position: "fixed",
+                        left: 18,
+                        right: 18,
+                        bottom: "calc(92px + var(--safe-bottom, 0px))",
+                        zIndex: 250,
+                        display: "flex",
+                        justifyContent: "center",
+                    }}>
+                        <div style={{
+                            width: "100%",
+                            maxWidth: 430,
+                            background: "rgba(15, 94, 99, 0.96)",
+                            color: "#fff",
+                            borderRadius: 18,
+                            padding: "12px 14px",
+                            boxShadow: "0 18px 36px rgba(15, 23, 42, 0.22)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            fontSize: 13,
+                            fontWeight: 800,
+                        }}>
+                            <span>{pendingDeleteUndo.date} の記録を削除しました</span>
+                            <button
+                                type="button"
+                                onClick={undoDeleteAllHistoryForDate}
+                                style={{
+                                    border: "1px solid rgba(255,255,255,0.3)",
+                                    borderRadius: 999,
+                                    background: "rgba(255,255,255,0.12)",
+                                    color: "#fff",
+                                    padding: "8px 12px",
+                                    fontSize: 12,
+                                    fontWeight: 900,
+                                }}
+                            >
+                                元に戻す
+                            </button>
                         </div>
                     </div>
                 )}
@@ -3413,6 +3791,9 @@ export default function GymApp() {
                     onClose={() => setShowSettingsModal(false)}
                     user={user}
                     onLogout={handleLogout}
+                    onExportData={handleExportData}
+                    onDeleteAccount={handleDeleteAccount}
+                    accountActionBusy={accountActionBusy}
                 />
                 {showAuth && (
                     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>

@@ -6,6 +6,10 @@ import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/b
 import { buildTrainingSummary } from "../utils/trainingSummary";
 import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 
+const debugLog = (...args) => {
+  if (process.env.NODE_ENV !== "production") console.debug(...args);
+};
+
 const PERIODS = [
   { label: "1ヶ月", days: 30 },
   { label: "3ヶ月", days: 90 },
@@ -816,7 +820,7 @@ export default function AnalyticsScreen({
 
   useEffect(() => {
     if (!selectedExercise) return;
-    console.log("[pr-detail] selected exercise records", {
+    debugLog("[pr-detail] selected exercise records", {
       exerciseName: selectedExercise.displayName || selectedExercise.name,
       totalRecords: selectedRecords.length,
       records: selectedRecords.map((r) => ({
@@ -830,7 +834,7 @@ export default function AnalyticsScreen({
 
   useEffect(() => {
     if (!selectedExercise) return;
-    console.log("[pr-detail] chart records", {
+    debugLog("[pr-detail] chart records", {
       range: period,
       chartRecords: selectedChartData.map((r) => ({
         date: r.rawDate || r.date,
