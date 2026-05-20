@@ -36,7 +36,7 @@ const RESERVED_USERNAMES = [
 const RANKING_TABS = [
     { key: "big3", label: "BIG3" },
     { key: "consistency", label: "継続" },
-    { key: "monthly", label: "今月" },
+    { key: "monthly", label: "Volume" },
 ];
 const STALE_MS = 30000;
 const EMPTY_FRIEND_SESSION_INSIGHTS = {
@@ -195,6 +195,27 @@ export default function FriendsScreen({
     const getRecordSets = useCallback((record) => {
         return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
     }, []);
+
+    const computeMonthlyVolumeFromHistory = useCallback((historyData) => {
+        return Math.round(
+            Object.values(historyData || {}).reduce((total, records) => (
+                total + (records || []).reduce((recordTotal, record) => {
+                    const recordDate = String(record?.date || "").slice(0, 10);
+                    if (!recordDate.startsWith(currentMonthPrefix)) return recordTotal;
+
+                    const setVolume = getRecordSets(record).reduce((sum, set) => {
+                        const weight = Number(set?.weight);
+                        const reps = Number(set?.reps);
+                        if (!Number.isFinite(weight) || weight <= 0) return sum;
+                        if (!Number.isFinite(reps) || reps <= 0) return sum;
+                        return sum + weight * reps;
+                    }, 0);
+
+                    return recordTotal + setVolume;
+                }, 0)
+            ), 0)
+        );
+    }, [currentMonthPrefix, getRecordSets]);
 
     const matchBig3Exercise = useCallback((name) => {
         return getBig3ExerciseKey(name);
@@ -1447,6 +1468,7 @@ export default function FriendsScreen({
             squat: myBig3.squat || 0,
             deadlift: myBig3.deadlift || 0,
             value: myBig3.total || 0,
+            avatarUrl,
         },
         ...friends.map((friend) => {
             const bests = computeBig3FromHistory(friend.history);
@@ -1458,6 +1480,7 @@ export default function FriendsScreen({
                 squat: bests.squat || 0,
                 deadlift: bests.deadlift || 0,
                 value: bests.total || 0,
+                avatarUrl: friend.avatar1_url || null,
             };
         }),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
@@ -1471,6 +1494,7 @@ export default function FriendsScreen({
             name: getDisplayUsername(myUsername, { isMe: true }),
             isMe: true,
             value: selfRecentSevenSessions.length,
+            avatarUrl,
         },
         ...friends.map((friend) => ({
             id: friend.id,
@@ -1480,24 +1504,24 @@ export default function FriendsScreen({
                 friendSessionInsights.recentSevenCountByUser?.[friend.id]
                 ?? getValidWorkoutDatesFromHistory(friend.history, { since: recentSevenStart }).length
             ),
+            avatarUrl: friend.avatar1_url || null,
         })),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
-    const monthlyWorkoutRanking = [
+    const monthlyVolumeRanking = [
         {
             id: user?.id || "me",
             name: getDisplayUsername(myUsername, { isMe: true }),
             isMe: true,
-            value: selfMonthlySessions.length,
+            value: computeMonthlyVolumeFromHistory(history),
+            avatarUrl,
         },
         ...friends.map((friend) => ({
             id: friend.id,
             name: getDisplayUsername(friend.username),
             isMe: false,
-            value: Number(
-                friendSessionInsights.monthlyCountByUser?.[friend.id]
-                ?? countMonthlyWorkoutDays(friend.history)
-            ),
+            value: computeMonthlyVolumeFromHistory(friend.history),
+            avatarUrl: friend.avatar1_url || null,
         })),
     ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
@@ -1522,7 +1546,7 @@ export default function FriendsScreen({
         console.log("[ranking] friend monthly sessions count by user", friendSessionCountByUser);
         console.log("[ranking] visibility by user/date", friendSessionInsights.visibilityByUserDate || {});
         console.log("[ranking] excluded monthly sessions", friendSessionInsights.excludedSessions || []);
-        console.log("[ranking] final ranking rows", monthlyWorkoutRanking);
+        console.log("[ranking] final ranking rows", monthlyVolumeRanking);
         console.log("[profile] viewed user id", user?.id);
         console.log("[profile] current user id", user?.id);
         console.log("[profile] accepted friend ids", friendIds);
@@ -1535,10 +1559,11 @@ export default function FriendsScreen({
         console.log("[profile] valid sets by date", friendSessionInsights.validSetsByDate || {});
     }, [
         countMonthlyWorkoutDays,
+        computeMonthlyVolumeFromHistory,
         friendIds,
         friendSessionInsights,
         friends,
-        monthlyWorkoutRanking,
+        monthlyVolumeRanking,
         selfMonthlySessions,
         user?.id,
     ]);
@@ -1594,26 +1619,26 @@ export default function FriendsScreen({
             },
         },
         monthly: {
-            label: "今月",
-            emptyValue: "0回",
-            unit: "回",
-            description: "今月のワークアウト回数ランキング",
-            data: monthlyWorkoutRanking,
-            detailLabel: () => "今月のワークアウト回数",
-            metricLabel: (entry) => `${entry.value}回`,
+            label: "Volume",
+            emptyValue: "0kg",
+            unit: "kg",
+            description: "今月のVolumeランキング",
+            data: monthlyVolumeRanking,
+            detailLabel: () => "今月の総重量",
+            metricLabel: (entry) => `${entry.value.toLocaleString("ja-JP")}kg`,
             mySummary: (rankIndex, myEntry, aboveEntry) => {
                 if (!myEntry) return null;
                 if (rankIndex === 0) {
                     return {
                         headline: "あなたは 1位",
-                        metric: `${myEntry.value}回`,
+                        metric: `${myEntry.value.toLocaleString("ja-JP")}kg`,
                         note: myEntry.value > 0 ? "今月トップです" : "まだ今月の記録はありません",
                     };
                 }
                 return {
                     headline: `あなたは ${rankIndex + 1}位`,
-                    metric: `${myEntry.value}回`,
-                    note: `${rankIndex}位まであと${Math.max(0, aboveEntry.value - myEntry.value)}回`,
+                    metric: `${myEntry.value.toLocaleString("ja-JP")}kg`,
+                    note: `${rankIndex}位まであと${Math.max(0, aboveEntry.value - myEntry.value).toLocaleString("ja-JP")}kg`,
                 };
             },
         },
@@ -1774,6 +1799,40 @@ export default function FriendsScreen({
 
     const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
     const hasVisibleFeedUsers = groupedActivityFeed.length > 0;
+    const topThreeRanking = activeRanking.data.slice(0, 3);
+    const podiumOrder = [topThreeRanking[1], topThreeRanking[0], topThreeRanking[2]].filter(Boolean);
+    const compactRankingRows = rankingTab === "big3" ? activeRanking.data.slice(3) : activeRanking.data;
+    const getRankAccentColor = (rankIndex) => {
+        if (rankIndex === 0) return "#C88A1A";
+        if (rankIndex === 1) return "#7E99A5";
+        if (rankIndex === 2) return "#B66B36";
+        return "var(--text3)";
+    };
+    const renderRankAvatar = (entry, size = 34) => (
+        <div
+            style={{
+                width: size,
+                height: size,
+                borderRadius: "50%",
+                overflow: "hidden",
+                flexShrink: 0,
+                display: "grid",
+                placeItems: "center",
+                background: entry?.isMe
+                    ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                    : "linear-gradient(135deg, rgba(15, 94, 99, 0.12), rgba(18, 199, 194, 0.24))",
+                border: "2px solid rgba(255, 255, 255, 0.9)",
+                boxShadow: "0 8px 18px rgba(15, 94, 99, 0.14)",
+                color: entry?.isMe ? "#fff" : "var(--text)",
+                fontSize: Math.max(11, Math.round(size * 0.36)),
+                fontWeight: 900,
+            }}
+        >
+            {entry?.avatarUrl
+                ? <img src={entry.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : String(entry?.name || "U").slice(0, 1)}
+        </div>
+    );
 
     if (!user) {
         return (
@@ -2256,7 +2315,18 @@ export default function FriendsScreen({
 
             {showRankingSections && (
                 <>
-                    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2, marginBottom: 14 }}>
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                            gap: 8,
+                            padding: 3,
+                            marginBottom: 10,
+                            borderRadius: 16,
+                            background: "linear-gradient(180deg, rgba(15, 94, 99, 0.06), rgba(18, 199, 194, 0.02))",
+                            border: "1px solid rgba(18, 199, 194, 0.12)",
+                        }}
+                    >
                         {RANKING_TABS.map((tab) => {
                             const selected = rankingTab === tab.key;
                             return (
@@ -2265,15 +2335,19 @@ export default function FriendsScreen({
                                     type="button"
                                     onClick={() => setRankingTab(tab.key)}
                                     style={{
-                                        padding: "11px 18px",
-                                        borderRadius: 999,
-                                        border: selected ? "1px solid transparent" : "1px solid var(--border2)",
-                                        background: selected ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+                                        minWidth: 0,
+                                        padding: "10px 8px",
+                                        borderRadius: 13,
+                                        border: selected ? "1px solid rgba(255,255,255,0.8)" : "1px solid transparent",
+                                        background: selected
+                                            ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                                            : "rgba(255,255,255,0.58)",
                                         color: selected ? "#fff" : "var(--text2)",
-                                        fontSize: 13,
-                                        fontWeight: 800,
-                                        flexShrink: 0,
-                                        boxShadow: selected ? "0 12px 26px rgba(18, 199, 194, 0.18)" : "none",
+                                        fontSize: 12,
+                                        fontWeight: 900,
+                                        boxShadow: selected
+                                            ? "0 12px 24px rgba(18, 199, 194, 0.22), inset 0 1px 0 rgba(255,255,255,0.35)"
+                                            : "inset 0 1px 0 rgba(255,255,255,0.75)",
                                     }}
                                 >
                                     {tab.label}
@@ -2285,25 +2359,33 @@ export default function FriendsScreen({
                     {myRankingSummary && (
                         <div
                             style={{
-                                background: "var(--card)",
-                                borderRadius: 22,
-                                padding: 18,
-                                marginBottom: 14,
-                                border: "1px solid var(--border2)",
-                                boxShadow: "var(--shadow-card)",
+                                display: "grid",
+                                gridTemplateColumns: "1fr auto",
+                                alignItems: "center",
+                                gap: 10,
+                                background: "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(18, 199, 194, 0.08))",
+                                borderRadius: 18,
+                                padding: "11px 13px",
+                                marginBottom: 10,
+                                border: "1px solid rgba(18, 199, 194, 0.14)",
+                                boxShadow: "0 12px 26px rgba(15, 94, 99, 0.08)",
                             }}
                         >
-                            <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>
-                                あなたの順位
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 11, fontWeight: 900, color: "var(--text3)", marginBottom: 2 }}>
+                                    あなたの順位
+                                </div>
+                                <div style={{ fontSize: 18, fontWeight: 950, color: "var(--text)", lineHeight: 1.15 }}>
+                                    {myRankingSummary.headline}
+                                </div>
                             </div>
-                            <div style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", marginBottom: 6 }}>
-                                {myRankingSummary.headline}
-                            </div>
-                            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--accent)", marginBottom: 6 }}>
-                                {myRankingSummary.metric}
-                            </div>
-                            <div style={{ fontSize: 12, color: "var(--text2)" }}>
-                                {myRankingSummary.note}
+                            <div style={{ textAlign: "right", minWidth: 104 }}>
+                                <div style={{ fontSize: 18, fontWeight: 950, color: "var(--accent)", lineHeight: 1.1 }}>
+                                    {myRankingSummary.metric}
+                                </div>
+                                <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 4, whiteSpace: "nowrap" }}>
+                                    {myRankingSummary.note}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -2311,21 +2393,23 @@ export default function FriendsScreen({
                     <div
                         style={{
                             background: "var(--card)",
-                            borderRadius: 22,
-                            padding: 16,
+                            borderRadius: 20,
+                            padding: 12,
                             border: "1px solid var(--border2)",
                             boxShadow: "var(--shadow-card)",
                         }}
                     >
-                        <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>
-                            {activeRanking.description}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-                            <div style={{ fontSize: 12, color: "var(--text3)" }}>
-                                自分の位置と友達との差をチェック
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                            <div>
+                                <div style={{ fontSize: 15, fontWeight: 950, color: "var(--text)", lineHeight: 1.2 }}>
+                                    {activeRanking.description}
+                                </div>
+                                <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 3 }}>
+                                    {rankingTab === "big3" ? "通算PRの合計" : "順位・ユーザー・数値"}
+                                </div>
                             </div>
                             {friendsRefreshing && (
-                                <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
+                                <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 800, flexShrink: 0 }}>
                                     更新中...
                                 </div>
                             )}
@@ -2334,46 +2418,119 @@ export default function FriendsScreen({
                         {shouldShowRankingLoading ? (
                             <div style={{ textAlign: "center", padding: 26, color: "var(--text2)", fontSize: 14 }}>読み込み中...</div>
                         ) : (
-                            <div style={{ display: "grid", gap: 10 }}>
-                                {activeRanking.data.map((entry, index) => (
+                            <>
+                                {rankingTab === "big3" && topThreeRanking.length > 0 && (
                                     <div
-                                        key={`${rankingTab}-${entry.id}`}
                                         style={{
-                                            padding: index === 0 ? "14px 14px 13px" : "12px 14px",
-                                            borderRadius: 18,
-                                            background: entry.isMe
-                                                ? "linear-gradient(180deg, rgba(18, 199, 194, 0.07), rgba(18, 199, 194, 0.02))"
-                                                : "linear-gradient(180deg, var(--card2), var(--card))",
-                                            border: index === 0
-                                                ? "1px solid rgba(18, 199, 194, 0.22)"
-                                                : entry.isMe
-                                                    ? "1px solid rgba(18, 199, 194, 0.2)"
-                                                    : "1px solid rgba(217, 228, 239, 0.9)",
-                                            boxShadow: index === 0 ? "0 12px 26px rgba(18, 199, 194, 0.14)" : "none",
-                                            opacity: entry.value > 0 ? 1 : 0.78,
+                                            display: "grid",
+                                            gridTemplateColumns: "1fr 1.18fr 1fr",
+                                            alignItems: "end",
+                                            gap: 7,
+                                            minHeight: 168,
+                                            marginBottom: 10,
+                                            padding: "8px 4px 0",
                                         }}
                                     >
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6 }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                                                <div style={{ minWidth: 32, fontSize: 12, fontWeight: 900, color: index === 0 ? "#C26B1E" : "var(--text3)" }}>
-                                                    {index + 1}位
-                                                </div>
-                                                <div style={{ minWidth: 0 }}>
-                                                    <div style={{ fontSize: 14, fontWeight: 900, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {podiumOrder.map((entry) => {
+                                            const rankIndex = activeRanking.data.findIndex((item) => item.id === entry.id);
+                                            const isChampion = rankIndex === 0;
+                                            return (
+                                                <div
+                                                    key={`podium-${entry.id}`}
+                                                    style={{
+                                                        minWidth: 0,
+                                                        textAlign: "center",
+                                                        transform: isChampion ? "translateY(-8px)" : "none",
+                                                    }}
+                                                >
+                                                    <div style={{ fontSize: isChampion ? 24 : 18, lineHeight: 1, marginBottom: 4 }}>
+                                                        {rankIndex === 0 ? "♛" : rankIndex === 1 ? "2" : "3"}
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+                                                        {renderRankAvatar(entry, isChampion ? 58 : 46)}
+                                                    </div>
+                                                    <div style={{ fontSize: isChampion ? 13 : 12, fontWeight: 950, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                         {entry.name}
                                                     </div>
+                                                    <div style={{ fontSize: isChampion ? 18 : 15, fontWeight: 950, color: isChampion ? "var(--accent)" : "var(--text)", marginTop: 2 }}>
+                                                        {activeRanking.metricLabel(entry)}
+                                                    </div>
+                                                    <div
+                                                        style={{
+                                                            height: isChampion ? 54 : rankIndex === 1 ? 40 : 34,
+                                                            marginTop: 7,
+                                                            borderRadius: "13px 13px 6px 6px",
+                                                            background: isChampion
+                                                                ? "linear-gradient(180deg, rgba(18, 199, 194, 0.28), rgba(15, 94, 99, 0.18))"
+                                                                : "linear-gradient(180deg, rgba(15, 94, 99, 0.10), rgba(18, 199, 194, 0.06))",
+                                                            border: `1px solid ${isChampion ? "rgba(18, 199, 194, 0.32)" : "rgba(15, 94, 99, 0.12)"}`,
+                                                            display: "grid",
+                                                            placeItems: "center",
+                                                            color: getRankAccentColor(rankIndex),
+                                                            fontSize: 14,
+                                                            fontWeight: 950,
+                                                            boxShadow: isChampion ? "0 14px 28px rgba(18, 199, 194, 0.16)" : "none",
+                                                        }}
+                                                    >
+                                                        {rankIndex + 1}位
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div style={{ display: "grid", gap: 6 }}>
+                                    {compactRankingRows.map((entry) => {
+                                        const index = activeRanking.data.findIndex((item) => item.id === entry.id);
+                                        return (
+                                            <div
+                                                key={`${rankingTab}-${entry.id}`}
+                                                style={{
+                                                    minHeight: 52,
+                                                    display: "grid",
+                                                    gridTemplateColumns: "38px minmax(0, 1fr) auto",
+                                                    alignItems: "center",
+                                                    gap: 8,
+                                                    padding: "7px 10px",
+                                                    borderRadius: 14,
+                                                    background: entry.isMe
+                                                        ? "linear-gradient(90deg, rgba(18, 199, 194, 0.12), rgba(255,255,255,0.9))"
+                                                        : "rgba(255,255,255,0.72)",
+                                                    border: entry.isMe
+                                                        ? "1px solid rgba(18, 199, 194, 0.24)"
+                                                        : "1px solid rgba(217, 228, 239, 0.78)",
+                                                    boxShadow: index === 0 && rankingTab !== "big3" ? "0 10px 20px rgba(18, 199, 194, 0.12)" : "none",
+                                                    opacity: entry.value > 0 ? 1 : 0.72,
+                                                }}
+                                            >
+                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                                    <span style={{ fontSize: index < 3 ? 15 : 12, lineHeight: 1 }}>
+                                                        {index === 0 ? "♛" : ""}
+                                                    </span>
+                                                    <span style={{ fontSize: 13, fontWeight: 950, color: getRankAccentColor(index), fontVariantNumeric: "tabular-nums" }}>
+                                                        {index + 1}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                                    {renderRankAvatar(entry, 30)}
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontSize: 13, fontWeight: 950, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+                                                            {entry.name}
+                                                        </div>
+                                                        <div style={{ fontSize: 10.5, color: "var(--text3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
+                                                            {activeRanking.detailLabel(entry)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ fontSize: 16, fontWeight: 950, color: "var(--text)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                                                    {activeRanking.metricLabel(entry)}
                                                 </div>
                                             </div>
-                                            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)" }}>
-                                                {activeRanking.metricLabel(entry)}
-                                            </div>
-                                        </div>
-                                        <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>
-                                            {activeRanking.detailLabel(entry)}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
                         )}
                     </div>
 
