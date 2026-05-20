@@ -575,7 +575,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
 
     const weeklySets = useMemo(() => (
         collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides)
-    ), [history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
+    ), [history, muscleEx, exerciseBodyPartOverrides]);
 
     const partsToShow = useMemo(() => {
         const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));
@@ -592,7 +592,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
 
     const recentSessions = useMemo(() => (
         collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
-    ), [history, muscleEx, exerciseBodyPartOverrides]);
+    ), [history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
 
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))

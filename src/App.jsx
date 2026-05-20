@@ -176,16 +176,23 @@ export default function GymApp() {
     const loadDraftForDate = useCallback((dateStr) => {
         const legacyDraftDate = load("draft_logDate", "");
         const useLegacyFallback = legacyDraftDate === dateStr;
+        const legacyLogData = useLegacyFallback ? load("draft_logData", {}) : {};
+        const datedLogData = load(getDraftKey("draft_logData", dateStr), null);
+        const countDraftSets = (draftLogData) => Object.values(draftLogData || {})
+            .reduce((count, sets) => count + (Array.isArray(sets) ? sets.length : 0), 0);
+        const logData =
+            datedLogData === null
+                ? legacyLogData
+                : countDraftSets(datedLogData) < countDraftSets(legacyLogData)
+                    ? legacyLogData
+                    : datedLogData;
 
         return {
             todayLabels: load(
                 getDraftKey("draft_todayLabels", dateStr),
                 useLegacyFallback ? load("draft_todayLabels", []) : []
             ),
-            logData: load(
-                getDraftKey("draft_logData", dateStr),
-                useLegacyFallback ? load("draft_logData", {}) : {}
-            ),
+            logData,
             sessionEx: load(
                 getDraftKey("draft_sessionEx", dateStr),
                 useLegacyFallback ? load("draft_sessionEx", null) : null
@@ -203,6 +210,12 @@ export default function GymApp() {
         Object.keys(draft.exerciseUnits || {}).length > 0 ||
         (draft.todayLabels || []).length > 0
     ), []);
+
+    const makeDefaultDraftSets = useCallback(() => ([
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+        { weight: "", reps: "", done: false },
+    ]), []);
 
     const saveDraftForDate = useCallback((dateStr, draft) => {
         if (!dateStr) return;
@@ -515,6 +528,25 @@ export default function GymApp() {
 
     const [logDate, setLogDate] = useState(() => getTodayKey());
     const [logMode, setLogMode] = useState("today");
+    const [exerciseUnits, setExerciseUnits] = useState(() => loadDraftForDate(getTodayKey()).exerciseUnits);
+
+    const setLogDataAndSaveDraft = useCallback((nextOrUpdater) => {
+        setLogData((prev) => {
+            const next =
+                typeof nextOrUpdater === "function"
+                    ? nextOrUpdater(prev)
+                    : nextOrUpdater;
+
+            saveDraftForDate(logDate, {
+                todayLabels,
+                logData: next || {},
+                sessionEx,
+                exerciseUnits,
+            });
+
+            return next;
+        });
+    }, [exerciseUnits, logDate, saveDraftForDate, sessionEx, todayLabels]);
 
     const {
         addSet,
@@ -522,7 +554,7 @@ export default function GymApp() {
         saveLog,
     } = useLogLogic({
         logData,
-        setLogData,
+        setLogData: setLogDataAndSaveDraft,
         history,
         setHistory,
         routineOrder,
@@ -590,7 +622,6 @@ export default function GymApp() {
     }, []);
 
 
-    const [exerciseUnits, setExerciseUnits] = useState(() => loadDraftForDate(getTodayKey()).exerciseUnits);
     const [sessionSyncVersion, setSessionSyncVersion] = useState(0);
     const initialWorkoutTimerState = readWorkoutTimerState();
     const [workoutStartedAt, setWorkoutStartedAt] = useState(initialWorkoutTimerState.startedAt);
@@ -1907,7 +1938,7 @@ export default function GymApp() {
         history,
         manualBests,
         sessionHistory,
-        setLogData,
+        setLogData: setLogDataAndSaveDraft,
         getExSets,
         getExUnit,
         KG_TO_LBS,
@@ -2138,7 +2169,8 @@ export default function GymApp() {
 
         const label = labelOverride || todayLabels[0];
         if (!label) return;
-        let didAddExercise = false;
+        const currentSessionExercises = sessionEx !== null ? sessionEx : baseExercises;
+        const alreadyInSession = currentSessionExercises.some((e) => e.name === trimmed);
 
         const ex = {
             id: Date.now() + (Math.random() * 1000 | 0),
@@ -2146,21 +2178,40 @@ export default function GymApp() {
             label,
             bodyPart: label,
         };
+        const nextSessionForDraft = alreadyInSession
+            ? currentSessionExercises
+            : [...currentSessionExercises, ex];
 
         setSessionEx((p) => {
             const current = p !== null ? p : [...baseExercises];
             if (current.find((e) => e.name === trimmed)) return current;
 
-            didAddExercise = true;
             const next = [...current, ex];
             saveDraftForDate(logDate, {
                 todayLabels,
-                logData,
+                logData: logData[trimmed] ? logData : { ...logData, [trimmed]: makeDefaultDraftSets() },
                 sessionEx: next,
                 exerciseUnits,
             });
             return next;
         });
+
+        if (!alreadyInSession) {
+            setLogData((prev) => {
+                const next = prev[trimmed]
+                    ? prev
+                    : { ...prev, [trimmed]: makeDefaultDraftSets() };
+
+                saveDraftForDate(logDate, {
+                    todayLabels,
+                    logData: next,
+                    sessionEx: nextSessionForDraft,
+                    exerciseUnits,
+                });
+
+                return next;
+            });
+        }
 
         setMuscleEx((prev) => {
             const next = { ...prev };
@@ -2175,7 +2226,7 @@ export default function GymApp() {
 
         setExerciseOverrideForLabel(trimmed, label);
 
-        if (didAddExercise) {
+        if (!alreadyInSession) {
             startWorkoutTimerIfNeeded(logDate, { markAsActivity: true });
         }
     };
