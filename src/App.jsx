@@ -928,7 +928,7 @@ export default function GymApp() {
         syncFailuresByDateRef.current = nextFailures;
     }, []);
 
-    const syncWorkoutRowsForDates = useCallback(async (userId, historyMap, dates = []) => {
+    const syncWorkoutRowsForDates = useCallback(async (userId, historyMap, dates = [], durationSecByDate = {}) => {
         const normalizedDates = [...new Set((dates || []).map((date) => String(date || "").trim()).filter(Boolean))];
         const results = {
             syncedDates: [],
@@ -941,6 +941,7 @@ export default function GymApp() {
             normalizedDates.map(async (workoutDate) => {
                 try {
                     const hasWorkoutForDate = hasValidWorkoutOnDate(historyMap, workoutDate);
+                    const durationSec = Math.floor(Number(durationSecByDate?.[workoutDate]) || 0);
                     const { error } = hasWorkoutForDate
                         ? await supabase
                             .from("workouts")
@@ -948,6 +949,7 @@ export default function GymApp() {
                                 user_id: userId,
                                 date: workoutDate,
                                 data: historyMap,
+                                ...(durationSec > 0 ? { duration_sec: durationSec } : {}),
                             }, {
                                 onConflict: "user_id,date",
                             })
@@ -1537,8 +1539,17 @@ export default function GymApp() {
                         formatDateKey(new Date()),
                     ]),
                 ];
+                const currentTimerPersistence = workoutStartedForDate
+                    ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
+                    : null;
+                const durationSecByDate = {
+                    ...savedWorkoutDurationSecByDate,
+                    ...(workoutStartedForDate && currentTimerPersistence?.durationSec > 0
+                        ? { [workoutStartedForDate]: currentTimerPersistence.durationSec }
+                        : {}),
+                };
 
-                const workoutSyncResults = await syncWorkoutRowsForDates(currentUserId, mergedHistory, syncDates);
+                const workoutSyncResults = await syncWorkoutRowsForDates(currentUserId, mergedHistory, syncDates, durationSecByDate);
                 if (workoutSyncResults.failedDates.length > 0) {
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
                 }
@@ -1641,6 +1652,7 @@ export default function GymApp() {
         pruneHistoryDeleteMarkersForHistory,
         recordSyncFailure,
         refreshHistorySyncDiagnostic,
+        savedWorkoutDurationSecByDate,
         syncWorkoutSessionSnapshot,
         syncWorkoutRowsForDates,
         cleanupWorkoutSessionsForHistory,
@@ -2152,8 +2164,16 @@ export default function GymApp() {
             title: "今日のワークアウト完了",
             endedAt,
         });
+        const durationSec = Math.max(0, Math.floor(Number(nextSummary?.durationSec) || 0));
+        if (durationSec > 0) {
+            setSavedWorkoutDurationSecByDate((prev) => ({
+                ...prev,
+                [logDate]: Math.max(prev[logDate] || 0, durationSec),
+            }));
+            queueWorkoutSessionSync(logDate);
+        }
         setSummary(nextSummary);
-    }, [buildDraftWorkoutDaySummary, finishWorkoutTimer, logDate]);
+    }, [buildDraftWorkoutDaySummary, finishWorkoutTimer, logDate, queueWorkoutSessionSync]);
 
 
 

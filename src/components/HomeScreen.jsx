@@ -337,10 +337,11 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
             if (!record.date) return;
+            const dateKey = String(record.date || "").slice(0, 10);
 
-            if (!sessions[record.date]) {
-                sessions[record.date] = {
-                    date: record.date,
+            if (!sessions[dateKey]) {
+                sessions[dateKey] = {
+                    date: dateKey,
                     parts: new Set(),
                     sets: 0,
                     volume: 0,
@@ -349,21 +350,21 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
                         record.durationMinutes ||
                         (record.duration_sec ? Math.round(Number(record.duration_sec) / 60) : null) ||
                         (record.durationSec ? Math.round(Number(record.durationSec) / 60) : null) ||
-                        (workoutDurationSecByDate[record.date] ? Math.round(Number(workoutDurationSecByDate[record.date]) / 60) : null),
+                        (workoutDurationSecByDate[dateKey] ? Math.round(Number(workoutDurationSecByDate[dateKey]) / 60) : null),
                     exercises: [],
                 };
             }
 
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
-            if (bp !== "その他") sessions[record.date].parts.add(bp);
+            if (bp !== "その他") sessions[dateKey].parts.add(bp);
 
             const setCount = getRecordSetCount(record);
             const volume = getRecordVolume(record);
 
-            sessions[record.date].sets += setCount;
-            sessions[record.date].volume += volume;
+            sessions[dateKey].sets += setCount;
+            sessions[dateKey].volume += volume;
 
-            sessions[record.date].exercises.push({
+            sessions[dateKey].exercises.push({
                 name: exName,
                 bodyPart: bp,
                 setCount,
@@ -371,7 +372,7 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
                 order: Number.isFinite(Number(record.order)) ? Number(record.order)
                     : Number.isFinite(Number(record.exerciseOrder)) ? Number(record.exerciseOrder)
                     : Number.isFinite(Number(record.sortOrder)) ? Number(record.sortOrder)
-                    : sessions[record.date].exercises.length,
+                    : sessions[dateKey].exercises.length,
                 sets: getRecordSets(record).map(s => ({
                     weight: formatWeightForDisplay(s.weight),
                     reps: s.reps,
