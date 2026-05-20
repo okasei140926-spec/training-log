@@ -1106,7 +1106,6 @@ export default function AnalyticsScreen({
         {[
           { key: "overview", label: "概要" },
           { key: "parts", label: "部位" },
-          { key: "exercises", label: "種目" },
           { key: "pr", label: "PR履歴" },
           { key: "trends", label: "推移" },
         ].map((tab) => (
@@ -1170,28 +1169,7 @@ export default function AnalyticsScreen({
         </div>
       )}
 
-      {activeAnalysisTab === "exercises" && (
-        <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>種目分析</div>
-          <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
 
-          <div style={{ display: "grid", gap: 10 }}>
-            {(overviewSummary.exerciseStats || []).length > 0 ? overviewSummary.exerciseStats.slice(0, 12).map((item) => (
-              <div key={`exercise-tab-${item.key}`} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: 13 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.exerciseName}</div>
-                    <div style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700, marginTop: 4 }}>{item.bodyPart} ・ {item.setCount} set</div>
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: "var(--accent)", whiteSpace: "nowrap" }}>{Math.round(item.volume || 0).toLocaleString("ja-JP")}kg</div>
-                </div>
-              </div>
-            )) : (
-              <div style={{ color: "var(--text2)", fontSize: 13 }}>まだデータがありません</div>
-            )}
-          </div>
-        </div>
-      )}
 
       {activeAnalysisTab === "trends" && (
         <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
@@ -1250,6 +1228,10 @@ export default function AnalyticsScreen({
             {option.label}
           </button>
         ))}
+      </div>
+
+      <div style={{ textAlign: "center", fontSize: 12, color: "var(--text2)", fontWeight: 700, marginBottom: 4 }}>
+        {overviewSummary.rangeLabel}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
