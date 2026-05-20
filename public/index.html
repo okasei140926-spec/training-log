@@ -28,9 +28,35 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>PUMP</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #f7fbfc;
+      }
+
+      #initial-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f7fbfc;
+      }
+
+      #initial-splash img {
+        width: 96px;
+        height: 96px;
+        display: block;
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="initial-splash" aria-hidden="true">
+      <img src="%PUBLIC_URL%/app-icon-192.png" alt="" />
+    </div>
     <div id="root"></div>
     <!--
       This HTML file is a template.

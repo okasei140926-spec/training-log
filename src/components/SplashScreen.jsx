@@ -4,6 +4,13 @@ export default function SplashScreen({ visible }) {
   const [mounted, setMounted] = useState(visible);
 
   useEffect(() => {
+    const initialSplash = document.getElementById("initial-splash");
+    if (initialSplash) {
+      initialSplash.remove();
+    }
+  }, []);
+
+  useEffect(() => {
     if (visible) {
       setMounted(true);
       return undefined;
