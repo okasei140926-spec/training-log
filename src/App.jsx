@@ -819,34 +819,34 @@ export default function GymApp() {
         let cancelled = false;
 
         async function loadSavedWorkoutDuration() {
-            if (!user?.id || !logDate) return;
+            if (!user?.id) return;
 
             try {
-                const [{ data: sessionData }, { data: workoutData }] = await Promise.all([
+                const [{ data: sessionRows }, { data: workoutRows }] = await Promise.all([
                     supabase
                         .from("workout_sessions")
-                        .select("duration_sec")
-                        .eq("user_id", user.id)
-                        .eq("workout_date", logDate)
-                        .maybeSingle(),
+                        .select("workout_date, duration_sec")
+                        .eq("user_id", user.id),
                     supabase
                         .from("workouts")
-                        .select("duration_sec")
-                        .eq("user_id", user.id)
-                        .eq("date", logDate)
-                        .maybeSingle(),
+                        .select("date, duration_sec")
+                        .eq("user_id", user.id),
                 ]);
 
-                const durationSec = Math.max(
-                    Math.floor(Number(sessionData?.duration_sec) || 0),
-                    Math.floor(Number(workoutData?.duration_sec) || 0)
-                );
+                const map = {};
+                (sessionRows || []).forEach(({ workout_date, duration_sec }) => {
+                    if (workout_date && duration_sec > 0) {
+                        map[workout_date] = Math.max(map[workout_date] || 0, Math.floor(Number(duration_sec)));
+                    }
+                });
+                (workoutRows || []).forEach(({ date, duration_sec }) => {
+                    if (date && duration_sec > 0) {
+                        map[date] = Math.max(map[date] || 0, Math.floor(Number(duration_sec)));
+                    }
+                });
 
                 if (!cancelled) {
-                    setSavedWorkoutDurationSecByDate((prev) => ({
-                        ...prev,
-                        [logDate]: durationSec,
-                    }));
+                    setSavedWorkoutDurationSecByDate(map);
                 }
             } catch (error) {
                 console.error("load saved workout duration failed", error);
@@ -858,7 +858,7 @@ export default function GymApp() {
         return () => {
             cancelled = true;
         };
-    }, [user?.id, logDate]);
+    }, [user?.id]);
 
     const workoutTimerStatus = getWorkoutTimerStatus(workoutTimerStateRef.current);
 
