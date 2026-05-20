@@ -835,13 +835,15 @@ export default function GymApp() {
 
                 const map = {};
                 (sessionRows || []).forEach(({ workout_date, duration_sec }) => {
-                    if (workout_date && duration_sec > 0) {
-                        map[workout_date] = Math.max(map[workout_date] || 0, Math.floor(Number(duration_sec)));
+                    const sec = Math.floor(Number(duration_sec));
+                    if (workout_date && sec > 0 && sec < 86400) {
+                        map[workout_date] = Math.max(map[workout_date] || 0, sec);
                     }
                 });
                 (workoutRows || []).forEach(({ date, duration_sec }) => {
-                    if (date && duration_sec > 0) {
-                        map[date] = Math.max(map[date] || 0, Math.floor(Number(duration_sec)));
+                    const sec = Math.floor(Number(duration_sec));
+                    if (date && sec > 0 && sec < 86400) {
+                        map[date] = Math.max(map[date] || 0, sec);
                     }
                 });
 
