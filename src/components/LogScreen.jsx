@@ -54,6 +54,30 @@ function SortableExerciseItem({ id, children }) {
 
 const roundTo1Decimal = (value) => Math.round(Number(value || 0) * 10) / 10;
 
+const getHistoryDurationSecForDate = (history, date) => {
+    const normalizedDate = String(date || "").slice(0, 10);
+    if (!normalizedDate) return 0;
+
+    let durationSec = 0;
+    Object.values(history || {}).forEach((records) => {
+        (records || []).forEach((record) => {
+            if (String(record?.date || "").slice(0, 10) !== normalizedDate) return;
+            [
+                Number(record?.durationSec),
+                Number(record?.duration_sec),
+                Number(record?.durationMinutes) * 60,
+                Number(record?.elapsedMinutes) * 60,
+            ].forEach((value) => {
+                if (Number.isFinite(value) && value > durationSec) {
+                    durationSec = Math.floor(value);
+                }
+            });
+        });
+    });
+
+    return durationSec;
+};
+
 
 export default function LogScreen({
     manualBests = [],
@@ -158,11 +182,16 @@ export default function LogScreen({
         };
     }, { prCount: 0, totalVolumeKg: 0 });
     const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
+    const shareDurationSec = Math.max(
+        Math.floor(Number(workoutElapsedSec) || 0),
+        getHistoryDurationSecForDate(history, logDate)
+    );
     const rawSessionSharePayload = buildWorkoutSessionPayloadFromDraft({
         exercises,
         logData,
         getExUnit,
         workoutDate: logDate,
+        durationSec: shareDurationSec,
     });
     const sessionSharePayload = rawSessionSharePayload
         ? {

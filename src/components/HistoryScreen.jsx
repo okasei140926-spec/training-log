@@ -680,7 +680,9 @@ export default function HistoryScreen({
         }
       }
 
-      const sessionPayload = buildWorkoutSessionPayloadFromHistory(history, normalizedDate);
+      const sessionPayload = buildWorkoutSessionPayloadFromHistory(history, normalizedDate, {
+        durationSec,
+      });
       const nextSummary = buildWorkoutDaySummary({
           title: options.title || `${normalizedDate} のサマリー`,
           date: normalizedDate,
@@ -696,8 +698,10 @@ export default function HistoryScreen({
                 workoutDate: normalizedDate,
                 sessionPayload: {
                   ...sessionPayload,
+                  durationSec,
                   session: {
                     ...sessionPayload.session,
+                    durationSec,
                     duration_sec: durationSec,
                   },
                 },

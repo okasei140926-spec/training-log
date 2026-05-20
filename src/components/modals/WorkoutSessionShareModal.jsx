@@ -29,10 +29,27 @@ const formatDate = (date) => {
 const formatDuration = (durationSec) => {
     const sec = Number(durationSec || 0);
     if (!Number.isFinite(sec) || sec <= 0) return "";
-    const hours = Math.floor(sec / 3600);
-    const minutes = Math.max(1, Math.round((sec % 3600) / 60));
+    const totalMinutes = Math.max(1, Math.round(sec / 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     if (hours <= 0) return `${minutes}分`;
-    return `${hours}時間${minutes}分`;
+    return minutes > 0 ? `${hours}時間${minutes}分` : `${hours}時間`;
+};
+
+const resolveDurationSec = (payload) => {
+    const session = payload?.session || {};
+    const candidates = [
+        Number(payload?.durationSec),
+        Number(session?.durationSec),
+        Number(session?.duration_sec),
+        Number(payload?.duration_sec),
+        Number(session?.durationMinutes) * 60,
+        Number(payload?.durationMinutes) * 60,
+        Number(session?.elapsedMinutes) * 60,
+        Number(payload?.elapsedMinutes) * 60,
+    ];
+    const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
+    return durationSec ? Math.floor(durationSec) : 0;
 };
 
 const getMaxWeightLabel = (weight) => {
@@ -92,7 +109,7 @@ export default function WorkoutSessionShareModal({
 
     const visibleItems = useMemo(() => items.slice(0, sizeKey === "story" ? 7 : 5), [items, sizeKey]);
     const hiddenItemCount = Math.max(0, items.length - visibleItems.length);
-    const durationLabel = formatDuration(sessionPayload?.session?.duration_sec);
+    const durationLabel = formatDuration(resolveDurationSec(sessionPayload));
     const totalSetLabel = `${Number(summary?.setCount || 0)}セット`;
     const totalVolumeLabel = `${Math.round(Number(summary?.totalVolume || 0)).toLocaleString("ja-JP")}kg`;
     const prCount = Number(summary?.prCount || 0);

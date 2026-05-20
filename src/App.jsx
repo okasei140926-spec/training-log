@@ -2504,6 +2504,7 @@ export default function GymApp() {
             logData,
             getExUnit,
             workoutDate: normalizedDate,
+            durationSec,
         });
 
         let isShared = false;
@@ -2533,7 +2534,15 @@ export default function GymApp() {
             shareTarget: sessionPayload
                 ? {
                     workoutDate: normalizedDate,
-                    sessionPayload,
+                    sessionPayload: {
+                        ...sessionPayload,
+                        durationSec,
+                        session: {
+                            ...sessionPayload.session,
+                            durationSec,
+                            duration_sec: durationSec,
+                        },
+                    },
                   }
                 : null,
         });

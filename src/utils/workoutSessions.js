@@ -22,6 +22,23 @@ const roundNumeric = (value, digits = 1) => {
   return Math.round(num * factor) / factor;
 };
 
+const normalizeDurationSec = (value) => {
+  const durationSec = Math.floor(Number(value) || 0);
+  if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
+  return durationSec;
+};
+
+const getRecordDurationSec = (record) => {
+  const candidates = [
+    Number(record?.durationSec),
+    Number(record?.duration_sec),
+    Number(record?.durationMinutes) * 60,
+    Number(record?.elapsedMinutes) * 60,
+  ];
+  const durationSec = candidates.find((value) => Number.isFinite(value) && value > 0);
+  return durationSec ? Math.floor(durationSec) : 0;
+};
+
 const getBestNumericSet = (sets) => {
   const numericSets = sanitizeWorkoutSets(sets, { allowBodyweight: false });
   if (!numericSets.length) return null;
@@ -57,6 +74,7 @@ export function buildWorkoutSessionEntriesFromHistory(history, workoutDate) {
           exerciseName,
           bodyPart,
           order: Number.isFinite(order) ? order : 999,
+          durationSec: getRecordDurationSec(record),
           sets,
         };
       })
@@ -204,12 +222,19 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
     sort: "fixed",
   });
   const totalExerciseCount = getExerciseCountTotal(exerciseCountByBodyPart);
+  const entryDurationSec = sortedEntries.reduce(
+    (max, entry) => Math.max(max, normalizeDurationSec(entry.durationSec)),
+    0
+  );
+  const durationSec = normalizeDurationSec(options.durationSec) || entryDurationSec;
 
   return {
     session: {
       workout_date: workoutDate,
       total_volume: roundNumeric(totalVolume, 1),
       exercise_count: totalExerciseCount,
+      durationSec,
+      duration_sec: durationSec,
       summary_json: {
         setCount: totalSetCount,
         totalVolume: roundNumeric(totalVolume, 1),
@@ -243,6 +268,7 @@ export function buildWorkoutSessionPayloadFromDraft(args) {
       visibility: args.visibility,
       photoVisibility: args.photoVisibility,
       photoId: args.photoId,
+      durationSec: args.durationSec,
     }
   );
 }
