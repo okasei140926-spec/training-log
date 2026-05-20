@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { isSupabaseConfigured, missingSupabaseEnvKeys, supabase, supabaseConfigError } from "./utils/supabase";
 import {
     load,
@@ -21,19 +21,13 @@ import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
-import AnalyticsScreen from "./components/AnalyticsScreen";
-import PhotoScreen from "./components/PhotoScreen";
 // eslint-disable-next-line no-unused-vars
-import Auth from "./components/Auth";
 
 import { useAI } from "./hooks/useAI";
 import { useSettings } from "./hooks/useSettings";
 
 import LogScreen from "./components/LogScreen";
-import FriendsScreen from "./components/FriendsScreen";
-import HistoryScreen from "./components/HistoryScreen";
 import HomeScreen from "./components/HomeScreen";
-import AIScreen from "./components/AIScreen";
 import AppHeader from "./components/layout/AppHeader";
 import BottomNav from "./components/layout/BottomNav";
 import PushPromptModal from "./components/PushPromptModal";
@@ -81,6 +75,12 @@ import {
     readWorkoutTimerState,
 } from "./utils/workoutTimer";
 
+const AnalyticsScreen = lazy(() => import("./components/AnalyticsScreen"));
+const PhotoScreen = lazy(() => import("./components/PhotoScreen"));
+const FriendsScreen = lazy(() => import("./components/FriendsScreen"));
+const HistoryScreen = lazy(() => import("./components/HistoryScreen"));
+const AIScreen = lazy(() => import("./components/AIScreen"));
+const Auth = lazy(() => import("./components/Auth"));
 
 const debugLog = (...args) => {
     if (process.env.NODE_ENV !== "production") console.debug(...args);
@@ -360,7 +360,7 @@ export default function GymApp() {
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
-    const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
+    const [, setAuthReady] = useState(!isSupabaseConfigured);
     const [splashMinElapsed, setSplashMinElapsed] = useState(false);
     const [splashForceDone, setSplashForceDone] = useState(false);
 
@@ -428,8 +428,8 @@ export default function GymApp() {
     }, []);
 
     useEffect(() => {
-        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 220);
-        const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 900);
+        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 120);
+        const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 500);
 
         return () => {
             window.clearTimeout(minTimerId);
@@ -3332,7 +3332,7 @@ export default function GymApp() {
         !dismissedSyncFailureSignaturesRef.current.has(syncFailureSignature);
     const showSplashScreen =
         !splashForceDone &&
-        (!splashMinElapsed || !authReady);
+        !splashMinElapsed;
 
     if (!isSupabaseConfigured) {
         return (
@@ -3560,6 +3560,7 @@ export default function GymApp() {
                 )}
 
 
+                <Suspense fallback={null}>
                 {showTimerMenu && screen === "log" && (
                     <div style={{ position: "fixed", top: 70, right: 20, zIndex: 200, background: "var(--card)", borderRadius: 12, padding: 12, border: "1px solid var(--border2)", display: "flex", gap: 6 }}>
                         {[30, 60, 90, 120].map(s => (
@@ -3904,6 +3905,7 @@ export default function GymApp() {
                         <Auth onClose={() => setShowAuth(false)} isDark={isDark} />
                     </div>
                 )}
+                </Suspense>
 
                 <PushPromptModal
                     isOpen={showPushPrompt}

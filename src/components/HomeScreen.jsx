@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { resolveRecordedBodyPartLabel, resolveVisibleBodyPartLabel } from "../utils/bodyPartClassification";
 
 const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
@@ -576,11 +576,17 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
     const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
+    const [homeMetricsReady, setHomeMetricsReady] = useState(false);
     const week = getWeekRange();
 
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => setHomeMetricsReady(true), 80);
+        return () => window.clearTimeout(timeoutId);
+    }, []);
+
     const weeklySets = useMemo(() => (
-        collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides)
-    ), [history, muscleEx, exerciseBodyPartOverrides]);
+        homeMetricsReady ? collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides) : {}
+    ), [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides]);
 
     const partsToShow = useMemo(() => {
         const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));
@@ -589,15 +595,23 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
     }, [hiddenBodyParts, weeklySets]);
 
     const recoveries = useMemo(() => (
-        partsToShow.map(part => ({
-            part,
-            ...calcRecovery(history, part, muscleEx, exerciseBodyPartOverrides),
-        }))
-    ), [history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
+        homeMetricsReady
+            ? partsToShow.map(part => ({
+                part,
+                ...calcRecovery(history, part, muscleEx, exerciseBodyPartOverrides),
+            }))
+            : partsToShow.map(part => ({
+                part,
+                pct: 100,
+                status: "excellent",
+            }))
+    ), [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
 
     const recentSessions = useMemo(() => (
-        collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
-    ), [history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
+        homeMetricsReady
+            ? collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
+            : []
+    ), [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
 
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))
