@@ -428,8 +428,8 @@ export default function GymApp() {
     }, []);
 
     useEffect(() => {
-        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 620);
-        const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 1500);
+        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 220);
+        const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 900);
 
         return () => {
             window.clearTimeout(minTimerId);
@@ -455,17 +455,19 @@ export default function GymApp() {
 
             setShowAuth(false);
 
-            try {
-                await ensureProfileForUser(nextUser);
-            } catch (error) {
-                console.error("ensure oauth profile failed", error);
-            }
+            void (async () => {
+                try {
+                    await ensureProfileForUser(nextUser);
+                } catch (error) {
+                    console.error("ensure oauth profile failed", error);
+                }
 
-            try {
-                await connectPendingFriendForUser(nextUser);
-            } catch (error) {
-                console.error("connect pending friend failed", error);
-            }
+                try {
+                    await connectPendingFriendForUser(nextUser);
+                } catch (error) {
+                    console.error("connect pending friend failed", error);
+                }
+            })();
         };
 
         supabase.auth.getSession()
@@ -3330,7 +3332,7 @@ export default function GymApp() {
         !dismissedSyncFailureSignaturesRef.current.has(syncFailureSignature);
     const showSplashScreen =
         !splashForceDone &&
-        (!splashMinElapsed || !authReady || !historySyncReady);
+        (!splashMinElapsed || !authReady);
 
     if (!isSupabaseConfigured) {
         return (
