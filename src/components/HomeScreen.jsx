@@ -575,7 +575,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
 
     const weeklySets = useMemo(() => (
         collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides)
-    ), [history, muscleEx, exerciseBodyPartOverrides]);
+    ), [history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
 
     const partsToShow = useMemo(() => {
         const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));
