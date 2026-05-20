@@ -136,7 +136,7 @@ const normalizeHistoryDeleteMarkers = (markers) => {
 };
 
 const buildHistoryRecordDeleteKey = (date, exerciseName) =>
-    `${String(date || "")}::${normalizeExerciseName(exerciseName)}`;
+    `${String(date || "").slice(0, 10)}::${normalizeExerciseName(exerciseName)}`;
 
 const applyHistoryDeleteMarkers = (historyMap, markers) => {
     const normalizedMarkers = normalizeHistoryDeleteMarkers(markers);
@@ -144,13 +144,13 @@ const applyHistoryDeleteMarkers = (historyMap, markers) => {
         return historyMap;
     }
 
-    const deletedDates = new Set(normalizedMarkers.dates);
+    const deletedDates = new Set(normalizedMarkers.dates.map((date) => String(date || "").slice(0, 10)));
     const deletedRecords = new Set(normalizedMarkers.records);
     const next = {};
 
     Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
         const filtered = (records || []).filter((record) => {
-            const recordDate = String(record?.date || "");
+            const recordDate = String(record?.date || "").slice(0, 10);
             if (!recordDate) return false;
             if (deletedDates.has(recordDate)) return false;
             if (deletedRecords.has(buildHistoryRecordDeleteKey(recordDate, exerciseName))) return false;
@@ -257,12 +257,12 @@ export default function GymApp() {
     }, [getDraftKey]);
 
     const removeHistoryDate = useCallback((historyMap, targetDate) => {
-        const normalizedDate = String(targetDate || "").trim();
+        const normalizedDate = String(targetDate || "").slice(0, 10);
         if (!normalizedDate) return historyMap || {};
 
         const next = {};
         Object.entries(historyMap || {}).forEach(([exName, recs]) => {
-            const filtered = (recs || []).filter((record) => record?.date !== normalizedDate);
+            const filtered = (recs || []).filter((record) => String(record?.date || "").slice(0, 10) !== normalizedDate);
             if (filtered.length > 0) {
                 next[exName] = filtered;
             }
@@ -1403,7 +1403,7 @@ export default function GymApp() {
 
         Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
             (records || []).forEach((record) => {
-                const recordDate = String(record?.date || "");
+                const recordDate = String(record?.date || "").slice(0, 10);
                 if (!recordDate) return;
                 restoredDates.add(recordDate);
                 restoredRecords.add(buildHistoryRecordDeleteKey(recordDate, exerciseName));
@@ -2720,7 +2720,7 @@ export default function GymApp() {
         persistHistoryForUser(user?.id, nextHistory);
 
         const recordMarkers = Object.entries(currentHistory || {})
-            .filter(([, recs]) => (recs || []).some((record) => record?.date === normalizedTargetDate))
+            .filter(([, recs]) => (recs || []).some((record) => String(record?.date || "").slice(0, 10) === normalizedTargetDate))
             .map(([exName]) => buildHistoryRecordDeleteKey(normalizedTargetDate, exName));
 
         appendHistoryDeleteMarkers({
@@ -3033,11 +3033,7 @@ export default function GymApp() {
                             workoutTimerStatus={displayedWorkoutTimerStatus}
                             onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
                             resetSession={() => {
-                                setSessionEx(null);
-                                setLogData({});
-                                setExerciseUnits({});
-                                clearDraftForDate(logDate);
-                                resetWorkoutElapsedTimer();
+                                deleteAllHistoryForDate(logDate);
                             }}
                         />
                             );
