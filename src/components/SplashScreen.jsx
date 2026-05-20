@@ -2,18 +2,13 @@ import { useEffect, useState } from "react";
 
 export default function SplashScreen({ visible }) {
   const [mounted, setMounted] = useState(visible);
-  const [entered, setEntered] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      const frameId = window.requestAnimationFrame(() => {
-        setEntered(true);
-      });
-      return () => window.cancelAnimationFrame(frameId);
+      return undefined;
     }
 
-    setEntered(false);
     const timeoutId = window.setTimeout(() => {
       setMounted(false);
     }, 220);
@@ -34,8 +29,8 @@ export default function SplashScreen({ visible }) {
         alignItems: "center",
         justifyContent: "center",
         background: "#F7FBFC",
-        opacity: visible && entered ? 1 : 0,
-        transition: "opacity 220ms ease",
+        opacity: visible ? 1 : 0,
+        transition: visible ? "none" : "opacity 220ms ease",
         pointerEvents: visible ? "auto" : "none",
       }}
       aria-hidden={!visible}
