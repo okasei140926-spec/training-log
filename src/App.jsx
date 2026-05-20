@@ -924,15 +924,22 @@ export default function GymApp() {
         await Promise.all(
             normalizedDates.map(async (workoutDate) => {
                 try {
-                    const { error } = await supabase
-                        .from("workouts")
-                        .upsert({
-                            user_id: userId,
-                            date: workoutDate,
-                            data: historyMap,
-                        }, {
-                            onConflict: "user_id,date",
-                        });
+                    const hasWorkoutForDate = hasValidWorkoutOnDate(historyMap, workoutDate);
+                    const { error } = hasWorkoutForDate
+                        ? await supabase
+                            .from("workouts")
+                            .upsert({
+                                user_id: userId,
+                                date: workoutDate,
+                                data: historyMap,
+                            }, {
+                                onConflict: "user_id,date",
+                            })
+                        : await supabase
+                            .from("workouts")
+                            .delete()
+                            .eq("user_id", userId)
+                            .eq("date", workoutDate);
 
                     if (error) throw error;
                     clearSyncFailure(workoutDate);
@@ -953,6 +960,45 @@ export default function GymApp() {
 
         return results;
     }, [clearSyncFailure, recordSyncFailure]);
+
+    const deleteRemoteWorkoutArtifactsForDate = useCallback(async (userId, workoutDate) => {
+        const normalizedDate = String(workoutDate || "").trim();
+        if (!userId || !normalizedDate) return;
+
+        const { data: sessionRows, error: sessionFetchError } = await supabase
+            .from("workout_sessions")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("workout_date", normalizedDate);
+
+        if (sessionFetchError) throw sessionFetchError;
+
+        const sessionIds = (sessionRows || []).map((session) => session.id).filter(Boolean);
+
+        if (sessionIds.length > 0) {
+            const { error: deleteExercisesError } = await supabase
+                .from("workout_session_exercises")
+                .delete()
+                .in("session_id", sessionIds);
+
+            if (deleteExercisesError) throw deleteExercisesError;
+
+            const { error: deleteSessionsError } = await supabase
+                .from("workout_sessions")
+                .delete()
+                .in("id", sessionIds);
+
+            if (deleteSessionsError) throw deleteSessionsError;
+        }
+
+        const { error: deleteWorkoutError } = await supabase
+            .from("workouts")
+            .delete()
+            .eq("user_id", userId)
+            .eq("date", normalizedDate);
+
+        if (deleteWorkoutError) throw deleteWorkoutError;
+    }, []);
 
     const refreshHistorySyncDiagnostic = useCallback(async (userId, historyMap, { prefix = "" } = {}) => {
         if (!userId) {
@@ -2081,6 +2127,7 @@ export default function GymApp() {
         const isNameOnly = maybeName === undefined;
         const targetId = isNameOnly ? null : idOrName;
         const targetName = isNameOnly ? idOrName : maybeName;
+        let shouldClearDateArtifacts = false;
 
         setSessionEx(p =>
             (p !== null ? p : [...baseExercises]).filter(e => {
@@ -2125,12 +2172,46 @@ export default function GymApp() {
                 delete next[targetName];
             }
 
+            shouldClearDateArtifacts = !Object.values(next).some((records) =>
+                (records || []).some((record) => record?.date === logDate)
+            );
+
             return next;
         });
 
         appendHistoryDeleteMarkers({
             records: [buildHistoryRecordDeleteKey(logDate, targetName)],
         });
+
+        if (shouldClearDateArtifacts) {
+            appendHistoryDeleteMarkers({ dates: [logDate] });
+            clearDraftForDate(logDate);
+            setSavedWorkoutDurationSecByDate((prev) => {
+                if (!prev[logDate]) return prev;
+                const next = { ...prev };
+                delete next[logDate];
+                return next;
+            });
+            if (summary?.date === logDate) setSummary(null);
+            if (workoutDayShareTarget?.workoutDate === logDate) setWorkoutDayShareTarget(null);
+            if (workoutStartedForDate === logDate) resetWorkoutElapsedTimer();
+            if (user?.id) {
+                deleteRemoteWorkoutArtifactsForDate(user.id, logDate)
+                    .then(() => {
+                        clearSyncFailure(logDate);
+                        setSessionSyncVersion((prev) => prev + 1);
+                    })
+                    .catch((error) => {
+                        recordSyncFailure(logDate, error, "delete_workout_artifacts");
+                        console.error("workout date artifact delete failed", {
+                            error,
+                            userId: user.id,
+                            workoutDate: logDate,
+                        });
+                    });
+            }
+        }
+
         queueWorkoutSessionSync(logDate);
     };
 
@@ -2433,6 +2514,9 @@ export default function GymApp() {
     };
 
     const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
+        let shouldClearDateArtifacts = false;
+        let deletedTargetDate = recordDate;
+
         setHistory(prev => {
             const recs = [...(prev[exName] || [])];
             const idx = historyIdx !== undefined
@@ -2441,6 +2525,7 @@ export default function GymApp() {
 
             if (idx < 0 || idx >= recs.length) return prev;
             const targetDate = recordDate || recs[idx]?.date;
+            deletedTargetDate = targetDate;
 
             // セット単位削除
             if (setIdx !== undefined) {
@@ -2469,10 +2554,17 @@ export default function GymApp() {
                 if (!recs.length) {
                     const next = { ...prev };
                     delete next[exName];
+                    shouldClearDateArtifacts = !Object.values(next).some((records) =>
+                        (records || []).some((record) => record?.date === targetDate)
+                    );
                     return next;
                 }
 
-                return { ...prev, [exName]: recs };
+                const next = { ...prev, [exName]: recs };
+                shouldClearDateArtifacts = !Object.values(next).some((records) =>
+                    (records || []).some((record) => record?.date === targetDate)
+                );
+                return next;
             }
 
             // 記録単位削除
@@ -2484,11 +2576,48 @@ export default function GymApp() {
             if (!recs.length) {
                 const next = { ...prev };
                 delete next[exName];
+                shouldClearDateArtifacts = !Object.values(next).some((records) =>
+                    (records || []).some((record) => record?.date === targetDate)
+                );
                 return next;
             }
 
-            return { ...prev, [exName]: recs };
+            const next = { ...prev, [exName]: recs };
+            shouldClearDateArtifacts = !Object.values(next).some((records) =>
+                (records || []).some((record) => record?.date === targetDate)
+            );
+            return next;
         });
+
+        if (shouldClearDateArtifacts && deletedTargetDate) {
+            appendHistoryDeleteMarkers({ dates: [deletedTargetDate] });
+            clearDraftForDate(deletedTargetDate);
+            setSavedWorkoutDurationSecByDate((prev) => {
+                if (!prev[deletedTargetDate]) return prev;
+                const next = { ...prev };
+                delete next[deletedTargetDate];
+                return next;
+            });
+            if (summary?.date === deletedTargetDate) setSummary(null);
+            if (workoutDayShareTarget?.workoutDate === deletedTargetDate) setWorkoutDayShareTarget(null);
+            if (workoutStartedForDate === deletedTargetDate) resetWorkoutElapsedTimer();
+            if (user?.id) {
+                deleteRemoteWorkoutArtifactsForDate(user.id, deletedTargetDate)
+                    .then(() => {
+                        clearSyncFailure(deletedTargetDate);
+                        setSessionSyncVersion((prev) => prev + 1);
+                    })
+                    .catch((error) => {
+                        recordSyncFailure(deletedTargetDate, error, "delete_workout_artifacts");
+                        console.error("workout date artifact delete failed", {
+                            error,
+                            userId: user.id,
+                            workoutDate: deletedTargetDate,
+                        });
+                    });
+            }
+        }
+
         queueWorkoutSessionSync(recordDate);
 
         // ===== draft側も更新する =====
@@ -2547,12 +2676,15 @@ export default function GymApp() {
     };
 
     const deleteAllHistoryForDate = (targetDate) => {
+        const normalizedTargetDate = String(targetDate || "").trim();
+        if (!normalizedTargetDate) return;
+
         const recordMarkers = Object.entries(history || {})
-            .filter(([, recs]) => (recs || []).some((record) => record?.date === targetDate))
-            .map(([exName]) => buildHistoryRecordDeleteKey(targetDate, exName));
+            .filter(([, recs]) => (recs || []).some((record) => record?.date === normalizedTargetDate))
+            .map(([exName]) => buildHistoryRecordDeleteKey(normalizedTargetDate, exName));
 
         appendHistoryDeleteMarkers({
-            dates: [targetDate],
+            dates: [normalizedTargetDate],
             records: recordMarkers,
         });
 
@@ -2560,7 +2692,7 @@ export default function GymApp() {
             const next = {};
 
             Object.entries(prev).forEach(([exName, recs]) => {
-                const filtered = (recs || []).filter((r) => r.date !== targetDate);
+                const filtered = (recs || []).filter((r) => r.date !== normalizedTargetDate);
                 if (filtered.length > 0) {
                     next[exName] = filtered;
                 }
@@ -2568,10 +2700,11 @@ export default function GymApp() {
 
             return next;
         });
-        queueWorkoutSessionSync(targetDate);
+        queueWorkoutSessionSync(normalizedTargetDate);
+        pendingWorkoutSessionSyncDatesRef.current.delete(normalizedTargetDate);
 
         // その日が今の編集中なら画面上の状態も消す
-        if (logDate === targetDate) {
+        if (logDate === normalizedTargetDate) {
             setTodayLabels([]);
             setLogData({});
             setSessionEx(null);
@@ -2579,7 +2712,35 @@ export default function GymApp() {
         }
 
         // その日のdraftも消す
-        clearDraftForDate(targetDate);
+        clearDraftForDate(normalizedTargetDate);
+        setSavedWorkoutDurationSecByDate((prev) => {
+            if (!prev[normalizedTargetDate]) return prev;
+            const next = { ...prev };
+            delete next[normalizedTargetDate];
+            return next;
+        });
+        if (summary?.date === normalizedTargetDate) setSummary(null);
+        if (workoutDayShareTarget?.workoutDate === normalizedTargetDate) setWorkoutDayShareTarget(null);
+        if (workoutStartedForDate === normalizedTargetDate) resetWorkoutElapsedTimer();
+
+        if (user?.id) {
+            deleteRemoteWorkoutArtifactsForDate(user.id, normalizedTargetDate)
+                .then(() => {
+                    clearSyncFailure(normalizedTargetDate);
+                    refreshHistorySyncDiagnostic(user.id, latestHistoryRef.current, {
+                        prefix: normalizedTargetDate.slice(0, 7),
+                    });
+                    setSessionSyncVersion((prev) => prev + 1);
+                })
+                .catch((error) => {
+                    recordSyncFailure(normalizedTargetDate, error, "delete_workout_artifacts");
+                    console.error("workout date artifact delete failed", {
+                        error,
+                        userId: user.id,
+                        workoutDate: normalizedTargetDate,
+                    });
+                });
+        }
     };
 
     // ─── 設定画面用 exercise 追加 ──────────────────────
