@@ -240,6 +240,7 @@ export default function GymApp() {
             getDraftKey("draft_logData", dateStr),
             getDraftKey("draft_sessionEx", dateStr),
             getDraftKey("draft_exerciseUnits", dateStr),
+            getDraftKey("draft_exercises", dateStr),
         ].forEach((key) => {
             try {
                 localStorage.removeItem(key);
@@ -254,6 +255,21 @@ export default function GymApp() {
             save("draft_logDate", "");
         }
     }, [getDraftKey]);
+
+    const removeHistoryDate = useCallback((historyMap, targetDate) => {
+        const normalizedDate = String(targetDate || "").trim();
+        if (!normalizedDate) return historyMap || {};
+
+        const next = {};
+        Object.entries(historyMap || {}).forEach(([exName, recs]) => {
+            const filtered = (recs || []).filter((record) => record?.date !== normalizedDate);
+            if (filtered.length > 0) {
+                next[exName] = filtered;
+            }
+        });
+
+        return next;
+    }, []);
 
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
@@ -961,7 +977,7 @@ export default function GymApp() {
         return results;
     }, [clearSyncFailure, recordSyncFailure]);
 
-    const deleteRemoteWorkoutArtifactsForDate = useCallback(async (userId, workoutDate) => {
+    const deleteRemoteWorkoutArtifactsForDate = useCallback(async (userId, workoutDate, nextHistoryMap = null) => {
         const normalizedDate = String(workoutDate || "").trim();
         if (!userId || !normalizedDate) return;
 
@@ -998,6 +1014,24 @@ export default function GymApp() {
             .eq("date", normalizedDate);
 
         if (deleteWorkoutError) throw deleteWorkoutError;
+
+        if (nextHistoryMap) {
+            const remainingDates = getValidWorkoutDatesFromHistory(nextHistoryMap);
+            if (remainingDates.length > 0) {
+                const { error: updateRemainingError } = await supabase
+                    .from("workouts")
+                    .upsert(
+                        remainingDates.map((date) => ({
+                            user_id: userId,
+                            date,
+                            data: nextHistoryMap,
+                        })),
+                        { onConflict: "user_id,date" }
+                    );
+
+                if (updateRemainingError) throw updateRemainingError;
+            }
+        }
     }, []);
 
     const refreshHistorySyncDiagnostic = useCallback(async (userId, historyMap, { prefix = "" } = {}) => {
@@ -2679,7 +2713,13 @@ export default function GymApp() {
         const normalizedTargetDate = String(targetDate || "").trim();
         if (!normalizedTargetDate) return;
 
-        const recordMarkers = Object.entries(history || {})
+        const currentHistory = latestHistoryRef.current || history || {};
+        const nextHistory = removeHistoryDate(currentHistory, normalizedTargetDate);
+        latestHistoryRef.current = nextHistory;
+        historyRevisionRef.current += 1;
+        persistHistoryForUser(user?.id, nextHistory);
+
+        const recordMarkers = Object.entries(currentHistory || {})
             .filter(([, recs]) => (recs || []).some((record) => record?.date === normalizedTargetDate))
             .map(([exName]) => buildHistoryRecordDeleteKey(normalizedTargetDate, exName));
 
@@ -2688,18 +2728,7 @@ export default function GymApp() {
             records: recordMarkers,
         });
 
-        setHistory((prev) => {
-            const next = {};
-
-            Object.entries(prev).forEach(([exName, recs]) => {
-                const filtered = (recs || []).filter((r) => r.date !== normalizedTargetDate);
-                if (filtered.length > 0) {
-                    next[exName] = filtered;
-                }
-            });
-
-            return next;
-        });
+        setHistory(nextHistory);
         queueWorkoutSessionSync(normalizedTargetDate);
         pendingWorkoutSessionSyncDatesRef.current.delete(normalizedTargetDate);
 
@@ -2724,10 +2753,10 @@ export default function GymApp() {
         if (workoutStartedForDate === normalizedTargetDate) resetWorkoutElapsedTimer();
 
         if (user?.id) {
-            deleteRemoteWorkoutArtifactsForDate(user.id, normalizedTargetDate)
+            deleteRemoteWorkoutArtifactsForDate(user.id, normalizedTargetDate, nextHistory)
                 .then(() => {
                     clearSyncFailure(normalizedTargetDate);
-                    refreshHistorySyncDiagnostic(user.id, latestHistoryRef.current, {
+                    refreshHistorySyncDiagnostic(user.id, nextHistory, {
                         prefix: normalizedTargetDate.slice(0, 7),
                     });
                     setSessionSyncVersion((prev) => prev + 1);
