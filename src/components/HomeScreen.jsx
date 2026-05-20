@@ -331,7 +331,7 @@ function collectWeeklySets(history, muscleEx, overrides) {
     return map;
 }
 
-function collectRecentSessions(history, muscleEx, overrides) {
+function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecByDate = {}) {
     const sessions = {};
 
     Object.entries(history || {}).forEach(([exName, records]) => {
@@ -591,7 +591,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
     ), [history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
 
     const recentSessions = useMemo(() => (
-        collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides)
+        collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
     ), [history, muscleEx, exerciseBodyPartOverrides]);
 
     const weeklyDisplay = partsToShow
