@@ -42,6 +42,9 @@ const VOLUME_PERIOD_TABS = [
     { key: "thisMonth", label: "今月" },
     { key: "lastMonth", label: "先月" },
 ];
+const MAX_RANKING_SET_WEIGHT_KG = 1000;
+const MAX_RANKING_SET_REPS = 1000;
+const MAX_RANKING_MONTHLY_VOLUME_KG = 1000000;
 const STALE_MS = 30000;
 const EMPTY_FRIEND_SESSION_INSIGHTS = {
     rawMonthlySessions: [],
@@ -233,8 +236,7 @@ export default function FriendsScreen({
     }, []);
 
     const computeVolumeFromHistoryForRange = useCallback((historyData, range) => {
-        return Math.round(
-            Object.values(historyData || {}).reduce((total, records) => (
+        const totalVolume = Object.values(historyData || {}).reduce((total, records) => (
                 total + (records || []).reduce((recordTotal, record) => {
                     const recordDate = String(record?.date || "").slice(0, 10);
                     if (!recordDate || recordDate < range.start || recordDate > range.end) return recordTotal;
@@ -244,13 +246,25 @@ export default function FriendsScreen({
                         const reps = Number(set?.reps);
                         if (!Number.isFinite(weight) || weight <= 0) return sum;
                         if (!Number.isFinite(reps) || reps <= 0) return sum;
-                        return sum + weight * reps;
+                        if (weight > MAX_RANKING_SET_WEIGHT_KG) return sum;
+                        if (reps > MAX_RANKING_SET_REPS) return sum;
+
+                        const volume = weight * reps;
+                        if (!Number.isFinite(volume) || volume < 0) return sum;
+
+                        const nextSum = sum + volume;
+                        if (!Number.isFinite(nextSum)) return sum;
+                        return nextSum;
                     }, 0);
 
                     return recordTotal + setVolume;
                 }, 0)
-            ), 0)
-        );
+        ), 0);
+
+        if (!Number.isFinite(totalVolume) || totalVolume < 0) return 0;
+        if (totalVolume > MAX_RANKING_MONTHLY_VOLUME_KG) return null;
+
+        return Math.round(totalVolume);
     }, [getRecordSets]);
 
     const matchBig3Exercise = useCallback((name) => {
@@ -1559,7 +1573,9 @@ export default function FriendsScreen({
             value: computeVolumeFromHistoryForRange(friend.history, volumePeriodRange),
             avatarUrl: friend.avatar1_url || null,
         })),
-    ].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
+    ]
+        .filter((entry) => entry.value !== null)
+        .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, "ja"));
 
     useEffect(() => {
         if (!user?.id) return;
