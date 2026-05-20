@@ -158,12 +158,24 @@ export default function LogScreen({
         };
     }, { prCount: 0, totalVolumeKg: 0 });
     const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
-    const sessionSharePayload = buildWorkoutSessionPayloadFromDraft({
+    const rawSessionSharePayload = buildWorkoutSessionPayloadFromDraft({
         exercises,
         logData,
         getExUnit,
         workoutDate: logDate,
     });
+    const sessionSharePayload = rawSessionSharePayload
+        ? {
+            ...rawSessionSharePayload,
+            session: {
+                ...rawSessionSharePayload.session,
+                summary_json: {
+                    ...(rawSessionSharePayload.session?.summary_json || {}),
+                    prCount,
+                },
+            },
+        }
+        : null;
     const confirmEdit = (ex) => {
         const trimmed = editingName.trim();
         if (trimmed && trimmed !== ex) onRenameEx(ex.id, trimmed);
@@ -293,7 +305,7 @@ export default function LogScreen({
                             fontWeight: 700,
                         }}
                     >
-                        シェアカード
+                        共有
                     </button>
                 )}
             </div>

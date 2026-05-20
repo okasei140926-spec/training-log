@@ -3785,6 +3785,7 @@ export default function GymApp() {
                         onOpenWorkoutDaySummary={(nextSummary) => {
                             setSummary(nextSummary);
                         }}
+                        onOpenWorkoutDayShare={openWorkoutDayShareModal}
                     />
                 )}
 

@@ -116,6 +116,7 @@ export default function HistoryScreen({
   onDeleteManualBest,
   onAddCustomBodyPart,
   onOpenWorkoutDaySummary,
+  onOpenWorkoutDayShare,
   workoutDurationSecByDate = {},
 }) {
   const [editTarget, setEditTarget] = useState(null);
@@ -680,8 +681,7 @@ export default function HistoryScreen({
       }
 
       const sessionPayload = buildWorkoutSessionPayloadFromHistory(history, normalizedDate);
-      onOpenWorkoutDaySummary(
-        buildWorkoutDaySummary({
+      const nextSummary = buildWorkoutDaySummary({
           title: options.title || `${normalizedDate} のサマリー`,
           date: normalizedDate,
           entries,
@@ -703,8 +703,13 @@ export default function HistoryScreen({
                 },
               }
             : null,
-        })
-      );
+        });
+
+      if (options.open !== false) {
+        onOpenWorkoutDaySummary(nextSummary);
+      }
+
+      return nextSummary;
     },
     [
       onOpenWorkoutDaySummary,
@@ -932,7 +937,7 @@ export default function HistoryScreen({
                 marginBottom: 4,
               }}
             >
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                 <button
                   type="button"
                   onClick={async () => {
@@ -952,6 +957,46 @@ export default function HistoryScreen({
                   }}
                 >
                   サマリーを見る
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const targetDate = selectedDate;
+                    const nextSummary = await handleOpenDaySummary(targetDate, {
+                      title: `${formatSlashDate(targetDate)} の記録`,
+                      open: false,
+                    });
+                    setSelectedDate(null);
+                    if (nextSummary?.shareTarget) {
+                      const shareSessionPayload = nextSummary.shareTarget.sessionPayload;
+                      onOpenWorkoutDayShare?.({
+                        ...nextSummary.shareTarget,
+                        sessionPayload: {
+                          ...shareSessionPayload,
+                          session: {
+                            ...shareSessionPayload.session,
+                            summary_json: {
+                              ...(shareSessionPayload.session?.summary_json || {}),
+                              prCount: nextSummary.prCount,
+                            },
+                          },
+                        },
+                      });
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    borderRadius: 18,
+                    padding: "15px 12px",
+                    fontSize: 14,
+                    fontWeight: 800,
+                    background: "linear-gradient(135deg, #0F5E63, #12C7C2)",
+                    color: "#fff",
+                    border: "1px solid rgba(18, 199, 194, 0.18)",
+                    boxShadow: "0 10px 22px rgba(15, 94, 99, 0.12)",
+                  }}
+                >
+                  シェア
                 </button>
                 <button
                   type="button"

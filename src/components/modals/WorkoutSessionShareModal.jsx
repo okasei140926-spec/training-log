@@ -3,11 +3,19 @@ import { toBlob } from "html-to-image";
 import { formatSetCountByBodyPart } from "../../utils/setCountByBodyPart";
 
 const CARD_PRESETS = {
+    square: {
+        key: "square",
+        label: "1:1",
+        width: 360,
+        height: 360,
+        scale: 0.84,
+    },
     story: {
         key: "story",
         label: "9:16",
         width: 360,
         height: 640,
+        scale: 0.58,
     },
 };
 
@@ -49,7 +57,7 @@ export default function WorkoutSessionShareModal({
     sessionPayload,
     photoRows = [],
 }) {
-    const [sizeKey] = useState("story");
+    const [sizeKey, setSizeKey] = useState("story");
     const [sharing, setSharing] = useState(false);
     const cardRef = useRef(null);
     const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
@@ -82,10 +90,13 @@ export default function WorkoutSessionShareModal({
         return "まだありません";
     }, [items, summary]);
 
-    const visibleItems = useMemo(() => items, [items]);
+    const visibleItems = useMemo(() => items.slice(0, sizeKey === "story" ? 7 : 5), [items, sizeKey]);
+    const hiddenItemCount = Math.max(0, items.length - visibleItems.length);
     const durationLabel = formatDuration(sessionPayload?.session?.duration_sec);
     const totalSetLabel = `${Number(summary?.setCount || 0)}セット`;
     const totalVolumeLabel = `${Math.round(Number(summary?.totalVolume || 0)).toLocaleString("ja-JP")}kg`;
+    const prCount = Number(summary?.prCount || 0);
+    const previewScale = preset.scale || 0.58;
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -136,16 +147,21 @@ export default function WorkoutSessionShareModal({
         setSharing(true);
 
         try {
+            if (document.fonts?.ready) {
+                await document.fonts.ready;
+            }
+
             const blob = await toBlob(cardRef.current, {
                 pixelRatio: 3,
                 cacheBust: true,
+                backgroundColor: "#05070b",
             });
 
             if (!blob) {
                 throw new Error("session share card blob generation failed");
             }
 
-            const file = new File([blob], `iron-log-${workoutDate}-${preset.key}.png`, {
+            const file = new File([blob], `pump-workout-${workoutDate}-${preset.key}.png`, {
                 type: "image/png",
             });
 
@@ -234,114 +250,154 @@ export default function WorkoutSessionShareModal({
                         padding: "0 18px calc(18px + var(--safe-bottom, 0px))",
                     }}
                 >
-                    {photoRows.length > 0 && (
-                        <div style={{ marginBottom: 12, fontSize: 11, color: "var(--text3)" }}>
-                            写真はこのカードでは表示せず、ワークアウト内容を優先しています
-                        </div>
-                    )}
+                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                        {Object.values(CARD_PRESETS).map((option) => (
+                            <button
+                                key={option.key}
+                                type="button"
+                                onClick={() => setSizeKey(option.key)}
+                                style={{
+                                    padding: "8px 12px",
+                                    borderRadius: 999,
+                                    border: "1px solid rgba(18, 199, 194, 0.12)",
+                                    background: sizeKey === option.key
+                                        ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                                        : "var(--card2)",
+                                    color: sizeKey === option.key ? "#fff" : "var(--text2)",
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                }}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
 
-                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, overflow: "hidden" }}>
                         <div
-                            ref={cardRef}
                             style={{
-                                width: preset.width,
-                                minHeight: preset.height,
-                                borderRadius: 28,
+                                width: preset.width * previewScale,
+                                height: preset.height * previewScale,
                                 overflow: "hidden",
-                                background:
-                                    "radial-gradient(circle at top right, rgba(51,225,219,0.18), transparent 28%), radial-gradient(circle at bottom left, rgba(15,94,99,0.18), transparent 26%), linear-gradient(165deg, #05070b 0%, #0b1220 42%, #111827 100%)",
-                                border: "1px solid rgba(255,255,255,0.08)",
-                                boxShadow: "0 30px 60px rgba(15, 23, 42, 0.24)",
-                                display: "flex",
-                                flexDirection: "column",
+                                borderRadius: 22,
+                                boxShadow: "0 24px 48px rgba(15, 23, 42, 0.18)",
                                 flexShrink: 0,
                             }}
                         >
                             <div
                                 style={{
-                                    width: "100%",
-                                    height: 68,
-                                    background: "transparent",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    padding: "0 24px",
-                                    boxSizing: "border-box",
+                                    width: preset.width,
+                                    height: preset.height,
+                                    transform: `scale(${previewScale})`,
+                                    transformOrigin: "top left",
                                 }}
                             >
-                                <div style={{ fontSize: 13, letterSpacing: 3.2, color: "rgba(255,255,255,0.68)", fontWeight: 800 }}>
-                                    PUMP
-                                </div>
-                            </div>
-
-                        <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                                <div>
-                                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", marginBottom: 6 }}>{dateLabel}</div>
-                                    <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", lineHeight: 1.12 }}>
-                                        今日のワークアウト
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div
-                                style={{
-                                    background: "rgba(17, 24, 39, 0.72)",
-                                    borderRadius: 20,
-                                    border: "1px solid rgba(56,189,248,0.14)",
-                                    padding: "14px 15px",
-                                    display: "grid",
-                                    gap: 8,
-                                }}
-                            >
-                                <div style={{ fontSize: 16, fontWeight: 800, color: "#E6FFFD", lineHeight: 1.4 }}>
-                                    {setCountByBodyPartLabel}
-                                </div>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                                    <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(18,199,194,0.12)", border: "1px solid rgba(18,199,194,0.22)", color: "#7DE7E2", fontSize: 12, fontWeight: 800 }}>
-                                        {totalSetLabel}
-                                    </div>
-                                    <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.18)", color: "#C9F7FF", fontSize: 12, fontWeight: 800 }}>
-                                        {totalVolumeLabel}
-                                    </div>
-                                    {durationLabel ? (
-                                        <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(249,115,22,0.10)", border: "1px solid rgba(249,115,22,0.18)", color: "#FDBA74", fontSize: 12, fontWeight: 800 }}>
-                                            {durationLabel}
+                                <div
+                                    ref={cardRef}
+                                    style={{
+                                        width: preset.width,
+                                        height: preset.height,
+                                        borderRadius: 28,
+                                        overflow: "hidden",
+                                        background:
+                                            "radial-gradient(circle at 85% 8%, rgba(251, 146, 60, 0.34), transparent 28%), radial-gradient(circle at 10% 88%, rgba(18,199,194,0.26), transparent 30%), linear-gradient(160deg, #05070b 0%, #111827 48%, #27140b 100%)",
+                                        border: "1px solid rgba(255,255,255,0.10)",
+                                        boxShadow: "0 30px 60px rgba(15, 23, 42, 0.24)",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        color: "#fff",
+                                        boxSizing: "border-box",
+                                        padding: sizeKey === "story" ? "28px 24px 24px" : "20px",
+                                    }}
+                                >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: sizeKey === "story" ? 22 : 14 }}>
+                                        <div>
+                                            <div style={{ fontSize: 11, letterSpacing: 3.2, color: "rgba(255,255,255,0.62)", fontWeight: 900, marginBottom: 8 }}>
+                                                PUMP
+                                            </div>
+                                            <div style={{ fontSize: sizeKey === "story" ? 13 : 11, color: "rgba(255,255,255,0.74)", fontWeight: 700 }}>
+                                                {dateLabel}
+                                            </div>
                                         </div>
-                                    ) : null}
-                                </div>
-                            </div>
-
-                            <div style={{ display: "grid", gap: 10, flex: 1 }}>
-                                {visibleItems.map((item) => (
-                                    <div
-                                        key={`${item.body_part || ""}-${item.exercise_name}`}
-                                        style={{
-                                            background: "rgba(17, 24, 39, 0.72)",
-                                            borderRadius: 18,
-                                            padding: "12px 14px",
-                                            border: "1px solid rgba(56,189,248,0.12)",
-                                        }}
-                                    >
-                                        <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
-                                            {item.exercise_name}
+                                        <div style={{ padding: "7px 10px", borderRadius: 999, background: "rgba(18,199,194,0.14)", border: "1px solid rgba(18,199,194,0.28)", color: "#7DE7E2", fontSize: 10, fontWeight: 900 }}>
+                                            WORKOUT
                                         </div>
-                                        <div style={{ display: "grid", gap: 4 }}>
-                                            {Array.isArray(item.sets) && item.sets.length > 0 ? (
-                                                item.sets.map((set, index) => (
-                                                    <div key={`${item.exercise_name}-${index}`} style={{ fontSize: 13, color: "rgba(255,255,255,0.84)", lineHeight: 1.45 }}>
-                                                        {formatSetLine(set)}
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.72)", lineHeight: 1.5 }}>
-                                                    最大 {getMaxWeightLabel(item.max_weight)}
+                                    </div>
+
+                                    <div style={{ marginBottom: sizeKey === "story" ? 22 : 14 }}>
+                                        <div style={{ fontSize: sizeKey === "story" ? 46 : 32, fontWeight: 950, lineHeight: 0.95, letterSpacing: -0.5 }}>
+                                            {totalVolumeLabel}
+                                        </div>
+                                        <div style={{ marginTop: 10, fontSize: sizeKey === "story" ? 18 : 13, color: "#E6FFFD", fontWeight: 900, lineHeight: 1.35 }}>
+                                            {setCountByBodyPartLabel}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: sizeKey === "story" ? 18 : 12 }}>
+                                        {[
+                                            { label: "SETS", value: totalSetLabel },
+                                            { label: "PR", value: `${prCount}件` },
+                                            { label: "TIME", value: durationLabel || "-" },
+                                        ].map((metric) => (
+                                            <div key={metric.label} style={{ borderRadius: 16, background: "rgba(17, 24, 39, 0.72)", border: "1px solid rgba(255,255,255,0.10)", padding: "10px 9px" }}>
+                                                <div style={{ fontSize: 9, letterSpacing: 1.4, color: "rgba(255,255,255,0.46)", fontWeight: 800 }}>
+                                                    {metric.label}
                                                 </div>
-                                            )}
-                                        </div>
+                                                <div style={{ marginTop: 5, fontSize: sizeKey === "story" ? 16 : 13, color: "#fff", fontWeight: 950, whiteSpace: "nowrap" }}>
+                                                    {metric.value}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+
+                                    <div style={{ display: "grid", gap: sizeKey === "story" ? 8 : 6, flex: 1, minHeight: 0 }}>
+                                        {visibleItems.map((item) => {
+                                            const bestSet = item.best_set_json?.weight
+                                                ? `${getMaxWeightLabel(item.best_set_json.weight)} × ${Number(item.best_set_json.reps || 0)}`
+                                                : Array.isArray(item.sets) && item.sets.length > 0
+                                                    ? formatSetLine(item.sets[0])
+                                                    : `最大 ${getMaxWeightLabel(item.max_weight)}`;
+
+                                            return (
+                                                <div
+                                                    key={`${item.body_part || ""}-${item.exercise_name}`}
+                                                    style={{
+                                                        background: "rgba(17, 24, 39, 0.70)",
+                                                        borderRadius: 15,
+                                                        padding: sizeKey === "story" ? "10px 12px" : "8px 10px",
+                                                        border: "1px solid rgba(255,255,255,0.08)",
+                                                        display: "grid",
+                                                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                                                        alignItems: "center",
+                                                        gap: 10,
+                                                    }}
+                                                >
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontSize: sizeKey === "story" ? 14 : 12, fontWeight: 900, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                            {item.exercise_name}
+                                                        </div>
+                                                        <div style={{ marginTop: 3, fontSize: 10, color: "rgba(255,255,255,0.52)", fontWeight: 800 }}>
+                                                            {item.set_count || item.sets?.length || 0} set
+                                                        </div>
+                                                    </div>
+                                                    <div style={{ fontSize: sizeKey === "story" ? 14 : 12, fontWeight: 950, color: "#7DE7E2", whiteSpace: "nowrap" }}>
+                                                        {bestSet}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {hiddenItemCount > 0 && (
+                                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.54)", fontWeight: 800, textAlign: "center", paddingTop: 2 }}>
+                                                +{hiddenItemCount} exercises
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ marginTop: sizeKey === "story" ? 14 : 8, fontSize: 10, color: "rgba(255,255,255,0.42)", letterSpacing: 2 }}>
+                                        SHARE YOUR PUMP
+                                    </div>
+                                </div>
                             </div>
-                        </div>
                         </div>
                     </div>
 

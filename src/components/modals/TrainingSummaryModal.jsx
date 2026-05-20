@@ -7,6 +7,12 @@ const CARD_PRESETS = {
   story: { key: "story", label: "9:16" },
 };
 
+const getCardDimensions = (sizeKey) => ({
+  width: 360,
+  height: sizeKey === "story" ? 640 : 360,
+  scale: sizeKey === "story" ? 0.54 : 0.86,
+});
+
 const downloadBlob = (blob, fileName) => {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -99,6 +105,8 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   }, [isOpen]);
 
   if (!isOpen || !summary) return null;
+
+  const preview = getCardDimensions(sizeKey);
 
   const handleShare = async () => {
     if (!cardRef.current || sharing) return;
@@ -301,28 +309,26 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             display: "flex",
             justifyContent: "center",
             marginBottom: 14,
-            overflowY: "auto",
-            overflowX: "hidden",
-            overscrollBehaviorX: "none",
+            overflow: "hidden",
             width: "100%",
           }}
         >
           <div
             style={{
-              width: sizeKey === "story" ? 360 * 0.54 : 360 * 0.86,
-              height: sizeKey === "story" ? 640 * 0.54 : 360 * 0.86,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "flex-start",
-              overflowY: "auto",
-            overflowX: "hidden",
-            overscrollBehaviorX: "none",
+              width: preview.width * preview.scale,
+              height: preview.height * preview.scale,
+              overflow: "hidden",
+              borderRadius: sizeKey === "story" ? 20 : 18,
+              boxShadow: "0 18px 38px rgba(15, 23, 42, 0.16)",
+              flexShrink: 0,
             }}
           >
             <div
               style={{
-                transform: sizeKey === "story" ? "scale(0.54)" : "scale(0.86)",
-                transformOrigin: "top center",
+                width: preview.width,
+                height: preview.height,
+                transform: `scale(${preview.scale})`,
+                transformOrigin: "top left",
               }}
             >
               <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} />
