@@ -4,6 +4,7 @@ const supabaseUrl =
   process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey =
   process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase =
   supabaseUrl && supabaseAnonKey
@@ -15,9 +16,28 @@ const supabase =
       })
     : null;
 
+const adminSupabase =
+  supabaseUrl && supabaseServiceRoleKey
+    ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      })
+    : null;
+
+const AI_DAILY_LIMIT = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 12;
 const rateLimitStore = new Map();
+
+const getTodayKeyInTokyo = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
 function getBearerToken(req) {
   const header = req.headers.authorization || req.headers.Authorization || "";
@@ -49,13 +69,58 @@ function checkRateLimit(userId) {
   return { allowed: true };
 }
 
+async function reserveAiChatUsage(userId) {
+  const usageDate = getTodayKeyInTokyo();
+  const { data, error } = await adminSupabase.rpc("reserve_ai_chat_usage", {
+    p_user_id: userId,
+    p_usage_date: usageDate,
+    p_daily_limit: AI_DAILY_LIMIT,
+  });
+
+  if (error) throw error;
+
+  const usage = Array.isArray(data) ? data[0] : data;
+  return {
+    usageDate,
+    allowed: Boolean(usage?.allowed),
+    isPro: Boolean(usage?.is_pro),
+    usageCount: Number(usage?.usage_count || 0),
+    remaining: usage?.remaining == null ? null : Number(usage.remaining),
+    dailyLimit: AI_DAILY_LIMIT,
+  };
+}
+
+async function refundAiChatUsage(userId, usageDate) {
+  if (!usageDate) return null;
+
+  const { data, error } = await adminSupabase.rpc("refund_ai_chat_usage", {
+    p_user_id: userId,
+    p_usage_date: usageDate,
+  });
+
+  if (error) throw error;
+
+  const usage = Array.isArray(data) ? data[0] : data;
+  return {
+    usageDate,
+    isPro: false,
+    usageCount: Number(usage?.usage_count || 0),
+    remaining: Number(usage?.remaining || 0),
+    dailyLimit: AI_DAILY_LIMIT,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!supabase) {
-    return res.status(500).json({ error: "Supabase auth is not configured" });
+  if (!supabase || !adminSupabase) {
+    return res.status(500).json({ error: "AI利用回数のDB設定が不足しています。" });
+  }
+
+  if (!process.env.CLAUDE_API_KEY) {
+    return res.status(500).json({ error: "Claude APIキーが設定されていません。" });
   }
 
   const accessToken = getBearerToken(req);
@@ -77,6 +142,21 @@ export default async function handler(req, res) {
     return res
       .status(429)
       .json({ error: "AI Coachの利用が集中しています。少し待ってからお試しください。", retryAfterSec: rateLimit.retryAfterSec });
+  }
+
+  let reservedUsage;
+  try {
+    reservedUsage = await reserveAiChatUsage(user.id);
+  } catch (usageError) {
+    console.error("reserve ai usage failed", usageError);
+    return res.status(500).json({ error: "AI利用回数の確認に失敗しました。" });
+  }
+
+  if (!reservedUsage.allowed) {
+    return res.status(403).json({
+      error: "今日の無料AI相談回数を使い切りました",
+      aiUsage: reservedUsage,
+    });
   }
 
   const { messages, coachContext } = req.body;
@@ -131,12 +211,32 @@ ${safeContext.latestWorkoutContext || "最新の記録はありません。"}
 
     const data = await response.json();
     if (!response.ok) {
+      if (!reservedUsage.isPro) {
+        try {
+          const refundedUsage = await refundAiChatUsage(user.id, reservedUsage.usageDate);
+          reservedUsage = refundedUsage || reservedUsage;
+        } catch (refundError) {
+          console.error("refund ai usage failed", refundError);
+        }
+      }
       return res.status(response.status).json({
         error: data?.error?.message || "AI Coachの応答に失敗しました",
+        aiUsage: reservedUsage,
       });
     }
-    return res.status(response.status).json(data);
+    return res.status(response.status).json({
+      ...data,
+      aiUsage: reservedUsage,
+    });
   } catch {
-    return res.status(500).json({ error: "AI Coachの応答に失敗しました" });
+    if (reservedUsage && !reservedUsage.isPro) {
+      try {
+        const refundedUsage = await refundAiChatUsage(user.id, reservedUsage.usageDate);
+        reservedUsage = refundedUsage || reservedUsage;
+      } catch (refundError) {
+        console.error("refund ai usage failed", refundError);
+      }
+    }
+    return res.status(500).json({ error: "AI Coachの応答に失敗しました", aiUsage: reservedUsage });
   }
 }

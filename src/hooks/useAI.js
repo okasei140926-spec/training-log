@@ -294,12 +294,52 @@ export function useAI(history) {
     };
   }, []);
 
-  const activatePumpPro = () => {
+  const applyServerAiUsage = (serverUsage) => {
+    if (!serverUsage || typeof serverUsage !== "object") return false;
+
+    const serverIsPro = Boolean(serverUsage.isPro);
+    const serverDateKey = serverUsage.usageDate || getTodayKey();
+    const serverCount = normalizeAiUsageCount(serverUsage.usageCount);
+
+    isProRef.current = serverIsPro;
+    setIsPro(serverIsPro);
+    aiUsageDateRef.current = serverDateKey;
+    aiUsageCountRef.current = serverCount;
+    setAiUsageDate(serverDateKey);
+    setAiUsageCount(serverCount);
+
     try {
-      localStorage.setItem(AI_PRO_STORAGE_KEY, "true");
+      localStorage.setItem(AI_PRO_STORAGE_KEY, serverIsPro ? "true" : "false");
+      saveAiUsage({ dateKey: serverDateKey, count: serverCount });
     } catch {}
-    isProRef.current = true;
-    setIsPro(true);
+
+    return true;
+  };
+
+  const activatePumpPro = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) return false;
+
+      const res = await fetch("/api/activate-pro-dev", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const data = await res.json();
+
+      if (!res.ok) return false;
+
+      applyServerAiUsage(data?.aiUsage);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const sendAI = async (overrideMsg) => {
@@ -361,14 +401,19 @@ export function useAI(history) {
       const data = await res.json();
 
       if (!res.ok) {
+        applyServerAiUsage(data?.aiUsage);
         const errorMessage =
-          res.status === 401 ? "ログインが必要です。" : data?.error || "AI Coachの応答に失敗しました。";
+          res.status === 401
+            ? "ログインが必要です。"
+            : res.status === 403
+              ? "今日の無料AI相談回数を使い切りました。Pump ProでAI Coachを無制限に使えます。"
+              : data?.error || "AI Coachの応答に失敗しました。";
         setAiMsgs((p) => [...p, { role: "assistant", content: errorMessage }]);
         return;
       }
 
       const reply = data.content?.[0]?.text || "AI Coachの応答に失敗しました。";
-      if (!currentIsPro) {
+      if (!applyServerAiUsage(data?.aiUsage) && !currentIsPro) {
         const nextUsage = incrementAiUsage();
         aiUsageDateRef.current = nextUsage.dateKey;
         aiUsageCountRef.current = nextUsage.count;

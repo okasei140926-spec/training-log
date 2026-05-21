@@ -95,28 +95,51 @@ const CompactBubble = ({ children, role }) => (
     </div>
 );
 
-const ProPaywallCard = ({ onStartPro }) => (
+const ProPaywallCard = ({ onStartPro, aiUsageCount, dailyFreeAiLimit }) => (
     <div
         style={{
-            padding: 14,
-            borderRadius: 18,
-            background: "linear-gradient(180deg, rgba(18, 199, 194, 0.13), rgba(18, 199, 194, 0.05))",
-            border: "1px solid rgba(18, 199, 194, 0.20)",
+            position: "relative",
+            overflow: "hidden",
+            padding: 16,
+            borderRadius: 22,
+            background:
+                "radial-gradient(circle at 82% 10%, rgba(51, 225, 219, 0.30), transparent 34%), linear-gradient(145deg, rgba(8, 28, 32, 0.96), rgba(13, 63, 68, 0.92) 52%, rgba(18, 199, 194, 0.20))",
+            border: "1px solid rgba(51, 225, 219, 0.28)",
             color: "var(--text)",
+            boxShadow: "0 18px 38px rgba(15, 94, 99, 0.20)",
             display: "flex",
             flexDirection: "column",
-            gap: 10,
+            gap: 12,
         }}
     >
-        <div>
-            <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 4 }}>
-                今日の無料AI相談を使い切りました
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.08), transparent 42%)", pointerEvents: "none" }} />
+        <div style={{ position: "relative", zIndex: 1 }}>
+            <div
+                style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "5px 9px",
+                    borderRadius: 999,
+                    background: "rgba(51, 225, 219, 0.16)",
+                    border: "1px solid rgba(51, 225, 219, 0.28)",
+                    color: "#A7FFFB",
+                    fontSize: 10,
+                    fontWeight: 900,
+                    letterSpacing: 1.2,
+                    marginBottom: 10,
+                }}
+            >
+                AI COACH PRO
             </div>
-            <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.55 }}>
-                Pump ProでAI Coachを無制限に使えます。
+            <div style={{ fontSize: 22, fontWeight: 950, color: "#FFFFFF", lineHeight: 1.12, marginBottom: 8 }}>
+                AI Coachをもっと使う
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)", lineHeight: 1.65 }}>
+                無料相談は本日分を使い切りました。Pump Proなら、あなたの記録をもとにメニュー・重量・成長分析まで相談できます。
             </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+        <div style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
             {[
                 "今日のメニュー提案",
                 "重量設定の相談",
@@ -127,11 +150,11 @@ const ProPaywallCard = ({ onStartPro }) => (
                 <div
                     key={feature}
                     style={{
-                        padding: "8px 9px",
+                        padding: "9px 10px",
                         borderRadius: 12,
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px solid rgba(18, 199, 194, 0.12)",
-                        color: "var(--text2)",
+                        background: "rgba(255,255,255,0.09)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        color: "rgba(255,255,255,0.84)",
                         fontSize: 11,
                         fontWeight: 800,
                         lineHeight: 1.35,
@@ -142,11 +165,11 @@ const ProPaywallCard = ({ onStartPro }) => (
             ))}
             <div
                 style={{
-                    padding: "8px 9px",
+                    padding: "9px 10px",
                     borderRadius: 12,
-                    background: "rgba(18, 199, 194, 0.12)",
-                    border: "1px solid rgba(18, 199, 194, 0.20)",
-                    color: "var(--text)",
+                    background: "rgba(51, 225, 219, 0.18)",
+                    border: "1px solid rgba(51, 225, 219, 0.26)",
+                    color: "#FFFFFF",
                     fontSize: 11,
                     fontWeight: 900,
                     lineHeight: 1.35,
@@ -160,19 +183,36 @@ const ProPaywallCard = ({ onStartPro }) => (
             onClick={onStartPro}
             className="pressable"
             style={{
+                position: "relative",
+                zIndex: 1,
                 width: "100%",
-                padding: "12px 14px",
-                borderRadius: 16,
+                padding: "13px 14px",
+                borderRadius: 18,
                 border: "none",
                 background: "linear-gradient(135deg, var(--accent), var(--accent2))",
                 color: "#fff",
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: 900,
-                boxShadow: "var(--shadow-soft)",
+                boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
             }}
         >
             Pump Proを始める
         </button>
+        <div
+            style={{
+                position: "relative",
+                zIndex: 1,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+                color: "rgba(255,255,255,0.58)",
+                fontSize: 10,
+                fontWeight: 800,
+            }}
+        >
+            <span>今日の使用回数</span>
+            <span>{aiUsageCount}/{dailyFreeAiLimit}</span>
+        </div>
     </div>
 );
 
@@ -390,16 +430,18 @@ export default function AIScreen({
                             padding: "7px 11px",
                             borderRadius: 999,
                             background:
-                                activeQuickAction === label
+                                isAiLimitReached
+                                    ? "linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0.30))"
+                                    : activeQuickAction === label
                                     ? "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))"
                                     : "linear-gradient(180deg, var(--card2), var(--card))",
-                            color: activeQuickAction === label ? "var(--text)" : "var(--text2)",
+                            color: isAiLimitReached ? "var(--text4)" : activeQuickAction === label ? "var(--text)" : "var(--text2)",
                             fontSize: 11,
                             fontWeight: 800,
-                            border: "1px solid rgba(18, 199, 194, 0.12)",
+                            border: isAiLimitReached ? "1px solid rgba(18, 199, 194, 0.06)" : "1px solid rgba(18, 199, 194, 0.12)",
                             boxShadow: isAiLimitReached ? "none" : "var(--shadow-card)",
                             transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
-                            opacity: isAiLimitReached ? 0.45 : 1,
+                            opacity: isAiLimitReached ? 0.50 : 1,
                             cursor: isAiLimitReached ? "not-allowed" : "pointer",
                         }}
                     >
@@ -426,22 +468,25 @@ export default function AIScreen({
                         ref={inputRef}
                         value={aiInput}
                         onChange={(e) => setAiInput(e.target.value)}
+                        disabled={isAiLimitReached}
                         onKeyDown={(e) => {
                             if (e.key !== "Enter") return;
                             e.preventDefault();
                             handleSend();
                         }}
-                        placeholder="今日は背中の日なんだけど…"
+                        placeholder={isAiLimitReached ? "今日は無料相談を使い切りました" : "今日は背中の日なんだけど…"}
                         style={{
                             flex: 1,
                             padding: "11px 14px",
                             borderRadius: 20,
-                            background: "var(--card2)",
-                            border: "1px solid var(--border2)",
-                            color: "var(--text)",
+                            background: isAiLimitReached ? "rgba(139, 164, 168, 0.10)" : "var(--card2)",
+                            border: isAiLimitReached ? "1px solid rgba(139, 164, 168, 0.18)" : "1px solid var(--border2)",
+                            color: isAiLimitReached ? "var(--text3)" : "var(--text)",
                             fontSize: 13,
                             minHeight: 42,
                             boxShadow: "none",
+                            opacity: isAiLimitReached ? 0.78 : 1,
+                            cursor: isAiLimitReached ? "not-allowed" : "text",
                         }}
                     />
                     <button
@@ -452,7 +497,7 @@ export default function AIScreen({
                             width: 44,
                             height: 44,
                             borderRadius: 22,
-                            background: !canSendMessage ? "var(--border2)" : "linear-gradient(135deg, var(--accent), var(--accent2))",
+                            background: !canSendMessage ? "rgba(139, 164, 168, 0.22)" : "linear-gradient(135deg, var(--accent), var(--accent2))",
                             color: "#fff",
                             fontSize: 18,
                             display: "flex",
@@ -460,36 +505,19 @@ export default function AIScreen({
                             justifyContent: "center",
                             boxShadow: !canSendMessage ? "none" : "var(--shadow-soft)",
                             flexShrink: 0,
-                            opacity: !canSendMessage ? 0.65 : 1,
+                            opacity: !canSendMessage ? 0.50 : 1,
                             cursor: !canSendMessage ? "not-allowed" : "pointer",
                         }}
                     >
                         ↑
                     </button>
                 </div>
-                {isAiLimitReached && (
-                    <div
-                        style={{
-                            padding: "9px 10px",
-                            borderRadius: 14,
-                            background: "rgba(245, 158, 11, 0.10)",
-                            border: "1px solid rgba(245, 158, 11, 0.24)",
-                            color: "var(--text2)",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            lineHeight: 1.5,
-                        }}
-                    >
-                        今日の無料AI相談回数を使い切りました。明日また利用できます。
-                    </div>
-                )}
                 {showProPaywall() && (
-                    <ProPaywallCard onStartPro={onStartPro} />
-                )}
-                {!isPro && (
-                    <div style={{ fontSize: 10, color: "var(--text4)", padding: "0 2px" }}>
-                        今日の使用回数 {aiUsageCount}/{dailyFreeAiLimit}
-                    </div>
+                    <ProPaywallCard
+                        onStartPro={onStartPro}
+                        aiUsageCount={aiUsageCount}
+                        dailyFreeAiLimit={dailyFreeAiLimit}
+                    />
                 )}
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
                     今日は何をやるべきか、昨日の記録分析、フォーム相談などをそのまま聞けます。
