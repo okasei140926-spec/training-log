@@ -106,8 +106,11 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
         !aiLoad;
 
     const visibleMessages = isInitialState ? [] : aiMsgs;
+    const isAiLimitReached = Number(aiRemaining) <= 0;
+    const canSendMessage = !aiLoad && !isAiLimitReached;
 
     const handleSend = (overrideMsg) => {
+        if (!canSendMessage) return;
         const nextMessage = overrideMsg ?? aiInput;
         if (!nextMessage?.trim()) return;
         sendAI(overrideMsg);
@@ -115,6 +118,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
     };
 
     const handleSuggestion = ({ label, prompt }) => {
+        if (isAiLimitReached) return;
         setActiveQuickAction(label);
         setAiInput(prompt);
         inputRef.current?.focus();
@@ -282,6 +286,7 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                     <button
                         key={label}
                         onClick={() => handleSuggestion({ label, prompt })}
+                        disabled={isAiLimitReached}
                         className="pressable"
                         style={{
                             whiteSpace: "nowrap",
@@ -295,8 +300,10 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                             fontSize: 11,
                             fontWeight: 800,
                             border: "1px solid rgba(18, 199, 194, 0.12)",
-                            boxShadow: "var(--shadow-card)",
+                            boxShadow: isAiLimitReached ? "none" : "var(--shadow-card)",
                             transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
+                            opacity: isAiLimitReached ? 0.45 : 1,
+                            cursor: isAiLimitReached ? "not-allowed" : "pointer",
                         }}
                     >
                         {label}
@@ -322,7 +329,11 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                         ref={inputRef}
                         value={aiInput}
                         onChange={(e) => setAiInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                        onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            handleSend();
+                        }}
                         placeholder="今日は背中の日なんだけど…"
                         style={{
                             flex: 1,
@@ -338,25 +349,43 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                     />
                     <button
                         onClick={() => handleSend()}
-                        disabled={aiLoad}
+                        disabled={!canSendMessage}
                         className="pressable"
                         style={{
                             width: 44,
                             height: 44,
                             borderRadius: 22,
-                            background: aiLoad ? "var(--border2)" : "linear-gradient(135deg, var(--accent), var(--accent2))",
+                            background: !canSendMessage ? "var(--border2)" : "linear-gradient(135deg, var(--accent), var(--accent2))",
                             color: "#fff",
                             fontSize: 18,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            boxShadow: aiLoad ? "none" : "var(--shadow-soft)",
+                            boxShadow: !canSendMessage ? "none" : "var(--shadow-soft)",
                             flexShrink: 0,
+                            opacity: !canSendMessage ? 0.65 : 1,
+                            cursor: !canSendMessage ? "not-allowed" : "pointer",
                         }}
                     >
                         ↑
                     </button>
                 </div>
+                {isAiLimitReached && (
+                    <div
+                        style={{
+                            padding: "9px 10px",
+                            borderRadius: 14,
+                            background: "rgba(245, 158, 11, 0.10)",
+                            border: "1px solid rgba(245, 158, 11, 0.24)",
+                            color: "var(--text2)",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            lineHeight: 1.5,
+                        }}
+                    >
+                        今日の無料AI相談回数を使い切りました。明日また利用できます。
+                    </div>
+                )}
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
                     今日は何をやるべきか、昨日の記録分析、フォーム相談などをそのまま聞けます。
                 </div>
