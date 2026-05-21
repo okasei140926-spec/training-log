@@ -111,7 +111,6 @@ export default function LogScreen({
 
     const hasExercises = exercises.length > 0;
     const softBorderColor = "rgba(18, 199, 194, 0.16)";
-    const softTealBg = "linear-gradient(180deg, rgba(18, 199, 194, 0.05), rgba(18, 199, 194, 0.02))";
     const subActionBg = "linear-gradient(180deg, rgba(18, 199, 194, 0.06), rgba(18, 199, 194, 0.02))";
     const subActionText = "#0F5E63";
 
@@ -340,16 +339,16 @@ export default function LogScreen({
                         onClick={() => setShowSessionShare(true)}
                         style={{
                             marginTop: 10,
-                            padding: "7px 10px",
-                            borderRadius: 10,
+                            padding: "9px 12px",
+                            borderRadius: 12,
                             border: `1px solid ${softBorderColor}`,
                             background: subActionBg,
                             color: subActionText,
                             fontSize: 12,
-                            fontWeight: 700,
+                            fontWeight: 800,
                         }}
                     >
-                        共有
+                        今日の記録をシェア
                     </button>
                 )}
             </div>
@@ -391,8 +390,11 @@ export default function LogScreen({
                         const sets = logData[ex.name] || getExSets(ex);
                         const isEditing = editingId === ex.id;
                         const prev = getPrev ? getPrev(ex) : null;
+                        const previousSets = Array.isArray(prev?.sets) ? prev.sets : [];
+                        const previousUnit = prev?.unit || prev?.weightUnit || prev?.weight_unit || "kg";
                         const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
+                        const exerciseBodyPartLabel = ex.bodyPart || ex.label || ex.target || "";
                         const prIsAlsoPrev = pr && prev && pr.date === prev.date;
 
                         const doneSets = sets.filter(s => {
@@ -549,7 +551,7 @@ export default function LogScreen({
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
                                 {() => (
-                                    <div style={{ background: "var(--card)", borderRadius: 20, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : softBorderColor}`, boxShadow: isPR ? "0 14px 32px rgba(18,199,194,0.10)" : "var(--shadow-card)" }}>
+                                    <div style={{ background: "linear-gradient(180deg, #12161b 0%, #0b0f14 100%)", borderRadius: 22, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "rgba(87, 195, 255, 0.36)" : "rgba(255,255,255,0.08)"}`, boxShadow: isPR ? "0 18px 36px rgba(18,199,194,0.14)" : "0 18px 34px rgba(15, 23, 42, 0.14)" }}>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                             <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
@@ -560,11 +562,18 @@ export default function LogScreen({
                                                         onChange={e => setEditingName(e.target.value)}
                                                         onBlur={() => confirmEdit(ex)}
                                                         onKeyDown={e => { if (e.key === "Enter") confirmEdit(ex); if (e.key === "Escape") setEditingId(null); }}
-                                                        style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid var(--text2)", color: "var(--text)", fontSize: 16, fontWeight: 700, padding: "2px 0" }}
+                                                        style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid rgba(238,245,255,0.42)", color: "#ffffff", fontSize: 18, fontWeight: 900, padding: "2px 0" }}
                                                     />
                                                 ) : (
-                                                    <div onClick={() => startEdit(ex)} style={{ fontSize: 16, fontWeight: 700, cursor: "text", color: "var(--text)" }}>
-                                                        {ex.name}
+                                                    <div>
+                                                        <div onClick={() => startEdit(ex)} style={{ fontSize: 19, fontWeight: 900, cursor: "text", color: "#ffffff", lineHeight: 1.25 }}>
+                                                            {ex.name}
+                                                        </div>
+                                                        {exerciseBodyPartLabel && (
+                                                            <div style={{ marginTop: 5, fontSize: 12, color: "rgba(238,245,255,0.46)", fontWeight: 800 }}>
+                                                                {exerciseBodyPartLabel}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -577,10 +586,10 @@ export default function LogScreen({
                                                         setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
                                                     }}
                                                     style={{
-                                                        background: subActionBg,
+                                                        background: "rgba(255,255,255,0.05)",
                                                         border: `1px solid ${softBorderColor}`,
                                                         padding: "6px 10px",
-                                                        color: subActionText,
+                                                        color: "#d8f8ff",
                                                         fontSize: 16,
                                                         borderRadius: 10,
                                                     }}
@@ -591,7 +600,7 @@ export default function LogScreen({
                                                 {onToggleExUnit && (
                                                     <button
                                                         onClick={() => onToggleExUnit(ex.name)}
-                                                        style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 700, border: `1px solid ${softBorderColor}`, background: exUnit !== unit ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : subActionBg, color: exUnit !== unit ? "#ffffff" : subActionText, boxShadow: exUnit !== unit ? "0 8px 18px rgba(15, 94, 99, 0.10)" : "none" }}
+                                                        style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 800, border: `1px solid ${softBorderColor}`, background: exUnit !== unit ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "rgba(255,255,255,0.05)", color: exUnit !== unit ? "#ffffff" : "#d8f8ff", boxShadow: exUnit !== unit ? "0 8px 18px rgba(15, 94, 99, 0.10)" : "none" }}
                                                     >
                                                         {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
                                                     </button>
@@ -608,13 +617,13 @@ export default function LogScreen({
                                                         fontSize: 11,
                                                         fontWeight: 700,
                                                         border: `1px solid ${softBorderColor}`,
-                                                        background: subActionBg,
-                                                        color: subActionText,
+                                                        background: "rgba(255,255,255,0.05)",
+                                                        color: "#d8f8ff",
                                                     }}
                                                 >
                                                     履歴
                                                 </button>
-                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: subActionBg, border: `1px solid ${softBorderColor}`, color: subActionText, fontSize: 16, padding: "4px 10px", borderRadius: 10 }}>×</button>
+                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${softBorderColor}`, color: "#d8f8ff", fontSize: 16, padding: "4px 10px", borderRadius: 10 }}>×</button>
                                             </div>
                                         </div>
 
@@ -672,51 +681,35 @@ export default function LogScreen({
 
                                         {/* 前回の記録 + PR */}
                                         {(prev || pr) && (
-                                            <div style={{ marginBottom: 10, padding: "10px 12px", background: softTealBg, borderRadius: 14, border: `1px solid ${softBorderColor}` }}>
+                                            <div style={{ marginBottom: 12, padding: "10px 12px", background: "rgba(87, 195, 255, 0.08)", borderRadius: 16, border: "1px solid rgba(87, 195, 255, 0.16)" }}>
                                                 {prev && (
                                                     <>
                                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                                            <div style={{ fontSize: 11, color: "var(--text2)" }}>前回 <span style={{ color: "var(--text3)" }}>{prev.date}</span></div>
-                                                            {isPR && <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>PR更新！</div>}
-                                                        </div>
-                                                        <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 3, lineHeight: 1.6 }}>
-                                                            {prev.sets?.map((s, i) => (
-                                                                <span key={i}>
-                                                                    {i > 0 && <span style={{ color: "var(--text5)", margin: "0 4px" }}>/</span>}
-                                                                    {s.weight === "BW" ? "自重" : `${dispW(s.weight, exUnit)}${exUnit}`}×{s.reps}
-                                                                </span>
-                                                            )) || `${prev.weight === "BW" ? "自重" : `${dispW(prev.weight, exUnit)}${exUnit}`}×${prev.reps}`}
+                                                            <div style={{ fontSize: 12, color: "rgba(238,245,255,0.62)", fontWeight: 800 }}>前回 <span style={{ color: "rgba(238,245,255,0.42)" }}>{prev.date}</span></div>
+                                                            {isPR && <div style={{ fontSize: 11, color: "#62caff", fontWeight: 900 }}>PR更新！</div>}
                                                         </div>
                                                     </>
                                                 )}
                                                 {pr && !prIsAlsoPrev && (
-                                                    <div style={{ marginTop: prev ? 6 : 0, paddingTop: prev ? 6 : 0, borderTop: prev ? "1px solid var(--border2)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                        <div style={{ fontSize: 11, color: "var(--text2)" }}>🏆 PR <span style={{ color: "var(--text3)", fontWeight: 400 }}>{pr.date}</span></div>
-                                                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text3)" }}>
+                                                    <div style={{ marginTop: prev ? 7 : 0, paddingTop: prev ? 7 : 0, borderTop: prev ? "1px solid rgba(255,255,255,0.08)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                        <div style={{ fontSize: 11, color: "rgba(238,245,255,0.62)" }}>🏆 PR <span style={{ color: "rgba(238,245,255,0.42)", fontWeight: 400 }}>{pr.date}</span></div>
+                                                        <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(238,245,255,0.76)" }}>
                                                             {prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit} × ${prTopSet.reps}rep` : `${roundTo1Decimal(pr.rm)}${exUnit}`}
                                                         </div>
                                                     </div>
                                                 )}
                                                 {pr && prIsAlsoPrev && (
-                                                    <div style={{ marginTop: 4, fontSize: 11, color: "var(--text2)" }}>
+                                                    <div style={{ marginTop: 6, fontSize: 11, color: "rgba(238,245,255,0.62)" }}>
                                                         🏆 前回がPR（{prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit}×${prTopSet.reps}rep` : `${roundTo1Decimal(pr.rm)}${exUnit}`}）
                                                     </div>
                                                 )}
                                                 {isPR && prDiff > 0 && (
-                                                    <div style={{ marginTop: 6, fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
+                                                    <div style={{ marginTop: 6, fontSize: 11, color: "#62caff", fontWeight: 900 }}>
                                                         PR更新！ +{prDiff.toFixed(1)}kg
                                                     </div>
                                                 )}
                                             </div>
                                         )}
-
-                                        <div style={{ display: "grid", gridTemplateColumns: "24px 1fr 28px 1fr 28px", gap: 6, marginBottom: 6 }}>
-                                            <div />
-                                            <div style={{ fontSize: 10, color: "var(--text2)", textAlign: "center" }}>{exUnit === "BW" ? "自重" : exUnit}</div>
-                                            <div />
-                                            <div style={{ fontSize: 10, color: "var(--text2)", textAlign: "center" }}>rep</div>
-                                            <div />
-                                        </div>
 
                                         {sets.map((set, idx) => (
                                             <SetRow
@@ -725,6 +718,9 @@ export default function LogScreen({
                                                 set={set}
                                                 idx={idx}
                                                 setField={setField}
+                                                previousSet={previousSets[idx]}
+                                                previousUnit={previousSets[idx]?.unit || previousSets[idx]?.weightUnit || previousSets[idx]?.weight_unit || previousUnit}
+                                                unit={exUnit}
                                                 onCopyDown={onCopyDown}
                                                 onCopyDownReps={onCopyDownReps}
                                             />
@@ -737,12 +733,12 @@ export default function LogScreen({
                                                     marginTop: 10,
                                                     padding: "12px",
                                                     borderRadius: 14,
-                                                    background: softTealBg,
-                                                    border: `1px solid ${softBorderColor}`,
-                                                    color: subActionText,
-                                                    fontSize: 13,
-                                                    fontWeight: 700,
-                                                    boxShadow: "0 10px 20px rgba(15, 94, 99, 0.05)",
+                                                    background: "rgba(87, 195, 255, 0.10)",
+                                                    border: "1px solid rgba(87, 195, 255, 0.22)",
+                                                    color: "#62caff",
+                                                    fontSize: 14,
+                                                    fontWeight: 900,
+                                                    boxShadow: "0 12px 24px rgba(0, 0, 0, 0.18)",
                                                 }}
                                             >
                                                 ＋ セット追加

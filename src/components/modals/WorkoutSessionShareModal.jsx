@@ -68,31 +68,39 @@ const resolveDurationSec = (payload) => {
     return 0;
 };
 
-const getMaxWeightLabel = (weight) => {
-    const value = Number(weight || 0);
-    if (!Number.isFinite(value) || value <= 0) return "-";
-    return `${Math.round(value * 10) / 10}kg`;
+const formatLargeNumber = (value) => {
+    const num = Math.round(Number(value || 0));
+    if (!Number.isFinite(num)) return "0";
+    return num.toLocaleString("ja-JP");
 };
 
-const formatSetLine = (set) => {
-    if (!set) return "";
-    const reps = Math.max(0, Number(set.reps || 0));
-    const weight = String(set.weight || "").toUpperCase();
-    if (weight === "BW") return `自重×${reps}`;
-    const weightNum = Math.round(Number(set.weight || 0) * 10) / 10;
-    return `${weightNum}kg×${reps}`;
+const getWorkoutTitle = (bodyPartCards, bodyPartLabel) => {
+    if (Array.isArray(bodyPartCards) && bodyPartCards.length === 1) {
+        return `${bodyPartCards[0].bodyPart}の日`;
+    }
+    if (Array.isArray(bodyPartCards) && bodyPartCards.length > 1) {
+        return bodyPartCards.slice(0, 2).map((item) => item.bodyPart).join(" / ");
+    }
+
+    const value = String(bodyPartLabel || "").trim();
+    if (!value || value === "まだありません") return "Workout";
+    const firstPart = value.split("/")[0]?.trim() || value;
+    if (firstPart.length <= 8 && !firstPart.includes(" ")) return `${firstPart}の日`;
+    return firstPart;
 };
 
-const getExerciseSetLine = (item) => {
-    if (Array.isArray(item?.sets) && item.sets.length > 0) {
-        return item.sets.map(formatSetLine).filter(Boolean).join(" / ");
-    }
+const getBodyPartCards = (summary, items) => {
+    const counts = Array.isArray(summary?.setCountByBodyPart) && summary.setCountByBodyPart.length > 0
+        ? summary.setCountByBodyPart
+        : items;
 
-    if (item?.best_set_json?.weight) {
-        return formatSetLine(item.best_set_json);
-    }
-
-    return `最大 ${getMaxWeightLabel(item?.max_weight)}`;
+    return (counts || [])
+        .map((item) => ({
+            bodyPart: item.bodyPart || item.body_part || "その他",
+            count: Number(item.count ?? item.set_count ?? 0),
+        }))
+        .filter((item) => Number.isFinite(item.count) && item.count > 0)
+        .slice(0, 3);
 };
 
 export default function WorkoutSessionShareModal({
@@ -135,16 +143,13 @@ export default function WorkoutSessionShareModal({
         return "まだありません";
     }, [items, summary]);
 
-    const maxExerciseCount = sizeKey === "story" ? 7 : 4;
-    const visibleItems = useMemo(() => items.slice(0, maxExerciseCount), [items, maxExerciseCount]);
-    const hiddenItemCount = Math.max(0, items.length - visibleItems.length);
+    const bodyPartCards = useMemo(() => getBodyPartCards(summary, items), [items, summary]);
+    const workoutTitle = getWorkoutTitle(bodyPartCards, setCountByBodyPartLabel);
     const durationLabel = formatDuration(resolveDurationSec(sessionPayload));
-    const totalSetLabel = `${Number(summary?.setCount || 0)}セット`;
-    const totalVolumeLabel = `${Math.round(Number(summary?.totalVolume || 0)).toLocaleString("ja-JP")}kg`;
     const prCount = Number(summary?.prCount || 0);
     const previewScale = preset.scale || 0.58;
     const isStory = sizeKey === "story";
-    const compactCard = visibleItems.length >= 5;
+    const prLabel = prCount > 0 ? `PR更新 ${prCount}件` : "";
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -345,107 +350,116 @@ export default function WorkoutSessionShareModal({
                                     style={{
                                         width: preset.width,
                                         height: preset.height,
-                                        borderRadius: 28,
+                                        borderRadius: 30,
                                         overflow: "hidden",
                                         background:
-                                            "radial-gradient(circle at 85% 8%, rgba(251, 146, 60, 0.34), transparent 28%), radial-gradient(circle at 10% 88%, rgba(18,199,194,0.26), transparent 30%), linear-gradient(160deg, #05070b 0%, #111827 48%, #27140b 100%)",
-                                        border: "1px solid rgba(255,255,255,0.10)",
+                                            "radial-gradient(circle at 50% 42%, rgba(87, 195, 255, 0.18), transparent 34%), radial-gradient(circle at 86% 82%, rgba(111, 66, 255, 0.16), transparent 30%), linear-gradient(160deg, #05070b 0%, #0d1117 54%, #141016 100%)",
+                                        border: "1px solid rgba(255,255,255,0.08)",
                                         boxShadow: "0 30px 60px rgba(15, 23, 42, 0.24)",
                                         display: "flex",
                                         flexDirection: "column",
                                         color: "#fff",
                                         boxSizing: "border-box",
-                                        padding: isStory ? "24px 22px 20px" : "18px",
+                                        padding: isStory ? "28px 24px 24px" : "22px",
                                     }}
                                 >
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: isStory ? 16 : 10 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: isStory ? 28 : 16 }}>
                                         <div>
-                                            <div style={{ fontSize: 10, letterSpacing: 3.2, color: "rgba(255,255,255,0.62)", fontWeight: 900, marginBottom: 7 }}>
-                                                PUMP
-                                            </div>
-                                            <div style={{ fontSize: isStory ? 13 : 11, color: "rgba(255,255,255,0.74)", fontWeight: 700 }}>
+                                            <div style={{ fontSize: 10, letterSpacing: 3.4, color: "rgba(255,255,255,0.45)", fontWeight: 900, marginBottom: 8 }}>
                                                 {dateLabel}
                                             </div>
+                                            <div style={{ fontSize: isStory ? 42 : 28, color: "#ffffff", fontWeight: 950, lineHeight: 1.02, letterSpacing: -0.4 }}>
+                                                {workoutTitle}
+                                            </div>
                                         </div>
-                                        <div style={{ padding: "7px 10px", borderRadius: 999, background: "rgba(18,199,194,0.14)", border: "1px solid rgba(18,199,194,0.28)", color: "#7DE7E2", fontSize: 10, fontWeight: 900 }}>
+                                        <div style={{ padding: "7px 10px", borderRadius: 999, background: "rgba(87,195,255,0.12)", border: "1px solid rgba(87,195,255,0.34)", color: "#62caff", fontSize: 10, fontWeight: 900 }}>
                                             WORKOUT
                                         </div>
                                     </div>
 
-                                    <div style={{ marginBottom: isStory ? 16 : 11 }}>
-                                        <div style={{ fontSize: isStory ? 44 : 31, fontWeight: 950, lineHeight: 0.95, letterSpacing: -0.5 }}>
-                                            {totalVolumeLabel}
+                                    <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.9fr", gap: isStory ? 18 : 10, marginBottom: isStory ? 24 : 14 }}>
+                                        <div>
+                                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", fontWeight: 800, letterSpacing: 1.1 }}>
+                                                VOLUME
+                                            </div>
+                                            <div style={{ marginTop: 7, fontSize: isStory ? 58 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
+                                                {formatLargeNumber(summary?.totalVolume)}
+                                            </div>
+                                            <div style={{ marginTop: 4, fontSize: isStory ? 19 : 14, color: "rgba(255,255,255,0.56)", fontWeight: 900 }}>
+                                                kg
+                                            </div>
                                         </div>
-                                        <div style={{ marginTop: 8, fontSize: isStory ? 17 : 12, color: "#E6FFFD", fontWeight: 900, lineHeight: 1.25 }}>
-                                            {setCountByBodyPartLabel}
+                                        <div>
+                                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", fontWeight: 800, letterSpacing: 1.1 }}>
+                                                SETS
+                                            </div>
+                                            <div style={{ marginTop: 7, fontSize: isStory ? 58 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
+                                                {Number(summary?.setCount || 0)}
+                                            </div>
+                                            <div style={{ marginTop: 4, fontSize: isStory ? 19 : 14, color: "rgba(255,255,255,0.56)", fontWeight: 900 }}>
+                                                sets
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: isStory ? 14 : 10 }}>
-                                        {[
-                                            { label: "SETS", value: totalSetLabel },
-                                            { label: "PR", value: `${prCount}件` },
-                                            { label: "TIME", value: durationLabel || "-" },
-                                        ].map((metric) => (
-                                            <div key={metric.label} style={{ borderRadius: 15, background: "rgba(17, 24, 39, 0.72)", border: "1px solid rgba(255,255,255,0.10)", padding: isStory ? "9px 9px" : "8px 8px" }}>
-                                                <div style={{ fontSize: 9, letterSpacing: 1.4, color: "rgba(255,255,255,0.46)", fontWeight: 800 }}>
-                                                    {metric.label}
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isStory ? 28 : 16 }}>
+                                        <div style={{ width: isStory ? 28 : 22, height: isStory ? 28 : 22, borderRadius: 999, border: "2px solid rgba(255,255,255,0.42)", position: "relative", boxSizing: "border-box" }}>
+                                            <div style={{ position: "absolute", left: "50%", top: 5, width: 2, height: isStory ? 8 : 6, background: "rgba(255,255,255,0.42)", transform: "translateX(-50%)" }} />
+                                            <div style={{ position: "absolute", left: "50%", top: "50%", width: isStory ? 8 : 6, height: 2, background: "rgba(255,255,255,0.42)", transformOrigin: "left center", transform: "translateY(-50%) rotate(25deg)" }} />
+                                        </div>
+                                        <div style={{ fontSize: isStory ? 22 : 16, color: "#fff", fontWeight: 950 }}>
+                                            {durationLabel || "-"}
+                                        </div>
+                                        <div style={{ fontSize: isStory ? 15 : 11, color: "rgba(255,255,255,0.48)", fontWeight: 900 }}>
+                                            TIME
+                                        </div>
+                                    </div>
+
+                                    <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 13 : 10, fontWeight: 800, marginBottom: isStory ? 12 : 8 }}>
+                                        部位
+                                    </div>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isStory ? 10 : 7, marginBottom: isStory ? 26 : 14 }}>
+                                        {(bodyPartCards.length > 0 ? bodyPartCards : [{ bodyPart: "合計", count: Number(summary?.setCount || 0) }]).map((item) => (
+                                            <div
+                                                key={`${item.bodyPart}-${item.count}`}
+                                                style={{
+                                                    minHeight: isStory ? 72 : 52,
+                                                    borderRadius: isStory ? 18 : 14,
+                                                    background: "rgba(255,255,255,0.075)",
+                                                    border: "1px solid rgba(255,255,255,0.05)",
+                                                    padding: isStory ? "13px 12px" : "9px 9px",
+                                                    boxSizing: "border-box",
+                                                }}
+                                            >
+                                                <div style={{ color: "#fff", fontSize: isStory ? 15 : 11, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                    {item.bodyPart}
                                                 </div>
-                                                <div style={{ marginTop: 5, fontSize: isStory ? 15 : 12, color: "#fff", fontWeight: 950, whiteSpace: "nowrap" }}>
-                                                    {metric.value}
+                                                <div style={{ marginTop: 6, color: "#62caff", fontSize: isStory ? 27 : 18, fontWeight: 950, lineHeight: 0.95 }}>
+                                                    {item.count}
+                                                    <span style={{ marginLeft: 4, color: "rgba(255,255,255,0.42)", fontSize: isStory ? 12 : 9, fontWeight: 900 }}>sets</span>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
 
-                                    <div style={{ display: "grid", gap: isStory ? 8 : 6, alignContent: "start", flex: 1, minHeight: 0, overflow: "hidden" }}>
-                                        {visibleItems.map((item) => {
-                                            const setLine = getExerciseSetLine(item);
-
-                                            return (
-                                                <div
-                                                    key={`${item.body_part || ""}-${item.exercise_name}`}
-                                                    style={{
-                                                        background: "rgba(17, 24, 39, 0.70)",
-                                                        borderRadius: isStory ? 15 : 13,
-                                                        padding: isStory
-                                                            ? (compactCard ? "8px 11px" : "10px 12px")
-                                                            : "7px 9px",
-                                                        border: "1px solid rgba(255,255,255,0.08)",
-                                                    }}
-                                                >
-                                                    <div style={{ minWidth: 0 }}>
-                                                        <div style={{ fontSize: isStory ? (compactCard ? 12 : 13) : 11, fontWeight: 900, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                            {item.exercise_name}
-                                                        </div>
-                                                        <div
-                                                            style={{
-                                                                marginTop: isStory ? 5 : 4,
-                                                                fontSize: isStory ? (compactCard ? 10 : 11) : 9,
-                                                                color: "#7DE7E2",
-                                                                fontWeight: 850,
-                                                                lineHeight: 1.34,
-                                                                overflow: "hidden",
-                                                                display: "-webkit-box",
-                                                                WebkitBoxOrient: "vertical",
-                                                                WebkitLineClamp: isStory ? 2 : 1,
-                                                            }}
-                                                        >
-                                                            {setLine}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                        {hiddenItemCount > 0 && (
-                                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.54)", fontWeight: 800, textAlign: "center", paddingTop: 2 }}>
-                                                +{hiddenItemCount} exercises
+                                    <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0 }}>
+                                        {prLabel ? (
+                                            <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: isStory ? "12px 14px" : "8px 10px", fontSize: isStory ? 15 : 11, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                PR <span style={{ color: "#62caff", marginLeft: 4 }}>{prLabel}</span>
                                             </div>
+                                        ) : (
+                                            <div />
                                         )}
                                     </div>
 
-                                    <div style={{ marginTop: isStory ? 12 : 7, fontSize: 10, color: "rgba(255,255,255,0.42)", letterSpacing: 2 }}>
-                                        SHARE YOUR PUMP
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: isStory ? 22 : 12 }}>
+                                        <div style={{ color: "#62caff", fontSize: isStory ? 18 : 14, fontWeight: 950, lineHeight: 1 }}>
+                                            Pump
+                                        </div>
+                                        <div style={{ color: "rgba(255,255,255,0.44)", fontSize: isStory ? 11 : 8, fontWeight: 900, letterSpacing: 3 }}>
+                                            WORKOUT TRACKER
+                                        </div>
                                     </div>
                                 </div>
                             </div>

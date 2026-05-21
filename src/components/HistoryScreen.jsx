@@ -1008,7 +1008,7 @@ export default function HistoryScreen({
                     width: "100%",
                     borderRadius: 18,
                     padding: "15px 12px",
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: 800,
                     background: "linear-gradient(135deg, #0F5E63, #12C7C2)",
                     color: "#fff",
@@ -1016,7 +1016,7 @@ export default function HistoryScreen({
                     boxShadow: "0 10px 22px rgba(15, 94, 99, 0.12)",
                   }}
                 >
-                  シェア
+                  この日の記録をシェア
                 </button>
                 <button
                   type="button"

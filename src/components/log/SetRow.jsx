@@ -1,157 +1,166 @@
-import { isCompletedWorkoutSet } from "../../utils/helpers";
+const normalizeUnitLabel = (unit) => {
+    const value = String(unit || "kg").toLowerCase();
+    if (value === "lbs" || value === "lb" || value === "pound" || value === "pounds") return "lb";
+    if (value === "bw" || value === "bodyweight") return "自重";
+    return "kg";
+};
+
+const formatWeightValue = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return String(value || "");
+    return Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10);
+};
+
+const getSavedUnitLabel = (set, fallbackUnit) =>
+    normalizeUnitLabel(set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit || "kg");
+
+const formatPreviousSet = (previousSet, fallbackUnit) => {
+    if (!previousSet) return "前回 -";
+
+    const reps = Number(previousSet.reps);
+    const repsLabel = Number.isFinite(reps) && reps > 0 ? formatWeightValue(reps) : "-";
+    const rawWeight = String(previousSet.weight ?? "").trim();
+
+    if (rawWeight.toUpperCase() === "BW") {
+        return `前回 自重 × ${repsLabel}`;
+    }
+
+    const weightLabel = rawWeight ? formatWeightValue(rawWeight) : "-";
+    const unitLabel = getSavedUnitLabel(previousSet, fallbackUnit);
+    return `前回 ${weightLabel}${unitLabel} × ${repsLabel}`;
+};
 
 export default function SetRow({
     ex,
     set,
     idx,
     setField,
-    onCopyDown,
-    onCopyDownReps,
+    previousSet,
+    previousUnit = "kg",
+    unit = "kg",
 }) {
-    const canCopy = idx > 0;
-    const isCompleted = isCompletedWorkoutSet(set);
-    const softTealBorder = "rgba(18, 199, 194, 0.16)";
-    const softTealBg = "linear-gradient(180deg, rgba(18, 199, 194, 0.045), rgba(18, 199, 194, 0.018))";
+    const unitLabel = normalizeUnitLabel(unit);
+    const previousLabel = formatPreviousSet(previousSet, previousUnit);
+    const isBodyweight = String(set.weight || "").toUpperCase() === "BW";
+
+    const inputWrapStyle = {
+        position: "relative",
+        minWidth: 0,
+    };
+    const inputStyle = {
+        width: "100%",
+        minHeight: 48,
+        background: "#080b10",
+        border: "1px solid rgba(87, 195, 255, 0.28)",
+        borderRadius: 16,
+        padding: "12px 39px 12px 12px",
+        color: "#f8fbff",
+        fontSize: 18,
+        fontWeight: 900,
+        textAlign: "center",
+        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.02)",
+        boxSizing: "border-box",
+    };
+    const suffixStyle = {
+        position: "absolute",
+        right: 13,
+        top: "50%",
+        transform: "translateY(-50%)",
+        color: "rgba(238, 245, 255, 0.52)",
+        fontSize: 12,
+        fontWeight: 800,
+        pointerEvents: "none",
+    };
 
     return (
         <div
             style={{
                 display: "grid",
-                gridTemplateColumns: "24px 1fr 32px 1fr 32px",
-                gap: 6,
-                marginBottom: 8,
-                alignItems: "stretch",
+                gridTemplateColumns: "34px minmax(82px, 1fr) minmax(84px, 0.9fr) minmax(74px, 0.75fr)",
+                gap: 8,
+                alignItems: "center",
+                marginBottom: 10,
+                padding: "10px",
+                borderRadius: 18,
+                background:
+                    idx === 0
+                        ? "linear-gradient(135deg, rgba(87, 195, 255, 0.14), rgba(18, 199, 194, 0.08))"
+                        : "rgba(255,255,255,0.045)",
+                border: "1px solid rgba(255,255,255,0.06)",
             }}
         >
-            <button
-                onClick={() =>
-                    setField(ex, idx, "weight", set.weight === "BW" ? "" : "BW")
-                }
+            <div
                 style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 17,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    width: 24,
-                    height: 36,
-                    borderRadius: 9,
-                    background: isCompleted
-                        ? "rgba(18, 199, 194, 0.12)"
-                        : "rgba(18, 199, 194, 0.06)",
-                    color: isCompleted ? "#0F5E63" : "var(--text2)",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    alignSelf: "center",
-                    border: `1px solid ${softTealBorder}`,
-                    boxShadow: "0 6px 14px rgba(15, 94, 99, 0.04)",
+                    background: idx === 0 ? "rgba(87, 195, 255, 0.18)" : "rgba(255,255,255,0.06)",
+                    color: idx === 0 ? "#62caff" : "rgba(238,245,255,0.72)",
+                    fontSize: 14,
+                    fontWeight: 900,
+                    flexShrink: 0,
                 }}
             >
                 {idx + 1}
-            </button>
+            </div>
 
-            {set.weight === "BW" ? (
+            <div
+                style={{
+                    color: "rgba(238,245,255,0.56)",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    lineHeight: 1.35,
+                    minWidth: 0,
+                    whiteSpace: "normal",
+                }}
+            >
+                {previousLabel}
+            </div>
+
+            {isBodyweight ? (
                 <button
+                    type="button"
                     onClick={() => setField(ex, idx, "weight", "")}
                     style={{
-                        width: "100%",
-                        background: "linear-gradient(135deg, rgba(15, 94, 99, 0.95), rgba(18, 199, 194, 0.9))",
-                        border: `1px solid ${softTealBorder}`,
-                        borderRadius: 10,
-                        padding: "10px 8px",
-                        color: "#ffffff",
+                        minHeight: 48,
+                        borderRadius: 16,
+                        border: "1px solid rgba(87, 195, 255, 0.30)",
+                        background: "linear-gradient(135deg, rgba(15, 94, 99, 0.95), rgba(18, 199, 194, 0.86))",
+                        color: "#fff",
                         fontSize: 14,
-                        fontWeight: 700,
-                        textAlign: "center",
-                        boxShadow: "0 10px 22px rgba(15, 94, 99, 0.10)",
+                        fontWeight: 900,
                     }}
                 >
-                    自重{" "}
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.78)" }}>
-                        タップでkg
-                    </span>
+                    自重
                 </button>
             ) : (
+                <div style={inputWrapStyle}>
+                    <input
+                        type="text"
+                        inputMode="decimal"
+                        value={set.weight}
+                        onChange={(e) => setField(ex, idx, "weight", e.target.value)}
+                        placeholder="0"
+                        style={inputStyle}
+                    />
+                    <span style={suffixStyle}>{unitLabel}</span>
+                </div>
+            )}
+
+            <div style={inputWrapStyle}>
                 <input
                     type="text"
-                    inputMode="decimal"
-                    value={set.weight}
-                    onChange={(e) => {
-                        setField(ex, idx, "weight", e.target.value);
-                    }}
+                    inputMode="numeric"
+                    value={set.reps}
+                    onChange={(e) => setField(ex, idx, "reps", e.target.value)}
                     placeholder="0"
-                    style={{
-                        width: "100%",
-                        background: softTealBg,
-                        border: `1px solid ${softTealBorder}`,
-                        borderRadius: 10,
-                        padding: "10px 8px",
-                        color: "var(--text)",
-                        fontSize: 16,
-                        fontWeight: 700,
-                        textAlign: "center",
-                    }}
+                    style={inputStyle}
                 />
-            )}
-
-            {canCopy && set.weight !== "BW" && onCopyDown ? (
-                <button
-                    onClick={() => onCopyDown(ex.name, idx - 1)}
-                    style={{
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: 8,
-                        background: softTealBg,
-                        border: `1px solid ${softTealBorder}`,
-                        color: "var(--text3)",
-                        fontSize: 15,
-                        fontWeight: 700,
-                    }}
-                >
-                    ⎘
-                </button>
-            ) : (
-                <div />
-            )}
-
-            <input
-                type="text"
-                inputMode="numeric"
-                value={set.reps}
-                onChange={(e) => {
-                    setField(ex, idx, "reps", e.target.value);
-                }}
-                placeholder="0"
-                style={{
-                    width: "100%",
-                    background: softTealBg,
-                    border: `1px solid ${softTealBorder}`,
-                    borderRadius: 10,
-                    padding: "10px 8px",
-                    color: "var(--text)",
-                    fontSize: 16,
-                    fontWeight: 700,
-                    textAlign: "center",
-                }}
-            />
-
-            {canCopy && onCopyDownReps ? (
-                <button
-                    onClick={() => onCopyDownReps(ex.name, idx - 1)}
-                    style={{
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: 8,
-                        background: softTealBg,
-                        border: `1px solid ${softTealBorder}`,
-                        color: "var(--text3)",
-                        fontSize: 15,
-                        fontWeight: 700,
-                    }}
-                >
-                    ⎘
-                </button>
-            ) : (
-                <div />
-            )}
+                <span style={suffixStyle}>回</span>
+            </div>
         </div>
     );
 }
