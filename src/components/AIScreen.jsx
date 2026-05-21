@@ -57,12 +57,8 @@ const buildAiOverview = (history) => {
         : "最近の記録";
 
     const recommendation = latestDate
-        ? `${formatDateLabel(latestDate)}は${latestSummary}でした。${
-            partSummary[0]
-                ? `${partSummary[0].bodyPart}を続けるならメイン1種目と補助2種目、別部位なら回復している部位を優先するのがおすすめです。`
-                : "メニュー提案やフォーム相談、重量相談ができます。"
-        }`
-        : "最近の記録をもとに、メニュー提案・フォーム相談・重量相談ができます。";
+        ? `${formatDateLabel(latestDate)}は${latestSummary}でした。次のメニューや重量調整を相談できます。`
+        : "最近の記録をもとに、メニューや重量調整を相談できます。";
 
     return {
         trainingDays: uniqueDates.length,
@@ -317,7 +313,7 @@ export default function AIScreen({
                                 }),
                                 display: "flex",
                                 flexDirection: "column",
-                                gap: 8,
+                                gap: 7,
                             }}
                         >
                             <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.8, color: "var(--text3)" }}>
@@ -328,24 +324,6 @@ export default function AIScreen({
                             </div>
                             <div style={{ fontSize: 13, lineHeight: 1.65, color: "var(--text2)" }}>
                                 メニュー提案・フォーム相談・重量相談ができます。
-                            </div>
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
-                                {["胸メニュー組んで", "昨日の記録分析", "ベンチ伸ばしたい"].map((example) => (
-                                    <div
-                                        key={example}
-                                        style={{
-                                            padding: "6px 10px",
-                                            borderRadius: 999,
-                                            background: "rgba(18, 199, 194, 0.07)",
-                                            border: "1px solid rgba(18, 199, 194, 0.12)",
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            color: "var(--text2)",
-                                        }}
-                                    >
-                                        {example}
-                                    </div>
-                                ))}
                             </div>
                         </div>
 
@@ -520,7 +498,7 @@ export default function AIScreen({
                     />
                 )}
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
-                    今日は何をやるべきか、昨日の記録分析、フォーム相談などをそのまま聞けます。
+                    メニュー相談、記録分析、フォーム相談をそのまま聞けます。
                 </div>
             </div>
         </div>
