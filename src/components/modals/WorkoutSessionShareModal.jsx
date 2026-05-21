@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
-import { formatSetCountByBodyPart } from "../../utils/setCountByBodyPart";
-
 const CARD_PRESETS = {
     square: {
         key: "square",
@@ -74,21 +72,6 @@ const formatLargeNumber = (value) => {
     return num.toLocaleString("ja-JP");
 };
 
-const getWorkoutTitle = (bodyPartCards, bodyPartLabel) => {
-    if (Array.isArray(bodyPartCards) && bodyPartCards.length === 1) {
-        return `${bodyPartCards[0].bodyPart}の日`;
-    }
-    if (Array.isArray(bodyPartCards) && bodyPartCards.length > 1) {
-        return bodyPartCards.slice(0, 2).map((item) => item.bodyPart).join(" / ");
-    }
-
-    const value = String(bodyPartLabel || "").trim();
-    if (!value || value === "まだありません") return "Workout";
-    const firstPart = value.split("/")[0]?.trim() || value;
-    if (firstPart.length <= 8 && !firstPart.includes(" ")) return `${firstPart}の日`;
-    return firstPart;
-};
-
 const getBodyPartCards = (summary, items) => {
     const counts = Array.isArray(summary?.setCountByBodyPart) && summary.setCountByBodyPart.length > 0
         ? summary.setCountByBodyPart
@@ -102,6 +85,11 @@ const getBodyPartCards = (summary, items) => {
         .filter((item) => Number.isFinite(item.count) && item.count > 0)
         .slice(0, 3);
 };
+
+const formatBodyPartBreakdown = (bodyPartCards) =>
+    (bodyPartCards || [])
+        .map((item) => `${item.bodyPart} ${item.count}セット`)
+        .join(" / ");
 
 const normalizeUnitLabel = (unit) => {
     const value = String(unit || "kg").toLowerCase();
@@ -179,33 +167,14 @@ export default function WorkoutSessionShareModal({
         () => sessionPayload?.preview_items || sessionPayload?.exercises || [],
         [sessionPayload]
     );
-    const setCountByBodyPartLabel = useMemo(() => {
-        if (Array.isArray(summary?.setCountByBodyPart) && summary.setCountByBodyPart.length > 0) {
-            return formatSetCountByBodyPart(summary.setCountByBodyPart, {
-                maxParts: 3,
-                suffix: "",
-                separator: " / ",
-            });
-        }
-        if (items.length > 0) {
-            return formatSetCountByBodyPart(items, {
-                maxParts: 3,
-                suffix: "",
-                separator: " / ",
-            });
-        }
-        return "まだありません";
-    }, [items, summary]);
-
     const bodyPartCards = useMemo(() => getBodyPartCards(summary, items), [items, summary]);
-    const workoutTitle = getWorkoutTitle(bodyPartCards, setCountByBodyPartLabel);
+    const bodyPartBreakdownLabel = formatBodyPartBreakdown(bodyPartCards);
+    const workoutTitle = "WORKOUT";
     const durationLabel = formatDuration(resolveDurationSec(sessionPayload));
     const prCount = Number(summary?.prCount || 0);
     const previewScale = preset.scale || 0.58;
     const isStory = sizeKey === "story";
     const prLabel = prCount > 0 ? `PR更新 ${prCount}件` : "";
-    const showBodyPartBreakdown = bodyPartCards.length > 1;
-    const singleTargetLabel = bodyPartCards.length === 1 ? bodyPartCards[0].bodyPart : "";
     const exerciseDetails = useMemo(
         () => getExerciseDetails(items, isStory ? 5 : 0),
         [isStory, items]
@@ -475,41 +444,16 @@ export default function WorkoutSessionShareModal({
                                         </div>
                                     </div>
 
-                                    {showBodyPartBreakdown ? (
-                                        <>
-                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 12 : 10, fontWeight: 800, marginBottom: isStory ? 8 : 8 }}>
+                                    {bodyPartBreakdownLabel && (
+                                        <div style={{ marginBottom: isStory ? 12 : 14 }}>
+                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 12 : 10, fontWeight: 800, marginBottom: 5 }}>
                                                 部位
                                             </div>
-
-                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isStory ? 8 : 7, marginBottom: isStory ? 12 : 14 }}>
-                                                {bodyPartCards.map((item) => (
-                                                    <div
-                                                        key={`${item.bodyPart}-${item.count}`}
-                                                        style={{
-                                                            minHeight: isStory ? 58 : 52,
-                                                            borderRadius: isStory ? 18 : 14,
-                                                            background: "rgba(255,255,255,0.075)",
-                                                            border: "1px solid rgba(255,255,255,0.05)",
-                                                            padding: isStory ? "10px 10px" : "9px 9px",
-                                                            boxSizing: "border-box",
-                                                        }}
-                                                    >
-                                                        <div style={{ color: "#fff", fontSize: isStory ? 15 : 11, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                            {item.bodyPart}
-                                                        </div>
-                                                        <div style={{ marginTop: 5, color: "#62caff", fontSize: isStory ? 22 : 18, fontWeight: 950, lineHeight: 0.95 }}>
-                                                            {item.count}
-                                                            <span style={{ marginLeft: 4, color: "rgba(255,255,255,0.42)", fontSize: isStory ? 12 : 9, fontWeight: 900 }}>sets</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                            <div style={{ color: "#dff8ff", fontSize: isStory ? 14 : 11, fontWeight: 900, lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                {bodyPartBreakdownLabel}
                                             </div>
-                                        </>
-                                    ) : singleTargetLabel ? (
-                                        <div style={{ color: "rgba(255,255,255,0.46)", fontSize: isStory ? 12 : 10, fontWeight: 900, marginBottom: isStory ? 12 : 14, letterSpacing: 0.8 }}>
-                                            Target: <span style={{ color: "#dff8ff" }}>{singleTargetLabel}</span>
                                         </div>
-                                    ) : null}
+                                    )}
 
                                     {isStory && prLabel && (
                                         <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: "8px 11px", fontSize: 12, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 10 }}>
