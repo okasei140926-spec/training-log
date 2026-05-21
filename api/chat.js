@@ -31,6 +31,29 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 12;
 const rateLimitStore = new Map();
 
+function parseWorkoutPlanFromText(text) {
+  const rawText = typeof text === "string" ? text : "";
+  const marker = "PUMP_WORKOUT_PLAN_JSON:";
+  const markerIndex = rawText.lastIndexOf(marker);
+  if (markerIndex < 0) return { text: rawText.trim(), workoutPlan: [] };
+
+  const visibleText = rawText.slice(0, markerIndex).trim();
+  const jsonText = rawText.slice(markerIndex + marker.length).trim();
+
+  try {
+    const parsed = JSON.parse(jsonText);
+    return {
+      text: visibleText,
+      workoutPlan: Array.isArray(parsed) ? parsed : [],
+    };
+  } catch {
+    return {
+      text: visibleText,
+      workoutPlan: [],
+    };
+  }
+}
+
 const getTodayKeyInTokyo = () =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -191,7 +214,12 @@ ${safeContext.latestWorkoutContext || "最新の記録はありません。"}
 - 初心者モードでは、種目数を少なめにし、専門用語を減らし、「まずはこれだけでOKです」と分かる形にする
 - 初心者モードでは、1回の提案は最大3〜4種目、セット数も簡単にする
 - 高重量低repなどの表現は、必要な時だけやさしい言葉に言い換える
-- 自然な話し言葉で書く`;
+- 自然な話し言葉で書く
+- メニュー提案モードでは、返答の最後に必ず次の形式でアプリ用JSONを1行だけ付ける
+PUMP_WORKOUT_PLAN_JSON: [{"exerciseName":"種目名","bodyPart":"胸","unit":"kg","sets":[{"weight":80,"reps":8},{"weight":80,"reps":8},{"weight":75,"reps":8}]}]
+- 自重種目は unit を "bodyweight" にし、sets は [{"reps":10},{"reps":10}] のようにする
+- 重量が不明な時は sets を空配列にせず、提案したセット数ぶん [{"weight":0,"reps":0}] を入れる
+- メニュー提案ではない時は PUMP_WORKOUT_PLAN_JSON を付けない`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -224,8 +252,20 @@ ${safeContext.latestWorkoutContext || "最新の記録はありません。"}
         aiUsage: reservedUsage,
       });
     }
+    const replyText = data?.content?.[0]?.text || "";
+    const parsedWorkoutPlan = parseWorkoutPlanFromText(replyText);
+    const nextContent = Array.isArray(data?.content)
+      ? data.content.map((part, index) =>
+          index === 0 && part?.type === "text"
+            ? { ...part, text: parsedWorkoutPlan.text || part.text }
+            : part
+        )
+      : data?.content;
+
     return res.status(response.status).json({
       ...data,
+      content: nextContent,
+      workoutPlan: parsedWorkoutPlan.workoutPlan,
       aiUsage: reservedUsage,
     });
   } catch {

@@ -212,6 +212,147 @@ const ProPaywallCard = ({ onStartPro, aiUsageCount, dailyFreeAiLimit }) => (
     </div>
 );
 
+const formatWorkoutPlanItem = (item) => {
+    const setCount = Array.isArray(item?.sets) ? item.sets.length : 0;
+    return `${item?.exerciseName || "種目"} ${setCount || 0}セット`;
+};
+
+const WorkoutPlanConfirmModal = ({ plan, selectedMap, setSelectedMap, onClose, onConfirm }) => {
+    const selectedCount = plan.filter((_, index) => selectedMap[index]).length;
+
+    return (
+        <div
+            onClick={onClose}
+            style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 80,
+                background: "rgba(11, 24, 28, 0.36)",
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                padding: "18px 16px calc(18px + var(--safe-bottom))",
+            }}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    width: "min(560px, 100%)",
+                    maxHeight: "78dvh",
+                    overflowY: "auto",
+                    borderRadius: 24,
+                    background: "var(--card)",
+                    border: "1px solid rgba(18, 199, 194, 0.14)",
+                    boxShadow: "0 24px 60px rgba(15, 94, 99, 0.22)",
+                    padding: 18,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 14,
+                }}
+            >
+                <div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: "var(--text)", marginBottom: 5 }}>
+                        記録に追加するメニュー
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
+                        今日の記録に追加する種目を選んでください。
+                    </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {plan.map((item, index) => (
+                        <button
+                            type="button"
+                            key={`${item.exerciseName}-${index}`}
+                            onClick={() => setSelectedMap((prev) => ({ ...prev, [index]: !prev[index] }))}
+                            style={{
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                                padding: "12px 12px",
+                                borderRadius: 16,
+                                border: selectedMap[index]
+                                    ? "1px solid rgba(18, 199, 194, 0.32)"
+                                    : "1px solid rgba(139, 164, 168, 0.16)",
+                                background: selectedMap[index]
+                                    ? "linear-gradient(135deg, rgba(18, 199, 194, 0.14), rgba(51, 225, 219, 0.08))"
+                                    : "var(--card2)",
+                                color: "var(--text)",
+                                textAlign: "left",
+                            }}
+                        >
+                            <span
+                                style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 999,
+                                    display: "grid",
+                                    placeItems: "center",
+                                    flexShrink: 0,
+                                    background: selectedMap[index]
+                                        ? "linear-gradient(135deg, var(--accent), var(--accent2))"
+                                        : "rgba(139, 164, 168, 0.14)",
+                                    color: selectedMap[index] ? "#fff" : "var(--text3)",
+                                    fontSize: 13,
+                                    fontWeight: 900,
+                                }}
+                            >
+                                {selectedMap[index] ? "✓" : ""}
+                            </span>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                                <span style={{ display: "block", fontSize: 14, fontWeight: 900 }}>
+                                    {formatWorkoutPlanItem(item)}
+                                </span>
+                                <span style={{ display: "block", fontSize: 11, color: "var(--text2)", marginTop: 3 }}>
+                                    {item.bodyPart || "その他"} / {item.unit === "BW" ? "自重" : item.unit === "lbs" ? "lb" : "kg"}
+                                </span>
+                            </span>
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: 10 }}>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        style={{
+                            padding: "13px 12px",
+                            borderRadius: 16,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card2)",
+                            color: "var(--text2)",
+                            fontWeight: 900,
+                            fontSize: 13,
+                        }}
+                    >
+                        キャンセル
+                    </button>
+                    <button
+                        type="button"
+                        disabled={selectedCount <= 0}
+                        onClick={onConfirm}
+                        style={{
+                            padding: "13px 12px",
+                            borderRadius: 16,
+                            border: "none",
+                            background: selectedCount > 0
+                                ? "linear-gradient(135deg, var(--accent), var(--accent2))"
+                                : "rgba(139, 164, 168, 0.22)",
+                            color: "#fff",
+                            fontWeight: 900,
+                            fontSize: 13,
+                            opacity: selectedCount > 0 ? 1 : 0.55,
+                        }}
+                    >
+                        選択した種目を追加
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function AIScreen({
     aiMsgs,
     aiInput,
@@ -225,9 +366,12 @@ export default function AIScreen({
     dailyFreeAiLimit = 5,
     aiUsageCount = 0,
     aiRemaining,
+    onAddWorkoutPlan,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
+    const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
+    const [selectedWorkoutPlanMap, setSelectedWorkoutPlanMap] = useState({});
 
     const overview = useMemo(() => buildAiOverview(history), [history]);
     const isInitialState =
@@ -254,6 +398,30 @@ export default function AIScreen({
         setAiInput(prompt);
         inputRef.current?.focus();
         setTimeout(() => setActiveQuickAction(""), 180);
+    };
+
+    const openWorkoutPlanConfirm = (plan) => {
+        const safePlan = Array.isArray(plan) ? plan : [];
+        if (!safePlan.length) return;
+        setPendingWorkoutPlan(safePlan);
+        setSelectedWorkoutPlanMap(
+            safePlan.reduce((acc, _item, index) => {
+                acc[index] = true;
+                return acc;
+            }, {})
+        );
+    };
+
+    const closeWorkoutPlanConfirm = () => {
+        setPendingWorkoutPlan(null);
+        setSelectedWorkoutPlanMap({});
+    };
+
+    const confirmWorkoutPlan = () => {
+        const selected = (pendingWorkoutPlan || []).filter((_, index) => selectedWorkoutPlanMap[index]);
+        if (!selected.length) return;
+        onAddWorkoutPlan?.(selected);
+        closeWorkoutPlanConfirm();
     };
 
     return (
@@ -354,11 +522,38 @@ export default function AIScreen({
                     </>
                 )}
 
-                {visibleMessages.map((msg, i) => (
-                    <CompactBubble key={i} role={msg.role}>
-                        {msg.content}
-                    </CompactBubble>
-                ))}
+                {visibleMessages.map((msg, i) => {
+                    const hasWorkoutPlan = msg.role === "assistant" && Array.isArray(msg.workoutPlan) && msg.workoutPlan.length > 0;
+
+                    return (
+                        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                            <CompactBubble role={msg.role}>
+                                {msg.content}
+                            </CompactBubble>
+                            {hasWorkoutPlan && (
+                                <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => openWorkoutPlanConfirm(msg.workoutPlan)}
+                                        className="pressable"
+                                        style={{
+                                            padding: "9px 12px",
+                                            borderRadius: 14,
+                                            border: "1px solid rgba(18, 199, 194, 0.18)",
+                                            background: "linear-gradient(135deg, rgba(18, 199, 194, 0.16), rgba(51, 225, 219, 0.10))",
+                                            color: "var(--text)",
+                                            fontSize: 12,
+                                            fontWeight: 900,
+                                            boxShadow: "0 10px 20px rgba(15,94,99,0.08)",
+                                        }}
+                                    >
+                                        このメニューを記録に追加
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
 
                 {aiLoad && (
                     <CompactBubble role="assistant">
@@ -501,6 +696,16 @@ export default function AIScreen({
                     メニュー相談、記録分析、フォーム相談をそのまま聞けます。
                 </div>
             </div>
+
+            {pendingWorkoutPlan && (
+                <WorkoutPlanConfirmModal
+                    plan={pendingWorkoutPlan}
+                    selectedMap={selectedWorkoutPlanMap}
+                    setSelectedMap={setSelectedWorkoutPlanMap}
+                    onClose={closeWorkoutPlanConfirm}
+                    onConfirm={confirmWorkoutPlan}
+                />
+            )}
         </div>
     );
 }

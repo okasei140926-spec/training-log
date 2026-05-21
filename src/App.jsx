@@ -66,6 +66,7 @@ import {
     scheduleRestTimerNotification,
 } from "./lib/restTimerNotifications";
 import { normalizeExerciseName } from "./utils/exerciseName";
+import { convertPlanWeight, normalizePlanUnit, normalizeWorkoutPlan } from "./utils/aiWorkoutPlan";
 import { isNativeApp, isNativeOAuthCallbackUrl } from "./utils/oauth";
 import {
     clearWorkoutTimerState,
@@ -2958,6 +2959,135 @@ export default function GymApp() {
         quickAdd(name, remove, labelOverride);
     };
 
+    const handleAddAiWorkoutPlanToLog = (rawPlan) => {
+        const plan = normalizeWorkoutPlan(rawPlan);
+        if (!plan.length) return;
+
+        const todayKey = getTodayKey();
+        const currentDraft = {
+            todayLabels,
+            logData,
+            sessionEx,
+            exerciseUnits,
+        };
+
+        if (hasDraftContent(currentDraft)) {
+            saveDraftForDate(logDate, currentDraft);
+        }
+
+        const todayDraft = logDate === todayKey
+            ? currentDraft
+            : loadDraftForDate(todayKey);
+        const baseLogData = { ...(todayDraft.logData || {}) };
+        const baseUnits = { ...(todayDraft.exerciseUnits || {}) };
+        const baseLabels = Array.isArray(todayDraft.todayLabels) ? [...todayDraft.todayLabels] : [];
+        const existingSession = Array.isArray(todayDraft.sessionEx)
+            ? todayDraft.sessionEx
+            : logDate === todayKey
+                ? [...exercises]
+                : Object.keys(baseLogData).map((name) => ({
+                    id: `${name}-${todayKey}`,
+                    name,
+                    label: EX_TO_LABEL[name] || baseLabels[0] || "その他",
+                    bodyPart: EX_TO_LABEL[name] || baseLabels[0] || "その他",
+                }));
+        const nextSession = [...existingSession];
+        const nextLogData = { ...baseLogData };
+        const nextUnits = { ...baseUnits };
+        const nextLabels = [...baseLabels];
+
+        const ensureLabel = (label) => {
+            const safeLabel = label && QUICK_LABELS.includes(label) ? label : (label || "その他");
+            if (safeLabel !== "その他" && !nextLabels.includes(safeLabel)) nextLabels.push(safeLabel);
+            return safeLabel;
+        };
+
+        const makeDraftSet = (set, sourceUnit, targetUnit) => {
+            const normalizedTargetUnit = normalizePlanUnit(targetUnit);
+            const normalizedSourceUnit = normalizePlanUnit(set?.unit || sourceUnit);
+            const reps = Number(set?.reps);
+            const repsValue = Number.isFinite(reps) && reps > 0 ? String(Math.floor(reps)) : "";
+
+            if (normalizedTargetUnit === "BW" || String(set?.weight || "").toUpperCase() === "BW") {
+                return {
+                    weight: "BW",
+                    reps: repsValue,
+                    done: Boolean(repsValue),
+                };
+            }
+
+            const weightValue = convertPlanWeight(set?.weight, normalizedSourceUnit, normalizedTargetUnit);
+            return {
+                weight: weightValue,
+                reps: repsValue,
+                done: Boolean(weightValue && repsValue),
+            };
+        };
+
+        plan.forEach((item) => {
+            const name = String(item.exerciseName || "").trim();
+            if (!name) return;
+
+            const label = ensureLabel(item.bodyPart || EX_TO_LABEL[name] || todayLabels[0] || "その他");
+            const existingUnit = nextUnits[name] || (logDate === todayKey ? exerciseUnits[name] : null);
+            const itemUnit = normalizePlanUnit(item.unit);
+            const targetUnit = itemUnit === "BW" ? "BW" : normalizePlanUnit(existingUnit || itemUnit || unit);
+            const draftSets = (item.sets || []).map((set) => makeDraftSet(set, itemUnit, targetUnit));
+            const safeSets = draftSets.length ? draftSets : makeDefaultDraftSets();
+
+            if (!nextSession.some((ex) => ex.name === name)) {
+                nextSession.push({
+                    id: Date.now() + Math.floor(Math.random() * 100000),
+                    name,
+                    label,
+                    bodyPart: label,
+                });
+            }
+
+            nextLogData[name] = nextLogData[name]
+                ? [...nextLogData[name], ...safeSets]
+                : safeSets;
+            nextUnits[name] = targetUnit;
+        });
+
+        setMuscleEx((prev) => {
+            const next = { ...prev };
+            plan.forEach((item) => {
+                const name = String(item.exerciseName || "").trim();
+                if (!name) return;
+                const label = item.bodyPart || EX_TO_LABEL[name] || todayLabels[0] || "その他";
+                if (!QUICK_LABELS.includes(label)) return;
+                const list = next[label] || [];
+                if (!list.some((ex) => ex.name === name)) {
+                    next[label] = [...list, { id: Date.now() + Math.floor(Math.random() * 100000), name }];
+                }
+            });
+            return next;
+        });
+
+        plan.forEach((item) => {
+            if (item.exerciseName && item.bodyPart) {
+                setExerciseOverrideForLabel(item.exerciseName, item.bodyPart);
+            }
+        });
+
+        saveDraftForDate(todayKey, {
+            todayLabels: nextLabels,
+            logData: nextLogData,
+            sessionEx: nextSession,
+            exerciseUnits: nextUnits,
+        });
+
+        setLogMode("today");
+        setLogDate(todayKey);
+        setTodayLabels(nextLabels);
+        setLogData(nextLogData);
+        setSessionEx(nextSession);
+        setExerciseUnits(nextUnits);
+        startWorkoutTimerIfNeeded(todayKey, { markAsActivity: true });
+        setScreen("log");
+    };
+
     const handleLogForDate = (dateStr) => {
         const currentDraft = {
             todayLabels,
@@ -3980,6 +4110,7 @@ export default function GymApp() {
                         aiUsageDate={aiUsageDate}
                         aiUsageCount={aiUsageCount}
                         aiRemaining={aiRemaining}
+                        onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
                     />
                 )}
 

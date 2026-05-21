@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
+import { extractWorkoutPlanFromText, normalizeWorkoutPlan } from "../utils/aiWorkoutPlan";
 
 const AI_DAILY_LIMIT = 5;
 const AI_USAGE_STORAGE_KEY = "ai_usage_state";
@@ -413,6 +414,12 @@ export function useAI(history) {
       }
 
       const reply = data.content?.[0]?.text || "AI Coachの応答に失敗しました。";
+      const structuredWorkoutPlan = normalizeWorkoutPlan(data.workoutPlan);
+      const workoutPlan = mode.wantsMenu
+        ? structuredWorkoutPlan.length
+          ? structuredWorkoutPlan
+          : extractWorkoutPlanFromText(reply)
+        : [];
       if (!applyServerAiUsage(data?.aiUsage) && !currentIsPro) {
         const nextUsage = incrementAiUsage();
         aiUsageDateRef.current = nextUsage.dateKey;
@@ -420,7 +427,7 @@ export function useAI(history) {
         setAiUsageDate(nextUsage.dateKey);
         setAiUsageCount(nextUsage.count);
       }
-      setAiMsgs((p) => [...p, { role: "assistant", content: reply }]);
+      setAiMsgs((p) => [...p, { role: "assistant", content: reply, workoutPlan }]);
       return true;
     } catch {
       setAiMsgs((p) => [...p, { role: "assistant", content: "AI Coachの応答に失敗しました。" }]);
