@@ -475,7 +475,11 @@ export default function LogScreen({
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: false });
-                        const prTopSetLabel = prTopSet ? convertWeightToTargetUnit(prTopSet, exUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg") : "";
+                        const prTopSetLabel = prTopSet
+                            ? (normalizeWeightUnit(exUnit) === "BW"
+                                ? "自重"
+                                : convertWeightToTargetUnit(prTopSet, exUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg"))
+                            : "";
 
                         if (i !== activeExIdx) {
                             const doneSetsCount = sets.filter((s) => isCompletedWorkoutSet(s)).length;
@@ -654,7 +658,7 @@ export default function LogScreen({
                                                         onClick={() => onToggleExUnit(ex.name)}
                                                         style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 800, border: `1px solid ${softBorderColor}`, background: exUnit !== unit ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : subActionBg, color: exUnit !== unit ? "#ffffff" : subActionText, boxShadow: exUnit !== unit ? "0 8px 18px rgba(15, 94, 99, 0.10)" : "none" }}
                                                     >
-                                                        {{ kg: "lbs", lbs: "自重", BW: "kg" }[exUnit] || exUnit}
+                                                        {{ kg: "kg", lbs: "lb", BW: "自重" }[exUnit] || exUnit}
                                                     </button>
                                                 )}
                                                 <button

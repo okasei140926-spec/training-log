@@ -2188,6 +2188,26 @@ export default function GymApp() {
         const currentUnit = getExUnit(name);
         const CYCLE = { kg: "lbs", lbs: "BW", BW: "kg" };
         const newUnit = CYCLE[currentUnit] || "kg";
+        const normalizeWeightedUnit = (value) => (value === "lbs" || value === "lb" ? "lbs" : "kg");
+        const formatWeightForDisplay = (value) => {
+            const num = Number(value);
+            if (!Number.isFinite(num) || num <= 0) return "";
+            const rounded = Math.round(num * 10) / 10;
+            return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+        };
+        const convertWeightDisplay = (value, fromUnit, toUnit) => {
+            const num = Number(value);
+            if (!Number.isFinite(num) || num <= 0) return "";
+
+            const sourceUnit = normalizeWeightedUnit(fromUnit);
+            const targetUnit = normalizeWeightedUnit(toUnit);
+            if (sourceUnit === targetUnit) return formatWeightForDisplay(num);
+
+            const converted = sourceUnit === "kg"
+                ? num * KG_TO_LBS
+                : num / KG_TO_LBS;
+            return formatWeightForDisplay(converted);
+        };
 
         const makeBaseSets = () => ([
             { weight: "", reps: "", done: false },
@@ -2199,36 +2219,71 @@ export default function GymApp() {
             ? logData[name].map(s => ({ ...s }))
             : makeBaseSets();
 
+        let nextSets = currentSets;
+
         if (newUnit === "BW") {
-            setLogData(p => ({
-                ...p,
-                [name]: currentSets.map(s => ({ ...s, weight: "BW" })),
-            }));
+            nextSets = currentSets.map((set) => {
+                const currentWeight = String(set.weight ?? "").trim();
+                const numericWeight = Number(currentWeight);
+                const hasWeightedValue =
+                    currentWeight &&
+                    currentWeight.toUpperCase() !== "BW" &&
+                    Number.isFinite(numericWeight) &&
+                    numericWeight > 0;
+
+                return {
+                    ...set,
+                    lastWeightedValue: hasWeightedValue
+                        ? formatWeightForDisplay(numericWeight)
+                        : set.lastWeightedValue,
+                    lastWeightedUnit: hasWeightedValue
+                        ? normalizeWeightedUnit(currentUnit)
+                        : set.lastWeightedUnit || normalizeWeightedUnit(currentUnit),
+                    weight: "BW",
+                };
+            });
         } else if (currentUnit === "BW") {
-            setLogData(p => ({
-                ...p,
-                [name]: currentSets.map(s => ({ ...s, weight: "" })),
-            }));
+            nextSets = currentSets.map((set) => {
+                const restoredWeight = convertWeightDisplay(
+                    set.lastWeightedValue,
+                    set.lastWeightedUnit || newUnit,
+                    newUnit
+                );
+
+                return {
+                    ...set,
+                    weight: restoredWeight,
+                    lastWeightedValue: restoredWeight || set.lastWeightedValue,
+                    lastWeightedUnit: restoredWeight ? normalizeWeightedUnit(newUnit) : set.lastWeightedUnit,
+                };
+            });
         } else if (logData[name]) {
-            setLogData(p => ({
-                ...p,
-                [name]: p[name].map(s => {
-                    if (!s.weight || s.weight === "BW") return s;
-                    const n = Number(s.weight);
-                    if (isNaN(n) || n === 0) return s;
-                    const converted = newUnit === "lbs"
-                        ? String(Math.round(n * KG_TO_LBS * 10) / 10)
-                        : String(Math.round(n / KG_TO_LBS * 100) / 100);
-                    return { ...s, weight: converted };
-                }),
-            }));
+            nextSets = currentSets.map((set) => {
+                if (!set.weight || set.weight === "BW") return set;
+                const converted = convertWeightDisplay(set.weight, currentUnit, newUnit);
+                if (!converted) return set;
+                return {
+                    ...set,
+                    weight: converted,
+                    lastWeightedValue: converted,
+                    lastWeightedUnit: normalizeWeightedUnit(newUnit),
+                };
+            });
         }
+
+        setLogData(p => ({
+            ...p,
+            [name]: nextSets,
+        }));
 
         setExerciseUnits((p) => {
             const next = { ...p, [name]: newUnit };
             saveDraftForDate(logDate, {
                 todayLabels,
-                logData,
+                logData: {
+                    ...logData,
+                    [name]: nextSets,
+                },
                 sessionEx,
                 exerciseUnits: next,
             });

@@ -31,7 +31,6 @@ const convertWeightForUnit = (weight, sourceUnit, targetUnit) => {
     const num = Number(rawWeight);
     if (!Number.isFinite(num)) return rawWeight;
 
-    if (targetUnit === "BW") return num;
     if (sourceUnit === targetUnit) return num;
     if (sourceUnit === "kg" && targetUnit === "lb") return num * KG_TO_LB;
     if (sourceUnit === "lb" && targetUnit === "kg") return num / KG_TO_LB;
@@ -44,13 +43,13 @@ const formatPreviousSet = (previousSet, fallbackUnit, targetUnit) => {
     const reps = Number(previousSet.reps);
     const repsLabel = Number.isFinite(reps) && reps > 0 ? formatWeightValue(reps) : "-";
     const rawWeight = String(previousSet.displayWeight ?? previousSet.weight ?? "").trim();
+    const normalizedTargetUnit = normalizeUnitKey(targetUnit);
 
-    if (rawWeight.toUpperCase() === "BW") {
+    if (normalizedTargetUnit === "BW" || rawWeight.toUpperCase() === "BW") {
         return `前回 自重 × ${repsLabel}`;
     }
 
     const sourceUnit = getSourceUnit(previousSet, fallbackUnit);
-    const normalizedTargetUnit = normalizeUnitKey(targetUnit);
     const convertedWeight = convertWeightForUnit(rawWeight, sourceUnit, normalizedTargetUnit);
     const weightLabel = convertedWeight !== "" ? formatWeightValue(convertedWeight) : "-";
     const unitLabel = normalizeUnitLabel(normalizedTargetUnit === "BW" ? sourceUnit : normalizedTargetUnit);
@@ -68,7 +67,7 @@ export default function SetRow({
 }) {
     const unitLabel = normalizeUnitLabel(unit);
     const previousLabel = formatPreviousSet(previousSet, previousUnit, unit);
-    const isBodyweight = String(set.weight || "").toUpperCase() === "BW";
+    const isBodyweight = normalizeUnitKey(unit) === "BW" || String(set.weight || "").toUpperCase() === "BW";
 
     const inputWrapStyle = {
         position: "relative",
@@ -148,9 +147,7 @@ export default function SetRow({
             </div>
 
             {isBodyweight ? (
-                <button
-                    type="button"
-                    onClick={() => setField(ex, idx, "weight", "")}
+                <div
                     style={{
                         minHeight: 48,
                         borderRadius: 16,
@@ -159,10 +156,14 @@ export default function SetRow({
                         color: "#fff",
                         fontSize: 14,
                         fontWeight: 900,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "var(--shadow-soft)",
                     }}
                 >
                     自重
-                </button>
+                </div>
             ) : (
                 <div style={inputWrapStyle}>
                     <input
