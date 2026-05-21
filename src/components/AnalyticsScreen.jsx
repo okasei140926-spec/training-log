@@ -562,7 +562,6 @@ export default function AnalyticsScreen({
           ? lastMonthSummary
           : thisWeekSummary;
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
-  const selectedPrPreview = selectedPrGroup ? selectedPrGroup.items.slice(0, 3) : [];
   const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
   const overviewBodyPartChart = overviewBodyPartStats.map((item) => ({
     label: getBodyPartDisplayLabel(item.bodyPart),
@@ -1224,9 +1223,7 @@ export default function AnalyticsScreen({
         const thisVol = thisMonthSummary.totalVolume;
         const lastVol = lastMonthSummary.totalVolume;
         const volDiff = lastVol > 0 ? Math.round(((thisVol - lastVol) / lastVol) * 100) : null;
-        const thisWeekVol = thisWeekSummary.totalVolume;
-        const lastWeekVol = lastWeekSummary.totalVolume;
-        const weekDiff = lastWeekVol > 0 ? Math.round(((thisWeekVol - lastWeekVol) / lastWeekVol) * 100) : null;
+
 
         return (
           <>
