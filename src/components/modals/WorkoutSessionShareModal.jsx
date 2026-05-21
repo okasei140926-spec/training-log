@@ -204,6 +204,8 @@ export default function WorkoutSessionShareModal({
     const previewScale = preset.scale || 0.58;
     const isStory = sizeKey === "story";
     const prLabel = prCount > 0 ? `PR更新 ${prCount}件` : "";
+    const showBodyPartBreakdown = bodyPartCards.length > 1;
+    const singleTargetLabel = bodyPartCards.length === 1 ? bodyPartCards[0].bodyPart : "";
     const exerciseDetails = useMemo(
         () => getExerciseDetails(items, isStory ? 5 : 0),
         [isStory, items]
@@ -473,33 +475,41 @@ export default function WorkoutSessionShareModal({
                                         </div>
                                     </div>
 
-                                    <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 12 : 10, fontWeight: 800, marginBottom: isStory ? 8 : 8 }}>
-                                        部位
-                                    </div>
-
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isStory ? 8 : 7, marginBottom: isStory ? 12 : 14 }}>
-                                        {(bodyPartCards.length > 0 ? bodyPartCards : [{ bodyPart: "合計", count: Number(summary?.setCount || 0) }]).map((item) => (
-                                            <div
-                                                key={`${item.bodyPart}-${item.count}`}
-                                                style={{
-                                                    minHeight: isStory ? 58 : 52,
-                                                    borderRadius: isStory ? 18 : 14,
-                                                    background: "rgba(255,255,255,0.075)",
-                                                    border: "1px solid rgba(255,255,255,0.05)",
-                                                    padding: isStory ? "10px 10px" : "9px 9px",
-                                                    boxSizing: "border-box",
-                                                }}
-                                            >
-                                                <div style={{ color: "#fff", fontSize: isStory ? 15 : 11, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                    {item.bodyPart}
-                                                </div>
-                                                <div style={{ marginTop: 5, color: "#62caff", fontSize: isStory ? 22 : 18, fontWeight: 950, lineHeight: 0.95 }}>
-                                                    {item.count}
-                                                    <span style={{ marginLeft: 4, color: "rgba(255,255,255,0.42)", fontSize: isStory ? 12 : 9, fontWeight: 900 }}>sets</span>
-                                                </div>
+                                    {showBodyPartBreakdown ? (
+                                        <>
+                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 12 : 10, fontWeight: 800, marginBottom: isStory ? 8 : 8 }}>
+                                                部位
                                             </div>
-                                        ))}
-                                    </div>
+
+                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isStory ? 8 : 7, marginBottom: isStory ? 12 : 14 }}>
+                                                {bodyPartCards.map((item) => (
+                                                    <div
+                                                        key={`${item.bodyPart}-${item.count}`}
+                                                        style={{
+                                                            minHeight: isStory ? 58 : 52,
+                                                            borderRadius: isStory ? 18 : 14,
+                                                            background: "rgba(255,255,255,0.075)",
+                                                            border: "1px solid rgba(255,255,255,0.05)",
+                                                            padding: isStory ? "10px 10px" : "9px 9px",
+                                                            boxSizing: "border-box",
+                                                        }}
+                                                    >
+                                                        <div style={{ color: "#fff", fontSize: isStory ? 15 : 11, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                            {item.bodyPart}
+                                                        </div>
+                                                        <div style={{ marginTop: 5, color: "#62caff", fontSize: isStory ? 22 : 18, fontWeight: 950, lineHeight: 0.95 }}>
+                                                            {item.count}
+                                                            <span style={{ marginLeft: 4, color: "rgba(255,255,255,0.42)", fontSize: isStory ? 12 : 9, fontWeight: 900 }}>sets</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    ) : singleTargetLabel ? (
+                                        <div style={{ color: "rgba(255,255,255,0.46)", fontSize: isStory ? 12 : 10, fontWeight: 900, marginBottom: isStory ? 12 : 14, letterSpacing: 0.8 }}>
+                                            Target: <span style={{ color: "#dff8ff" }}>{singleTargetLabel}</span>
+                                        </div>
+                                    ) : null}
 
                                     {isStory && prLabel && (
                                         <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: "8px 11px", fontSize: 12, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 10 }}>
