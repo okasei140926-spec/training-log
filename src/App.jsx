@@ -710,6 +710,17 @@ export default function GymApp() {
         startTimer, stopTimer,
     } = useTimer();
 
+    useEffect(() => {
+        setShowTimerMenu(false);
+    }, [screen, setShowTimerMenu]);
+
+    useEffect(() => {
+        if (!showTimerMenu) return undefined;
+        const closeTimerMenu = () => setShowTimerMenu(false);
+        window.addEventListener("scroll", closeTimerMenu, true);
+        return () => window.removeEventListener("scroll", closeTimerMenu, true);
+    }, [showTimerMenu, setShowTimerMenu]);
+
     // eslint-disable-next-line no-unused-vars
     const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
     const appThemeClassName = isDark ? "app-shell" : "theme-light app-shell";
@@ -3372,7 +3383,7 @@ export default function GymApp() {
 
     // ─── Main render ──────────────────────────────────
     const headerTitle =
-        screen === "log" ? "ワークアウト記録"
+        screen === "log" ? "記録"
             : screen === "analytics" ? "分析"
                 : screen === "photos" ? "写真比較"
                 : screen === "feed" ? "フィード"
@@ -3628,17 +3639,78 @@ export default function GymApp() {
 
                 <Suspense fallback={null}>
                 {showTimerMenu && screen === "log" && (
-                    <div style={{ position: "fixed", top: 70, right: 20, zIndex: 200, background: "var(--card)", borderRadius: 12, padding: 12, border: "1px solid var(--border2)", display: "flex", gap: 6 }}>
-                        {[30, 60, 90, 120].map(s => (
-                            <button key={s} onClick={() => { setIntervalSec(s); setShowTimerMenu(false); startTimer(s); }}
-                                style={{
-                                    padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, border: "none",
-                                    background: intervalSec === s ? "var(--text)" : "var(--card2)",
-                                    color: intervalSec === s ? "var(--bg)" : "var(--text2)"
-                                }}>
-                                {s < 60 ? `${s}s` : `${s / 60}m`}
-                            </button>
-                        ))}
+                    <div
+                        onClick={() => setShowTimerMenu(false)}
+                        style={{
+                            position: "fixed",
+                            inset: 0,
+                            zIndex: 220,
+                            background: "rgba(15, 23, 42, 0.22)",
+                            display: "flex",
+                            alignItems: "flex-end",
+                            justifyContent: "center",
+                            padding: "16px 14px calc(18px + var(--safe-bottom, 0px))",
+                            boxSizing: "border-box",
+                        }}
+                    >
+                        <div
+                            onClick={(event) => event.stopPropagation()}
+                            style={{
+                                width: "100%",
+                                maxWidth: 430,
+                                background: "var(--card-modal)",
+                                color: "var(--text)",
+                                border: "1px solid var(--border2)",
+                                borderRadius: 24,
+                                padding: "18px 16px 16px",
+                                boxShadow: "0 24px 52px rgba(15, 23, 42, 0.22)",
+                                boxSizing: "border-box",
+                            }}
+                        >
+                            <div style={{ width: 46, height: 5, borderRadius: 999, background: "var(--border2)", margin: "0 auto 14px" }} />
+                            <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 4 }}>
+                                休憩時間を選択
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>
+                                選ぶと休憩タイマーを開始します
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                                {[
+                                    { sec: 30, label: "30秒" },
+                                    { sec: 60, label: "1分" },
+                                    { sec: 90, label: "1分30秒" },
+                                    { sec: 120, label: "2分" },
+                                ].map(({ sec, label }) => {
+                                    const selected = intervalSec === sec;
+                                    return (
+                                        <button
+                                            key={sec}
+                                            type="button"
+                                            onClick={() => {
+                                                setIntervalSec(sec);
+                                                setShowTimerMenu(false);
+                                                startTimer(sec);
+                                            }}
+                                            style={{
+                                                minHeight: 48,
+                                                padding: "12px 14px",
+                                                borderRadius: 16,
+                                                border: selected ? "1px solid transparent" : "1px solid var(--border2)",
+                                                background: selected
+                                                    ? "linear-gradient(135deg, var(--accent), var(--accent2))"
+                                                    : "var(--btn-secondary)",
+                                                color: selected ? "#ffffff" : "var(--text)",
+                                                fontSize: 14,
+                                                fontWeight: 900,
+                                                boxShadow: selected ? "var(--shadow-soft)" : "none",
+                                            }}
+                                        >
+                                            {label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 )}
 
