@@ -5,16 +5,40 @@ const normalizeUnitLabel = (unit) => {
     return "kg";
 };
 
+const normalizeUnitKey = (unit) => {
+    const label = normalizeUnitLabel(unit);
+    if (label === "lb") return "lb";
+    if (label === "自重") return "BW";
+    return "kg";
+};
+
 const formatWeightValue = (value) => {
     const num = Number(value);
     if (!Number.isFinite(num)) return String(value || "");
     return Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10);
 };
 
-const getSavedUnitLabel = (set, fallbackUnit) =>
-    normalizeUnitLabel(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit || "kg");
+const KG_TO_LB = 2.20462;
 
-const formatPreviousSet = (previousSet, fallbackUnit) => {
+const getSourceUnit = (set, fallbackUnit) =>
+    normalizeUnitKey(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit || "kg");
+
+const convertWeightForUnit = (weight, sourceUnit, targetUnit) => {
+    const rawWeight = String(weight ?? "").trim();
+    if (!rawWeight) return "";
+    if (rawWeight.toUpperCase() === "BW" || targetUnit === "BW") return rawWeight;
+
+    const num = Number(rawWeight);
+    if (!Number.isFinite(num)) return rawWeight;
+
+    if (targetUnit === "BW") return num;
+    if (sourceUnit === targetUnit) return num;
+    if (sourceUnit === "kg" && targetUnit === "lb") return num * KG_TO_LB;
+    if (sourceUnit === "lb" && targetUnit === "kg") return num / KG_TO_LB;
+    return num;
+};
+
+const formatPreviousSet = (previousSet, fallbackUnit, targetUnit) => {
     if (!previousSet) return "前回 -";
 
     const reps = Number(previousSet.reps);
@@ -25,8 +49,11 @@ const formatPreviousSet = (previousSet, fallbackUnit) => {
         return `前回 自重 × ${repsLabel}`;
     }
 
-    const weightLabel = rawWeight ? formatWeightValue(rawWeight) : "-";
-    const unitLabel = getSavedUnitLabel(previousSet, fallbackUnit);
+    const sourceUnit = getSourceUnit(previousSet, fallbackUnit);
+    const normalizedTargetUnit = normalizeUnitKey(targetUnit);
+    const convertedWeight = convertWeightForUnit(rawWeight, sourceUnit, normalizedTargetUnit);
+    const weightLabel = convertedWeight !== "" ? formatWeightValue(convertedWeight) : "-";
+    const unitLabel = normalizeUnitLabel(normalizedTargetUnit === "BW" ? sourceUnit : normalizedTargetUnit);
     return `前回 ${weightLabel}${unitLabel} × ${repsLabel}`;
 };
 
@@ -40,7 +67,7 @@ export default function SetRow({
     unit = "kg",
 }) {
     const unitLabel = normalizeUnitLabel(unit);
-    const previousLabel = formatPreviousSet(previousSet, previousUnit);
+    const previousLabel = formatPreviousSet(previousSet, previousUnit, unit);
     const isBodyweight = String(set.weight || "").toUpperCase() === "BW";
 
     const inputWrapStyle = {

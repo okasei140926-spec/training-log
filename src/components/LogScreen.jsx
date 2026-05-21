@@ -60,6 +60,52 @@ const getPreviousRecordSets = (record) => {
     return Array.isArray(sets) ? sets.filter(Boolean) : [];
 };
 
+const normalizeWeightUnit = (unit) => {
+    const value = String(unit || "kg").toLowerCase();
+    if (value === "lbs" || value === "lb" || value === "pound" || value === "pounds") return "lb";
+    if (value === "bw" || value === "bodyweight") return "BW";
+    return "kg";
+};
+
+const formatWeightUnit = (unit) => {
+    const normalized = normalizeWeightUnit(unit);
+    if (normalized === "lb") return "lb";
+    if (normalized === "BW") return "自重";
+    return "kg";
+};
+
+const formatConvertedWeight = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return String(value || "");
+    const rounded = Math.round(num * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+};
+
+const convertWeightToTargetUnit = (set, targetUnit, fallbackUnit = "kg") => {
+    const rawWeight = String(set?.displayWeight ?? set?.weight ?? "").trim();
+    if (!rawWeight) return "";
+    if (rawWeight.toUpperCase() === "BW") return "自重";
+
+    const weightNum = Number(rawWeight);
+    if (!Number.isFinite(weightNum)) return rawWeight;
+
+    const sourceUnit = normalizeWeightUnit(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit);
+    const normalizedTargetUnit = normalizeWeightUnit(targetUnit);
+
+    if (normalizedTargetUnit === "BW") {
+        return `${formatConvertedWeight(weightNum)}${formatWeightUnit(sourceUnit)}`;
+    }
+
+    let converted = weightNum;
+    if (sourceUnit === "kg" && normalizedTargetUnit === "lb") {
+        converted = weightNum * 2.20462;
+    } else if (sourceUnit === "lb" && normalizedTargetUnit === "kg") {
+        converted = weightNum / 2.20462;
+    }
+
+    return `${formatConvertedWeight(converted)}${formatWeightUnit(normalizedTargetUnit)}`;
+};
+
 const normalizeDurationSec = (value) => {
     const durationSec = Math.floor(Number(value) || 0);
     if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
@@ -429,6 +475,7 @@ export default function LogScreen({
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: false });
+                        const prTopSetLabel = prTopSet ? convertWeightToTargetUnit(prTopSet, exUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg") : "";
 
                         if (i !== activeExIdx) {
                             const doneSetsCount = sets.filter((s) => isCompletedWorkoutSet(s)).length;
@@ -699,13 +746,13 @@ export default function LogScreen({
                                                     <div style={{ marginTop: prev ? 7 : 0, paddingTop: prev ? 7 : 0, borderTop: prev ? "1px solid var(--border2)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                                         <div style={{ fontSize: 11, color: "var(--text2)" }}>🏆 PR <span style={{ color: "var(--text3)", fontWeight: 400 }}>{pr.date}</span></div>
                                                         <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)" }}>
-                                                            {prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit} × ${prTopSet.reps}rep` : `${roundTo1Decimal(pr.rm)}${exUnit}`}
+                                                            {prTopSet ? `${prTopSetLabel} × ${prTopSet.reps}rep` : `${dispW(roundTo1Decimal(pr.rm), exUnit)}${formatWeightUnit(exUnit)}`}
                                                         </div>
                                                     </div>
                                                 )}
                                                 {pr && prIsAlsoPrev && (
                                                     <div style={{ marginTop: 6, fontSize: 11, color: "var(--text2)" }}>
-                                                        🏆 前回がPR（{prTopSet ? `${dispW(prTopSet.weight, exUnit)}${exUnit}×${prTopSet.reps}rep` : `${roundTo1Decimal(pr.rm)}${exUnit}`}）
+                                                        🏆 前回がPR（{prTopSet ? `${prTopSetLabel}×${prTopSet.reps}rep` : `${dispW(roundTo1Decimal(pr.rm), exUnit)}${formatWeightUnit(exUnit)}`}）
                                                     </div>
                                                 )}
                                                 {isPR && prDiff > 0 && (
