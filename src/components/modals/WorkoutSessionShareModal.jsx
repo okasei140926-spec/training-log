@@ -163,7 +163,6 @@ export default function WorkoutSessionShareModal({
     );
     const bodyPartCards = useMemo(() => getBodyPartCards(summary, items), [items, summary]);
     const bodyPartBreakdownLabel = formatBodyPartBreakdown(bodyPartCards);
-    const workoutTitle = "WORKOUT";
     const durationLabel = formatDuration(resolveDurationSec(sessionPayload));
     const prCount = Number(summary?.prCount || 0);
     const previewScale = preset.scale || 0.58;
@@ -399,13 +398,12 @@ export default function WorkoutSessionShareModal({
                                             <div style={{ fontSize: 10, letterSpacing: 3.4, color: "rgba(255,255,255,0.45)", fontWeight: 900, marginBottom: 8 }}>
                                                 {dateLabel}
                                             </div>
-                                            <div style={{ fontSize: isStory ? 34 : 28, color: "#ffffff", fontWeight: 950, lineHeight: 1.02, letterSpacing: -0.4 }}>
-                                                {workoutTitle}
+                                        </div>
+                                        {bodyPartBreakdownLabel && (
+                                            <div style={{ maxWidth: isStory ? 230 : 190, padding: "7px 10px", borderRadius: 999, background: "rgba(87,195,255,0.12)", border: "1px solid rgba(87,195,255,0.34)", color: "#62caff", fontSize: isStory ? 10 : 9, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                {bodyPartBreakdownLabel}
                                             </div>
-                                        </div>
-                                        <div style={{ padding: "7px 10px", borderRadius: 999, background: "rgba(87,195,255,0.12)", border: "1px solid rgba(87,195,255,0.34)", color: "#62caff", fontSize: 10, fontWeight: 900 }}>
-                                            WORKOUT
-                                        </div>
+                                        )}
                                     </div>
 
                                     <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.9fr", gap: isStory ? 14 : 10, marginBottom: isStory ? 16 : 14 }}>
@@ -445,17 +443,6 @@ export default function WorkoutSessionShareModal({
                                             TIME
                                         </div>
                                     </div>
-
-                                    {bodyPartBreakdownLabel && (
-                                        <div style={{ marginBottom: isStory ? 12 : 14 }}>
-                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 12 : 10, fontWeight: 800, marginBottom: 5 }}>
-                                                部位
-                                            </div>
-                                            <div style={{ color: "#dff8ff", fontSize: isStory ? 14 : 11, fontWeight: 900, lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                {bodyPartBreakdownLabel}
-                                            </div>
-                                        </div>
-                                    )}
 
                                     {isStory && prLabel && (
                                         <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: "8px 11px", fontSize: 12, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 10 }}>
