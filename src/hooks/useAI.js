@@ -3,10 +3,40 @@ import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
 
-const AI_DAILY_LIMIT = 3;
+const AI_DAILY_LIMIT = 5;
 
 const getTodayKey = () => formatDateKey(new Date());
 const getAiUsageKey = (dateKey = getTodayKey()) => `ai_usage_${dateKey}`;
+
+const normalizeAiUsageCount = (value) => {
+  const count = Number(value);
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  return Math.floor(count);
+};
+
+const getTodayAiUsage = () => {
+  const dateKey = getTodayKey();
+  try {
+    return {
+      dateKey,
+      count: normalizeAiUsageCount(localStorage.getItem(getAiUsageKey(dateKey))),
+    };
+  } catch {
+    return { dateKey, count: 0 };
+  }
+};
+
+const canUseAiChat = (usage = getTodayAiUsage()) =>
+  normalizeAiUsageCount(usage?.count) < AI_DAILY_LIMIT;
+
+const incrementAiUsage = () => {
+  const usage = getTodayAiUsage();
+  const nextCount = Math.min(AI_DAILY_LIMIT, normalizeAiUsageCount(usage.count) + 1);
+  try {
+    localStorage.setItem(getAiUsageKey(usage.dateKey), String(nextCount));
+  } catch {}
+  return { dateKey: usage.dateKey, count: nextCount };
+};
 
 const ANALYSIS_KEYWORDS = ["分析", "振り返", "レビュー", "見て", "チェック"];
 const MENU_KEYWORDS = ["メニュー", "組んで", "作って", "何すれば", "何したら", "どうすれば"];
@@ -177,13 +207,10 @@ export function useAI(history) {
   const aiUsageDateRef = useRef(initialAiUsageDate);
   const aiUsageCountRef = useRef(0);
   const [aiUsageCount, setAiUsageCount] = useState(() => {
-    try {
-      const count = Number(localStorage.getItem(getAiUsageKey(initialAiUsageDate)) || 0) || 0;
-      aiUsageCountRef.current = count;
-      return count;
-    } catch {
-      return 0;
-    }
+    const usage = getTodayAiUsage();
+    aiUsageDateRef.current = usage.dateKey || initialAiUsageDate;
+    aiUsageCountRef.current = usage.count;
+    return usage.count;
   });
 
   const groupedHistory = useMemo(() => flattenHistoryByDate(history), [history]);
@@ -193,16 +220,10 @@ export function useAI(history) {
   }, [aiMsgs]);
 
   useEffect(() => {
-    try {
-      const todayKey = getTodayKey();
-      aiUsageDateRef.current = todayKey;
-      const count = Number(localStorage.getItem(getAiUsageKey(todayKey)) || 0) || 0;
-      aiUsageCountRef.current = count;
-      setAiUsageCount(count);
-    } catch {
-      aiUsageCountRef.current = 0;
-      setAiUsageCount(0);
-    }
+    const usage = getTodayAiUsage();
+    aiUsageDateRef.current = usage.dateKey;
+    aiUsageCountRef.current = usage.count;
+    setAiUsageCount(usage.count);
   }, []);
 
   useEffect(() => {
@@ -210,15 +231,10 @@ export function useAI(history) {
       const todayKey = getTodayKey();
       if (aiUsageDateRef.current === todayKey) return;
 
-      aiUsageDateRef.current = todayKey;
-      try {
-        const count = Number(localStorage.getItem(getAiUsageKey(todayKey)) || 0) || 0;
-        aiUsageCountRef.current = count;
-        setAiUsageCount(count);
-      } catch {
-        aiUsageCountRef.current = 0;
-        setAiUsageCount(0);
-      }
+      const usage = getTodayAiUsage();
+      aiUsageDateRef.current = usage.dateKey;
+      aiUsageCountRef.current = usage.count;
+      setAiUsageCount(usage.count);
     };
 
     const intervalId = window.setInterval(refreshUsageDate, 60 * 1000);
@@ -234,7 +250,12 @@ export function useAI(history) {
 
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
-    if (!userMsg || aiLoadRef.current || aiUsageCountRef.current >= AI_DAILY_LIMIT) return false;
+    const currentUsage = getTodayAiUsage();
+    aiUsageDateRef.current = currentUsage.dateKey;
+    aiUsageCountRef.current = currentUsage.count;
+    setAiUsageCount(currentUsage.count);
+
+    if (!userMsg || aiLoadRef.current || !canUseAiChat(currentUsage)) return false;
 
     aiLoadRef.current = true;
 
@@ -289,17 +310,10 @@ export function useAI(history) {
       }
 
       const reply = data.content?.[0]?.text || "AI Coachの応答に失敗しました。";
-      try {
-        const todayKey = getTodayKey();
-        if (aiUsageDateRef.current !== todayKey) {
-          aiUsageDateRef.current = todayKey;
-          aiUsageCountRef.current = Number(localStorage.getItem(getAiUsageKey(todayKey)) || 0) || 0;
-        }
-        const nextUsageCount = Math.min(AI_DAILY_LIMIT, aiUsageCountRef.current + 1);
-        aiUsageCountRef.current = nextUsageCount;
-        setAiUsageCount(nextUsageCount);
-        localStorage.setItem(getAiUsageKey(todayKey), String(nextUsageCount));
-      } catch {}
+      const nextUsage = incrementAiUsage();
+      aiUsageDateRef.current = nextUsage.dateKey;
+      aiUsageCountRef.current = nextUsage.count;
+      setAiUsageCount(nextUsage.count);
       setAiMsgs((p) => [...p, { role: "assistant", content: reply }]);
       return true;
     } catch {
