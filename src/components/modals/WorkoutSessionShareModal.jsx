@@ -124,8 +124,8 @@ const formatShareSet = (set, index) => {
     return `${index + 1}. ${formatWeightValue(rawWeight)}${unit} × ${reps}`;
 };
 
-const getExerciseDetails = (items, maxExercises = 5) => {
-    const details = (items || [])
+const getExerciseDetails = (items) =>
+    (items || [])
         .map((item) => {
             const sets = (Array.isArray(item?.sets) ? item.sets : [])
                 .filter(isDisplayableShareSet)
@@ -138,12 +138,6 @@ const getExerciseDetails = (items, maxExercises = 5) => {
             };
         })
         .filter(Boolean);
-
-    return {
-        visible: details.slice(0, maxExercises),
-        hiddenCount: Math.max(0, details.length - maxExercises),
-    };
-};
 
 export default function WorkoutSessionShareModal({
     isOpen,
@@ -176,9 +170,17 @@ export default function WorkoutSessionShareModal({
     const isStory = sizeKey === "story";
     const prLabel = prCount > 0 ? `PR更新 ${prCount}件` : "";
     const exerciseDetails = useMemo(
-        () => getExerciseDetails(items, isStory ? 5 : 0),
+        () => (isStory ? getExerciseDetails(items) : []),
         [isStory, items]
     );
+    const exerciseDetailCount = exerciseDetails.length;
+    const exerciseDetailSetCount = exerciseDetails.reduce((sum, item) => sum + item.sets.length, 0);
+    const denseStoryMenu = isStory && (exerciseDetailCount >= 5 || exerciseDetailSetCount >= 13);
+    const extraStoryMenuHeight = isStory
+        ? Math.max(0, exerciseDetailCount - 5) * (denseStoryMenu ? 42 : 52)
+            + Math.max(0, exerciseDetailSetCount - 15) * 10
+        : 0;
+    const cardHeight = isStory ? preset.height + extraStoryMenuHeight : preset.height;
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -359,7 +361,7 @@ export default function WorkoutSessionShareModal({
                         <div
                             style={{
                                 width: preset.width * previewScale,
-                                height: preset.height * previewScale,
+                                height: cardHeight * previewScale,
                                 overflow: "hidden",
                                 borderRadius: 22,
                                 boxShadow: "0 24px 48px rgba(15, 23, 42, 0.18)",
@@ -369,7 +371,7 @@ export default function WorkoutSessionShareModal({
                             <div
                                 style={{
                                     width: preset.width,
-                                    height: preset.height,
+                                    height: cardHeight,
                                     transform: `scale(${previewScale})`,
                                     transformOrigin: "top left",
                                 }}
@@ -378,7 +380,7 @@ export default function WorkoutSessionShareModal({
                                     ref={cardRef}
                                     style={{
                                         width: preset.width,
-                                        height: preset.height,
+                                        height: cardHeight,
                                         borderRadius: 30,
                                         overflow: "hidden",
                                         background:
@@ -461,35 +463,30 @@ export default function WorkoutSessionShareModal({
                                         </div>
                                     )}
 
-                                    {isStory && exerciseDetails.visible.length > 0 && (
-                                        <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: 12, fontWeight: 800, marginBottom: 7 }}>
+                                    {isStory && exerciseDetails.length > 0 && (
+                                        <div style={{ flex: 1, minHeight: 0 }}>
+                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: denseStoryMenu ? 11 : 12, fontWeight: 800, marginBottom: denseStoryMenu ? 5 : 7 }}>
                                                 メニュー
                                             </div>
-                                            <div style={{ display: "grid", gap: 7 }}>
-                                                {exerciseDetails.visible.map((item) => (
+                                            <div style={{ display: "grid", gap: denseStoryMenu ? 5 : 7 }}>
+                                                {exerciseDetails.map((item) => (
                                                     <div
                                                         key={item.name}
                                                         style={{
-                                                            borderRadius: 13,
+                                                            borderRadius: denseStoryMenu ? 11 : 13,
                                                             background: "rgba(17, 24, 39, 0.72)",
                                                             border: "1px solid rgba(255,255,255,0.07)",
-                                                            padding: "8px 10px",
+                                                            padding: denseStoryMenu ? "6px 8px" : "8px 10px",
                                                         }}
                                                     >
-                                                        <div style={{ color: "#fff", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                        <div style={{ color: "#fff", fontSize: denseStoryMenu ? 10 : 12, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                             {item.name}
                                                         </div>
-                                                        <div style={{ marginTop: 4, color: "#7DE7E2", fontSize: 10, fontWeight: 800, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}>
+                                                        <div style={{ marginTop: denseStoryMenu ? 3 : 4, color: "#7DE7E2", fontSize: denseStoryMenu ? 8.5 : 10, fontWeight: 800, lineHeight: denseStoryMenu ? 1.25 : 1.35 }}>
                                                             {item.sets.join(" / ")}
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {exerciseDetails.hiddenCount > 0 && (
-                                                    <div style={{ color: "rgba(255,255,255,0.42)", fontSize: 10, fontWeight: 800, textAlign: "center" }}>
-                                                        +{exerciseDetails.hiddenCount} 種目
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
                                     )}
