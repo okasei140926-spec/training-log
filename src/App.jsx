@@ -709,9 +709,11 @@ export default function GymApp() {
         showTimerMenu, setShowTimerMenu,
         startTimer, stopTimer,
     } = useTimer();
+    const [timerMenuAnchor, setTimerMenuAnchor] = useState(null);
 
     useEffect(() => {
         setShowTimerMenu(false);
+        setTimerMenuAnchor(null);
     }, [screen, setShowTimerMenu]);
 
     useEffect(() => {
@@ -3410,6 +3412,15 @@ export default function GymApp() {
     const showSplashScreen =
         !splashForceDone &&
         !splashMinElapsed;
+    const timerMenuViewportWidth = typeof window !== "undefined" ? window.innerWidth : 430;
+    const timerMenuWidth = Math.max(0, Math.min(timerMenuViewportWidth - 36, 398));
+    const timerMenuRightLimit = Math.max(18, timerMenuViewportWidth - timerMenuWidth - 18);
+    const timerMenuRight = timerMenuAnchor
+        ? Math.max(18, Math.min(timerMenuAnchor.right, timerMenuRightLimit))
+        : Math.max(18, Math.min((timerMenuViewportWidth - 430) / 2 + 18, timerMenuRightLimit));
+    const timerMenuTop = timerMenuAnchor
+        ? Math.max(96, Math.round(timerMenuAnchor.bottom + 10))
+        : 112;
 
     if (!isSupabaseConfigured) {
         return (
@@ -3476,10 +3487,17 @@ export default function GymApp() {
                     title={headerTitle}
                     showLogTimer={screen === "log"}
                     timerLeft={timerLeft}
-                    onTimerClick={() => {
+                    onTimerClick={(event) => {
                         if (timerLeft !== null) {
                             stopTimer();
+                            setShowTimerMenu(false);
+                            setTimerMenuAnchor(null);
                         } else {
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setTimerMenuAnchor({
+                                bottom: rect.bottom,
+                                right: window.innerWidth - rect.right,
+                            });
                             setShowTimerMenu(p => !p);
                         }
                     }}
@@ -3640,41 +3658,35 @@ export default function GymApp() {
                 <Suspense fallback={null}>
                 {showTimerMenu && screen === "log" && (
                     <div
-                        onClick={() => setShowTimerMenu(false)}
+                        onClick={() => {
+                            setShowTimerMenu(false);
+                            setTimerMenuAnchor(null);
+                        }}
                         style={{
                             position: "fixed",
                             inset: 0,
                             zIndex: 220,
-                            background: "rgba(15, 23, 42, 0.22)",
-                            display: "flex",
-                            alignItems: "flex-end",
-                            justifyContent: "center",
-                            padding: "16px 14px calc(18px + var(--safe-bottom, 0px))",
-                            boxSizing: "border-box",
+                            background: "rgba(15, 23, 42, 0.03)",
                         }}
                     >
                         <div
                             onClick={(event) => event.stopPropagation()}
                             style={{
-                                width: "100%",
-                                maxWidth: 430,
-                                background: "var(--card-modal)",
+                                position: "fixed",
+                                top: timerMenuTop,
+                                right: timerMenuRight,
+                                width: timerMenuWidth,
+                                maxWidth: "calc(100vw - 36px)",
+                                background: "linear-gradient(180deg, var(--card-modal), var(--card2))",
                                 color: "var(--text)",
                                 border: "1px solid var(--border2)",
-                                borderRadius: 24,
-                                padding: "18px 16px 16px",
-                                boxShadow: "0 24px 52px rgba(15, 23, 42, 0.22)",
+                                borderRadius: 18,
+                                padding: 8,
+                                boxShadow: "0 16px 34px rgba(15, 23, 42, 0.18)",
                                 boxSizing: "border-box",
                             }}
                         >
-                            <div style={{ width: 46, height: 5, borderRadius: 999, background: "var(--border2)", margin: "0 auto 14px" }} />
-                            <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 4 }}>
-                                休憩時間を選択
-                            </div>
-                            <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>
-                                選ぶと休憩タイマーを開始します
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                            <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
                                 {[
                                     { sec: 30, label: "30秒" },
                                     { sec: 60, label: "1分" },
@@ -3689,20 +3701,24 @@ export default function GymApp() {
                                             onClick={() => {
                                                 setIntervalSec(sec);
                                                 setShowTimerMenu(false);
+                                                setTimerMenuAnchor(null);
                                                 startTimer(sec);
                                             }}
                                             style={{
-                                                minHeight: 48,
-                                                padding: "12px 14px",
-                                                borderRadius: 16,
+                                                flex: 1,
+                                                minWidth: 0,
+                                                minHeight: 40,
+                                                padding: "9px 8px",
+                                                borderRadius: 13,
                                                 border: selected ? "1px solid transparent" : "1px solid var(--border2)",
                                                 background: selected
                                                     ? "linear-gradient(135deg, var(--accent), var(--accent2))"
                                                     : "var(--btn-secondary)",
                                                 color: selected ? "#ffffff" : "var(--text)",
-                                                fontSize: 14,
+                                                fontSize: 12,
                                                 fontWeight: 900,
                                                 boxShadow: selected ? "var(--shadow-soft)" : "none",
+                                                whiteSpace: "nowrap",
                                             }}
                                         >
                                             {label}
