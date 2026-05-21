@@ -4,6 +4,8 @@ import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
 
 const AI_DAILY_LIMIT = 5;
+const AI_USAGE_STORAGE_KEY = "ai_usage_state";
+const AI_PRO_STORAGE_KEY = "pump_pro_enabled";
 
 const getTodayKey = () => formatDateKey(new Date());
 const getAiUsageKey = (dateKey = getTodayKey()) => `ai_usage_${dateKey}`;
@@ -17,6 +19,14 @@ const normalizeAiUsageCount = (value) => {
 const getTodayAiUsage = () => {
   const dateKey = getTodayKey();
   try {
+    const stored = JSON.parse(localStorage.getItem(AI_USAGE_STORAGE_KEY) || "{}");
+    if (stored?.dateKey === dateKey) {
+      return {
+        dateKey,
+        count: normalizeAiUsageCount(stored.count),
+      };
+    }
+
     return {
       dateKey,
       count: normalizeAiUsageCount(localStorage.getItem(getAiUsageKey(dateKey))),
@@ -26,16 +36,41 @@ const getTodayAiUsage = () => {
   }
 };
 
-const canUseAiChat = (usage = getTodayAiUsage()) =>
-  normalizeAiUsageCount(usage?.count) < AI_DAILY_LIMIT;
+const saveAiUsage = ({ dateKey, count }) => {
+  const nextUsage = {
+    dateKey: dateKey || getTodayKey(),
+    count: normalizeAiUsageCount(count),
+  };
+  try {
+    localStorage.setItem(AI_USAGE_STORAGE_KEY, JSON.stringify(nextUsage));
+    localStorage.setItem(getAiUsageKey(nextUsage.dateKey), String(nextUsage.count));
+  } catch {}
+  return nextUsage;
+};
+
+const getIsPro = () => {
+  try {
+    return localStorage.getItem(AI_PRO_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+const resetAiUsageIfNewDay = () => {
+  const todayKey = getTodayKey();
+  const usage = getTodayAiUsage();
+  if (usage.dateKey === todayKey) return usage;
+  return saveAiUsage({ dateKey: todayKey, count: 0 });
+};
+
+const canUseAiChat = ({ isPro = getIsPro(), usage = getTodayAiUsage() } = {}) =>
+  Boolean(isPro) || normalizeAiUsageCount(usage?.count) < AI_DAILY_LIMIT;
 
 const incrementAiUsage = () => {
-  const usage = getTodayAiUsage();
+  if (getIsPro()) return getTodayAiUsage();
+  const usage = resetAiUsageIfNewDay();
   const nextCount = Math.min(AI_DAILY_LIMIT, normalizeAiUsageCount(usage.count) + 1);
-  try {
-    localStorage.setItem(getAiUsageKey(usage.dateKey), String(nextCount));
-  } catch {}
-  return { dateKey: usage.dateKey, count: nextCount };
+  return saveAiUsage({ dateKey: usage.dateKey, count: nextCount });
 };
 
 const ANALYSIS_KEYWORDS = ["分析", "振り返", "レビュー", "見て", "チェック"];
@@ -206,8 +241,11 @@ export function useAI(history) {
   const aiLoadRef = useRef(false);
   const aiUsageDateRef = useRef(initialAiUsageDate);
   const aiUsageCountRef = useRef(0);
+  const isProRef = useRef(getIsPro());
+  const [isPro, setIsPro] = useState(() => getIsPro());
+  const [aiUsageDate, setAiUsageDate] = useState(initialAiUsageDate);
   const [aiUsageCount, setAiUsageCount] = useState(() => {
-    const usage = getTodayAiUsage();
+    const usage = resetAiUsageIfNewDay();
     aiUsageDateRef.current = usage.dateKey || initialAiUsageDate;
     aiUsageCountRef.current = usage.count;
     return usage.count;
@@ -220,10 +258,14 @@ export function useAI(history) {
   }, [aiMsgs]);
 
   useEffect(() => {
-    const usage = getTodayAiUsage();
+    const usage = resetAiUsageIfNewDay();
     aiUsageDateRef.current = usage.dateKey;
     aiUsageCountRef.current = usage.count;
+    setAiUsageDate(usage.dateKey);
     setAiUsageCount(usage.count);
+    const currentIsPro = getIsPro();
+    isProRef.current = currentIsPro;
+    setIsPro(currentIsPro);
   }, []);
 
   useEffect(() => {
@@ -231,10 +273,14 @@ export function useAI(history) {
       const todayKey = getTodayKey();
       if (aiUsageDateRef.current === todayKey) return;
 
-      const usage = getTodayAiUsage();
+      const usage = resetAiUsageIfNewDay();
       aiUsageDateRef.current = usage.dateKey;
       aiUsageCountRef.current = usage.count;
+      setAiUsageDate(usage.dateKey);
       setAiUsageCount(usage.count);
+      const currentIsPro = getIsPro();
+      isProRef.current = currentIsPro;
+      setIsPro(currentIsPro);
     };
 
     const intervalId = window.setInterval(refreshUsageDate, 60 * 1000);
@@ -248,14 +294,26 @@ export function useAI(history) {
     };
   }, []);
 
+  const activatePumpPro = () => {
+    try {
+      localStorage.setItem(AI_PRO_STORAGE_KEY, "true");
+    } catch {}
+    isProRef.current = true;
+    setIsPro(true);
+  };
+
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
-    const currentUsage = getTodayAiUsage();
+    const currentUsage = resetAiUsageIfNewDay();
+    const currentIsPro = getIsPro();
+    isProRef.current = currentIsPro;
+    setIsPro(currentIsPro);
     aiUsageDateRef.current = currentUsage.dateKey;
     aiUsageCountRef.current = currentUsage.count;
+    setAiUsageDate(currentUsage.dateKey);
     setAiUsageCount(currentUsage.count);
 
-    if (!userMsg || aiLoadRef.current || !canUseAiChat(currentUsage)) return false;
+    if (!userMsg || aiLoadRef.current || !canUseAiChat({ isPro: currentIsPro, usage: currentUsage })) return false;
 
     aiLoadRef.current = true;
 
@@ -310,10 +368,13 @@ export function useAI(history) {
       }
 
       const reply = data.content?.[0]?.text || "AI Coachの応答に失敗しました。";
-      const nextUsage = incrementAiUsage();
-      aiUsageDateRef.current = nextUsage.dateKey;
-      aiUsageCountRef.current = nextUsage.count;
-      setAiUsageCount(nextUsage.count);
+      if (!currentIsPro) {
+        const nextUsage = incrementAiUsage();
+        aiUsageDateRef.current = nextUsage.dateKey;
+        aiUsageCountRef.current = nextUsage.count;
+        setAiUsageDate(nextUsage.dateKey);
+        setAiUsageCount(nextUsage.count);
+      }
       setAiMsgs((p) => [...p, { role: "assistant", content: reply }]);
       return true;
     } catch {
@@ -332,7 +393,11 @@ export function useAI(history) {
     aiLoad,
     aiEnd,
     sendAI,
-    aiRemaining: Math.max(0, AI_DAILY_LIMIT - aiUsageCount),
+    isPro,
+    activatePumpPro,
+    dailyFreeAiLimit: AI_DAILY_LIMIT,
+    aiUsageDate,
+    aiRemaining: isPro ? Infinity : Math.max(0, AI_DAILY_LIMIT - aiUsageCount),
     aiUsageCount,
   };
 }

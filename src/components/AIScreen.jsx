@@ -95,7 +95,101 @@ const CompactBubble = ({ children, role }) => (
     </div>
 );
 
-export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, aiEnd, history, aiRemaining }) {
+const ProPaywallCard = ({ onStartPro }) => (
+    <div
+        style={{
+            padding: 14,
+            borderRadius: 18,
+            background: "linear-gradient(180deg, rgba(18, 199, 194, 0.13), rgba(18, 199, 194, 0.05))",
+            border: "1px solid rgba(18, 199, 194, 0.20)",
+            color: "var(--text)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+        }}
+    >
+        <div>
+            <div style={{ fontSize: 14, fontWeight: 900, marginBottom: 4 }}>
+                今日の無料AI相談を使い切りました
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.55 }}>
+                Pump ProでAI Coachを無制限に使えます。
+            </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+            {[
+                "今日のメニュー提案",
+                "重量設定の相談",
+                "記録分析",
+                "弱点部位の改善提案",
+                "Proシェアカード",
+            ].map((feature) => (
+                <div
+                    key={feature}
+                    style={{
+                        padding: "8px 9px",
+                        borderRadius: 12,
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(18, 199, 194, 0.12)",
+                        color: "var(--text2)",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        lineHeight: 1.35,
+                    }}
+                >
+                    {feature}
+                </div>
+            ))}
+            <div
+                style={{
+                    padding: "8px 9px",
+                    borderRadius: 12,
+                    background: "rgba(18, 199, 194, 0.12)",
+                    border: "1px solid rgba(18, 199, 194, 0.20)",
+                    color: "var(--text)",
+                    fontSize: 11,
+                    fontWeight: 900,
+                    lineHeight: 1.35,
+                }}
+            >
+                月額 ¥480
+            </div>
+        </div>
+        <button
+            type="button"
+            onClick={onStartPro}
+            className="pressable"
+            style={{
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 16,
+                border: "none",
+                background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 900,
+                boxShadow: "var(--shadow-soft)",
+            }}
+        >
+            Pump Proを始める
+        </button>
+    </div>
+);
+
+export default function AIScreen({
+    aiMsgs,
+    aiInput,
+    setAiInput,
+    sendAI,
+    aiLoad,
+    aiEnd,
+    history,
+    isPro = false,
+    onStartPro,
+    dailyFreeAiLimit = 5,
+    aiUsageCount = 0,
+    aiRemaining,
+}) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
 
@@ -106,8 +200,9 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
         !aiLoad;
 
     const visibleMessages = isInitialState ? [] : aiMsgs;
-    const isAiLimitReached = Number(aiRemaining) <= 0;
+    const isAiLimitReached = !isPro && Number(aiRemaining) <= 0;
     const canSendMessage = !aiLoad && !isAiLimitReached;
+    const showProPaywall = () => isAiLimitReached;
 
     const handleSend = (overrideMsg) => {
         if (!canSendMessage) return;
@@ -153,7 +248,9 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                     fontWeight: 700,
                 }}
             >
-                今日のAI相談 残り{aiRemaining}回
+                {isPro
+                    ? "今日のAI相談 Pro 無制限"
+                    : `今日のAI相談 残り${aiRemaining}回 / ${dailyFreeAiLimit}回`}
             </div>
 
             <div
@@ -384,6 +481,14 @@ export default function AIScreen({ aiMsgs, aiInput, setAiInput, sendAI, aiLoad, 
                         }}
                     >
                         今日の無料AI相談回数を使い切りました。明日また利用できます。
+                    </div>
+                )}
+                {showProPaywall() && (
+                    <ProPaywallCard onStartPro={onStartPro} />
+                )}
+                {!isPro && (
+                    <div style={{ fontSize: 10, color: "var(--text4)", padding: "0 2px" }}>
+                        今日の使用回数 {aiUsageCount}/{dailyFreeAiLimit}
                     </div>
                 )}
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>

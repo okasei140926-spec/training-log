@@ -829,7 +829,20 @@ export default function GymApp() {
 
 
     // ─── AI Coach ─────────────────────────────────────
-    const { aiMsgs, aiInput, setAiInput, aiLoad, aiEnd, sendAI, aiRemaining } = useAI(history);
+    const {
+        aiMsgs,
+        aiInput,
+        setAiInput,
+        aiLoad,
+        aiEnd,
+        sendAI,
+        isPro,
+        activatePumpPro,
+        dailyFreeAiLimit,
+        aiUsageDate,
+        aiUsageCount,
+        aiRemaining,
+    } = useAI(history);
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
@@ -3955,6 +3968,11 @@ export default function GymApp() {
                         aiLoad={aiLoad}
                         aiEnd={aiEnd}
                         history={history}
+                        isPro={isPro}
+                        onStartPro={activatePumpPro}
+                        dailyFreeAiLimit={dailyFreeAiLimit}
+                        aiUsageDate={aiUsageDate}
+                        aiUsageCount={aiUsageCount}
                         aiRemaining={aiRemaining}
                     />
                 )}
