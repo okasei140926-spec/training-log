@@ -1140,8 +1140,21 @@ export default function AnalyticsScreen({
 
       {activeAnalysisTab === "parts" && (
         <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>部位別分析</div>
-          <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 12 }}>部位別ボリューム</div>
+          <div style={{ display: "inline-flex", gap: 6, padding: 5, borderRadius: 999, background: "var(--card2)", border: "1px solid rgba(18, 199, 194, 0.10)", marginBottom: 14 }}>
+            {[
+              { key: "this_week", label: "今週" },
+              { key: "last_week", label: "先週" },
+              { key: "this_month", label: "今月" },
+              { key: "last_month", label: "先月" },
+            ].map((option) => (
+              <button key={option.key} type="button" onClick={() => setOverviewScope(option.key)}
+                style={{ padding: "7px 14px", borderRadius: 999, border: "none", background: overviewScope === option.key ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "transparent", color: overviewScope === option.key ? "#fff" : "var(--text2)", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
 
           {(overviewBodyPartStats || []).length > 0 ? (
             <ResponsiveContainer width="100%" height={Math.max(250, Math.min(360, 160 + overviewBodyPartStats.length * 18))}>
@@ -1503,25 +1516,6 @@ export default function AnalyticsScreen({
       )}
 
       {activeAnalysisTab === "pr" && (<>
-      <div style={{ background: "var(--card)", borderRadius: 20, padding: 16, border: "1px solid var(--border2)", boxShadow: "var(--shadow-card)" }}>
-        <div style={{ fontSize: 10, letterSpacing: 2.5, color: "var(--text3)", marginBottom: 12 }}>
-          BIG3 PR
-        </div>
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ background: "linear-gradient(135deg, var(--success-soft), var(--card))", borderRadius: 18, padding: "14px 16px", border: "1px solid var(--success-border)" }}>
-            <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>BIG3合計</div>
-            <div style={{ fontSize: 30, fontWeight: 900, color: "var(--text)" }}>{prData.big3Total}kg</div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-            {prData.big3.map((entry) => (
-              <div key={entry.key}>
-                {renderPRCard(entry.item, { compact: true })}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>
           自己ベスト
