@@ -77,15 +77,15 @@ export default function SetRow({
     const inputStyle = {
         width: "100%",
         minHeight: 48,
-        background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247, 253, 253, 0.94))",
-        border: "1px solid rgba(18, 199, 194, 0.18)",
+        background: "var(--input-bg)",
+        border: "1px solid var(--border2)",
         borderRadius: 16,
         padding: "12px 39px 12px 12px",
         color: "var(--text)",
         fontSize: 18,
         fontWeight: 900,
         textAlign: "center",
-        boxShadow: "0 8px 20px rgba(15, 94, 99, 0.04)",
+        boxShadow: "var(--shadow-soft)",
         boxSizing: "border-box",
     };
     const suffixStyle = {
@@ -111,9 +111,9 @@ export default function SetRow({
                 borderRadius: 18,
                 background:
                     idx === 0
-                        ? "linear-gradient(135deg, rgba(18, 199, 194, 0.11), rgba(18, 199, 194, 0.045))"
-                        : "rgba(18, 199, 194, 0.035)",
-                border: "1px solid rgba(18, 199, 194, 0.12)",
+                        ? "var(--success-soft)"
+                        : "var(--card2)",
+                border: "1px solid var(--border2)",
             }}
         >
             <div
@@ -124,8 +124,8 @@ export default function SetRow({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: idx === 0 ? "rgba(18, 199, 194, 0.16)" : "rgba(18, 199, 194, 0.08)",
-                    color: idx === 0 ? "#0F5E63" : "var(--text2)",
+                    background: idx === 0 ? "var(--success-soft)" : "var(--btn-secondary)",
+                    color: idx === 0 ? "var(--accent)" : "var(--text2)",
                     fontSize: 14,
                     fontWeight: 900,
                     flexShrink: 0,
@@ -154,7 +154,7 @@ export default function SetRow({
                     style={{
                         minHeight: 48,
                         borderRadius: 16,
-                        border: "1px solid rgba(18, 199, 194, 0.24)",
+                        border: "1px solid var(--border2)",
                         background: "linear-gradient(135deg, rgba(15, 94, 99, 0.95), rgba(18, 199, 194, 0.86))",
                         color: "#fff",
                         fontSize: 14,

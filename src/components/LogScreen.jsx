@@ -161,9 +161,9 @@ export default function LogScreen({
 }) {
 
     const hasExercises = exercises.length > 0;
-    const softBorderColor = "rgba(18, 199, 194, 0.16)";
-    const subActionBg = "linear-gradient(180deg, rgba(18, 199, 194, 0.06), rgba(18, 199, 194, 0.02))";
-    const subActionText = "#0F5E63";
+    const softBorderColor = "var(--border2)";
+    const subActionBg = "var(--btn-secondary)";
+    const subActionText = "var(--accent)";
 
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
@@ -603,7 +603,7 @@ export default function LogScreen({
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
                                 {() => (
-                                    <div style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247, 253, 253, 0.94))", borderRadius: 22, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "rgba(18, 199, 194, 0.28)" : softBorderColor}`, boxShadow: isPR ? "0 16px 32px rgba(18,199,194,0.12)" : "var(--shadow-card)" }}>
+                                    <div style={{ background: "var(--card)", borderRadius: 22, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : softBorderColor}`, boxShadow: isPR ? "var(--shadow-soft)" : "var(--shadow-card)" }}>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                             <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
@@ -733,7 +733,7 @@ export default function LogScreen({
 
                                         {/* 前回の記録 + PR */}
                                         {(prev || pr) && (
-                                            <div style={{ marginBottom: 12, padding: "10px 12px", background: "rgba(18, 199, 194, 0.055)", borderRadius: 16, border: `1px solid ${softBorderColor}` }}>
+                                            <div style={{ marginBottom: 12, padding: "10px 12px", background: "var(--card2)", borderRadius: 16, border: `1px solid ${softBorderColor}` }}>
                                                 {prev && (
                                                     <>
                                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
