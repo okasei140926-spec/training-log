@@ -21,20 +21,6 @@ const CARD_PRESETS = {
 
 const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
 
-const getSafeDurationSeconds = (value) => {
-    const durationSec = Math.floor(Number(value) || 0);
-    if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
-    if (durationSec > MAX_REASONABLE_DURATION_SEC) return 0;
-    return durationSec;
-};
-
-const getSafeDurationMinutesAsSeconds = (value) => {
-    const durationMinutes = Number(value);
-    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0;
-    if (durationMinutes > MAX_REASONABLE_DURATION_SEC / 60) return 0;
-    return Math.floor(durationMinutes * 60);
-};
-
 const formatDate = (date) => {
     const value = String(date || "");
     if (!value) return "";
@@ -54,27 +40,32 @@ const formatDuration = (durationSec) => {
 
 const resolveDurationSec = (payload) => {
     const session = payload?.session || {};
-    const summary = session?.summary_json || {};
-    const secondCandidates = [
-        payload?.durationSec,
-        session?.durationSec,
-        summary?.durationSec,
-        session?.duration_sec,
-        payload?.duration_sec,
-        summary?.duration_sec,
-    ].map(getSafeDurationSeconds);
-    const durationSec = secondCandidates.find((value) => value > 0);
-    if (durationSec) return durationSec;
+    const candidates = [
+        { value: payload?.durationSec, unit: "seconds" },
+        { value: payload?.duration_sec, unit: "seconds" },
+        { value: session?.durationSec, unit: "seconds" },
+        { value: session?.duration_sec, unit: "seconds" },
+        { value: payload?.durationMinutes, unit: "minutes" },
+        { value: payload?.elapsedMinutes, unit: "minutes" },
+        { value: session?.durationMinutes, unit: "minutes" },
+        { value: session?.elapsedMinutes, unit: "minutes" },
+    ];
 
-    const minuteCandidates = [
-        session?.durationMinutes,
-        payload?.durationMinutes,
-        summary?.durationMinutes,
-        session?.elapsedMinutes,
-        payload?.elapsedMinutes,
-        summary?.elapsedMinutes,
-    ].map(getSafeDurationMinutesAsSeconds);
-    return minuteCandidates.find((value) => value > 0) || 0;
+    for (const candidate of candidates) {
+        const rawValue = Number(candidate.value);
+        if (!Number.isFinite(rawValue) || rawValue <= 0) continue;
+
+        const durationSec =
+            candidate.unit === "minutes"
+                ? Math.floor(rawValue * 60)
+                : Math.floor(rawValue);
+
+        if (durationSec > 0 && durationSec < MAX_REASONABLE_DURATION_SEC) {
+            return durationSec;
+        }
+    }
+
+    return 0;
 };
 
 const getMaxWeightLabel = (weight) => {

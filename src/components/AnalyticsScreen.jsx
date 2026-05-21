@@ -1098,7 +1098,7 @@ export default function AnalyticsScreen({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
           gap: 4,
           padding: 5,
           borderRadius: 16,
@@ -1144,52 +1144,155 @@ export default function AnalyticsScreen({
           <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 4 }}>部位別分析</div>
           <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
 
-          <div style={{ display: "grid", gap: 10 }}>
-            {(overviewBodyPartStats || []).length > 0 ? overviewBodyPartStats.map((item) => {
-              const maxSets = Math.max(...overviewBodyPartStats.map((x) => Number(x.sets || 0)), 1);
-              const percent = Math.min(100, Math.round((Number(item.sets || 0) / maxSets) * 100));
-
-              return (
-                <div key={`part-tab-${item.bodyPart}`} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: 13 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 9 }}>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)" }}>{getBodyPartDisplayLabel(item.bodyPart)}</div>
-                    <div style={{ fontSize: 13, fontWeight: 900, color: "var(--accent)" }}>{item.sets} set</div>
-                  </div>
-
-                  <div style={{ height: 8, borderRadius: 999, background: "rgba(18,199,194,0.10)", overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${percent}%`, borderRadius: 999, background: BODY_PART_CHART_COLORS[item.bodyPart] || "var(--accent)" }} />
-                  </div>
-
-                  <div style={{ marginTop: 7, display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text2)", fontWeight: 700 }}>
-                    <span>{Math.round(item.volume || 0).toLocaleString("ja-JP")}kg</span>
-                    <span>{item.frequency || item.workoutCount || 0}回</span>
-                  </div>
-                </div>
-              );
-            }) : (
-              <div style={{ color: "var(--text2)", fontSize: 13 }}>まだデータがありません</div>
-            )}
-          </div>
+          {(overviewBodyPartStats || []).length > 0 ? (
+            <ResponsiveContainer width="100%" height={Math.max(250, Math.min(360, 160 + overviewBodyPartStats.length * 18))}>
+              <BarChart
+                data={overviewBodyPartStats.map((item) => ({
+                  label: getBodyPartDisplayLabel(item.bodyPart),
+                  volume: Math.round(item.volume || 0),
+                  fill: BODY_PART_CHART_COLORS[item.bodyPart] || "var(--accent)",
+                }))}
+                margin={{ top: 10, right: 10, left: 4, bottom: 4 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: "var(--text2)", fontWeight: 700 }}
+                  interval={0}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: "var(--text3)" }}
+                  width={44}
+                  tickFormatter={(v) => `${(v / 1000).toFixed(v >= 1000 ? 1 : 0)}k`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--card)",
+                    border: "1px solid rgba(18, 199, 194, 0.12)",
+                    borderRadius: 14,
+                    fontSize: 12,
+                    boxShadow: "var(--shadow-card)",
+                  }}
+                  labelStyle={{ color: "var(--text)" }}
+                  formatter={(value) => [`${Number(value).toLocaleString("ja-JP")}kg`, "Volume"]}
+                />
+                <Bar dataKey="volume" radius={[10, 10, 0, 0]} background={{ fill: "rgba(18, 199, 194, 0.08)", radius: 10 }}>
+                  {overviewBodyPartStats.map((item) => (
+                    <Cell key={item.bodyPart} fill={BODY_PART_CHART_COLORS[item.bodyPart] || "var(--accent)"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ color: "var(--text2)", fontSize: 13 }}>まだデータがありません</div>
+          )}
         </div>
       )}
 
 
 
-      {activeAnalysisTab === "trends" && (
-        <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-          <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 12 }}>推移</div>
+      {activeAnalysisTab === "trends" && (() => {
+        // 月別集計
+        const monthlyMap = {};
+        Object.values(history || {}).forEach((records) => {
+          (records || []).forEach((record) => {
+            if (!record.date) return;
+            const month = record.date.slice(0, 7);
+            if (!monthlyMap[month]) monthlyMap[month] = { volume: 0, sets: 0, workouts: new Set() };
+            monthlyMap[month].volume += (record.sets || []).reduce((s, set) => {
+              const w = Number(set.weight); const r = Number(set.reps);
+              return s + (Number.isFinite(w) && Number.isFinite(r) ? w * r : 0);
+            }, 0);
+            monthlyMap[month].sets += (record.sets || []).length || 1;
+            monthlyMap[month].workouts.add(record.date);
+          });
+        });
+        const monthlyList = Object.entries(monthlyMap)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-6)
+          .map(([month, data]) => ({
+            label: `${Number(month.slice(5))}月`,
+            volume: Math.round(data.volume),
+            sets: data.sets,
+            workouts: data.workouts.size,
+          }));
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-            {[thisWeekSummary, lastWeekSummary, thisMonthSummary, lastMonthSummary].map((summary) => (
-              <div key={`trend-${summary.group}-${summary.shortLabel}`} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: 13 }}>
-                <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 7 }}>{summary.shortLabel}</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "var(--text)" }}>{summary.totalVolume.toLocaleString("ja-JP")}kg</div>
-                <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 6, fontWeight: 700 }}>{summary.totalSets}set ・ {summary.workoutCount}回</div>
+        const thisVol = thisMonthSummary.totalVolume;
+        const lastVol = lastMonthSummary.totalVolume;
+        const volDiff = lastVol > 0 ? Math.round(((thisVol - lastVol) / lastVol) * 100) : null;
+        const thisWeekVol = thisWeekSummary.totalVolume;
+        const lastWeekVol = lastWeekSummary.totalVolume;
+        const weekDiff = lastWeekVol > 0 ? Math.round(((thisWeekVol - lastWeekVol) / lastWeekVol) * 100) : null;
+
+        return (
+          <>
+            <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
+              <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 14 }}>推移</div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 20 }}>
+                {[
+                  { label: "Volume", value: `${thisMonthSummary.totalVolume.toLocaleString("ja-JP")}kg`, diff: volDiff, sub: "今月" },
+                  { label: "セット数", value: `${thisMonthSummary.totalSets}set`, diff: null, sub: "今月" },
+                  { label: "トレ回数", value: `${thisMonthSummary.workoutCount}回`, diff: null, sub: "今月" },
+                ].map((card) => (
+                  <div key={card.label} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: "12px 10px" }}>
+                    <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 4 }}>{card.label}</div>
+                    <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>{card.value}</div>
+                    {card.diff !== null && (
+                      <div style={{ fontSize: 10, fontWeight: 800, color: card.diff >= 0 ? "var(--accent)" : "#ff6b6b", marginTop: 3 }}>
+                        前月比 {card.diff >= 0 ? "+" : ""}{card.diff}%
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+
+              {monthlyList.length > 0 && (
+                <>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>Volumeの推移</div>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={monthlyList} margin={{ top: 5, right: 10, left: 4, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" vertical={false} />
+                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--text2)", fontWeight: 700 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--text3)" }} width={40} tickFormatter={(v) => `${Math.round(v/1000)}k`} />
+                      <Tooltip
+                        contentStyle={{ background: "var(--card)", border: "1px solid rgba(18, 199, 194, 0.12)", borderRadius: 14, fontSize: 12 }}
+                        formatter={(v) => [`${Number(v).toLocaleString("ja-JP")}kg`, "Volume"]}
+                      />
+                      <Line type="monotone" dataKey="volume" stroke="var(--accent)" strokeWidth={2.5} dot={{ fill: "var(--accent)", r: 4 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </>
+              )}
+            </div>
+
+            <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
+              <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)", marginBottom: 12 }}>月別比較</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {monthlyList.slice().reverse().map((m, i) => {
+                  const prev = monthlyList.slice().reverse()[i + 1];
+                  const diff = prev && prev.volume > 0 ? Math.round(((m.volume - prev.volume) / prev.volume) * 100) : null;
+                  return (
+                    <div key={m.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(18,199,194,0.07)", paddingBottom: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{m.label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: "var(--text)" }}>{m.volume.toLocaleString("ja-JP")} kg</div>
+                      {diff !== null && (
+                        <div style={{ fontSize: 11, fontWeight: 800, color: diff >= 0 ? "var(--accent)" : "#ff6b6b", minWidth: 50, textAlign: "right" }}>
+                          {diff >= 0 ? "+" : ""}{diff}%
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        );
+      })()}
       {activeAnalysisTab === "overview" && (<>
       <div
         style={{
@@ -1288,24 +1391,6 @@ export default function AnalyticsScreen({
           <>
             <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700, marginBottom: 10 }}>
               合計 {totalOverviewSets}セット
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-              {overviewBodyPartStats.slice(0, 4).map((item) => (
-                <div
-                  key={`overview-sets-${item.bodyPart}`}
-                  style={{
-                    padding: "6px 10px",
-                    borderRadius: 999,
-                    background: "rgba(18, 199, 194, 0.06)",
-                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                    color: "var(--text2)",
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}
-                >
-                  {item.bodyPart} {item.sets}セット
-                </div>
-              ))}
             </div>
             <ResponsiveContainer width="100%" height={Math.max(250, Math.min(360, 160 + overviewBodyPartChart.length * 18))}>
               <BarChart data={overviewBodyPartChart} margin={{ top: 10, right: 10, left: 4, bottom: 4 }}>
@@ -1441,27 +1526,8 @@ export default function AnalyticsScreen({
       </div>
 
       <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-            部位別PR
-          </div>
-          {selectedPrGroup && selectedPrGroup.items.length > 3 && (
-            <button
-              type="button"
-              onClick={() => setShowAllBodyPartPr(true)}
-              style={{
-                padding: "7px 12px",
-                borderRadius: 999,
-                border: "1px solid rgba(18, 199, 194, 0.12)",
-                background: "var(--card2)",
-                color: "var(--accent)",
-                fontSize: 11,
-                fontWeight: 800,
-              }}
-            >
-              すべて見る
-            </button>
-          )}
+        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>
+          自己ベスト
         </div>
         {prData.groupedByBodyPart.length > 0 ? (
           <>
@@ -1470,10 +1536,10 @@ export default function AnalyticsScreen({
                 <button
                   key={group.bodyPart}
                   type="button"
-                  onClick={() => setSelectedPrBodyPart(group.bodyPart)}
+                  onClick={() => setSelectedPrBodyPart(selectedPrBodyPart === group.bodyPart ? null : group.bodyPart)}
                   style={{
-                    padding: "7px 9px 7px",
-                    borderRadius: 12,
+                    padding: "10px 12px",
+                    borderRadius: 14,
                     border: "1px solid rgba(18, 199, 194, 0.12)",
                     background:
                       selectedPrBodyPart === group.bodyPart
@@ -1485,21 +1551,29 @@ export default function AnalyticsScreen({
                       selectedPrBodyPart === group.bodyPart ? "0 10px 22px rgba(15, 94, 99, 0.10)" : "none",
                   }}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: selectedPrBodyPart === group.bodyPart ? "var(--accent)" : "var(--text)" }}>
                     {group.bodyPart}
                   </div>
-                  <div style={{ fontSize: 9, color: "var(--text2)", fontWeight: 700, lineHeight: 1.3 }}>
-                    {group.items.length}件のPR
+                  <div style={{ fontSize: 10, color: "var(--text2)", fontWeight: 700, marginTop: 2 }}>
+                    {group.items.length}種目
                   </div>
                 </button>
               ))}
             </div>
 
             {selectedPrGroup && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {selectedPrPreview.map((item) => (
-                  <div key={item.key}>
-                    {renderPRCard(item)}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {selectedPrGroup.items.map((item) => (
+                  <div key={item.key} style={{ borderRadius: 14, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: "12px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 14, fontWeight: 900, color: "var(--text)" }}>{item.name}</div>
+                      <div style={{ fontSize: 14, fontWeight: 900, color: "var(--accent)" }}>
+                        {item.weight === "BW" ? "自重" : `${item.weight}kg`} × {item.reps}reps
+                      </div>
+                    </div>
+                    {item.date && (
+                      <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{item.date}</div>
+                    )}
                   </div>
                 ))}
               </div>
