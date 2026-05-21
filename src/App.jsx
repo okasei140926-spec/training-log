@@ -61,6 +61,10 @@ import {
     getPushSupportState,
     syncPushSubscriptionState,
 } from "./lib/pushNotifications";
+import {
+    cancelRestTimerNotification,
+    scheduleRestTimerNotification,
+} from "./lib/restTimerNotifications";
 import { normalizeExerciseName } from "./utils/exerciseName";
 import { isNativeApp, isNativeOAuthCallbackUrl } from "./utils/oauth";
 import {
@@ -3503,6 +3507,7 @@ export default function GymApp() {
                     onTimerClick={(event) => {
                         if (timerLeft !== null) {
                             stopTimer();
+                            void cancelRestTimerNotification();
                             setShowTimerMenu(false);
                             setTimerMenuAnchor(null);
                         } else {
@@ -3716,6 +3721,7 @@ export default function GymApp() {
                                                 setShowTimerMenu(false);
                                                 setTimerMenuAnchor(null);
                                                 startTimer(sec);
+                                                void scheduleRestTimerNotification(sec);
                                             }}
                                             style={{
                                                 flex: 1,
