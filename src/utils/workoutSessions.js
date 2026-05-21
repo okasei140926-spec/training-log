@@ -14,6 +14,12 @@ const buildSessionExerciseKey = (exerciseName, bodyPart) =>
   `${String(bodyPart || "").trim()}::${String(exerciseName || "").trim()}`;
 
 const sanitizeBodyPart = (value) => String(value || "").trim();
+const normalizeUnit = (value) => {
+  const unit = String(value || "kg").toLowerCase();
+  if (unit === "lbs" || unit === "lb" || unit === "pound" || unit === "pounds") return "lb";
+  if (unit === "bw" || unit === "bodyweight") return "BW";
+  return "kg";
+};
 
 const roundNumeric = (value, digits = 1) => {
   const num = Number(value || 0);
@@ -74,9 +80,18 @@ export function buildWorkoutSessionEntriesFromHistory(history, workoutDate) {
       (records || []).map((record) => {
         if (!record || record.date !== workoutDate) return null;
 
-        const sets = sanitizeWorkoutSets(getRecordSourceSets(record), {
+        const sourceSets = getRecordSourceSets(record);
+        const recordUnit = normalizeUnit(record.displayUnit || record.unit || record.weightUnit || record.weight_unit);
+        const sets = sanitizeWorkoutSets(sourceSets, {
           allowBodyweight: true,
         });
+        const displaySets = sanitizeWorkoutSets(sourceSets, {
+          allowBodyweight: true,
+        }).map((set) => ({
+          ...set,
+          weight: set.displayWeight ?? set.weight,
+          unit: normalizeUnit(set.displayUnit || set.unit || set.weightUnit || set.weight_unit || recordUnit),
+        }));
         if (!sets.length) return null;
 
         const order = Number(record.order);
@@ -88,6 +103,7 @@ export function buildWorkoutSessionEntriesFromHistory(history, workoutDate) {
           order: Number.isFinite(order) ? order : 999,
           durationSec: getRecordDurationSec(record),
           sets,
+          displaySets,
         };
       })
     )
@@ -111,10 +127,19 @@ export function buildWorkoutSessionEntriesFromDraft({
       if (!exerciseName) return null;
 
       const exUnit = typeof getExUnit === "function" ? getExUnit(exerciseName) : "kg";
+      const sourceSets = logData[exerciseName] || [];
+      const displaySets = sanitizeWorkoutSets(
+        sourceSets.map((set) => ({
+          ...set,
+          unit: normalizeUnit(exUnit),
+        })),
+        { allowBodyweight: true }
+      );
       const sets = sanitizeWorkoutSets(
-        (logData[exerciseName] || []).map((set) => ({
+        sourceSets.map((set) => ({
           ...set,
           weight: storeW(set.weight, exUnit),
+          unit: normalizeUnit(exUnit),
         })),
         { allowBodyweight: true }
       );
@@ -127,6 +152,7 @@ export function buildWorkoutSessionEntriesFromDraft({
         order: index,
         date: workoutDate,
         sets,
+        displaySets,
       };
     })
     .filter(Boolean);
@@ -171,9 +197,10 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
       set_count: entry.sets.length,
       max_weight: roundNumeric(maxWeight, 1),
       volume: roundNumeric(numericVolume, 1),
-      sets: entry.sets.map((set) => ({
+      sets: (entry.displaySets || entry.sets).map((set) => ({
         weight: set.weight,
         reps: set.reps,
+        unit: normalizeUnit(set.unit || set.weightUnit || set.weight_unit),
       })),
       best_set_json: bestSet
         ? {

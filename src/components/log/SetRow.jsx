@@ -12,14 +12,14 @@ const formatWeightValue = (value) => {
 };
 
 const getSavedUnitLabel = (set, fallbackUnit) =>
-    normalizeUnitLabel(set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit || "kg");
+    normalizeUnitLabel(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit || "kg");
 
 const formatPreviousSet = (previousSet, fallbackUnit) => {
     if (!previousSet) return "前回 -";
 
     const reps = Number(previousSet.reps);
     const repsLabel = Number.isFinite(reps) && reps > 0 ? formatWeightValue(reps) : "-";
-    const rawWeight = String(previousSet.weight ?? "").trim();
+    const rawWeight = String(previousSet.displayWeight ?? previousSet.weight ?? "").trim();
 
     if (rawWeight.toUpperCase() === "BW") {
         return `前回 自重 × ${repsLabel}`;
@@ -50,15 +50,15 @@ export default function SetRow({
     const inputStyle = {
         width: "100%",
         minHeight: 48,
-        background: "#080b10",
-        border: "1px solid rgba(87, 195, 255, 0.28)",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247, 253, 253, 0.94))",
+        border: "1px solid rgba(18, 199, 194, 0.18)",
         borderRadius: 16,
         padding: "12px 39px 12px 12px",
-        color: "#f8fbff",
+        color: "var(--text)",
         fontSize: 18,
         fontWeight: 900,
         textAlign: "center",
-        boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.02)",
+        boxShadow: "0 8px 20px rgba(15, 94, 99, 0.04)",
         boxSizing: "border-box",
     };
     const suffixStyle = {
@@ -66,7 +66,7 @@ export default function SetRow({
         right: 13,
         top: "50%",
         transform: "translateY(-50%)",
-        color: "rgba(238, 245, 255, 0.52)",
+        color: "var(--text3)",
         fontSize: 12,
         fontWeight: 800,
         pointerEvents: "none",
@@ -84,9 +84,9 @@ export default function SetRow({
                 borderRadius: 18,
                 background:
                     idx === 0
-                        ? "linear-gradient(135deg, rgba(87, 195, 255, 0.14), rgba(18, 199, 194, 0.08))"
-                        : "rgba(255,255,255,0.045)",
-                border: "1px solid rgba(255,255,255,0.06)",
+                        ? "linear-gradient(135deg, rgba(18, 199, 194, 0.11), rgba(18, 199, 194, 0.045))"
+                        : "rgba(18, 199, 194, 0.035)",
+                border: "1px solid rgba(18, 199, 194, 0.12)",
             }}
         >
             <div
@@ -97,8 +97,8 @@ export default function SetRow({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: idx === 0 ? "rgba(87, 195, 255, 0.18)" : "rgba(255,255,255,0.06)",
-                    color: idx === 0 ? "#62caff" : "rgba(238,245,255,0.72)",
+                    background: idx === 0 ? "rgba(18, 199, 194, 0.16)" : "rgba(18, 199, 194, 0.08)",
+                    color: idx === 0 ? "#0F5E63" : "var(--text2)",
                     fontSize: 14,
                     fontWeight: 900,
                     flexShrink: 0,
@@ -109,7 +109,7 @@ export default function SetRow({
 
             <div
                 style={{
-                    color: "rgba(238,245,255,0.56)",
+                    color: "var(--text2)",
                     fontSize: 12,
                     fontWeight: 800,
                     lineHeight: 1.35,
@@ -127,7 +127,7 @@ export default function SetRow({
                     style={{
                         minHeight: 48,
                         borderRadius: 16,
-                        border: "1px solid rgba(87, 195, 255, 0.30)",
+                        border: "1px solid rgba(18, 199, 194, 0.24)",
                         background: "linear-gradient(135deg, rgba(15, 94, 99, 0.95), rgba(18, 199, 194, 0.86))",
                         color: "#fff",
                         fontSize: 14,

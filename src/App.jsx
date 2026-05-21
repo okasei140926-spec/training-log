@@ -2359,6 +2359,8 @@ export default function GymApp() {
                 const stored = sanitizeWorkoutSets(sets.map((s) => ({
                     ...s,
                     weight: storeW(s.weight, exUnit),
+                    displayWeight: s.weight,
+                    displayUnit: exUnit === "lbs" ? "lb" : exUnit,
                 })), { allowBodyweight: true });
 
                 if (!stored.length) return;

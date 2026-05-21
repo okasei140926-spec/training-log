@@ -103,6 +103,60 @@ const getBodyPartCards = (summary, items) => {
         .slice(0, 3);
 };
 
+const normalizeUnitLabel = (unit) => {
+    const value = String(unit || "kg").toLowerCase();
+    if (value === "lbs" || value === "lb" || value === "pound" || value === "pounds") return "lb";
+    if (value === "bw" || value === "bodyweight") return "自重";
+    return "kg";
+};
+
+const formatWeightValue = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return String(value || "");
+    return Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10);
+};
+
+const isDisplayableShareSet = (set) => {
+    const reps = Number(set?.reps);
+    if (!Number.isFinite(reps) || reps <= 0) return false;
+    const rawWeight = set?.displayWeight ?? set?.weight;
+    if (String(rawWeight || "").toUpperCase() === "BW") return true;
+    const weight = Number(rawWeight);
+    return Number.isFinite(weight) && weight > 0;
+};
+
+const formatShareSet = (set, index) => {
+    const reps = formatWeightValue(set?.reps);
+    const rawWeight = set?.displayWeight ?? set?.weight;
+    if (String(rawWeight || "").toUpperCase() === "BW") {
+        return `${index + 1}. 自重 × ${reps}`;
+    }
+
+    const unit = normalizeUnitLabel(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit);
+    return `${index + 1}. ${formatWeightValue(rawWeight)}${unit} × ${reps}`;
+};
+
+const getExerciseDetails = (items, maxExercises = 5) => {
+    const details = (items || [])
+        .map((item) => {
+            const sets = (Array.isArray(item?.sets) ? item.sets : [])
+                .filter(isDisplayableShareSet)
+                .map(formatShareSet);
+            if (!sets.length) return null;
+
+            return {
+                name: item.exercise_name || item.name || "種目",
+                sets,
+            };
+        })
+        .filter(Boolean);
+
+    return {
+        visible: details.slice(0, maxExercises),
+        hiddenCount: Math.max(0, details.length - maxExercises),
+    };
+};
+
 export default function WorkoutSessionShareModal({
     isOpen,
     onClose,
@@ -150,6 +204,10 @@ export default function WorkoutSessionShareModal({
     const previewScale = preset.scale || 0.58;
     const isStory = sizeKey === "story";
     const prLabel = prCount > 0 ? `PR更新 ${prCount}件` : "";
+    const exerciseDetails = useMemo(
+        () => getExerciseDetails(items, isStory ? 5 : 0),
+        [isStory, items]
+    );
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -360,15 +418,15 @@ export default function WorkoutSessionShareModal({
                                         flexDirection: "column",
                                         color: "#fff",
                                         boxSizing: "border-box",
-                                        padding: isStory ? "28px 24px 24px" : "22px",
+                                        padding: isStory ? "24px 22px 22px" : "22px",
                                     }}
                                 >
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: isStory ? 28 : 16 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: isStory ? 18 : 16 }}>
                                         <div>
                                             <div style={{ fontSize: 10, letterSpacing: 3.4, color: "rgba(255,255,255,0.45)", fontWeight: 900, marginBottom: 8 }}>
                                                 {dateLabel}
                                             </div>
-                                            <div style={{ fontSize: isStory ? 42 : 28, color: "#ffffff", fontWeight: 950, lineHeight: 1.02, letterSpacing: -0.4 }}>
+                                            <div style={{ fontSize: isStory ? 34 : 28, color: "#ffffff", fontWeight: 950, lineHeight: 1.02, letterSpacing: -0.4 }}>
                                                 {workoutTitle}
                                             </div>
                                         </div>
@@ -377,12 +435,12 @@ export default function WorkoutSessionShareModal({
                                         </div>
                                     </div>
 
-                                    <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.9fr", gap: isStory ? 18 : 10, marginBottom: isStory ? 24 : 14 }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.9fr", gap: isStory ? 14 : 10, marginBottom: isStory ? 16 : 14 }}>
                                         <div>
                                             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", fontWeight: 800, letterSpacing: 1.1 }}>
                                                 VOLUME
                                             </div>
-                                            <div style={{ marginTop: 7, fontSize: isStory ? 58 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
+                                            <div style={{ marginTop: 7, fontSize: isStory ? 46 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
                                                 {formatLargeNumber(summary?.totalVolume)}
                                             </div>
                                             <div style={{ marginTop: 4, fontSize: isStory ? 19 : 14, color: "rgba(255,255,255,0.56)", fontWeight: 900 }}>
@@ -393,7 +451,7 @@ export default function WorkoutSessionShareModal({
                                             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", fontWeight: 800, letterSpacing: 1.1 }}>
                                                 SETS
                                             </div>
-                                            <div style={{ marginTop: 7, fontSize: isStory ? 58 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
+                                            <div style={{ marginTop: 7, fontSize: isStory ? 46 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
                                                 {Number(summary?.setCount || 0)}
                                             </div>
                                             <div style={{ marginTop: 4, fontSize: isStory ? 19 : 14, color: "rgba(255,255,255,0.56)", fontWeight: 900 }}>
@@ -402,7 +460,7 @@ export default function WorkoutSessionShareModal({
                                         </div>
                                     </div>
 
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isStory ? 28 : 16 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isStory ? 16 : 16 }}>
                                         <div style={{ width: isStory ? 28 : 22, height: isStory ? 28 : 22, borderRadius: 999, border: "2px solid rgba(255,255,255,0.42)", position: "relative", boxSizing: "border-box" }}>
                                             <div style={{ position: "absolute", left: "50%", top: 5, width: 2, height: isStory ? 8 : 6, background: "rgba(255,255,255,0.42)", transform: "translateX(-50%)" }} />
                                             <div style={{ position: "absolute", left: "50%", top: "50%", width: isStory ? 8 : 6, height: 2, background: "rgba(255,255,255,0.42)", transformOrigin: "left center", transform: "translateY(-50%) rotate(25deg)" }} />
@@ -415,27 +473,27 @@ export default function WorkoutSessionShareModal({
                                         </div>
                                     </div>
 
-                                    <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 13 : 10, fontWeight: 800, marginBottom: isStory ? 12 : 8 }}>
+                                    <div style={{ color: "rgba(255,255,255,0.34)", fontSize: isStory ? 12 : 10, fontWeight: 800, marginBottom: isStory ? 8 : 8 }}>
                                         部位
                                     </div>
 
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isStory ? 10 : 7, marginBottom: isStory ? 26 : 14 }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: isStory ? 8 : 7, marginBottom: isStory ? 12 : 14 }}>
                                         {(bodyPartCards.length > 0 ? bodyPartCards : [{ bodyPart: "合計", count: Number(summary?.setCount || 0) }]).map((item) => (
                                             <div
                                                 key={`${item.bodyPart}-${item.count}`}
                                                 style={{
-                                                    minHeight: isStory ? 72 : 52,
+                                                    minHeight: isStory ? 58 : 52,
                                                     borderRadius: isStory ? 18 : 14,
                                                     background: "rgba(255,255,255,0.075)",
                                                     border: "1px solid rgba(255,255,255,0.05)",
-                                                    padding: isStory ? "13px 12px" : "9px 9px",
+                                                    padding: isStory ? "10px 10px" : "9px 9px",
                                                     boxSizing: "border-box",
                                                 }}
                                             >
                                                 <div style={{ color: "#fff", fontSize: isStory ? 15 : 11, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                     {item.bodyPart}
                                                 </div>
-                                                <div style={{ marginTop: 6, color: "#62caff", fontSize: isStory ? 27 : 18, fontWeight: 950, lineHeight: 0.95 }}>
+                                                <div style={{ marginTop: 5, color: "#62caff", fontSize: isStory ? 22 : 18, fontWeight: 950, lineHeight: 0.95 }}>
                                                     {item.count}
                                                     <span style={{ marginLeft: 4, color: "rgba(255,255,255,0.42)", fontSize: isStory ? 12 : 9, fontWeight: 900 }}>sets</span>
                                                 </div>
@@ -443,7 +501,47 @@ export default function WorkoutSessionShareModal({
                                         ))}
                                     </div>
 
-                                    <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0 }}>
+                                    {isStory && prLabel && (
+                                        <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: "8px 11px", fontSize: 12, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 10 }}>
+                                            PR <span style={{ color: "#62caff", marginLeft: 4 }}>{prLabel}</span>
+                                        </div>
+                                    )}
+
+                                    {isStory && exerciseDetails.visible.length > 0 && (
+                                        <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: 12, fontWeight: 800, marginBottom: 7 }}>
+                                                メニュー
+                                            </div>
+                                            <div style={{ display: "grid", gap: 7 }}>
+                                                {exerciseDetails.visible.map((item) => (
+                                                    <div
+                                                        key={item.name}
+                                                        style={{
+                                                            borderRadius: 13,
+                                                            background: "rgba(17, 24, 39, 0.72)",
+                                                            border: "1px solid rgba(255,255,255,0.07)",
+                                                            padding: "8px 10px",
+                                                        }}
+                                                    >
+                                                        <div style={{ color: "#fff", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                            {item.name}
+                                                        </div>
+                                                        <div style={{ marginTop: 4, color: "#7DE7E2", fontSize: 10, fontWeight: 800, lineHeight: 1.35, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}>
+                                                            {item.sets.join(" / ")}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {exerciseDetails.hiddenCount > 0 && (
+                                                    <div style={{ color: "rgba(255,255,255,0.42)", fontSize: 10, fontWeight: 800, textAlign: "center" }}>
+                                                        +{exerciseDetails.hiddenCount} 種目
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!isStory && (
+                                        <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0 }}>
                                         {prLabel ? (
                                             <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: isStory ? "12px 14px" : "8px 10px", fontSize: isStory ? 15 : 11, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                 PR <span style={{ color: "#62caff", marginLeft: 4 }}>{prLabel}</span>
@@ -451,7 +549,8 @@ export default function WorkoutSessionShareModal({
                                         ) : (
                                             <div />
                                         )}
-                                    </div>
+                                        </div>
+                                    )}
 
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: isStory ? 22 : 12 }}>
                                         <div style={{ color: "#62caff", fontSize: isStory ? 18 : 14, fontWeight: 950, lineHeight: 1 }}>
