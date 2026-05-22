@@ -23,17 +23,48 @@ const BIG3_EXERCISES = [
   { key: "squat", label: "スクワット" },
   { key: "deadlift", label: "デッドリフト" },
 ];
-const BODY_PART_CHART_COLORS = {
-  胸: "#12C7C2",
-  背中: "#0F5E63",
-  四頭: "#33E1DB",
-  ハムストリングス: "#50BFA5",
-  尻: "#3B82F6",
-  肩: "#8B5CF6",
-  二頭: "#F59E0B",
-  三頭: "#EF4444",
-  腹筋: "#14B8A6",
-  その他: "#94A3B8",
+const BODY_PART_CHART_PALETTE = [
+  "#0F6B6B",
+  "#14958F",
+  "#20B8AE",
+  "#37CDC4",
+  "#65DCD4",
+  "#8EE8E2",
+  "#5EBFAE",
+  "#7ACFC2",
+  "#A7EDE8",
+  "#B9DAD5",
+];
+const BODY_PART_CHART_BG = "rgba(18, 199, 194, 0.045)";
+const BODY_PART_CHART_GRID = "rgba(15, 94, 99, 0.075)";
+
+const getBodyPartChartFill = (index = 0) =>
+  BODY_PART_CHART_PALETTE[Math.min(index, BODY_PART_CHART_PALETTE.length - 1)] || "#20B8AE";
+
+const BodyPartChartTooltip = ({ active, payload, label, valueLabel, unit, formatter }) => {
+  if (!active || !payload?.length) return null;
+  const rawValue = Number(payload[0]?.value || 0);
+  const displayValue = formatter ? formatter(rawValue) : `${rawValue.toLocaleString("ja-JP")}${unit || ""}`;
+
+  return (
+    <div
+      style={{
+        background: "linear-gradient(180deg, var(--card), var(--card2))",
+        border: "1px solid rgba(18, 199, 194, 0.18)",
+        borderRadius: 16,
+        boxShadow: "0 14px 32px rgba(15, 94, 99, 0.14)",
+        padding: "11px 13px",
+        minWidth: 132,
+      }}
+    >
+      <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 900, marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ color: "var(--text2)", fontSize: 12, fontWeight: 700 }}>
+        {valueLabel}：<span style={{ color: "var(--accent)", fontSize: 15, fontWeight: 900 }}>{displayValue}</span>
+      </div>
+    </div>
+  );
 };
 
 const formatDate = (date) => (date ? date.replace(/-/g, "/") : null);
@@ -563,10 +594,10 @@ export default function AnalyticsScreen({
           : thisWeekSummary;
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
   const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
-  const overviewBodyPartChart = overviewBodyPartStats.map((item) => ({
+  const overviewBodyPartChart = overviewBodyPartStats.map((item, index) => ({
     label: getBodyPartDisplayLabel(item.bodyPart),
     sets: item.sets,
-    fill: BODY_PART_CHART_COLORS[item.bodyPart] || "#12C7C2",
+    fill: getBodyPartChartFill(index),
   }));
   const totalOverviewSets = overviewBodyPartStats.reduce((sum, item) => sum + item.sets, 0);
   const overviewMetricDetails = useMemo(
@@ -1159,14 +1190,14 @@ export default function AnalyticsScreen({
           {(overviewBodyPartStats || []).length > 0 ? (
             <ResponsiveContainer width="100%" height={Math.max(250, Math.min(360, 160 + overviewBodyPartStats.length * 18))}>
               <BarChart
-                data={overviewBodyPartStats.map((item) => ({
+                data={overviewBodyPartStats.map((item, index) => ({
                   label: getBodyPartDisplayLabel(item.bodyPart),
                   volume: Math.round(item.volume || 0),
-                  fill: BODY_PART_CHART_COLORS[item.bodyPart] || "var(--accent)",
+                  fill: getBodyPartChartFill(index),
                 }))}
                 margin={{ top: 10, right: 10, left: 4, bottom: 4 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={BODY_PART_CHART_GRID} vertical={false} />
                 <XAxis
                   dataKey="label"
                   axisLine={false}
@@ -1182,19 +1213,12 @@ export default function AnalyticsScreen({
                   tickFormatter={(v) => `${(v / 1000).toFixed(v >= 1000 ? 1 : 0)}k`}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                    borderRadius: 14,
-                    fontSize: 12,
-                    boxShadow: "var(--shadow-card)",
-                  }}
-                  labelStyle={{ color: "var(--text)" }}
-                  formatter={(value) => [`${Number(value).toLocaleString("ja-JP")}kg`, "Volume"]}
+                  content={<BodyPartChartTooltip valueLabel="Volume" formatter={(value) => `${Number(value || 0).toLocaleString("ja-JP")}kg`} />}
+                  cursor={{ fill: "rgba(15, 94, 99, 0.055)", radius: 12 }}
                 />
-                <Bar dataKey="volume" radius={[10, 10, 0, 0]} background={{ fill: "rgba(18, 199, 194, 0.08)", radius: 10 }}>
-                  {overviewBodyPartStats.map((item) => (
-                    <Cell key={item.bodyPart} fill={BODY_PART_CHART_COLORS[item.bodyPart] || "var(--accent)"} />
+                <Bar dataKey="volume" radius={[10, 10, 0, 0]} background={{ fill: BODY_PART_CHART_BG, radius: 10 }}>
+                  {overviewBodyPartStats.map((item, index) => (
+                    <Cell key={item.bodyPart} fill={getBodyPartChartFill(index)} />
                   ))}
                 </Bar>
               </BarChart>
@@ -1404,7 +1428,7 @@ export default function AnalyticsScreen({
             </div>
             <ResponsiveContainer width="100%" height={Math.max(250, Math.min(360, 160 + overviewBodyPartChart.length * 18))}>
               <BarChart data={overviewBodyPartChart} margin={{ top: 10, right: 10, left: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={BODY_PART_CHART_GRID} vertical={false} />
                 <XAxis
                   dataKey="label"
                   type="category"
@@ -1422,20 +1446,13 @@ export default function AnalyticsScreen({
                   allowDecimals={false}
                 />
                 <Tooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                    borderRadius: 14,
-                    fontSize: 12,
-                    boxShadow: "var(--shadow-card)",
-                  }}
-                  labelStyle={{ color: "var(--text)" }}
-                  formatter={(value) => [`${Math.round(Number(value) || 0)}セット`, "セット数"]}
+                  content={<BodyPartChartTooltip valueLabel="セット数" formatter={(value) => `${Math.round(Number(value) || 0)}セット`} />}
+                  cursor={{ fill: "rgba(15, 94, 99, 0.055)", radius: 12 }}
                 />
                 <Bar
                   dataKey="sets"
                   radius={[10, 10, 0, 0]}
-                  background={{ fill: "rgba(18, 199, 194, 0.08)", radius: 10 }}
+                  background={{ fill: BODY_PART_CHART_BG, radius: 10 }}
                 >
                   {overviewBodyPartChart.map((item) => (
                     <Cell key={item.label} fill={item.fill} />
