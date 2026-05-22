@@ -78,8 +78,6 @@ const resolvePeriodMeta = (period, today = new Date()) => {
   if (period === "last_week") {
     start.setDate(start.getDate() - 7);
     end.setDate(end.getDate() - 7);
-  } else {
-    end.setTime(Math.min(end.getTime(), startOfDay(today).getTime()));
   }
 
   return {

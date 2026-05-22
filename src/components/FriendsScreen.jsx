@@ -9,7 +9,6 @@ import {
     getRecordSourceSets,
     getValidWorkoutDatesFromHistory,
     hasValidWorkoutOnDate,
-    mergeHistoryMaps,
     PR_UPDATE_TOLERANCE_KG,
     sanitizeWorkoutSets,
     sanitizeHistoryRecord,
@@ -145,6 +144,7 @@ export default function FriendsScreen({
     onLogout,
     onOpenRecord,
     mode = "all",
+    deletedWorkoutDates = [],
 }) {
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.friends || []);
@@ -177,6 +177,31 @@ export default function FriendsScreen({
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
     const recentSevenStart = shiftDateKey(today, -6);
+    const ownDeletedWorkoutDateSet = useMemo(
+        () => new Set((deletedWorkoutDates || []).map((date) => String(date || "").slice(0, 10)).filter(Boolean)),
+        [deletedWorkoutDates]
+    );
+    const hasOwnHistorySnapshot = useMemo(
+        () => Boolean(history && typeof history === "object" && Object.keys(history).length > 0),
+        [history]
+    );
+    const ownHistoryDateSet = useMemo(() => new Set(
+        getValidWorkoutDatesFromHistory(history || {}, { since: recentSevenStart })
+            .filter((dateKey) => dateKey <= today)
+    ), [history, recentSevenStart, today]);
+    const shouldHideOwnWorkoutDate = useCallback((ownerId, workoutDate) => {
+        if (!user?.id || ownerId !== user.id) return false;
+        const dateKey = String(workoutDate || "").slice(0, 10);
+        if (!dateKey) return false;
+        if (ownDeletedWorkoutDateSet.has(dateKey)) return true;
+        return hasOwnHistorySnapshot
+            && dateKey >= recentSevenStart
+            && dateKey <= today
+            && !ownHistoryDateSet.has(dateKey);
+    }, [hasOwnHistorySnapshot, ownDeletedWorkoutDateSet, ownHistoryDateSet, recentSevenStart, today, user?.id]);
+    const shouldHideFeedItem = useCallback((item) => (
+        shouldHideOwnWorkoutDate(item?.user_id || item?.userId, item?.workout_date || item?.date)
+    ), [shouldHideOwnWorkoutDate]);
     const volumePeriodRange = useMemo(() => {
         const todayDate = parseDateKey(today);
         const thisMonthStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
@@ -862,7 +887,8 @@ export default function FriendsScreen({
         }
 
         if (hasCache && cachedItems.length) {
-            setActivityFeed((prev) => (prev.length ? prev : cachedItems));
+            const visibleCachedItems = cachedItems.filter((item) => !shouldHideFeedItem(item));
+            setActivityFeed((prev) => (prev.length ? prev : visibleCachedItems));
         }
 
         if (!hasCache && !background && activityFeed.length === 0) {
@@ -913,7 +939,7 @@ export default function FriendsScreen({
                     today,
                 });
             }
-            const rawSessions = sessions || [];
+            const rawSessions = (sessions || []).filter((session) => !shouldHideOwnWorkoutDate(session?.user_id, session?.workout_date));
             const friendSessions = rawSessions.filter((session) => session?.user_id && effectiveFriendIds.includes(session.user_id));
             const friendVisibilityStats = friendSessions.reduce((stats, session) => {
                 const visibility = String(session?.visibility || "unknown");
@@ -951,13 +977,14 @@ export default function FriendsScreen({
             }
 
             const profileMap = new Map((profilesRes.data || []).map((profile) => [profile.id, profile]));
+            const visibleWorkoutRows = (workoutsRes.data || []).filter((row) => !shouldHideOwnWorkoutDate(row?.user_id, row?.date));
             const workoutRowMap = new Map(
-                (workoutsRes.data || []).map((row) => [`${row.user_id}::${row.date}`, row])
+                visibleWorkoutRows.map((row) => [`${row.user_id}::${row.date}`, row])
             );
 
             const excludedItems = [];
             const workoutRowsByUser = new Map();
-            (workoutsRes.data || []).forEach((row) => {
+            visibleWorkoutRows.forEach((row) => {
                 const current = workoutRowsByUser.get(row.user_id) || [];
                 current.push(row);
                 workoutRowsByUser.set(row.user_id, current);
@@ -1041,6 +1068,7 @@ export default function FriendsScreen({
             });
 
             const buildItemsForUser = (targetUserId, sourceHistory = {}, preferredDates = []) => {
+                const isOwnTarget = targetUserId === user.id;
                 const historyDates = getValidWorkoutDatesFromHistory(sourceHistory, { since: recentSevenStart })
                     .filter((dateKey) => dateKey <= today);
                 const sessionDates = Array.from(sessionMetaMap.keys())
@@ -1051,7 +1079,10 @@ export default function FriendsScreen({
                     .filter((dateKey) => dateKey && dateKey >= recentSevenStart && dateKey <= today);
                 const visibleDates = (Array.isArray(preferredDates) ? preferredDates : [])
                     .filter((dateKey) => dateKey >= recentSevenStart && dateKey <= today);
-                const validDates = [...new Set([...historyDates, ...sessionDates, ...visibleDates])];
+                const validDates = [
+                    ...new Set(isOwnTarget ? historyDates : [...historyDates, ...sessionDates, ...visibleDates]),
+                ]
+                    .filter((dateKey) => !(targetUserId === user.id && ownDeletedWorkoutDateSet.has(String(dateKey || "").slice(0, 10))));
 
                 return validDates.map((workoutDate) => {
                     const workoutKey = `${targetUserId}::${workoutDate}`;
@@ -1086,11 +1117,9 @@ export default function FriendsScreen({
             };
 
             const ownWorkoutRows = workoutRowsByUser.get(user.id) || [];
-            const mergedOwnHistory = mergeHistoryMaps(
-                buildHistoryFromWorkoutRows(ownWorkoutRows),
-                history || {}
-            );
-            const ownItems = buildItemsForUser(user.id, mergedOwnHistory);
+            const remoteOwnHistory = buildHistoryFromWorkoutRows(ownWorkoutRows);
+            const localOwnHistory = history && Object.keys(history).length ? history : remoteOwnHistory;
+            const ownItems = buildItemsForUser(user.id, localOwnHistory);
             const friendItems = effectiveFriendIds.flatMap((friendId) =>
                 buildItemsForUser(
                     friendId,
@@ -1113,9 +1142,9 @@ export default function FriendsScreen({
             debugLog("[feed] friend workouts count", {
                 currentUserId: user.id,
                 friendIds: effectiveFriendIds,
-                count: (workoutsRes.data || []).filter((row) => effectiveFriendIds.includes(row.user_id)).length,
+                count: visibleWorkoutRows.filter((row) => effectiveFriendIds.includes(row.user_id)).length,
             });
-            debugLog("[feed] friend workouts count", (workoutsRes.data || []).filter((row) => effectiveFriendIds.includes(row.user_id)).length);
+            debugLog("[feed] friend workouts count", visibleWorkoutRows.filter((row) => effectiveFriendIds.includes(row.user_id)).length);
             excludedItems
                 .filter((item) => item.isFriendWorkout)
                 .forEach((item) => {
@@ -1146,7 +1175,7 @@ export default function FriendsScreen({
                 ownWorkoutsLast7DaysCount: ownItems.length,
                 friendWorkoutsLast7DaysCount: friendItems.length,
                 sessionsCount: rawSessions.length,
-                workoutsCount: (workoutsRes.data || []).length,
+                workoutsCount: visibleWorkoutRows.length,
                 feedItemsLength: allItems.length,
                 headerActivityCount: allItems.length,
                 displayedCardsCount: allItems.length,
@@ -1296,7 +1325,7 @@ export default function FriendsScreen({
             setActivityFeedLoading(false);
             setFeedRefreshing(false);
         }
-    }, [activityFeed, buildFeedItemFromHistoryDate, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, resolveAcceptedFriendIds, today, user?.id]);
+    }, [activityFeed, buildFeedItemFromHistoryDate, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, resolveAcceptedFriendIds, shouldHideFeedItem, shouldHideOwnWorkoutDate, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -1435,14 +1464,21 @@ export default function FriendsScreen({
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
+        const visibleCachedItems = (FRIENDS_SCREEN_CACHE.feedData.activityFeed || []).filter((item) => !shouldHideFeedItem(item));
+        FRIENDS_SCREEN_CACHE.feedData = {
+            ...FRIENDS_SCREEN_CACHE.feedData,
+            activityFeed: visibleCachedItems,
+        };
+        setActivityFeed((prev) => prev.filter((item) => !shouldHideFeedItem(item)));
         const hasCachedFeed = FRIENDS_SCREEN_CACHE.feedData.userId === user.id
             && Array.isArray(FRIENDS_SCREEN_CACHE.feedData.activityFeed)
             && FRIENDS_SCREEN_CACHE.feedData.activityFeed.length > 0;
         fetchActivityFeed({
             reset: true,
             background: hasCachedFeed,
+            force: true,
         }).catch(console.error);
-    }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion]);
+    }, [user, fetchActivityFeed, showFeedSections, sessionSyncVersion, shouldHideFeedItem]);
 
     useEffect(() => {
         if (!user || !showFeedSections) return;
@@ -1716,10 +1752,14 @@ export default function FriendsScreen({
     const aboveRankingEntry = myRankingIndex > 0 ? activeRanking.data[myRankingIndex - 1] : null;
     const myRankingSummary = activeRanking?.mySummary?.(myRankingIndex, myRankingEntry, aboveRankingEntry) || null;
 
-    const activityCount = activityFeed.length;
+    const visibleActivityFeed = useMemo(
+        () => activityFeed.filter((item) => !shouldHideFeedItem(item)),
+        [activityFeed, shouldHideFeedItem]
+    );
+    const activityCount = visibleActivityFeed.length;
     const shouldShowRankingLoading = loading && activeRanking.data.length === 0;
     const activeFriendCount = new Set(
-        activityFeed
+        visibleActivityFeed
             .filter((item) => item.user_id !== user?.id)
             .map((item) => item.user_id)
             .filter(Boolean)
@@ -1735,8 +1775,8 @@ export default function FriendsScreen({
     const groupedActivityFeed = useMemo(() => {
         debugTime("[feed] build grouped");
         const userMap = new Map();
-        const ownItemsCount = activityFeed.filter((item) => item?.user_id === user?.id).length;
-        const friendItemsCount = activityFeed.filter((item) => item?.user_id && item.user_id !== user?.id).length;
+        const ownItemsCount = visibleActivityFeed.filter((item) => item?.user_id === user?.id).length;
+        const friendItemsCount = visibleActivityFeed.filter((item) => item?.user_id && item.user_id !== user?.id).length;
 
         const ensureUserGroup = ({ userId, username, avatar1Url, profile }) => {
             if (!userId || userMap.has(userId)) return;
@@ -1774,7 +1814,7 @@ export default function FriendsScreen({
             });
         });
 
-        activityFeed.forEach((item) => {
+        visibleActivityFeed.forEach((item) => {
             const userId = item.user_id || item.userId || "unknown";
             const workoutDate = String(item.workout_date || item.date || "").slice(0, 10);
             if (!workoutDate) return;
@@ -1850,7 +1890,7 @@ export default function FriendsScreen({
         debugLog("[feed grouped] source counts", {
             ownItemsCount,
             friendItemsCount,
-            totalItemsCount: activityFeed.length,
+            totalItemsCount: visibleActivityFeed.length,
             acceptedFriendIds: friendIds,
         });
         debugLog("[feed grouped] users", groupedUsers.map((u) => ({
@@ -1861,7 +1901,7 @@ export default function FriendsScreen({
         })));
         debugTimeEnd("[feed] build grouped");
         return groupedUsers;
-    }, [activityFeed, avatarUrl, friendIds, friends, getDisplayUsername, myUsername, user?.id]);
+    }, [avatarUrl, friendIds, friends, getDisplayUsername, myUsername, user?.id, visibleActivityFeed]);
 
     const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
     const hasVisibleFeedUsers = groupedActivityFeed.length > 0;

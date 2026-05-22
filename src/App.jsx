@@ -1330,6 +1330,24 @@ export default function GymApp() {
         const sessionIds = (sessionRows || []).map((session) => session.id).filter(Boolean);
 
         if (sessionIds.length > 0) {
+            const [deleteLikesResult, deleteCommentsResult] = await Promise.all([
+                supabase
+                    .from("workout_session_likes")
+                    .delete()
+                    .in("session_id", sessionIds),
+                supabase
+                    .from("workout_session_comments")
+                    .delete()
+                    .in("session_id", sessionIds),
+            ]);
+
+            if (deleteLikesResult.error) {
+                console.warn("workout session likes delete failed", deleteLikesResult.error);
+            }
+            if (deleteCommentsResult.error) {
+                console.warn("workout session comments delete failed", deleteCommentsResult.error);
+            }
+
             const { error: deleteExercisesError } = await supabase
                 .from("workout_session_exercises")
                 .delete()
@@ -3446,6 +3464,10 @@ export default function GymApp() {
         historyRevisionRef.current += 1;
         persistHistoryForUser(user?.id, latestHistoryRef.current);
         setHistory(latestHistoryRef.current);
+        commitHistoryDeleteMarkers({
+            dates: (historyDeleteMarkersRef.current?.dates || []).filter((date) => date !== pending.date),
+            records: (historyDeleteMarkersRef.current?.records || []).filter((key) => !String(key || "").startsWith(`${pending.date}::`)),
+        });
 
         saveDraftForDate(pending.date, pending.previousDraft || {});
         if (logDate === pending.date) {
@@ -3475,6 +3497,7 @@ export default function GymApp() {
         }
     }, [
         clearSyncFailure,
+        commitHistoryDeleteMarkers,
         logDate,
         queueWorkoutSessionSync,
         recordSyncFailure,
@@ -3994,6 +4017,7 @@ export default function GymApp() {
                         historySyncDiagnostic={historySyncDiagnostic}
                         manualBests={manualBests}
                         sessionSyncVersion={sessionSyncVersion}
+                        deletedWorkoutDates={historyDeleteMarkersRef.current?.dates || []}
                         user={user}
                         onLogin={() => setShowAuth(true)}
                         onOpenRecord={() => setScreen("history")}
