@@ -363,6 +363,7 @@ export default function AIScreen({
     history,
     isPro = false,
     onStartPro,
+    onDeactivateProDev,
     dailyFreeAiLimit = 5,
     aiUsageCount = 0,
     aiRemaining,
@@ -374,6 +375,7 @@ export default function AIScreen({
     const [selectedWorkoutPlanMap, setSelectedWorkoutPlanMap] = useState({});
 
     const overview = useMemo(() => buildAiOverview(history), [history]);
+    const showDevProControls = process.env.NODE_ENV !== "production" && isPro && typeof onDeactivateProDev === "function";
     const isInitialState =
         aiMsgs.length === 1 &&
         aiMsgs[0]?.role === "assistant" &&
@@ -442,19 +444,44 @@ export default function AIScreen({
             <div
                 style={{
                     flexShrink: 0,
-                    alignSelf: "flex-start",
-                    padding: "6px 10px",
-                    borderRadius: 999,
-                    background: "rgba(18, 199, 194, 0.08)",
-                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                    color: "var(--text2)",
-                    fontSize: 11,
-                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexWrap: "wrap",
                 }}
             >
-                {isPro
-                    ? "今日のAI相談 Pro 無制限"
-                    : `今日のAI相談 残り${aiRemaining}回 / ${dailyFreeAiLimit}回`}
+                <div
+                    style={{
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        background: "rgba(18, 199, 194, 0.08)",
+                        border: "1px solid rgba(18, 199, 194, 0.12)",
+                        color: "var(--text2)",
+                        fontSize: 11,
+                        fontWeight: 700,
+                    }}
+                >
+                    {isPro
+                        ? "今日のAI相談 Pro 無制限"
+                        : `今日のAI相談 残り${aiRemaining}回 / ${dailyFreeAiLimit}回`}
+                </div>
+                {showDevProControls && (
+                    <button
+                        type="button"
+                        onClick={onDeactivateProDev}
+                        style={{
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            background: "rgba(239, 68, 68, 0.08)",
+                            border: "1px solid rgba(239, 68, 68, 0.18)",
+                            color: "#B94A48",
+                            fontSize: 11,
+                            fontWeight: 800,
+                        }}
+                    >
+                        開発用：Pro解除
+                    </button>
+                )}
             </div>
 
             <div

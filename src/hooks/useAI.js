@@ -343,6 +343,34 @@ export function useAI(history) {
     }
   };
 
+  const deactivatePumpProDev = async () => {
+    if (process.env.NODE_ENV === "production") return false;
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) return false;
+
+      const res = await fetch("/api/deactivate-pro-dev", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const data = await res.json();
+
+      if (!res.ok) return false;
+
+      applyServerAiUsage(data?.aiUsage);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
     const currentUsage = resetAiUsageIfNewDay();
@@ -447,6 +475,7 @@ export function useAI(history) {
     sendAI,
     isPro,
     activatePumpPro,
+    deactivatePumpProDev,
     dailyFreeAiLimit: AI_DAILY_LIMIT,
     aiUsageDate,
     aiRemaining: isPro ? Infinity : Math.max(0, AI_DAILY_LIMIT - aiUsageCount),

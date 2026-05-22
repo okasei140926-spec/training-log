@@ -843,6 +843,7 @@ export default function GymApp() {
         sendAI,
         isPro,
         activatePumpPro,
+        deactivatePumpProDev,
         dailyFreeAiLimit,
         aiUsageDate,
         aiUsageCount,
@@ -4106,6 +4107,7 @@ export default function GymApp() {
                         history={history}
                         isPro={isPro}
                         onStartPro={activatePumpPro}
+                        onDeactivateProDev={deactivatePumpProDev}
                         dailyFreeAiLimit={dailyFreeAiLimit}
                         aiUsageDate={aiUsageDate}
                         aiUsageCount={aiUsageCount}
