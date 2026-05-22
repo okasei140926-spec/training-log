@@ -1966,7 +1966,13 @@ export default function FriendsScreen({
         );
     }
     return (
-        <div className="fade-in" style={{ ...S.page, paddingBottom: 20 }}>
+        <div
+            className="fade-in"
+            style={{
+                ...S.page,
+                paddingBottom: "calc(112px + var(--safe-bottom, 0px))",
+            }}
+        >
             {/* アクティビティ/ランキング切り替えタブ */}
             <div style={{
                 display: "flex",
