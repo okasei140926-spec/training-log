@@ -887,7 +887,10 @@ export default function FriendsScreen({
         }
 
         if (hasCache && cachedItems.length) {
-            const visibleCachedItems = cachedItems.filter((item) => !shouldHideFeedItem(item));
+            const shouldPruneOwnCache = ownDeletedWorkoutDateSet.size > 0 || hasOwnHistorySnapshot;
+            const visibleCachedItems = shouldPruneOwnCache
+                ? cachedItems.filter((item) => !shouldHideFeedItem(item))
+                : cachedItems;
             setActivityFeed((prev) => (prev.length ? prev : visibleCachedItems));
         }
 
@@ -1329,7 +1332,7 @@ export default function FriendsScreen({
             setActivityFeedLoading(false);
             setFeedRefreshing(false);
         }
-    }, [activityFeed, buildFeedItemFromHistoryDate, friendSessionInsights.visibleDatesByUser, getDisplayUsername, history, recentSevenStart, resolveAcceptedFriendIds, shouldHideFeedItem, shouldHideOwnWorkoutDate, today, user?.id]);
+    }, [activityFeed, buildFeedItemFromHistoryDate, friendSessionInsights.visibleDatesByUser, getDisplayUsername, hasOwnHistorySnapshot, history, ownDeletedWorkoutDateSet, recentSevenStart, resolveAcceptedFriendIds, shouldHideFeedItem, shouldHideOwnWorkoutDate, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
