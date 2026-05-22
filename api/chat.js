@@ -113,6 +113,32 @@ async function reserveAiChatUsage(userId) {
   };
 }
 
+async function getTodayAiUsageCount(userId, usageDate) {
+  const { data, error } = await adminSupabase
+    .from("ai_chat_usage")
+    .select("usage_count")
+    .eq("user_id", userId)
+    .eq("usage_date", usageDate)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Number(data?.usage_count || 0);
+}
+
+async function getPumpProStatus(userId) {
+  const { data, error } = await adminSupabase
+    .from("pump_pro_subscriptions")
+    .select("active, expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  const expiresAt = data?.expires_at ? new Date(data.expires_at).getTime() : null;
+  const isNotExpired = !expiresAt || expiresAt > Date.now();
+  return Boolean(data?.active && isNotExpired);
+}
+
 async function refundAiChatUsage(userId, usageDate) {
   if (!usageDate) return null;
 
@@ -168,10 +194,31 @@ export default async function handler(req, res) {
   }
 
   let reservedUsage;
+  const usageDate = getTodayKeyInTokyo();
+  let isPro = false;
   try {
-    reservedUsage = await reserveAiChatUsage(user.id);
+    isPro = await getPumpProStatus(user.id);
+    if (isPro) {
+      let usageCount = 0;
+      try {
+        usageCount = await getTodayAiUsageCount(user.id, usageDate);
+      } catch (usageCountError) {
+        console.warn("pro ai usage count lookup failed; continuing without blocking", usageCountError);
+      }
+
+      reservedUsage = {
+        usageDate,
+        allowed: true,
+        isPro: true,
+        usageCount,
+        remaining: null,
+        dailyLimit: AI_DAILY_LIMIT,
+      };
+    } else {
+      reservedUsage = await reserveAiChatUsage(user.id);
+    }
   } catch (usageError) {
-    console.error("reserve ai usage failed", usageError);
+    console.error("ai usage/pro check failed", usageError);
     return res.status(500).json({ error: "AI利用回数の確認に失敗しました。" });
   }
 
