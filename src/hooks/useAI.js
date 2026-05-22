@@ -373,8 +373,13 @@ export function useAI(history) {
 
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
-    const currentUsage = resetAiUsageIfNewDay();
-    const currentIsPro = getIsPro();
+    const currentIsPro = Boolean(isProRef.current || isPro || getIsPro());
+    const currentUsage = currentIsPro
+      ? {
+          dateKey: aiUsageDateRef.current || getTodayKey(),
+          count: normalizeAiUsageCount(aiUsageCountRef.current),
+        }
+      : resetAiUsageIfNewDay();
     isProRef.current = currentIsPro;
     setIsPro(currentIsPro);
     aiUsageDateRef.current = currentUsage.dateKey;
@@ -382,7 +387,8 @@ export function useAI(history) {
     setAiUsageDate(currentUsage.dateKey);
     setAiUsageCount(currentUsage.count);
 
-    if (!userMsg || aiLoadRef.current || !canUseAiChat({ isPro: currentIsPro, usage: currentUsage })) return false;
+    if (!userMsg || aiLoadRef.current) return false;
+    if (!currentIsPro && !canUseAiChat({ isPro: false, usage: currentUsage })) return false;
 
     aiLoadRef.current = true;
 
@@ -416,6 +422,9 @@ export function useAI(history) {
         },
         body: JSON.stringify({
           messages: newMsgs.map((m) => ({ role: m.role, content: m.content })),
+          clientState: {
+            isPro: currentIsPro,
+          },
           coachContext: {
             mode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
             level: mode.wantsBeginner ? "beginner" : mode.wantsAdvanced ? "advanced" : "standard",

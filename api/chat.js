@@ -193,11 +193,25 @@ export default async function handler(req, res) {
       .json({ error: "AI Coachの利用が集中しています。少し待ってからお試しください。", retryAfterSec: rateLimit.retryAfterSec });
   }
 
+  const requestBody = req.body && typeof req.body === "object" ? req.body : {};
+  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+  const allowDevProHint = !isProduction && requestBody?.clientState?.isPro === true;
   let reservedUsage;
   const usageDate = getTodayKeyInTokyo();
   let isPro = false;
   try {
-    isPro = await getPumpProStatus(user.id);
+    try {
+      isPro = await getPumpProStatus(user.id);
+    } catch (proStatusError) {
+      if (!allowDevProHint) throw proStatusError;
+      console.warn("pump pro status lookup failed; using development pro hint", proStatusError);
+      isPro = true;
+    }
+
+    if (!isPro && allowDevProHint) {
+      isPro = true;
+    }
+
     if (isPro) {
       let usageCount = 0;
       try {
@@ -229,7 +243,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const { messages, coachContext } = req.body;
+  const { messages, coachContext } = requestBody;
   const safeContext = coachContext && typeof coachContext === "object" ? coachContext : {};
 
   const systemPrompt = `あなたは筋トレ記録アプリ PUMP のAI Coachです。ユーザーの実際の記録だけを元に、短く分かりやすく答えてください。
