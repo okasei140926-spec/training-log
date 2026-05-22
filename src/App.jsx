@@ -860,6 +860,7 @@ export default function GymApp() {
         isPro,
         activatePumpPro,
         deactivatePumpProDev,
+        refreshPumpProStatus,
         dailyFreeAiLimit,
         aiUsageDate,
         aiUsageCount,
@@ -4276,6 +4277,12 @@ export default function GymApp() {
                     onExportData={handleExportData}
                     onDeleteAccount={handleDeleteAccount}
                     accountActionBusy={accountActionBusy}
+                    isPro={isPro}
+                    onStartPro={activatePumpPro}
+                    onDeactivateProDev={deactivatePumpProDev}
+                    onRefreshProStatus={refreshPumpProStatus}
+                    dailyFreeAiLimit={dailyFreeAiLimit}
+                    aiUsageCount={aiUsageCount}
                 />
                 {showAuth && (
                     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>

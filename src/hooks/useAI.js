@@ -371,6 +371,32 @@ export function useAI(history) {
     }
   };
 
+  const refreshPumpProStatus = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) return null;
+
+      const res = await fetch("/api/pro-status", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const data = await res.json();
+
+      if (!res.ok) return null;
+
+      applyServerAiUsage(data?.aiUsage);
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
     const currentIsPro = Boolean(isProRef.current || isPro || getIsPro());
@@ -485,6 +511,7 @@ export function useAI(history) {
     isPro,
     activatePumpPro,
     deactivatePumpProDev,
+    refreshPumpProStatus,
     dailyFreeAiLimit: AI_DAILY_LIMIT,
     aiUsageDate,
     aiRemaining: isPro ? Infinity : Math.max(0, AI_DAILY_LIMIT - aiUsageCount),
