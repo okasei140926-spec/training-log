@@ -716,10 +716,26 @@ export default function GymApp() {
     } = useTimer();
     const [timerMenuAnchor, setTimerMenuAnchor] = useState(null);
 
+    const resetDocumentInteractionLocks = useCallback(() => {
+        const body = document.body;
+        const html = document.documentElement;
+        if (!body || !html) return;
+
+        body.style.overflow = "";
+        body.style.position = "";
+        body.style.top = "";
+        body.style.width = "";
+        body.style.touchAction = "";
+        html.style.overflow = "";
+        html.style.overscrollBehavior = "";
+    }, []);
+
     useEffect(() => {
         setShowTimerMenu(false);
         setTimerMenuAnchor(null);
-    }, [screen, setShowTimerMenu]);
+        const id = window.setTimeout(resetDocumentInteractionLocks, 0);
+        return () => window.clearTimeout(id);
+    }, [screen, setShowTimerMenu, resetDocumentInteractionLocks]);
 
     useEffect(() => {
         if (!showTimerMenu) return undefined;
@@ -865,6 +881,32 @@ export default function GymApp() {
             body.classList.remove("theme-light");
         };
     }, [isDark]);
+
+    useEffect(() => {
+        const hasAppModalOpen =
+            showAddEx ||
+            Boolean(summary) ||
+            Boolean(workoutDayShareTarget) ||
+            showSettingsModal ||
+            showAuth ||
+            showPushPrompt ||
+            showOnboarding;
+
+        if (hasAppModalOpen) return undefined;
+
+        const id = window.setTimeout(resetDocumentInteractionLocks, 0);
+        return () => window.clearTimeout(id);
+    }, [
+        resetDocumentInteractionLocks,
+        screen,
+        showAddEx,
+        summary,
+        workoutDayShareTarget,
+        showSettingsModal,
+        showAuth,
+        showPushPrompt,
+        showOnboarding,
+    ]);
 
     useEffect(() => {
         latestHistoryRef.current = history;
@@ -3837,7 +3879,7 @@ export default function GymApp() {
                         style={{
                             position: "fixed",
                             inset: 0,
-                            zIndex: 220,
+                            zIndex: 90,
                             background: "rgba(15, 23, 42, 0.03)",
                         }}
                     >
