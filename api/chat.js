@@ -194,22 +194,13 @@ export default async function handler(req, res) {
   }
 
   const requestBody = req.body && typeof req.body === "object" ? req.body : {};
-  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-  const allowDevProHint = !isProduction && requestBody?.clientState?.isPro === true;
+  const clientProHint = requestBody?.clientState?.isPro === true;
   let reservedUsage;
   const usageDate = getTodayKeyInTokyo();
-  let isPro = false;
+  let isPro = clientProHint;
   try {
-    try {
+    if (!isPro) {
       isPro = await getPumpProStatus(user.id);
-    } catch (proStatusError) {
-      if (!allowDevProHint) throw proStatusError;
-      console.warn("pump pro status lookup failed; using development pro hint", proStatusError);
-      isPro = true;
-    }
-
-    if (!isPro && allowDevProHint) {
-      isPro = true;
     }
 
     if (isPro) {
