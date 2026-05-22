@@ -1082,7 +1082,7 @@ export default function FriendsScreen({
                 const validDates = [
                     ...new Set(isOwnTarget ? historyDates : [...historyDates, ...sessionDates, ...visibleDates]),
                 ]
-                    .filter((dateKey) => !(targetUserId === user.id && ownDeletedWorkoutDateSet.has(String(dateKey || "").slice(0, 10))));
+                    .filter((dateKey) => !shouldHideOwnWorkoutDate(targetUserId, dateKey));
 
                 return validDates.map((workoutDate) => {
                     const workoutKey = `${targetUserId}::${workoutDate}`;
@@ -1270,20 +1270,9 @@ export default function FriendsScreen({
                         commentCountMap.set(row.session_id, (commentCountMap.get(row.session_id) || 0) + 1);
                     });
 
-                    setActivityFeed((prev) => prev.map((item) => (
-                        item?.sessionId
-                            ? {
-                                ...item,
-                                photoUrl: item.photoUrl || photoUrlMap.get(item.photoId) || item.photoUrl || null,
-                                likeCount: likeCountMap.get(item.sessionId) ?? item.likeCount ?? 0,
-                                likedByMe: likedSessionIds.has(item.sessionId) || item.likedByMe || false,
-                                commentCount: commentCountMap.get(item.sessionId) ?? item.commentCount ?? 0,
-                            }
-                            : item
-                    )));
-                    FRIENDS_SCREEN_CACHE.feedData = {
-                        userId: user.id,
-                        activityFeed: (FRIENDS_SCREEN_CACHE.feedData.activityFeed || []).map((item) => (
+                    setActivityFeed((prev) => prev
+                        .filter((item) => !shouldHideFeedItem(item))
+                        .map((item) => (
                             item?.sessionId
                                 ? {
                                     ...item,
@@ -1293,7 +1282,22 @@ export default function FriendsScreen({
                                     commentCount: commentCountMap.get(item.sessionId) ?? item.commentCount ?? 0,
                                 }
                                 : item
-                        )),
+                        )));
+                    FRIENDS_SCREEN_CACHE.feedData = {
+                        userId: user.id,
+                        activityFeed: (FRIENDS_SCREEN_CACHE.feedData.activityFeed || [])
+                            .filter((item) => !shouldHideFeedItem(item))
+                            .map((item) => (
+                                item?.sessionId
+                                    ? {
+                                        ...item,
+                                        photoUrl: item.photoUrl || photoUrlMap.get(item.photoId) || item.photoUrl || null,
+                                        likeCount: likeCountMap.get(item.sessionId) ?? item.likeCount ?? 0,
+                                        likedByMe: likedSessionIds.has(item.sessionId) || item.likedByMe || false,
+                                        commentCount: commentCountMap.get(item.sessionId) ?? item.commentCount ?? 0,
+                                    }
+                                    : item
+                            )),
                         fetchedAt: FRIENDS_SCREEN_CACHE.feedData.fetchedAt,
                     };
                 }).catch((error) => {
@@ -2085,7 +2089,7 @@ export default function FriendsScreen({
                         )}
                     </div>
 
-                    {!hasVisibleFeedUsers && activityFeed.length === 0 && !activityFeedLoading && !feedRefreshing ? (
+                    {!hasVisibleFeedUsers && visibleActivityFeed.length === 0 && !activityFeedLoading && !feedRefreshing ? (
                         <div
                             style={{
                                 ...S.sectionCard,
