@@ -1,0 +1,31 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="220" fill="#071111"/>
+  <rect x="1" y="1" width="1022" height="1022" rx="219" stroke="#143333" stroke-width="2" opacity="0.7"/>
+
+  <defs>
+    <linearGradient id="mint" x1="220" y1="190" x2="820" y2="850" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2EF2DB"/>
+      <stop offset="1" stop-color="#0FAE9F"/>
+    </linearGradient>
+  </defs>
+  <path fill-rule="evenodd" clip-rule="evenodd"
+    d="M335 250
+       H618
+       C735 250 816 329 816 438
+       C816 548 735 626 618 626
+       H457
+       L407 774
+       C402 790 388 800 371 800
+       H275
+       C253 800 240 778 247 758
+       L408 287
+       C416 264 435 250 460 250
+       H335Z
+       M475 372
+       L430 504
+       H610
+       C654 504 688 477 688 438
+       C688 399 654 372 610 372
+       H475Z"
+    fill="url(#mint)"/>
+</svg>

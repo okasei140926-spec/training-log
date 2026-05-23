@@ -43,7 +43,7 @@ export default function SplashScreen({ visible }) {
       aria-hidden={!visible}
     >
       <img
-        src="/app-icon-192.png"
+        src="/app-icon.svg"
         alt=""
         aria-hidden="true"
         style={{
