@@ -1565,10 +1565,11 @@ export default function GymApp() {
         }
 
         const startedAt = timing?.startedAtIso || existingSession?.started_at || new Date().toISOString();
-        const endedAt = timing?.endedAtIso || new Date().toISOString();
+        const endedAt = timing?.endedAtIso || existingSession?.ended_at || new Date().toISOString();
         const existingDurationSec = Number.isFinite(Number(existingSession?.duration_sec)) && Number(existingSession?.duration_sec) > 0 && Number(existingSession?.duration_sec) < 86400
             ? Math.floor(Number(existingSession.duration_sec))
             : 0;
+        // timingがある（今日進行中）場合のみ更新、それ以外は既存値を保持
         const durationSec = Number.isFinite(timing?.durationSec)
             ? Math.max(0, Math.floor(timing.durationSec))
             : existingDurationSec;
