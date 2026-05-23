@@ -727,7 +727,7 @@ export function useAI(history) {
         setAiUsageCount(nextUsage.count);
       }
       setAiMsgs((p) => [...p, assistantMessage]);
-      saveAiConversationTurn({
+      await saveAiConversationTurn({
         conversationId: activeConversationIdRef.current,
         userMessage,
         assistantMessage,
