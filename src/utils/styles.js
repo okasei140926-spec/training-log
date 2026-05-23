@@ -6,10 +6,10 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "calc(44px + var(--safe-bottom))",
+    paddingBottom: "var(--bottom-nav-clearance)",
   },
   page: {
-    padding: "18px",
+    padding: "18px 18px var(--bottom-nav-clearance)",
     display: "flex",
     flexDirection: "column",
     gap: 16,
@@ -61,13 +61,13 @@ export const S = {
 	    left: 0,
 	    right: 0,
 	    width: "100%",
-	    zIndex: 260,
+	    zIndex: 520,
 	    display: "flex",
 	    alignItems: "flex-end",
-	    height: "calc(44px + var(--safe-bottom))",
+	    height: "var(--bottom-nav-height)",
 	    paddingBottom: "var(--safe-bottom)",
 	    boxSizing: "border-box",
-	    pointerEvents: "auto",
+	    pointerEvents: "none",
 	    background: "transparent",
 	    borderTop: "none",
 	    boxShadow: "none",
@@ -77,12 +77,16 @@ export const S = {
     alignItems: "center",
     justifyContent: "space-between",
     width: "100%",
-    height: 44,
-    padding: "0 10px",
+    maxWidth: 430,
+    margin: "0 auto",
+    height: 56,
+    padding: "0 12px",
     boxSizing: "border-box",
-    background: "var(--nav-bg)",
+    background: "var(--bottom-nav-bg)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
     borderTop: "1px solid var(--border2)",
-    boxShadow: "0 -1px 2px rgba(0,0,0,0.10)",
+    boxShadow: "0 -12px 28px var(--bottom-nav-shadow)",
     pointerEvents: "auto",
   },
 };
@@ -90,6 +94,9 @@ export const S = {
 export const css = `
   :root {
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --bottom-nav-base-height: 56px;
+    --bottom-nav-height: calc(var(--bottom-nav-base-height) + var(--safe-bottom));
+    --bottom-nav-clearance: calc(132px + var(--safe-bottom));
   }
   :root {
     --bg: #0f0f0f;
@@ -105,6 +112,8 @@ export const css = `
     --text4: #666666;
     --text5: #444444;
     --nav-bg: #0f0f0fee;
+    --bottom-nav-bg: rgba(15, 19, 20, 0.97);
+    --bottom-nav-shadow: rgba(0,0,0,0.34);
     --input-bg: #242424;
     --btn-secondary: #2a2a2a;
     --accent: #12C7C2;
@@ -143,6 +152,8 @@ export const css = `
     --text4: #A9BDC0;
     --text5: #C8D5D8;
     --nav-bg: rgba(255,255,255,0.88);
+    --bottom-nav-bg: rgba(255,255,255,0.98);
+    --bottom-nav-shadow: rgba(15,94,99,0.13);
     --input-bg: #FFFFFF;
     --btn-secondary: #EEF5F6;
     --accent: #12C7C2;

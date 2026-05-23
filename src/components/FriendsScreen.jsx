@@ -2064,7 +2064,7 @@ export default function FriendsScreen({
             className="fade-in"
             style={{
                 ...S.page,
-                paddingBottom: "calc(112px + var(--safe-bottom, 0px))",
+                paddingBottom: "var(--bottom-nav-clearance)",
             }}
         >
             {/* アクティビティ/ランキング切り替えタブ */}

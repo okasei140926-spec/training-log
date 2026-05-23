@@ -31,7 +31,7 @@ function NavIcon({ id, active }) {
 
 function DumbbellIcon() {
     return (
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
             <path d="M6 8v8"/>
             <path d="M18 8v8"/>
             <path d="M3 9v6"/>
@@ -63,11 +63,13 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     background: "transparent",
                                     border: "none",
                                     padding: 0,
+                                    pointerEvents: "auto",
                                 }}
                             >
                                 <div style={{
                                     width: 40,
                                     height: 40,
+                                    minWidth: 40,
                                     borderRadius: "50%",
                                     background: "linear-gradient(135deg, var(--accent), var(--accent2))",
                                     display: "flex",
@@ -75,7 +77,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                     justifyContent: "center",
                                     boxShadow: "0 8px 26px rgba(18,199,194,0.32)",
                                     position: "relative",
-                                    top: -2,
+                                    top: -3,
                                     border: "1px solid rgba(255,255,255,0.26)",
                                 }}>
                                     {isRecording ? (
@@ -108,17 +110,18 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 display: "flex",
                                 flexDirection: "column",
                                 alignItems: "center",
-                                justifyContent: "flex-end",
-                                gap: 2,
-                                height: 34,
+                                justifyContent: "center",
+                                gap: 3,
+                                height: 48,
                                 padding: 0,
                                 borderRadius: 14,
                                 border: "none",
+                                pointerEvents: "auto",
                             }}
                         >
                             <div style={{
-                                width: 28,
-                                height: 20,
+                                width: 34,
+                                height: 24,
                                 borderRadius: 14,
                                 display: "grid",
                                 placeItems: "center",
@@ -129,7 +132,7 @@ export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording })
                                 <NavIcon id={tab.id} active={isActive} />
                             </div>
                             <div style={{
-                                fontSize: 7,
+                                fontSize: 9,
                                 lineHeight: 1,
                                 fontWeight: isActive ? 900 : 650,
                                 color: isActive ? "var(--accent)" : "var(--text3)",

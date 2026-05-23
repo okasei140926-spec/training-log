@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { sanitizeHistoryRecord } from "../utils/helpers";
 
 const HEADER_OFFSET = 72;
-const BOTTOM_NAV_OFFSET = 104;
+const BOTTOM_NAV_OFFSET = 124;
 const AI_VIEWPORT_HEIGHT = `calc(100dvh - ${HEADER_OFFSET}px - ${BOTTOM_NAV_OFFSET}px - var(--safe-top) - var(--safe-bottom))`;
 const FOOTER_SAFE_PADDING = "calc(8px + var(--safe-bottom))";
 
