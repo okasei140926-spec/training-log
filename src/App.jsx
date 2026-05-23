@@ -1908,33 +1908,9 @@ export default function GymApp() {
         });
     }, [commitHistoryDeleteMarkers]);
 
-    const pruneHistoryDeleteMarkersForHistory = useCallback((historyMap) => {
-        const normalizedMarkers = normalizeHistoryDeleteMarkers(historyDeleteMarkersRef.current);
-        if (!normalizedMarkers.dates.length && !normalizedMarkers.records.length) {
-            return normalizedMarkers;
-        }
-
-        const restoredDates = new Set();
-        const restoredRecords = new Set();
-
-        Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
-            (records || []).forEach((record) => {
-                const recordDate = String(record?.date || "").slice(0, 10);
-                if (!recordDate) return;
-                restoredDates.add(recordDate);
-                restoredRecords.add(buildHistoryRecordDeleteKey(recordDate, exerciseName));
-            });
-        });
-
-        const prunedMarkers = {
-            dates: normalizedMarkers.dates.filter((date) => !restoredDates.has(date)),
-            records: normalizedMarkers.records.filter((key) => !restoredRecords.has(key)),
-        };
-
-        return serializeHistoryMap(prunedMarkers) === serializeHistoryMap(normalizedMarkers)
-            ? normalizedMarkers
-            : commitHistoryDeleteMarkers(prunedMarkers);
-    }, [commitHistoryDeleteMarkers]);
+    const getCurrentHistoryDeleteMarkers = useCallback(() => (
+        normalizeHistoryDeleteMarkers(historyDeleteMarkersRef.current)
+    ), []);
 
     useEffect(() => {
         let isActive = true;
@@ -1970,7 +1946,7 @@ export default function GymApp() {
                 save(getUserHistoryCacheKey(localOwnerUserId), rawLocalHistory);
             }
 
-            const effectiveDeleteMarkers = pruneHistoryDeleteMarkersForHistory(localMergeCandidate);
+            const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
 
             try {
                 const [workoutsRes, sessionsRes] = await Promise.all([
@@ -2042,7 +2018,7 @@ export default function GymApp() {
         return () => {
             isActive = false;
         };
-    }, [historyReloadNonce, pruneHistoryDeleteMarkersForHistory, user]);
+    }, [getCurrentHistoryDeleteMarkers, historyReloadNonce, user]);
 
     useEffect(() => {
         if (!user || !historySyncReady) return;
@@ -2055,7 +2031,7 @@ export default function GymApp() {
                 if (latestUserIdRef.current !== currentUserId) return;
                 const saveRevision = historyRevisionRef.current;
                 const baseLocalHistory = mergeHistoryMaps(latestHistoryRef.current);
-                const effectiveDeleteMarkers = pruneHistoryDeleteMarkersForHistory(baseLocalHistory);
+                const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
                 const localHistorySnapshot = applyHistoryDeleteMarkers(
                     baseLocalHistory,
                     effectiveDeleteMarkers
@@ -2215,7 +2191,7 @@ export default function GymApp() {
         logDate,
         screen,
         clearSyncFailure,
-        pruneHistoryDeleteMarkersForHistory,
+        getCurrentHistoryDeleteMarkers,
         recordSyncFailure,
         refreshHistorySyncDiagnostic,
         savedWorkoutDurationSecByDate,
