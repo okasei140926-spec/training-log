@@ -101,6 +101,55 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 const getExerciseRecordBodyPart = (exercise, fallbackLabel) =>
     exercise?.bodyPart || exercise?.label || fallbackLabel || EX_TO_LABEL[exercise?.name] || null;
 
+const normalizeSetWeightMode = (value) => {
+    const unit = String(value || "kg").toLowerCase();
+    if (unit === "lbs" || unit === "lb" || unit === "pound" || unit === "pounds") return "lbs";
+    if (unit === "bw" || unit === "bodyweight") return "BW";
+    return "kg";
+};
+
+const getSetWeightMode = (set, fallbackUnit = "kg") =>
+    normalizeSetWeightMode(
+        set?.weightMode
+        || set?.weightType
+        || set?.displayUnit
+        || set?.unit
+        || set?.weightUnit
+        || set?.weight_unit
+        || fallbackUnit
+    );
+
+const getSetDisplayUnit = (set, fallbackUnit = "kg") => {
+    const mode = getSetWeightMode(set, fallbackUnit);
+    return mode === "lbs" ? "lb" : mode;
+};
+
+const storeSetWeightForUnit = (set, fallbackUnit = "kg") => {
+    const mode = getSetWeightMode(set, fallbackUnit);
+    if (mode === "BW" || String(set?.weight || "").toUpperCase() === "BW") return "BW";
+    return storeW(set?.weight, mode);
+};
+
+const normalizeDraftSetFromRecord = (set, fallbackUnit = "kg") => {
+    const mode = getSetWeightMode(set, fallbackUnit);
+    const displayWeight = mode === "BW"
+        ? "BW"
+        : String(set?.displayWeight ?? set?.weight ?? "");
+
+    return {
+        ...set,
+        weight: displayWeight,
+        reps: String(set?.reps ?? ""),
+        done: true,
+        weightMode: mode,
+        weightType: mode,
+        unit: mode,
+        displayUnit: getSetDisplayUnit(set, fallbackUnit),
+        weightUnit: mode,
+        weight_unit: mode,
+    };
+};
+
 const HISTORY_OWNER_KEY = "historyOwnerUserId";
 const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
 const getHistoryDeleteMarkersKey = (userId) => `historyDeleteMarkers_${userId}`;
@@ -667,6 +716,14 @@ export default function GymApp() {
     const [logMode, setLogMode] = useState("today");
     const [exerciseUnits, setExerciseUnits] = useState(() => loadDraftForDate(getTodayKey()).exerciseUnits);
 
+    // eslint-disable-next-line no-unused-vars
+    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
+    const appThemeClassName = isDark ? "app-shell" : "theme-light app-shell";
+
+    const getExUnit = useCallback((name) => {
+        return exerciseUnits[name] ?? unit;
+    }, [exerciseUnits, unit]);
+
     const setLogDataAndSaveDraft = useCallback((nextOrUpdater) => {
         setLogData((prev) => {
             const next =
@@ -688,6 +745,7 @@ export default function GymApp() {
     const {
         addSet,
         setField,
+        setWeightMode,
         saveLog,
     } = useLogLogic({
         logData,
@@ -700,6 +758,7 @@ export default function GymApp() {
         sessionEx,
         getExSets,
         logDate,
+        getExUnit,
     });
 
     const handleSaveLog = useCallback(() => {
@@ -743,10 +802,6 @@ export default function GymApp() {
         window.addEventListener("scroll", closeTimerMenu, true);
         return () => window.removeEventListener("scroll", closeTimerMenu, true);
     }, [showTimerMenu, setShowTimerMenu]);
-
-    // eslint-disable-next-line no-unused-vars
-    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
-    const appThemeClassName = isDark ? "app-shell" : "theme-light app-shell";
 
     useLayoutEffect(() => {
         if (typeof window === "undefined" || typeof document === "undefined") return undefined;
@@ -2267,111 +2322,17 @@ export default function GymApp() {
 
 
 
-    // ─── Per-exercise unit ────────────────────────────
-    const getExUnit = useCallback((name) => {
-        return exerciseUnits[name] ?? unit;
-    }, [exerciseUnits, unit]);
-
+    // ─── Per-exercise default unit ────────────────────
     const toggleExUnit = (name) => {
         const currentUnit = getExUnit(name);
         const CYCLE = { kg: "lbs", lbs: "BW", BW: "kg" };
         const newUnit = CYCLE[currentUnit] || "kg";
-        const normalizeWeightedUnit = (value) => (value === "lbs" || value === "lb" ? "lbs" : "kg");
-        const formatWeightForDisplay = (value) => {
-            const num = Number(value);
-            if (!Number.isFinite(num) || num <= 0) return "";
-            const rounded = Math.round(num * 10) / 10;
-            return Number.isInteger(rounded) ? String(rounded) : String(rounded);
-        };
-        const convertWeightDisplay = (value, fromUnit, toUnit) => {
-            const num = Number(value);
-            if (!Number.isFinite(num) || num <= 0) return "";
-
-            const sourceUnit = normalizeWeightedUnit(fromUnit);
-            const targetUnit = normalizeWeightedUnit(toUnit);
-            if (sourceUnit === targetUnit) return formatWeightForDisplay(num);
-
-            const converted = sourceUnit === "kg"
-                ? num * KG_TO_LBS
-                : num / KG_TO_LBS;
-            return formatWeightForDisplay(converted);
-        };
-
-        const makeBaseSets = () => ([
-            { weight: "", reps: "", done: false },
-            { weight: "", reps: "", done: false },
-            { weight: "", reps: "", done: false },
-        ]);
-
-        const currentSets = logData[name]
-            ? logData[name].map(s => ({ ...s }))
-            : makeBaseSets();
-
-        let nextSets = currentSets;
-
-        if (newUnit === "BW") {
-            nextSets = currentSets.map((set) => {
-                const currentWeight = String(set.weight ?? "").trim();
-                const numericWeight = Number(currentWeight);
-                const hasWeightedValue =
-                    currentWeight &&
-                    currentWeight.toUpperCase() !== "BW" &&
-                    Number.isFinite(numericWeight) &&
-                    numericWeight > 0;
-
-                return {
-                    ...set,
-                    lastWeightedValue: hasWeightedValue
-                        ? formatWeightForDisplay(numericWeight)
-                        : set.lastWeightedValue,
-                    lastWeightedUnit: hasWeightedValue
-                        ? normalizeWeightedUnit(currentUnit)
-                        : set.lastWeightedUnit || normalizeWeightedUnit(currentUnit),
-                    weight: "BW",
-                };
-            });
-        } else if (currentUnit === "BW") {
-            nextSets = currentSets.map((set) => {
-                const restoredWeight = convertWeightDisplay(
-                    set.lastWeightedValue,
-                    set.lastWeightedUnit || newUnit,
-                    newUnit
-                );
-
-                return {
-                    ...set,
-                    weight: restoredWeight,
-                    lastWeightedValue: restoredWeight || set.lastWeightedValue,
-                    lastWeightedUnit: restoredWeight ? normalizeWeightedUnit(newUnit) : set.lastWeightedUnit,
-                };
-            });
-        } else if (logData[name]) {
-            nextSets = currentSets.map((set) => {
-                if (!set.weight || set.weight === "BW") return set;
-                const converted = convertWeightDisplay(set.weight, currentUnit, newUnit);
-                if (!converted) return set;
-                return {
-                    ...set,
-                    weight: converted,
-                    lastWeightedValue: converted,
-                    lastWeightedUnit: normalizeWeightedUnit(newUnit),
-                };
-            });
-        }
-
-        setLogData(p => ({
-            ...p,
-            [name]: nextSets,
-        }));
 
         setExerciseUnits((p) => {
             const next = { ...p, [name]: newUnit };
             saveDraftForDate(logDate, {
                 todayLabels,
-                logData: {
-                    ...logData,
-                    [name]: nextSets,
-                },
+                logData,
                 sessionEx,
                 exerciseUnits: next,
             });
@@ -2400,7 +2361,9 @@ export default function GymApp() {
                     const validSets = sanitizeWorkoutSets(
                         (logData[ex.name] || []).map((set) => ({
                             ...set,
-                            weight: storeW(set.weight, exUnit),
+                            weight: storeSetWeightForUnit(set, exUnit),
+                            displayWeight: set.weight,
+                            displayUnit: getSetDisplayUnit(set, exUnit),
                         })),
                         { allowBodyweight: true }
                     );
@@ -2437,14 +2400,16 @@ export default function GymApp() {
 
     useEffect(() => {
         const hasValidDraftWorkout = exercises.some((ex) => {
-            const exUnit = getExUnit(ex.name);
-            const validSets = sanitizeWorkoutSets(
-                (logData[ex.name] || []).map((set) => ({
-                    ...set,
-                    weight: storeW(set.weight, exUnit),
-                })),
-                { allowBodyweight: true }
-            );
+                    const exUnit = getExUnit(ex.name);
+                    const validSets = sanitizeWorkoutSets(
+                        (logData[ex.name] || []).map((set) => ({
+                            ...set,
+                            weight: storeSetWeightForUnit(set, exUnit),
+                            displayWeight: set.weight,
+                            displayUnit: getSetDisplayUnit(set, exUnit),
+                        })),
+                        { allowBodyweight: true }
+                    );
             return validSets.length > 0;
         });
 
@@ -2501,9 +2466,14 @@ export default function GymApp() {
                 const bodyPart = getExerciseRecordBodyPart(ex, todayLabels[0] || null);
                 const stored = sanitizeWorkoutSets(sets.map((s) => ({
                     ...s,
-                    weight: storeW(s.weight, exUnit),
+                    weight: storeSetWeightForUnit(s, exUnit),
                     displayWeight: s.weight,
-                    displayUnit: exUnit === "lbs" ? "lb" : exUnit,
+                    displayUnit: getSetDisplayUnit(s, exUnit),
+                    unit: getSetWeightMode(s, exUnit),
+                    weightMode: getSetWeightMode(s, exUnit),
+                    weightType: getSetWeightMode(s, exUnit),
+                    weightUnit: getSetWeightMode(s, exUnit),
+                    weight_unit: getSetWeightMode(s, exUnit),
                 })), { allowBodyweight: true });
 
                 if (!stored.length) return;
@@ -2580,7 +2550,9 @@ export default function GymApp() {
                 const sets = sanitizeWorkoutSets(
                     (logData[exerciseName] || []).map((set) => ({
                         ...set,
-                        weight: storeW(set.weight, exUnit),
+                        weight: storeSetWeightForUnit(set, exUnit),
+                        displayWeight: set.weight,
+                        displayUnit: getSetDisplayUnit(set, exUnit),
                     })),
                     { allowBodyweight: true }
                 );
@@ -3070,6 +3042,12 @@ export default function GymApp() {
                     weight: "BW",
                     reps: repsValue,
                     done: Boolean(repsValue),
+                    weightMode: "BW",
+                    weightType: "BW",
+                    unit: "BW",
+                    displayUnit: "BW",
+                    weightUnit: "BW",
+                    weight_unit: "BW",
                 };
             }
 
@@ -3078,6 +3056,12 @@ export default function GymApp() {
                 weight: weightValue,
                 reps: repsValue,
                 done: Boolean(weightValue && repsValue),
+                weightMode: normalizedTargetUnit,
+                weightType: normalizedTargetUnit,
+                unit: normalizedTargetUnit,
+                displayUnit: normalizedTargetUnit === "lbs" ? "lb" : normalizedTargetUnit,
+                weightUnit: normalizedTargetUnit,
+                weight_unit: normalizedTargetUnit,
             };
         };
 
@@ -3197,7 +3181,8 @@ export default function GymApp() {
             const dayLogData = {};
             dayExercises.forEach(({ name, rec }) => {
                 if (rec?.sets) {
-                    dayLogData[name] = rec.sets.map(s => ({ ...s, done: true }));
+                    const fallbackUnit = rec?.displayUnit || rec?.unit || rec?.weightUnit || rec?.weight_unit || getExUnit(name);
+                    dayLogData[name] = rec.sets.map(s => normalizeDraftSetFromRecord(s, fallbackUnit));
                 }
             });
 
@@ -4036,6 +4021,7 @@ export default function GymApp() {
                             logData={logData}
                             getExSets={getExSets}
                             setField={setField}
+                            setWeightMode={setWeightMode}
                             addSet={addSet}
                             removeEx={removeEx}
                             timerLeft={timerLeft}

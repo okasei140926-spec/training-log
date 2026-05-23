@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { calc1RM, dispW, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, KG_TO_LBS, PR_UPDATE_TOLERANCE_KG } from "../utils/helpers";
+import { calc1RM, dispW, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -72,6 +72,34 @@ const formatWeightUnit = (unit) => {
     if (normalized === "lb") return "lb";
     if (normalized === "BW") return "自重";
     return "kg";
+};
+
+const normalizeSetWeightMode = (unit) => {
+    const normalized = normalizeWeightUnit(unit);
+    if (normalized === "lb") return "lbs";
+    return normalized;
+};
+
+const getSetWeightMode = (set, fallbackUnit = "kg") =>
+    normalizeSetWeightMode(
+        set?.weightMode
+        || set?.weightType
+        || set?.displayUnit
+        || set?.unit
+        || set?.weightUnit
+        || set?.weight_unit
+        || fallbackUnit
+    );
+
+const getSetDisplayUnit = (set, fallbackUnit = "kg") => {
+    const mode = getSetWeightMode(set, fallbackUnit);
+    return mode === "lbs" ? "lb" : mode;
+};
+
+const getSetStoredWeightKg = (set, fallbackUnit = "kg") => {
+    const mode = getSetWeightMode(set, fallbackUnit);
+    if (mode === "BW" || String(set?.weight || "").toUpperCase() === "BW") return "BW";
+    return storeW(set?.weight, mode);
 };
 
 const formatConvertedWeight = (value) => {
@@ -152,7 +180,7 @@ export default function LogScreen({
     onAddCustomBodyPart,
     onUpdateHiddenBodyParts,
     todayLabels,
-    exercises, logData, getExSets, setField, addSet, removeEx,
+    exercises, logData, getExSets, setField, setWeightMode, addSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, getPreviousPR, onCopyDown, onCopyDownReps, unit = "kg",
     getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
     workoutElapsedSec = 0,
@@ -216,12 +244,12 @@ export default function LogScreen({
         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
 
         const doneSets = sets.filter((s) => {
-            const w = Number(s.weight);
+            const w = Number(getSetStoredWeightKg(s, exUnit));
             const r = Number(s.reps);
             return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
         }).map((s) => ({
             ...s,
-            weight: exUnit === "lbs" ? String(Number(s.weight) / KG_TO_LBS) : s.weight,
+            weight: getSetStoredWeightKg(s, exUnit),
         }));
 
         const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
@@ -449,12 +477,12 @@ export default function LogScreen({
                         const prIsAlsoPrev = pr && prev && pr.date === prev.date;
 
                         const doneSets = sets.filter(s => {
-                            const w = Number(s.weight);
+                            const w = Number(getSetStoredWeightKg(s, exUnit));
                             const r = Number(s.reps);
                             return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
                         }).map(s => ({
                             ...s,
-                            weight: exUnit === "lbs" ? String(Number(s.weight) / KG_TO_LBS) : s.weight
+                            weight: getSetStoredWeightKg(s, exUnit)
                         }));
 
                         const cur1RM = calc1RM(doneSets);
@@ -774,9 +802,10 @@ export default function LogScreen({
                                                 set={set}
                                                 idx={idx}
                                                 setField={setField}
+                                                onWeightModeChange={() => setWeightMode(ex, idx)}
                                                 previousSet={previousSets[idx]}
                                                 previousUnit={previousSets[idx]?.displayUnit || previousSets[idx]?.unit || previousSets[idx]?.weightUnit || previousSets[idx]?.weight_unit || previousUnit}
-                                                unit={exUnit}
+                                                unit={getSetDisplayUnit(set, exUnit)}
                                                 onCopyDown={onCopyDown}
                                                 onCopyDownReps={onCopyDownReps}
                                             />

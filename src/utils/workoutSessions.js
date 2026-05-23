@@ -21,6 +21,22 @@ const normalizeUnit = (value) => {
   return "kg";
 };
 
+const getSetUnit = (set, fallbackUnit = "kg") =>
+  normalizeUnit(
+    set?.weightMode
+    || set?.weightType
+    || set?.displayUnit
+    || set?.unit
+    || set?.weightUnit
+    || set?.weight_unit
+    || fallbackUnit
+  );
+
+const getStoreUnit = (set, fallbackUnit = "kg") => {
+  const unit = getSetUnit(set, fallbackUnit);
+  return unit === "lb" ? "lbs" : unit;
+};
+
 const roundNumeric = (value, digits = 1) => {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return 0;
@@ -131,15 +147,16 @@ export function buildWorkoutSessionEntriesFromDraft({
       const displaySets = sanitizeWorkoutSets(
         sourceSets.map((set) => ({
           ...set,
-          unit: normalizeUnit(exUnit),
+          weight: getSetUnit(set, exUnit) === "BW" ? "BW" : set.weight,
+          unit: getSetUnit(set, exUnit),
         })),
         { allowBodyweight: true }
       );
       const sets = sanitizeWorkoutSets(
         sourceSets.map((set) => ({
           ...set,
-          weight: storeW(set.weight, exUnit),
-          unit: normalizeUnit(exUnit),
+          weight: getSetUnit(set, exUnit) === "BW" ? "BW" : storeW(set.weight, getStoreUnit(set, exUnit)),
+          unit: getSetUnit(set, exUnit),
         })),
         { allowBodyweight: true }
       );

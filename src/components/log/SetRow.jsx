@@ -45,14 +45,16 @@ const formatPreviousSet = (previousSet, fallbackUnit, targetUnit) => {
     const rawWeight = String(previousSet.displayWeight ?? previousSet.weight ?? "").trim();
     const normalizedTargetUnit = normalizeUnitKey(targetUnit);
 
-    if (normalizedTargetUnit === "BW" || rawWeight.toUpperCase() === "BW") {
+    const sourceUnit = getSourceUnit(previousSet, fallbackUnit);
+
+    if (sourceUnit === "BW" || rawWeight.toUpperCase() === "BW") {
         return `前回 自重 × ${repsLabel}`;
     }
 
-    const sourceUnit = getSourceUnit(previousSet, fallbackUnit);
-    const convertedWeight = convertWeightForUnit(rawWeight, sourceUnit, normalizedTargetUnit);
+    const displayUnit = normalizedTargetUnit === "BW" ? sourceUnit : normalizedTargetUnit;
+    const convertedWeight = convertWeightForUnit(rawWeight, sourceUnit, displayUnit);
     const weightLabel = convertedWeight !== "" ? formatWeightValue(convertedWeight) : "-";
-    const unitLabel = normalizeUnitLabel(normalizedTargetUnit === "BW" ? sourceUnit : normalizedTargetUnit);
+    const unitLabel = normalizeUnitLabel(displayUnit);
     return `前回 ${weightLabel}${unitLabel} × ${repsLabel}`;
 };
 
@@ -61,6 +63,7 @@ export default function SetRow({
     set,
     idx,
     setField,
+    onWeightModeChange,
     previousSet,
     previousUnit = "kg",
     unit = "kg",
@@ -95,7 +98,17 @@ export default function SetRow({
         color: "var(--text3)",
         fontSize: 12,
         fontWeight: 800,
-        pointerEvents: "none",
+        border: "none",
+        background: "transparent",
+        padding: 0,
+        cursor: "pointer",
+    };
+    const cycleUnit = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof onWeightModeChange === "function") {
+            onWeightModeChange();
+        }
     };
 
     return (
@@ -147,8 +160,11 @@ export default function SetRow({
             </div>
 
             {isBodyweight ? (
-                <div
+                <button
+                    type="button"
+                    onClick={cycleUnit}
                     style={{
+                        width: "100%",
                         minHeight: 48,
                         borderRadius: 16,
                         border: "1px solid var(--border2)",
@@ -160,10 +176,11 @@ export default function SetRow({
                         alignItems: "center",
                         justifyContent: "center",
                         boxShadow: "var(--shadow-soft)",
+                        cursor: "pointer",
                     }}
                 >
                     自重
-                </div>
+                </button>
             ) : (
                 <div style={inputWrapStyle}>
                     <input
@@ -174,7 +191,9 @@ export default function SetRow({
                         placeholder="0"
                         style={inputStyle}
                     />
-                    <span style={suffixStyle}>{unitLabel}</span>
+                    <button type="button" onClick={cycleUnit} style={suffixStyle}>
+                        {unitLabel}
+                    </button>
                 </div>
             )}
 
