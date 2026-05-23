@@ -865,6 +865,13 @@ export default function GymApp() {
         aiUsageDate,
         aiUsageCount,
         aiRemaining,
+        aiConversations,
+        aiConversationLoading,
+        aiConversationError,
+        activeConversationId,
+        openAiConversation,
+        startNewAiConversation,
+        deleteAiConversation,
     } = useAI(history);
 
     useEffect(() => {
@@ -4180,6 +4187,13 @@ export default function GymApp() {
                         aiUsageDate={aiUsageDate}
                         aiUsageCount={aiUsageCount}
                         aiRemaining={aiRemaining}
+                        aiConversations={aiConversations}
+                        aiConversationLoading={aiConversationLoading}
+                        aiConversationError={aiConversationError}
+                        activeConversationId={activeConversationId}
+                        onOpenConversation={openAiConversation}
+                        onStartNewConversation={startNewAiConversation}
+                        onDeleteConversation={deleteAiConversation}
                         onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
                     />
                 )}

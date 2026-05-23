@@ -647,7 +647,12 @@ export function useAI(history) {
     const latestWorkoutSummary = latestDateKey ? summarizeWorkoutDay(groupedHistory, latestDateKey) : null;
 
     setAiInput("");
-    const newMsgs = [...aiMsgs, { role: "user", content: userMsg }];
+    const userMessage = {
+      role: "user",
+      content: userMsg,
+      created_at: new Date().toISOString(),
+    };
+    const newMsgs = [...aiMsgsRef.current, userMessage];
     setAiMsgs(newMsgs);
     setAiLoad(true);
 
@@ -669,7 +674,10 @@ export function useAI(history) {
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          messages: newMsgs.map((m) => ({ role: m.role, content: m.content })),
+          messages: newMsgs
+            .filter((m) => m?.role === "user" || m?.role === "assistant")
+            .slice(-10)
+            .map((m) => ({ role: m.role, content: m.content })),
           clientState: {
             isPro: currentIsPro,
           },
@@ -705,6 +713,12 @@ export function useAI(history) {
           ? structuredWorkoutPlan
           : extractWorkoutPlanFromText(reply)
         : [];
+      const assistantMessage = {
+        role: "assistant",
+        content: reply,
+        workoutPlan,
+        created_at: new Date().toISOString(),
+      };
       if (!applyServerAiUsage(data?.aiUsage) && !currentIsPro) {
         const nextUsage = incrementAiUsage();
         aiUsageDateRef.current = nextUsage.dateKey;
@@ -712,7 +726,12 @@ export function useAI(history) {
         setAiUsageDate(nextUsage.dateKey);
         setAiUsageCount(nextUsage.count);
       }
-      setAiMsgs((p) => [...p, { role: "assistant", content: reply, workoutPlan }]);
+      setAiMsgs((p) => [...p, assistantMessage]);
+      saveAiConversationTurn({
+        conversationId: activeConversationIdRef.current,
+        userMessage,
+        assistantMessage,
+      });
       return true;
     } catch {
       setAiMsgs((p) => [...p, { role: "assistant", content: "AI Coachの応答に失敗しました。" }]);
@@ -738,5 +757,13 @@ export function useAI(history) {
     aiUsageDate,
     aiRemaining: isPro ? Infinity : Math.max(0, AI_DAILY_LIMIT - aiUsageCount),
     aiUsageCount,
+    aiConversations,
+    aiConversationLoading,
+    aiConversationError,
+    activeConversationId,
+    loadAiConversations,
+    openAiConversation,
+    startNewAiConversation,
+    deleteAiConversation,
   };
 }

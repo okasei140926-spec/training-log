@@ -22,6 +22,21 @@ const formatDateLabel = (dateKey) => {
     return `${month}/${day}`;
 };
 
+const formatConversationTime = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const time = date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+
+    if (startOfDate === startOfToday) return `今日 ${time}`;
+    if (startOfDate === startOfToday - 24 * 60 * 60 * 1000) return `昨日 ${time}`;
+    return `${date.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })} ${time}`;
+};
+
 const buildAiOverview = (history) => {
     const flattened = [];
 
@@ -353,6 +368,180 @@ const WorkoutPlanConfirmModal = ({ plan, selectedMap, setSelectedMap, onClose, o
     );
 };
 
+const ConversationHistorySection = ({
+    conversations,
+    loading,
+    error,
+    activeConversationId,
+    showAll,
+    setShowAll,
+    onOpenConversation,
+    onStartNewConversation,
+    onDeleteConversation,
+}) => {
+    const visibleConversations = showAll ? conversations : conversations.slice(0, 5);
+    const hasMore = conversations.length > 5;
+
+    const handleDelete = async (event, conversation) => {
+        event.stopPropagation();
+        if (!window.confirm(`「${conversation.title || "AI相談"}」を削除しますか？`)) return;
+        await onDeleteConversation?.(conversation.id);
+    };
+
+    return (
+        <div
+            style={{
+                background: "var(--card)",
+                borderRadius: 20,
+                border: "1px solid rgba(18, 199, 194, 0.10)",
+                boxShadow: "var(--shadow-card)",
+                padding: 14,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+            }}
+        >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)" }}>
+                        AIとの会話履歴
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                        過去の相談の続きから質問できます
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={onStartNewConversation}
+                    className="pressable"
+                    style={{
+                        flexShrink: 0,
+                        padding: "7px 10px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(18, 199, 194, 0.14)",
+                        background: "linear-gradient(180deg, var(--card2), var(--card))",
+                        color: "var(--text2)",
+                        fontSize: 11,
+                        fontWeight: 900,
+                    }}
+                >
+                    新規相談
+                </button>
+            </div>
+
+            {loading && (
+                <div style={{ fontSize: 12, color: "var(--text3)", padding: "6px 0" }}>
+                    会話履歴を読み込んでいます…
+                </div>
+            )}
+            {!loading && error && (
+                <div style={{ fontSize: 12, color: "var(--text3)", padding: "6px 0" }}>
+                    {error}
+                </div>
+            )}
+            {!loading && !error && !conversations.length && (
+                <div
+                    style={{
+                        padding: "12px 12px",
+                        borderRadius: 14,
+                        background: "rgba(18, 199, 194, 0.06)",
+                        border: "1px solid rgba(18, 199, 194, 0.10)",
+                        color: "var(--text2)",
+                        fontSize: 12,
+                    }}
+                >
+                    まだ会話履歴はありません。
+                </div>
+            )}
+
+            {!!visibleConversations.length && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {visibleConversations.map((conversation) => {
+                        const isActive = conversation.id === activeConversationId;
+                        return (
+                            <div
+                                key={conversation.id}
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr auto",
+                                    gap: 8,
+                                    alignItems: "stretch",
+                                }}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenConversation?.(conversation.id)}
+                                    className="pressable"
+                                    style={{
+                                        minWidth: 0,
+                                        textAlign: "left",
+                                        padding: "10px 11px",
+                                        borderRadius: 15,
+                                        border: isActive
+                                            ? "1px solid rgba(18, 199, 194, 0.32)"
+                                            : "1px solid rgba(18, 199, 194, 0.10)",
+                                        background: isActive
+                                            ? "linear-gradient(135deg, rgba(18, 199, 194, 0.16), rgba(51, 225, 219, 0.08))"
+                                            : "var(--card2)",
+                                        color: "var(--text)",
+                                    }}
+                                >
+                                    <div style={{ fontSize: 13, fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {conversation.title || "AI相談"}
+                                    </div>
+                                    <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 3 }}>
+                                        {formatConversationTime(conversation.updated_at || conversation.created_at)}
+                                    </div>
+                                    {conversation.preview && (
+                                        <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                            {conversation.preview}
+                                        </div>
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(event) => handleDelete(event, conversation)}
+                                    aria-label="会話履歴を削除"
+                                    style={{
+                                        width: 38,
+                                        borderRadius: 14,
+                                        border: "1px solid rgba(139, 164, 168, 0.14)",
+                                        background: "var(--card2)",
+                                        color: "var(--text3)",
+                                        fontSize: 16,
+                                        fontWeight: 900,
+                                    }}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {hasMore && (
+                <button
+                    type="button"
+                    onClick={() => setShowAll((prev) => !prev)}
+                    style={{
+                        width: "100%",
+                        padding: "9px 10px",
+                        borderRadius: 14,
+                        border: "1px solid rgba(18, 199, 194, 0.12)",
+                        background: "rgba(18, 199, 194, 0.06)",
+                        color: "var(--text2)",
+                        fontSize: 12,
+                        fontWeight: 900,
+                    }}
+                >
+                    {showAll ? "閉じる" : "すべて見る"}
+                </button>
+            )}
+        </div>
+    );
+};
+
 export default function AIScreen({
     aiMsgs,
     aiInput,
@@ -368,11 +557,19 @@ export default function AIScreen({
     aiUsageCount = 0,
     aiRemaining,
     onAddWorkoutPlan,
+    aiConversations = [],
+    aiConversationLoading = false,
+    aiConversationError = "",
+    activeConversationId = null,
+    onOpenConversation,
+    onStartNewConversation,
+    onDeleteConversation,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
     const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
     const [selectedWorkoutPlanMap, setSelectedWorkoutPlanMap] = useState({});
+    const [showAllConversations, setShowAllConversations] = useState(false);
 
     const overview = useMemo(() => buildAiOverview(history), [history]);
     const showDevProControls = process.env.NODE_ENV !== "production" && isPro && typeof onDeactivateProDev === "function";
@@ -548,6 +745,18 @@ export default function AIScreen({
                         </div>
                     </>
                 )}
+
+                <ConversationHistorySection
+                    conversations={aiConversations}
+                    loading={aiConversationLoading}
+                    error={aiConversationError}
+                    activeConversationId={activeConversationId}
+                    showAll={showAllConversations}
+                    setShowAll={setShowAllConversations}
+                    onOpenConversation={onOpenConversation}
+                    onStartNewConversation={onStartNewConversation}
+                    onDeleteConversation={onDeleteConversation}
+                />
 
                 {visibleMessages.map((msg, i) => {
                     const hasWorkoutPlan = msg.role === "assistant" && Array.isArray(msg.workoutPlan) && msg.workoutPlan.length > 0;
