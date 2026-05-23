@@ -207,6 +207,54 @@ const attachWorkoutDurationsToHistory = (historyMap, workoutRows = []) => {
     return next;
 };
 
+const buildHistoryFromWorkoutSessionRows = (sessionRows = []) => {
+    const historyMap = {};
+
+    (sessionRows || []).forEach((session) => {
+        const workoutDate = String(session?.workout_date || "").slice(0, 10);
+        const durationSec = Math.floor(Number(session?.duration_sec) || 0);
+        const summaryItems = Array.isArray(session?.summary_json?.items)
+            ? session.summary_json.items
+            : [];
+
+        if (!workoutDate || !summaryItems.length) return;
+
+        summaryItems.forEach((item, index) => {
+            const exerciseName = String(item?.exercise_name || item?.exerciseName || "").trim();
+            if (!exerciseName) return;
+
+            const sets = sanitizeWorkoutSets(item?.sets || [], { allowBodyweight: true });
+            if (!sets.length) return;
+
+            if (!historyMap[exerciseName]) historyMap[exerciseName] = [];
+
+            const durationMinutes = durationSec > 0 && durationSec < 86400
+                ? Math.max(1, Math.round(durationSec / 60))
+                : 0;
+
+            historyMap[exerciseName].push({
+                date: workoutDate,
+                bodyPart: String(item?.body_part || item?.bodyPart || "").trim(),
+                order: Number.isFinite(Number(item?.order)) ? Number(item.order) : index,
+                sets,
+                weight: sets[0]?.weight === "BW" ? "BW" : Number(sets[0]?.weight),
+                reps: Number(sets[0]?.reps),
+                source: "workout_session",
+                ...(durationMinutes > 0
+                    ? {
+                        duration_sec: durationSec,
+                        durationSec,
+                        durationMinutes,
+                        elapsedMinutes: durationMinutes,
+                    }
+                    : {}),
+            });
+        });
+    });
+
+    return historyMap;
+};
+
 const attachWorkoutDurationToHistoryDate = (historyMap, targetDate, durationSecValue) => {
     const normalizedDate = String(targetDate || "").slice(0, 10);
     const durationSec = Math.floor(Number(durationSecValue) || 0);
@@ -456,7 +504,15 @@ export default function GymApp() {
             if (!isMounted) return;
             setUser(nextUser ?? null);
 
-            if (!nextUser) return;
+            if (!nextUser) {
+                debugLog("[auth] signed out");
+                return;
+            }
+
+            debugLog("[auth] signed in", {
+                userId: nextUser.id,
+                email: nextUser.email,
+            });
 
             setShowAuth(false);
 
@@ -578,6 +634,8 @@ export default function GymApp() {
     const [history, setHistory] = useState(() => mergeHistoryMaps(load("history", {})));
     const [manualBests, setManualBests] = useState([]);
     const [historySyncReady, setHistorySyncReady] = useState(false);
+    const [historyLoadError, setHistoryLoadError] = useState("");
+    const [historyReloadNonce, setHistoryReloadNonce] = useState(0);
     const [customBodyParts, setCustomBodyParts] = useState(() => {
         const saved = load("customBodyParts", []);
         return [...new Set((saved || []).map((part) => String(part || "").trim()).filter(Boolean))];
@@ -1044,7 +1102,7 @@ export default function GymApp() {
             if (!user?.id) return;
 
             try {
-                const [{ data: sessionRows }, { data: workoutRows }] = await Promise.all([
+                const [sessionsRes, workoutsRes] = await Promise.all([
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec")
@@ -1055,14 +1113,17 @@ export default function GymApp() {
                         .eq("user_id", user.id),
                 ]);
 
+                if (sessionsRes.error) throw sessionsRes.error;
+                if (workoutsRes.error) throw workoutsRes.error;
+
                 const map = {};
-                (sessionRows || []).forEach(({ workout_date, duration_sec }) => {
+                (sessionsRes.data || []).forEach(({ workout_date, duration_sec }) => {
                     const sec = Math.floor(Number(duration_sec));
                     if (workout_date && sec > 0 && sec < 86400) {
                         map[workout_date] = Math.max(map[workout_date] || 0, sec);
                     }
                 });
-                (workoutRows || []).forEach(({ date, duration_sec }) => {
+                (workoutsRes.data || []).forEach(({ date, duration_sec }) => {
                     const sec = Math.floor(Number(duration_sec));
                     if (date && sec > 0 && sec < 86400) {
                         map[date] = Math.max(map[date] || 0, sec);
@@ -1881,11 +1942,15 @@ export default function GymApp() {
         const syncHistoryFromSupabase = async () => {
             if (!user?.id) {
                 historyDeleteMarkersRef.current = createEmptyHistoryDeleteMarkers();
+                if (isActive) setHistoryLoadError("");
                 if (isActive) setHistorySyncReady(true);
                 return;
             }
 
-            if (isActive) setHistorySyncReady(false);
+            if (isActive) {
+                setHistorySyncReady(false);
+                setHistoryLoadError("");
+            }
 
             const rawLocalHistory = load("history", {});
             const localOwnerUserId = load(HISTORY_OWNER_KEY, null);
@@ -1908,16 +1973,29 @@ export default function GymApp() {
             const effectiveDeleteMarkers = pruneHistoryDeleteMarkersForHistory(localMergeCandidate);
 
             try {
-                const { data, error } = await supabase
-                    .from("workouts")
-                    .select("date, data, duration_sec")
-                    .eq("user_id", user.id)
-                    .order("date", { ascending: true });
+                const [workoutsRes, sessionsRes] = await Promise.all([
+                    supabase
+                        .from("workouts")
+                        .select("date, data, duration_sec")
+                        .eq("user_id", user.id)
+                        .order("date", { ascending: true }),
+                    supabase
+                        .from("workout_sessions")
+                        .select("workout_date, duration_sec, summary_json")
+                        .eq("user_id", user.id)
+                        .order("workout_date", { ascending: true }),
+                ]);
 
-                if (error) throw error;
+                if (workoutsRes.error) throw workoutsRes.error;
+                if (sessionsRes.error) throw sessionsRes.error;
 
+                const remoteWorkoutHistory = attachWorkoutDurationsToHistory(
+                    buildHistoryFromWorkoutRows(workoutsRes.data || []),
+                    workoutsRes.data || []
+                );
+                const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionsRes.data || []);
                 const remoteHistory = applyHistoryDeleteMarkers(
-                    attachWorkoutDurationsToHistory(buildHistoryFromWorkoutRows(data), data),
+                    mergeHistoryMaps(remoteWorkoutHistory, remoteSessionHistory),
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
@@ -1925,15 +2003,32 @@ export default function GymApp() {
                     effectiveDeleteMarkers
                 );
 
+                debugLog("[history] remote load complete", {
+                    userId: user.id,
+                    email: user.email,
+                    workoutsRows: workoutsRes.data?.length || 0,
+                    sessionRows: sessionsRes.data?.length || 0,
+                    remoteDates: getValidWorkoutDatesFromHistory(remoteHistory),
+                    mergedDates: getValidWorkoutDatesFromHistory(mergedHistory),
+                });
+
                 if (!isActive) return;
 
+                setHistoryLoadError("");
                 setHistory(mergedHistory);
                 persistHistoryForUser(user.id, mergedHistory);
             } catch (error) {
-                console.error("history sync load failed", error);
+                console.error("history sync load failed", {
+                    error,
+                    message: error?.message,
+                    code: error?.code,
+                    userId: user.id,
+                    email: user.email,
+                });
 
                 if (!isActive) return;
 
+                setHistoryLoadError(error?.message || "記録の取得に失敗しました");
                 const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
                 setHistory(fallbackHistory);
                 persistHistoryForUser(user.id, fallbackHistory);
@@ -1947,7 +2042,7 @@ export default function GymApp() {
         return () => {
             isActive = false;
         };
-    }, [user, pruneHistoryDeleteMarkersForHistory]);
+    }, [historyReloadNonce, pruneHistoryDeleteMarkersForHistory, user]);
 
     useEffect(() => {
         if (!user || !historySyncReady) return;
@@ -1966,17 +2061,30 @@ export default function GymApp() {
                     effectiveDeleteMarkers
                 );
 
-                const { data, error } = await supabase
-                    .from("workouts")
-                    .select("date, data, duration_sec")
-                    .eq("user_id", currentUserId)
-                    .order("date", { ascending: true });
+                const [workoutsRes, sessionsRes] = await Promise.all([
+                    supabase
+                        .from("workouts")
+                        .select("date, data, duration_sec")
+                        .eq("user_id", currentUserId)
+                        .order("date", { ascending: true }),
+                    supabase
+                        .from("workout_sessions")
+                        .select("workout_date, duration_sec, summary_json")
+                        .eq("user_id", currentUserId)
+                        .order("workout_date", { ascending: true }),
+                ]);
 
-                if (error) throw error;
+                if (workoutsRes.error) throw workoutsRes.error;
+                if (sessionsRes.error) throw sessionsRes.error;
                 if (latestUserIdRef.current !== currentUserId) return;
 
+                const remoteWorkoutHistory = attachWorkoutDurationsToHistory(
+                    buildHistoryFromWorkoutRows(workoutsRes.data || []),
+                    workoutsRes.data || []
+                );
+                const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionsRes.data || []);
                 const remoteHistory = applyHistoryDeleteMarkers(
-                    attachWorkoutDurationsToHistory(buildHistoryFromWorkoutRows(data), data),
+                    mergeHistoryMaps(remoteWorkoutHistory, remoteSessionHistory),
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
@@ -1986,7 +2094,6 @@ export default function GymApp() {
                 const validHistoryDates = getValidWorkoutDatesFromHistory(mergedHistory);
                 const syncDates = [
                     ...new Set([
-                        ...(data || []).map((row) => String(row?.date || "")).filter(Boolean),
                         ...validHistoryDates,
                         String(logDate || "").trim(),
                         formatDateKey(new Date()),
@@ -3745,6 +3852,47 @@ export default function GymApp() {
                             lineHeight: 1.6,
                         }}>
                             オフラインです。端末内の記録は表示できます。通信が戻ると自動で同期します。
+                        </div>
+                    </div>
+                )}
+
+                {isOnline && user?.id && historyLoadError && (
+                    <div style={{ padding: "10px 18px 0" }}>
+                        <div style={{
+                            background: "rgba(239, 68, 68, 0.08)",
+                            color: "var(--text)",
+                            border: "1px solid rgba(239, 68, 68, 0.22)",
+                            borderRadius: 18,
+                            padding: "12px 14px",
+                            fontSize: 13,
+                            lineHeight: 1.6,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 12,
+                        }}>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 900 }}>記録の取得に失敗しました</div>
+                                <div style={{ color: "var(--text2)", fontSize: 12 }}>
+                                    {historyLoadError}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setHistoryReloadNonce((prev) => prev + 1)}
+                                style={{
+                                    border: "none",
+                                    borderRadius: 999,
+                                    padding: "9px 12px",
+                                    background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                                    color: "#fff",
+                                    fontSize: 12,
+                                    fontWeight: 900,
+                                    flexShrink: 0,
+                                }}
+                            >
+                                再取得
+                            </button>
                         </div>
                     </div>
                 )}
