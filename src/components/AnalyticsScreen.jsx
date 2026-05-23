@@ -303,6 +303,8 @@ const buildChartData = (records = [], period) => {
     rawDate: record.date,
     date: record.date.slice(5),
     weight: Number(record.estimated1RM || 0),
+    setWeight: record.weight,
+    reps: record.reps,
     isLatest: record.date === latestDate,
     isPeak: Number(record.estimated1RM || 0) === maxWeight,
   }));
@@ -874,14 +876,19 @@ export default function AnalyticsScreen({
   }, [selectedExercise, period, selectedChartData]);
 
   const renderPRCard = (item, { compact = false, hideEstimated1RM = false } = {}) => {
+    const isSelected = Boolean(item?.key && item.key === selectedExerciseKey);
     const sharedStyle = {
       width: "100%",
       textAlign: "left",
-      background: compact ? "linear-gradient(180deg, var(--info-soft), var(--card))" : "var(--card2)",
+      background: isSelected
+        ? "linear-gradient(135deg, rgba(15, 94, 99, 0.16), rgba(18, 199, 194, 0.14))"
+        : compact ? "linear-gradient(180deg, var(--info-soft), var(--card))" : "var(--card2)",
       borderRadius: 16,
       padding: compact ? "12px 14px" : "11px 12px",
-      border: compact ? "1px solid var(--info-border)" : "1px solid rgba(186, 230, 253, 0.65)",
-      boxShadow: compact ? "var(--shadow-card)" : "none",
+      border: isSelected
+        ? "1px solid var(--accent)"
+        : compact ? "1px solid var(--info-border)" : "1px solid rgba(186, 230, 253, 0.65)",
+      boxShadow: isSelected ? "0 12px 26px rgba(15, 94, 99, 0.14)" : compact ? "var(--shadow-card)" : "none",
       cursor: item ? "pointer" : "default",
     };
 
@@ -896,6 +903,7 @@ export default function AnalyticsScreen({
 
     return (
       <button
+        type="button"
         onClick={() => handleSelectExercise(item.key)}
         style={sharedStyle}
       >
@@ -950,6 +958,11 @@ export default function AnalyticsScreen({
           <div style={{ fontSize: 16, color: "var(--accent)", fontWeight: 900, lineHeight: 1.1 }}>
             {point.weight}kg
           </div>
+          {Number(point.setWeight || 0) > 0 && Number(point.reps || 0) > 0 && (
+            <div style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700, marginTop: 4 }}>
+              {point.setWeight}kg × {point.reps}rep
+            </div>
+          )}
         </div>
       );
     };
@@ -1029,7 +1042,7 @@ export default function AnalyticsScreen({
             ))}
           </div>
 
-          {selectedChartData.length > 0 ? (
+          {selectedChartData.length >= 2 ? (
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={selectedChartData} margin={{ top: 8, right: 6, left: -10, bottom: 2 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" />
@@ -1077,7 +1090,7 @@ export default function AnalyticsScreen({
             </ResponsiveContainer>
           ) : (
             <div style={{ textAlign: "center", color: "var(--text3)", fontSize: 13, padding: "28px 0 18px" }}>
-              グラフに表示できる日付付き記録がありません
+              まだ推移を表示するには記録が少ないです
             </div>
           )}
         </div>
@@ -1572,16 +1585,8 @@ export default function AnalyticsScreen({
             {selectedPrGroup && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {selectedPrGroup.items.map((item) => (
-                  <div key={item.key} style={{ borderRadius: 14, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: "12px 14px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div style={{ fontSize: 14, fontWeight: 900, color: "var(--text)" }}>{item.name}</div>
-                      <div style={{ fontSize: 14, fontWeight: 900, color: "var(--accent)" }}>
-                        {item.weight === "BW" ? "自重" : `${item.weight}kg`} × {item.reps}reps
-                      </div>
-                    </div>
-                    {item.date && (
-                      <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 4 }}>{item.date}</div>
-                    )}
+                  <div key={item.key}>
+                    {renderPRCard(item, { hideEstimated1RM: true })}
                   </div>
                 ))}
               </div>
