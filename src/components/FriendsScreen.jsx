@@ -9,6 +9,7 @@ import {
     getRecordSourceSets,
     getValidWorkoutDatesFromHistory,
     hasValidWorkoutOnDate,
+    mergeHistoryMaps,
     PR_UPDATE_TOLERANCE_KG,
     sanitizeWorkoutSets,
     sanitizeHistoryRecord,
@@ -70,6 +71,7 @@ const EMPTY_FRIEND_SESSION_INSIGHTS = {
     missingDates: {},
     excludedSessions: [],
 };
+const EMPTY_DELETED_WORKOUT_DATES = [];
 const FRIENDS_SCREEN_CACHE = {
     friendsData: {
         userId: null,
@@ -91,6 +93,25 @@ const getCachedFriendIdsForUser = (userId) => (
     FRIENDS_SCREEN_CACHE.friendsData.userId === userId
         ? (FRIENDS_SCREEN_CACHE.friendsData.friendIds || [])
         : []
+);
+
+const areStringArraysEqual = (a = [], b = []) => {
+    if (a.length !== b.length) return false;
+    return a.every((value, index) => value === b[index]);
+};
+
+const buildFeedItemsSignature = (items = []) => (
+    items.map((item) => [
+        item?.id || "",
+        item?.sessionId || "",
+        item?.user_id || "",
+        item?.workout_date || "",
+        item?.updated_at || "",
+        item?.photoUrl || "",
+        item?.likeCount ?? "",
+        item?.commentCount ?? "",
+        item?.likedByMe ? 1 : 0,
+    ].join("|")).join("::")
 );
 
 const parseDateKey = (value) => {
@@ -135,6 +156,37 @@ const hasValidSessionData = (session) => {
     return false;
 };
 
+const buildHistoryFromSessionRows = (sessions = []) => {
+    const historyMap = {};
+
+    (sessions || []).forEach((session) => {
+        const workoutDate = String(session?.workout_date || "").slice(0, 10);
+        const summaryItems = Array.isArray(session?.summary_json?.items)
+            ? session.summary_json.items
+            : [];
+        if (!workoutDate || !summaryItems.length) return;
+
+        summaryItems.forEach((item, index) => {
+            const exerciseName = String(item?.exercise_name || item?.exerciseName || "").trim();
+            if (!exerciseName) return;
+
+            const sets = sanitizeWorkoutSets(item?.sets || [], { allowBodyweight: true });
+            if (!sets.length) return;
+
+            if (!historyMap[exerciseName]) historyMap[exerciseName] = [];
+            historyMap[exerciseName].push({
+                date: workoutDate,
+                bodyPart: String(item?.body_part || item?.bodyPart || "").trim(),
+                order: Number.isFinite(Number(item?.order)) ? Number(item.order) : index,
+                sets,
+                source: "workout_session",
+            });
+        });
+    });
+
+    return historyMap;
+};
+
 export default function FriendsScreen({
     history,
     manualBests = [],
@@ -144,7 +196,7 @@ export default function FriendsScreen({
     onLogout,
     onOpenRecord,
     mode = "all",
-    deletedWorkoutDates = [],
+    deletedWorkoutDates = EMPTY_DELETED_WORKOUT_DATES,
 }) {
     const [copied, setCopied] = useState(false);
     const [friends, setFriends] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.friends || []);
@@ -174,6 +226,8 @@ export default function FriendsScreen({
     const activityFeedStatusTimeoutRef = useRef(null);
     const latestFeedRequestIdRef = useRef(0);
     const friendIdsRef = useRef(friendIds);
+    const activityFeedRef = useRef(activityFeed);
+    const visibleDatesByUserRef = useRef(friendSessionInsights.visibleDatesByUser || {});
     const today = formatDateKey();
     const currentMonthPrefix = today.slice(0, 7);
     const recentSevenStart = shiftDateKey(today, -6);
@@ -240,6 +294,14 @@ export default function FriendsScreen({
     useEffect(() => {
         friendIdsRef.current = friendIds;
     }, [friendIds]);
+
+    useEffect(() => {
+        activityFeedRef.current = activityFeed;
+    }, [activityFeed]);
+
+    useEffect(() => {
+        visibleDatesByUserRef.current = friendSessionInsights.visibleDatesByUser || {};
+    }, [friendSessionInsights.visibleDatesByUser]);
 
     useEffect(() => {
         if (rankingTab !== "big3" || !showRankingSections) {
@@ -445,7 +507,7 @@ export default function FriendsScreen({
 
     const fetchFriendsData = useCallback(async ({ force = false, background = false } = {}) => {
         if (!user) {
-            setFriendIds([]);
+            setFriendIds((prev) => (prev.length ? [] : prev));
             setFriends([]);
             setFriendSessionInsights(EMPTY_FRIEND_SESSION_INSIGHTS);
             setTodayActiveMap({});
@@ -478,12 +540,12 @@ export default function FriendsScreen({
             }
 
             if (!friendships || friendships.length === 0) {
-                setFriendIds([]);
+                setFriendIds((prev) => (prev.length ? [] : prev));
                 setFriends([]);
                 setFriendSessionInsights(EMPTY_FRIEND_SESSION_INSIGHTS);
                 FRIENDS_SCREEN_CACHE.friendsData = {
-                    userId: user.id,
                     ...FRIENDS_SCREEN_CACHE.friendsData,
+                    userId: user.id,
                     friendIds: [],
                     friends: [],
                     friendSessionInsights: EMPTY_FRIEND_SESSION_INSIGHTS,
@@ -505,7 +567,7 @@ export default function FriendsScreen({
                 friendIds: nextFriendIds,
             });
 
-            setFriendIds(nextFriendIds);
+            setFriendIds((prev) => (areStringArraysEqual(prev, nextFriendIds) ? prev : nextFriendIds));
 
             const currentMonthStart = `${currentMonthPrefix}-01`;
             const [profilesRes, workoutsRes, friendSessionsRes] = await Promise.all([
@@ -577,6 +639,7 @@ export default function FriendsScreen({
             const validSetsByDate = {};
             const monthlyCountByUser = {};
             const recentSevenCountByUser = {};
+            const visibleFriendSessionsByUser = new Map();
             const missingDates = {};
             const excludedSessions = [];
 
@@ -625,6 +688,9 @@ export default function FriendsScreen({
                     recentSevenCountByUser[session.user_id] = recentSevenCountByUser[session.user_id] || new Set();
                     recentSevenCountByUser[session.user_id].add(session.workout_date);
                 }
+                const visibleRows = visibleFriendSessionsByUser.get(session.user_id) || [];
+                visibleRows.push(session);
+                visibleFriendSessionsByUser.set(session.user_id, visibleRows);
             });
 
             const workoutRowsMap = new Map();
@@ -647,10 +713,12 @@ export default function FriendsScreen({
                     avatar1_url: null,
                 };
                 const friendWorkoutRows = workoutRowsMap.get(friendId) || [];
+                const workoutHistory = buildHistoryFromWorkoutRows(friendWorkoutRows);
+                const sessionHistory = buildHistoryFromSessionRows(visibleFriendSessionsByUser.get(friendId) || []);
                 return {
                     ...profile,
                     workoutRows: friendWorkoutRows,
-                    history: buildHistoryFromWorkoutRows(friendWorkoutRows),
+                    history: mergeHistoryMaps(workoutHistory, sessionHistory),
                 };
             });
 
@@ -705,7 +773,7 @@ export default function FriendsScreen({
                 error: err,
                 currentUserId: user?.id,
             });
-            setFriendIds([]);
+            setFriendIds((prev) => (prev.length ? [] : prev));
             setFriends([]);
             setFriendSessionInsights(EMPTY_FRIEND_SESSION_INSIGHTS);
             setTodayActiveMap({});
@@ -842,7 +910,7 @@ export default function FriendsScreen({
         )].filter(Boolean);
 
         if (resolvedIds.length) {
-            setFriendIds((prev) => (prev.length ? prev : resolvedIds));
+            setFriendIds((prev) => (areStringArraysEqual(prev, resolvedIds) ? prev : resolvedIds));
             FRIENDS_SCREEN_CACHE.friendsData = {
                 ...FRIENDS_SCREEN_CACHE.friendsData,
                 userId: user.id,
@@ -859,7 +927,7 @@ export default function FriendsScreen({
             setActivityFeed([]);
             return false;
         }
-        const requestId = Date.now();
+        const requestId = latestFeedRequestIdRef.current + 1;
         latestFeedRequestIdRef.current = requestId;
         debugTime("[feed] load total");
 
@@ -872,8 +940,9 @@ export default function FriendsScreen({
             && FRIENDS_SCREEN_CACHE.feedData.userId === user.id;
         const cachedItems = hasCache ? (FRIENDS_SCREEN_CACHE.feedData.activityFeed || []) : [];
         const cachedFriendCount = cachedItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
+        const visibleDatesByUser = visibleDatesByUserRef.current || {};
         const expectedFriendCount = effectiveFriendIds.reduce(
-            (sum, friendId) => sum + ((friendSessionInsights.visibleDatesByUser?.[friendId] || []).length),
+            (sum, friendId) => sum + ((visibleDatesByUser?.[friendId] || []).length),
             0
         );
         const shouldBypassFreshCache = hasCache
@@ -891,17 +960,22 @@ export default function FriendsScreen({
             const visibleCachedItems = shouldPruneOwnCache
                 ? cachedItems.filter((item) => !shouldHideFeedItem(item))
                 : cachedItems;
-            setActivityFeed((prev) => (prev.length ? prev : visibleCachedItems));
+            setActivityFeed((prev) => {
+                if (prev.length) return prev;
+                activityFeedRef.current = visibleCachedItems;
+                return visibleCachedItems;
+            });
         }
 
-        if (!hasCache && !background && activityFeed.length === 0) {
+        const currentActivityFeed = activityFeedRef.current || [];
+        if (!hasCache && !background && currentActivityFeed.length === 0) {
             setActivityFeedLoading(true);
         } else {
             setFeedRefreshing(true);
         }
 
         try {
-            const previousItems = hasCache ? cachedItems : (activityFeed || []);
+            const previousItems = hasCache ? cachedItems : (activityFeedRef.current || []);
             const beforeCount = previousItems.length;
             const beforeFriendCount = previousItems.filter((item) => item?.user_id && item.user_id !== user.id).length;
             const profileIds = [...new Set(feedUserIds.filter(Boolean))];
@@ -1127,7 +1201,7 @@ export default function FriendsScreen({
                 buildItemsForUser(
                     friendId,
                     buildHistoryFromWorkoutRows(workoutRowsByUser.get(friendId) || []),
-                    friendSessionInsights.visibleDatesByUser?.[friendId] || []
+                    visibleDatesByUser?.[friendId] || []
                 )
             );
 
@@ -1206,7 +1280,13 @@ export default function FriendsScreen({
             if (latestFeedRequestIdRef.current !== requestId) {
                 return true;
             }
-            setActivityFeed(allItems);
+            setActivityFeed((prev) => {
+                const nextItems = buildFeedItemsSignature(prev) === buildFeedItemsSignature(allItems)
+                    ? prev
+                    : allItems;
+                activityFeedRef.current = nextItems;
+                return nextItems;
+            });
             FRIENDS_SCREEN_CACHE.feedData = {
                 userId: user.id,
                 activityFeed: allItems,
@@ -1273,7 +1353,8 @@ export default function FriendsScreen({
                         commentCountMap.set(row.session_id, (commentCountMap.get(row.session_id) || 0) + 1);
                     });
 
-                    setActivityFeed((prev) => prev
+                    setActivityFeed((prev) => {
+                        const enrichedItems = prev
                         .filter((item) => !shouldHideFeedItem(item))
                         .map((item) => (
                             item?.sessionId
@@ -1285,7 +1366,13 @@ export default function FriendsScreen({
                                     commentCount: commentCountMap.get(item.sessionId) ?? item.commentCount ?? 0,
                                 }
                                 : item
-                        )));
+                        ));
+                        const nextItems = buildFeedItemsSignature(prev) === buildFeedItemsSignature(enrichedItems)
+                            ? prev
+                            : enrichedItems;
+                        activityFeedRef.current = nextItems;
+                        return nextItems;
+                    });
                     FRIENDS_SCREEN_CACHE.feedData = {
                         userId: user.id,
                         activityFeed: (FRIENDS_SCREEN_CACHE.feedData.activityFeed || [])
@@ -1332,7 +1419,7 @@ export default function FriendsScreen({
             setActivityFeedLoading(false);
             setFeedRefreshing(false);
         }
-    }, [activityFeed, buildFeedItemFromHistoryDate, friendSessionInsights.visibleDatesByUser, getDisplayUsername, hasOwnHistorySnapshot, history, ownDeletedWorkoutDateSet, recentSevenStart, resolveAcceptedFriendIds, shouldHideFeedItem, shouldHideOwnWorkoutDate, today, user?.id]);
+    }, [buildFeedItemFromHistoryDate, getDisplayUsername, hasOwnHistorySnapshot, history, ownDeletedWorkoutDateSet, recentSevenStart, resolveAcceptedFriendIds, shouldHideFeedItem, shouldHideOwnWorkoutDate, today, user?.id]);
 
     const handleRefreshActivityFeed = useCallback(async () => {
         if (activityFeedLoading) return;
@@ -1476,7 +1563,14 @@ export default function FriendsScreen({
             ...FRIENDS_SCREEN_CACHE.feedData,
             activityFeed: visibleCachedItems,
         };
-        setActivityFeed((prev) => prev.filter((item) => !shouldHideFeedItem(item)));
+        setActivityFeed((prev) => {
+            const nextItems = prev.filter((item) => !shouldHideFeedItem(item));
+            const stableItems = buildFeedItemsSignature(prev) === buildFeedItemsSignature(nextItems)
+                ? prev
+                : nextItems;
+            activityFeedRef.current = stableItems;
+            return stableItems;
+        });
         const hasCachedFeed = FRIENDS_SCREEN_CACHE.feedData.userId === user.id
             && Array.isArray(FRIENDS_SCREEN_CACHE.feedData.activityFeed)
             && FRIENDS_SCREEN_CACHE.feedData.activityFeed.length > 0;
