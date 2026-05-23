@@ -37,7 +37,7 @@ import {
 const formatDurationValue = (value) => {
   const n = Number(value || 0);
   if (!Number.isFinite(n) || n <= 0) return "-";
-  return `${Math.round(n)}分`;
+  return `${Math.floor(n)}分`;
 };
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;

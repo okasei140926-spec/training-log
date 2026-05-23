@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
@@ -7,6 +7,10 @@ import { extractWorkoutPlanFromText, normalizeWorkoutPlan } from "../utils/aiWor
 const AI_DAILY_LIMIT = 5;
 const AI_USAGE_STORAGE_KEY = "ai_usage_state";
 const AI_PRO_STORAGE_KEY = "pump_pro_enabled";
+const INITIAL_AI_MESSAGE = {
+  role: "assistant",
+  content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪",
+};
 
 const getTodayKey = () => formatDateKey(new Date());
 const getAiUsageKey = (dateKey = getTodayKey()) => `ai_usage_${dateKey}`;
@@ -72,6 +76,27 @@ const incrementAiUsage = () => {
   const usage = resetAiUsageIfNewDay();
   const nextCount = Math.min(AI_DAILY_LIMIT, normalizeAiUsageCount(usage.count) + 1);
   return saveAiUsage({ dateKey: usage.dateKey, count: nextCount });
+};
+
+const createConversationTitle = (message) => {
+  const title = String(message || "").replace(/\s+/g, " ").trim();
+  if (!title) return "AI相談";
+  return title.length > 28 ? `${title.slice(0, 28)}…` : title;
+};
+
+const toAiMessage = (message) => ({
+  id: message?.id,
+  role: message?.role === "user" ? "user" : "assistant",
+  content: String(message?.content || ""),
+  workoutPlan: normalizeWorkoutPlan(message?.workoutPlan || message?.workout_plan),
+  created_at: message?.created_at || message?.createdAt || new Date().toISOString(),
+});
+
+const buildConversationPreview = (messages) => {
+  const lastAssistant = [...(messages || [])].reverse().find((message) => message.role === "assistant" && message.content);
+  const lastMessage = lastAssistant || [...(messages || [])].reverse().find((message) => message.content);
+  const preview = String(lastMessage?.content || "").replace(/\s+/g, " ").trim();
+  return preview.length > 48 ? `${preview.slice(0, 48)}…` : preview;
 };
 
 const ANALYSIS_KEYWORDS = ["分析", "振り返", "レビュー", "見て", "チェック"];
@@ -230,20 +255,21 @@ const buildRecentSummaryText = (groupedHistory) => {
 
 export function useAI(history) {
   const initialAiUsageDate = getTodayKey();
-  const [aiMsgs, setAiMsgs] = useState([
-    {
-      role: "assistant",
-      content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪",
-    },
-  ]);
+  const [aiMsgs, setAiMsgs] = useState([INITIAL_AI_MESSAGE]);
   const [aiInput, setAiInput] = useState("");
   const [aiLoad, setAiLoad] = useState(false);
   const aiEnd = useRef(null);
   const aiLoadRef = useRef(false);
+  const aiMsgsRef = useRef([INITIAL_AI_MESSAGE]);
   const aiUsageDateRef = useRef(initialAiUsageDate);
   const aiUsageCountRef = useRef(0);
   const isProRef = useRef(getIsPro());
+  const activeConversationIdRef = useRef(null);
   const [isPro, setIsPro] = useState(() => getIsPro());
+  const [aiConversations, setAiConversations] = useState([]);
+  const [aiConversationLoading, setAiConversationLoading] = useState(false);
+  const [aiConversationError, setAiConversationError] = useState("");
+  const [activeConversationId, setActiveConversationIdState] = useState(null);
   const [aiUsageDate, setAiUsageDate] = useState(initialAiUsageDate);
   const [aiUsageCount, setAiUsageCount] = useState(() => {
     const usage = resetAiUsageIfNewDay();
@@ -253,6 +279,202 @@ export function useAI(history) {
   });
 
   const groupedHistory = useMemo(() => flattenHistoryByDate(history), [history]);
+
+  const setActiveConversationId = useCallback((conversationId) => {
+    activeConversationIdRef.current = conversationId || null;
+    setActiveConversationIdState(conversationId || null);
+  }, []);
+
+  const loadAiConversations = useCallback(async () => {
+    setAiConversationLoading(true);
+    setAiConversationError("");
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        setAiConversations([]);
+        return [];
+      }
+
+      const { data: conversations, error: conversationsError } = await supabase
+        .from("ai_conversations")
+        .select("id,title,created_at,updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+
+      if (conversationsError) throw conversationsError;
+
+      const ids = (conversations || []).map((conversation) => conversation.id).filter(Boolean);
+      let messages = [];
+
+      if (ids.length) {
+        const { data: messageRows, error: messagesError } = await supabase
+          .from("ai_messages")
+          .select("id,conversation_id,role,content,workout_plan,created_at")
+          .eq("user_id", userId)
+          .in("conversation_id", ids)
+          .order("created_at", { ascending: true });
+
+        if (messagesError) throw messagesError;
+        messages = messageRows || [];
+      }
+
+      const messageMap = messages.reduce((acc, message) => {
+        if (!acc[message.conversation_id]) acc[message.conversation_id] = [];
+        acc[message.conversation_id].push(toAiMessage(message));
+        return acc;
+      }, {});
+
+      const nextConversations = (conversations || []).map((conversation) => {
+        const conversationMessages = messageMap[conversation.id] || [];
+        return {
+          ...conversation,
+          messages: conversationMessages,
+          preview: buildConversationPreview(conversationMessages),
+        };
+      });
+
+      setAiConversations(nextConversations);
+      return nextConversations;
+    } catch (error) {
+      console.warn("ai conversation history load failed", error);
+      setAiConversationError("会話履歴を読み込めませんでした。");
+      return [];
+    } finally {
+      setAiConversationLoading(false);
+    }
+  }, []);
+
+  const saveAiConversationTurn = useCallback(
+    async ({ conversationId, userMessage, assistantMessage }) => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+
+        if (!userId) return null;
+
+        let nextConversationId = conversationId || activeConversationIdRef.current;
+
+        if (!nextConversationId) {
+          const now = new Date().toISOString();
+          const { data: conversation, error: conversationError } = await supabase
+            .from("ai_conversations")
+            .insert({
+              user_id: userId,
+              title: createConversationTitle(userMessage?.content),
+              created_at: now,
+              updated_at: now,
+            })
+            .select("id")
+            .single();
+
+          if (conversationError) throw conversationError;
+          nextConversationId = conversation?.id || null;
+        }
+
+        if (!nextConversationId) return null;
+
+        const rows = [userMessage, assistantMessage]
+          .map(toAiMessage)
+          .map((message) => ({
+            conversation_id: nextConversationId,
+            user_id: userId,
+            role: message.role,
+            content: message.content,
+            workout_plan:
+              message.role === "assistant" && message.workoutPlan?.length
+                ? message.workoutPlan
+                : null,
+            created_at: message.created_at,
+          }));
+
+        const { error: messagesError } = await supabase.from("ai_messages").insert(rows);
+        if (messagesError) throw messagesError;
+
+        const { error: updateError } = await supabase
+          .from("ai_conversations")
+          .update({ updated_at: assistantMessage?.created_at || new Date().toISOString() })
+          .eq("id", nextConversationId)
+          .eq("user_id", userId);
+
+        if (updateError) throw updateError;
+
+        setActiveConversationId(nextConversationId);
+        await loadAiConversations();
+        return nextConversationId;
+      } catch (error) {
+        console.warn("ai conversation history save failed", error);
+        setAiConversationError("会話履歴を保存できませんでした。");
+        return null;
+      }
+    },
+    [loadAiConversations, setActiveConversationId]
+  );
+
+  const openAiConversation = useCallback(
+    (conversationId) => {
+      const conversation = aiConversations.find((item) => item.id === conversationId);
+      if (!conversation) return false;
+
+      const messages = (conversation.messages || []).map(toAiMessage);
+      setActiveConversationId(conversation.id);
+      setAiMsgs(messages.length ? messages : [INITIAL_AI_MESSAGE]);
+      return true;
+    },
+    [aiConversations, setActiveConversationId]
+  );
+
+  const startNewAiConversation = useCallback(() => {
+    setActiveConversationId(null);
+    setAiMsgs([INITIAL_AI_MESSAGE]);
+    setAiInput("");
+  }, [setActiveConversationId]);
+
+  const deleteAiConversation = useCallback(
+    async (conversationId) => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId || !conversationId) return false;
+
+        const { error } = await supabase
+          .from("ai_conversations")
+          .delete()
+          .eq("id", conversationId)
+          .eq("user_id", userId);
+
+        if (error) throw error;
+
+        setAiConversations((prev) => prev.filter((conversation) => conversation.id !== conversationId));
+        if (activeConversationIdRef.current === conversationId) {
+          startNewAiConversation();
+        }
+        return true;
+      } catch (error) {
+        console.warn("ai conversation history delete failed", error);
+        setAiConversationError("会話履歴を削除できませんでした。");
+        return false;
+      }
+    },
+    [startNewAiConversation]
+  );
+
+  useEffect(() => {
+    loadAiConversations();
+  }, [loadAiConversations]);
+
+  useEffect(() => {
+    aiMsgsRef.current = aiMsgs;
+  }, [aiMsgs]);
 
   useEffect(() => {
     aiEnd.current?.scrollIntoView({ behavior: "smooth" });

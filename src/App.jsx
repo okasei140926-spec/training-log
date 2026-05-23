@@ -1559,11 +1559,12 @@ export default function GymApp() {
 
         const startedAt = timing?.startedAtIso || existingSession?.started_at || new Date().toISOString();
         const endedAt = timing?.endedAtIso || new Date().toISOString();
+        const existingDurationSec = Number.isFinite(Number(existingSession?.duration_sec)) && Number(existingSession?.duration_sec) > 0 && Number(existingSession?.duration_sec) < 86400
+            ? Math.floor(Number(existingSession.duration_sec))
+            : 0;
         const durationSec = Number.isFinite(timing?.durationSec)
             ? Math.max(0, Math.floor(timing.durationSec))
-            : Number.isFinite(Number(existingSession?.duration_sec)) && Number(existingSession?.duration_sec) > 0
-                ? Math.floor(Number(existingSession.duration_sec))
-                : 0;
+            : existingDurationSec;
 
         const { data: upsertedSession, error: sessionUpsertError } = await supabase
             .from("workout_sessions")
