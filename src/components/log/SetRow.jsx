@@ -82,7 +82,7 @@ export default function SetRow({
         background: "var(--input-bg)",
         border: "1px solid var(--border2)",
         borderRadius: 16,
-        padding: "12px 39px 12px 12px",
+        padding: "12px 36px 12px 8px",
         color: "var(--text)",
         fontSize: 18,
         fontWeight: 900,
