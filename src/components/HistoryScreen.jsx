@@ -207,20 +207,12 @@ export default function HistoryScreen({
         return;
       }
 
-      const [{ data: sessionData, error: sessionError }, { data: workoutData }] = await Promise.all([
-        supabase
-          .from("workout_sessions")
-          .select("started_at, ended_at, duration_sec")
-          .eq("user_id", user.id)
-          .eq("workout_date", todayKey)
-          .maybeSingle(),
-        supabase
-          .from("workouts")
-          .select("started_at, ended_at, duration_sec")
-          .eq("user_id", user.id)
-          .eq("date", todayKey)
-          .maybeSingle(),
-      ]);
+      const { data: sessionData, error: sessionError } = await supabase
+        .from("workout_sessions")
+        .select("started_at, ended_at, duration_sec")
+        .eq("user_id", user.id)
+        .eq("workout_date", todayKey)
+        .maybeSingle();
 
       if (sessionError) {
         console.error(sessionError);
@@ -230,12 +222,11 @@ export default function HistoryScreen({
 
       const durationSec = Math.max(
         Math.floor(Number(sessionData?.duration_sec) || 0),
-        Math.floor(Number(workoutData?.duration_sec) || 0),
       );
 
       applyTodayWorkoutTiming({
-        startedAt: sessionData?.started_at || workoutData?.started_at || null,
-        lastActivityAt: sessionData?.ended_at || workoutData?.ended_at || null,
+        startedAt: sessionData?.started_at || null,
+        lastActivityAt: sessionData?.ended_at || null,
         durationSec,
       });
     };
@@ -659,25 +650,16 @@ export default function HistoryScreen({
 
       if (user?.id) {
         try {
-          const [{ data: sessionData }, { data: workoutData }] = await Promise.all([
-            supabase
-              .from("workout_sessions")
-              .select("duration_sec")
-              .eq("user_id", user.id)
-              .eq("workout_date", normalizedDate)
-              .maybeSingle(),
-            supabase
-              .from("workouts")
-              .select("duration_sec")
-              .eq("user_id", user.id)
-              .eq("date", normalizedDate)
-              .maybeSingle(),
-          ]);
+          const { data: sessionData } = await supabase
+            .from("workout_sessions")
+            .select("duration_sec")
+            .eq("user_id", user.id)
+            .eq("workout_date", normalizedDate)
+            .maybeSingle();
 
           durationSec = Math.max(
             durationSec,
-            normalizeDurationSec(sessionData?.duration_sec),
-            normalizeDurationSec(workoutData?.duration_sec)
+            normalizeDurationSec(sessionData?.duration_sec)
           );
         } catch (error) {
           console.error("workout day summary duration fetch failed", error);

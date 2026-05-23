@@ -174,39 +174,6 @@ const applyHistoryDeleteMarkers = (historyMap, markers) => {
     return next;
 };
 
-const attachWorkoutDurationsToHistory = (historyMap, workoutRows = []) => {
-    const durationByDate = {};
-    (workoutRows || []).forEach((row) => {
-        const date = String(row?.date || "").slice(0, 10);
-        const durationSec = Math.floor(Number(row?.duration_sec) || 0);
-        if (date && durationSec > 0 && durationSec < 86400) {
-            durationByDate[date] = Math.max(durationByDate[date] || 0, durationSec);
-        }
-    });
-
-    if (!Object.keys(durationByDate).length) return historyMap;
-
-    const next = {};
-    Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
-        next[exerciseName] = (records || []).map((record) => {
-            const recordDate = String(record?.date || "").slice(0, 10);
-            const durationSec = durationByDate[recordDate];
-            if (!durationSec) return record;
-
-            const durationMinutes = Math.max(1, Math.round(durationSec / 60));
-            return {
-                ...record,
-                duration_sec: durationSec,
-                durationSec,
-                durationMinutes,
-                elapsedMinutes: durationMinutes,
-            };
-        });
-    });
-
-    return next;
-};
-
 const buildHistoryFromWorkoutSessionRows = (sessionRows = []) => {
     const historyMap = {};
 
@@ -277,31 +244,6 @@ const attachWorkoutDurationToHistoryDate = (historyMap, targetDate, durationSecV
     });
 
     return next;
-};
-
-const getHistoryDurationSecForDate = (historyMap, targetDate) => {
-    const normalizedDate = String(targetDate || "").slice(0, 10);
-    if (!normalizedDate) return 0;
-
-    let durationSec = 0;
-    Object.values(historyMap || {}).forEach((records) => {
-        (records || []).forEach((record) => {
-            if (String(record?.date || "").slice(0, 10) !== normalizedDate) return;
-            const candidates = [
-                Number(record?.duration_sec),
-                Number(record?.durationSec),
-                Number(record?.durationMinutes) * 60,
-                Number(record?.elapsedMinutes) * 60,
-            ];
-            candidates.forEach((value) => {
-                if (Number.isFinite(value) && value > durationSec) {
-                    durationSec = Math.floor(value);
-                }
-            });
-        });
-    });
-
-    return durationSec;
 };
 
 export default function GymApp() {
@@ -1102,31 +1044,18 @@ export default function GymApp() {
             if (!user?.id) return;
 
             try {
-                const [sessionsRes, workoutsRes] = await Promise.all([
-                    supabase
-                        .from("workout_sessions")
-                        .select("workout_date, duration_sec")
-                        .eq("user_id", user.id),
-                    supabase
-                        .from("workouts")
-                        .select("date, duration_sec")
-                        .eq("user_id", user.id),
-                ]);
+                const sessionsRes = await supabase
+                    .from("workout_sessions")
+                    .select("workout_date, duration_sec")
+                    .eq("user_id", user.id);
 
                 if (sessionsRes.error) throw sessionsRes.error;
-                if (workoutsRes.error) throw workoutsRes.error;
 
                 const map = {};
                 (sessionsRes.data || []).forEach(({ workout_date, duration_sec }) => {
                     const sec = Math.floor(Number(duration_sec));
                     if (workout_date && sec > 0 && sec < 86400) {
                         map[workout_date] = Math.max(map[workout_date] || 0, sec);
-                    }
-                });
-                (workoutsRes.data || []).forEach(({ date, duration_sec }) => {
-                    const sec = Math.floor(Number(duration_sec));
-                    if (date && sec > 0 && sec < 86400) {
-                        map[date] = Math.max(map[date] || 0, sec);
                     }
                 });
 
@@ -1372,7 +1301,7 @@ export default function GymApp() {
         setSyncFailuresByDate({ ...syncFailuresByDateRef.current });
     }, [getSyncFailureSignature]);
 
-    const syncWorkoutRowsForDates = useCallback(async (userId, historyMap, dates = [], durationSecByDate = {}) => {
+    const syncWorkoutRowsForDates = useCallback(async (userId, historyMap, dates = []) => {
         const normalizedDates = [...new Set((dates || []).map((date) => String(date || "").trim()).filter(Boolean))];
         const results = {
             syncedDates: [],
@@ -1385,10 +1314,6 @@ export default function GymApp() {
             normalizedDates.map(async (workoutDate) => {
                 try {
                     const hasWorkoutForDate = hasValidWorkoutOnDate(historyMap, workoutDate);
-                    const durationSec = Math.max(
-                        Math.floor(Number(durationSecByDate?.[workoutDate]) || 0),
-                        getHistoryDurationSecForDate(historyMap, workoutDate)
-                    );
                     const { error } = hasWorkoutForDate
                         ? await supabase
                             .from("workouts")
@@ -1396,7 +1321,6 @@ export default function GymApp() {
                                 user_id: userId,
                                 date: workoutDate,
                                 data: historyMap,
-                                ...(durationSec > 0 ? { duration_sec: durationSec } : {}),
                             }, {
                                 onConflict: "user_id,date",
                             })
@@ -1952,7 +1876,7 @@ export default function GymApp() {
                 const [workoutsRes, sessionsRes] = await Promise.all([
                     supabase
                         .from("workouts")
-                        .select("date, data, duration_sec")
+                        .select("date, data")
                         .eq("user_id", user.id)
                         .order("date", { ascending: true }),
                     supabase
@@ -1965,10 +1889,7 @@ export default function GymApp() {
                 if (workoutsRes.error) throw workoutsRes.error;
                 if (sessionsRes.error) throw sessionsRes.error;
 
-                const remoteWorkoutHistory = attachWorkoutDurationsToHistory(
-                    buildHistoryFromWorkoutRows(workoutsRes.data || []),
-                    workoutsRes.data || []
-                );
+                const remoteWorkoutHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
                 const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionsRes.data || []);
                 const remoteHistory = applyHistoryDeleteMarkers(
                     mergeHistoryMaps(remoteWorkoutHistory, remoteSessionHistory),
@@ -2040,7 +1961,7 @@ export default function GymApp() {
                 const [workoutsRes, sessionsRes] = await Promise.all([
                     supabase
                         .from("workouts")
-                        .select("date, data, duration_sec")
+                        .select("date, data")
                         .eq("user_id", currentUserId)
                         .order("date", { ascending: true }),
                     supabase
@@ -2054,10 +1975,7 @@ export default function GymApp() {
                 if (sessionsRes.error) throw sessionsRes.error;
                 if (latestUserIdRef.current !== currentUserId) return;
 
-                const remoteWorkoutHistory = attachWorkoutDurationsToHistory(
-                    buildHistoryFromWorkoutRows(workoutsRes.data || []),
-                    workoutsRes.data || []
-                );
+                const remoteWorkoutHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
                 const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionsRes.data || []);
                 const remoteHistory = applyHistoryDeleteMarkers(
                     mergeHistoryMaps(remoteWorkoutHistory, remoteSessionHistory),
@@ -2075,23 +1993,8 @@ export default function GymApp() {
                         formatDateKey(new Date()),
                     ]),
                 ];
-                const currentTimerPersistence = workoutStartedForDate
-                    ? getWorkoutTimerPersistence(workoutTimerStateRef.current, Date.now())
-                    : null;
-                const currentTimerDurationSec = workoutStartedForDate
-                    ? Math.max(
-                        Math.floor(Number(currentTimerPersistence?.durationSec) || 0),
-                        computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current)
-                    )
-                    : 0;
-                const durationSecByDate = {
-                    ...savedWorkoutDurationSecByDate,
-                    ...(workoutStartedForDate && currentTimerDurationSec > 0
-                        ? { [workoutStartedForDate]: currentTimerDurationSec }
-                        : {}),
-                };
 
-                const workoutSyncResults = await syncWorkoutRowsForDates(currentUserId, mergedHistory, syncDates, durationSecByDate);
+                const workoutSyncResults = await syncWorkoutRowsForDates(currentUserId, mergedHistory, syncDates);
                 if (workoutSyncResults.failedDates.length > 0) {
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
                 }
