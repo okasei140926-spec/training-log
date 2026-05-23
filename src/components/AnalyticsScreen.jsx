@@ -1260,15 +1260,24 @@ export default function AnalyticsScreen({
             monthlyMap[month].workouts.add(record.date);
           });
         });
-        const monthlyList = Object.entries(monthlyMap)
+        const sortedMonthlyEntries = Object.entries(monthlyMap)
           .sort(([a], [b]) => a.localeCompare(b))
-          .slice(-6)
+          .slice(-6);
+        const hasMultipleYears = new Set(sortedMonthlyEntries.map(([month]) => month.slice(0, 4))).size > 1;
+        const formatMonthLabel = (month) => {
+          const year = month.slice(0, 4);
+          const monthNumber = Number(month.slice(5));
+          return hasMultipleYears ? `${year}/${monthNumber}` : `${monthNumber}月`;
+        };
+        const monthlyList = sortedMonthlyEntries
           .map(([month, data]) => ({
-            label: `${Number(month.slice(5))}月`,
+            month,
+            label: formatMonthLabel(month),
             volume: Math.round(data.volume),
             sets: data.sets,
             workouts: data.workouts.size,
           }));
+        const monthlyTableList = monthlyList.slice().reverse();
 
         const thisVol = thisMonthSummary.totalVolume;
         const lastVol = lastMonthSummary.totalVolume;
@@ -1309,6 +1318,7 @@ export default function AnalyticsScreen({
                       <Tooltip
                         contentStyle={{ background: "var(--card)", border: "1px solid rgba(18, 199, 194, 0.12)", borderRadius: 14, fontSize: 12 }}
                         formatter={(v) => [`${Number(v).toLocaleString("ja-JP")}kg`, "Volume"]}
+                        labelFormatter={(_label, payload) => payload?.[0]?.payload?.label || _label}
                       />
                       <Line type="monotone" dataKey="volume" stroke="var(--accent)" strokeWidth={2.5} dot={{ fill: "var(--accent)", r: 4 }} activeDot={{ r: 6 }} />
                     </LineChart>
@@ -1320,11 +1330,11 @@ export default function AnalyticsScreen({
             <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
               <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)", marginBottom: 12 }}>月別比較</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {monthlyList.slice().reverse().map((m, i) => {
-                  const prev = monthlyList.slice().reverse()[i + 1];
+                {monthlyTableList.map((m, i) => {
+                  const prev = monthlyTableList[i + 1];
                   const diff = prev && prev.volume > 0 ? Math.round(((m.volume - prev.volume) / prev.volume) * 100) : null;
                   return (
-                    <div key={m.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(18,199,194,0.07)", paddingBottom: 8 }}>
+                    <div key={m.month} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(18,199,194,0.07)", paddingBottom: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{m.label}</div>
                       <div style={{ fontSize: 13, fontWeight: 900, color: "var(--text)" }}>{m.volume.toLocaleString("ja-JP")} kg</div>
                       {diff !== null && (

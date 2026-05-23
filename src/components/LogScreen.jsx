@@ -341,7 +341,7 @@ export default function LogScreen({
     }, [exercises, reorderMenuId]);
 
     return (
-        <div className="fade-in" style={{ ...S.page, paddingBottom: 200 }}>
+        <div className="fade-in" style={{ ...S.page, paddingBottom: "calc(var(--bottom-nav-clearance) + 56px)" }}>
             <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
