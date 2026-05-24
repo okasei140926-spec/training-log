@@ -727,13 +727,28 @@ export function useAI(history) {
         setAiUsageCount(nextUsage.count);
       }
       setAiMsgs((p) => [...p, assistantMessage]);
-      await saveAiConversationTurn({
+      void saveAiConversationTurn({
         conversationId: activeConversationIdRef.current,
         userMessage,
         assistantMessage,
+      }).catch((error) => {
+        console.error("AI conversation save failed", {
+          error,
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+        });
       });
       return true;
-    } catch {
+    } catch (error) {
+      console.error("AI Coach request failed", {
+        error,
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+      });
       setAiMsgs((p) => [...p, { role: "assistant", content: "AI Coachの応答に失敗しました。" }]);
       return false;
     } finally {

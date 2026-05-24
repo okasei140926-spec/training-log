@@ -1706,18 +1706,42 @@ export default function GymApp() {
             const currentHistory = latestHistoryRef.current || history || {};
             await Promise.all(failedDates.map(async (date) => {
                 const hasWorkoutForDate = hasValidWorkoutOnDate(currentHistory, date);
-                if (hasWorkoutForDate) {
-                    await syncWorkoutRowsForDates(
-                        user.id,
-                        currentHistory,
-                        [date],
-                        savedWorkoutDurationSecByDate
-                    );
-                    await syncWorkoutSessionSnapshot(user.id, currentHistory, date);
-                } else {
-                    await deleteRemoteWorkoutArtifactsForDate(user.id, date, currentHistory);
+                try {
+                    if (hasWorkoutForDate) {
+                        const rowSyncResults = await syncWorkoutRowsForDates(
+                            user.id,
+                            currentHistory,
+                            [date],
+                            savedWorkoutDurationSecByDate
+                        );
+                        if (rowSyncResults.failedDates.includes(date)) {
+                            throw new Error(`workouts sync failed for ${date}`);
+                        }
+                        await syncWorkoutSessionSnapshot(user.id, currentHistory, date);
+                    } else {
+                        await deleteRemoteWorkoutArtifactsForDate(user.id, date, currentHistory);
+                    }
+                    pendingWorkoutSessionSyncDatesRef.current.delete(date);
+                    clearSyncFailure(date);
+                } catch (error) {
+                    if (!syncFailuresByDateRef.current[date]) {
+                        recordSyncFailure(
+                            date,
+                            error,
+                            hasWorkoutForDate ? "workout_sessions_retry" : "delete_workout_artifacts_retry"
+                        );
+                    }
+                    console.error("[sync] retry failed for workout date", {
+                        date,
+                        userId: user.id,
+                        hasWorkoutForDate,
+                        error,
+                        message: error?.message,
+                        code: error?.code,
+                        details: error?.details,
+                        hint: error?.hint,
+                    });
                 }
-                clearSyncFailure(date);
             }));
 
             await refreshHistorySyncDiagnostic(user.id, currentHistory, {
@@ -1734,6 +1758,7 @@ export default function GymApp() {
         clearSyncFailure,
         deleteRemoteWorkoutArtifactsForDate,
         history,
+        recordSyncFailure,
         refreshHistorySyncDiagnostic,
         savedWorkoutDurationSecByDate,
         syncRetrying,
