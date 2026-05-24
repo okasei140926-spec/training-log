@@ -45,10 +45,12 @@ const isPlainObject = (value) =>
 export function sanitizeWorkoutSet(set, { allowBodyweight = true } = {}) {
   if (!set || typeof set !== "object") return null;
 
-  const reps = Number(set.reps);
+  const reps = Number(set.reps ?? set.rep);
   if (!Number.isFinite(reps) || reps <= 0) return null;
 
-  if (set.weight === "BW") {
+  const rawWeight = set.weight ?? set.weightKg ?? set.weight_kg ?? set.kg ?? set.displayWeight;
+
+  if (String(rawWeight).toUpperCase() === "BW") {
     if (!allowBodyweight) return null;
     return {
       ...set,
@@ -58,7 +60,7 @@ export function sanitizeWorkoutSet(set, { allowBodyweight = true } = {}) {
     };
   }
 
-  const weight = Number(set.weight);
+  const weight = Number(rawWeight);
   if (!Number.isFinite(weight) || weight <= 0) return null;
 
   return {
@@ -96,7 +98,11 @@ export function getRecordSourceSets(record) {
     return record.sets;
   }
 
-  return [{ weight: record.weight, reps: record.reps, done: record.done }];
+  return [{
+    weight: record.weight ?? record.weightKg ?? record.weight_kg ?? record.kg ?? record.displayWeight,
+    reps: record.reps ?? record.rep,
+    done: record.done,
+  }];
 }
 
 export function sanitizeHistoryRecord(record, { allowBodyweight = true } = {}) {
@@ -109,11 +115,13 @@ export function sanitizeHistoryRecord(record, { allowBodyweight = true } = {}) {
   const weight = firstSet.weight === "BW" ? "BW" : Number(firstSet.weight);
   const reps = Number(firstSet.reps);
   const order = Number(record.order);
+  const rawDate = record.date ?? record.workoutDate ?? record.workout_date;
+  const date = String(rawDate || "").slice(0, 10);
   const bodyPart = String(record.bodyPart || record.body_part || "").trim();
 
   return {
     ...record,
-    date: String(record.date || ""),
+    date,
     order: Number.isFinite(order) ? order : 999,
     bodyPart,
     sets,

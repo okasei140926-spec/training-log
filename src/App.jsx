@@ -223,6 +223,28 @@ const applyHistoryDeleteMarkers = (historyMap, markers) => {
     return next;
 };
 
+const describeHistoryRecordsForDate = (historyMap, targetDate) => {
+    const normalizedDate = String(targetDate || "").slice(0, 10);
+    if (!normalizedDate) return [];
+
+    return Object.entries(historyMap || {})
+        .flatMap(([exerciseName, records]) =>
+            (records || []).map((record) => {
+                const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+                if (sanitized?.date !== normalizedDate) return null;
+
+                return {
+                    exerciseName,
+                    date: sanitized.date,
+                    bodyPart: sanitized.bodyPart || "",
+                    setCount: sanitized.sets?.length || 0,
+                    rawDate: record?.date ?? record?.workoutDate ?? record?.workout_date ?? "",
+                };
+            })
+        )
+        .filter(Boolean);
+};
+
 const buildHistoryFromWorkoutSessionRows = (sessionRows = []) => {
     const historyMap = {};
 
@@ -1301,19 +1323,30 @@ export default function GymApp() {
     }, [accountActionBusy, clearLocalAppState, user?.id]);
 
     const queueWorkoutSessionSync = useCallback((date) => {
-        const normalizedDate = String(date || "").trim();
+        const normalizedDate = String(date || "").slice(0, 10);
         if (!normalizedDate) return;
         pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
     }, []);
 
     const recordSyncFailure = useCallback((workoutDate, error, stage) => {
-        const normalizedDate = String(workoutDate || "").trim();
+        const normalizedDate = String(workoutDate || "").slice(0, 10);
         if (!normalizedDate) return;
+        const normalizedStage = String(stage || "").trim() || "unknown";
+
+        console.error("[sync] workout date sync failure tracked", {
+            workoutDate: normalizedDate,
+            stage: normalizedStage,
+            error,
+            message: error?.message || String(error || "unknown error"),
+            code: error?.code || null,
+            details: error?.details || null,
+            hint: error?.hint || null,
+        });
 
         syncFailuresByDateRef.current = {
             ...syncFailuresByDateRef.current,
             [normalizedDate]: {
-                stage: String(stage || "").trim() || "unknown",
+                stage: normalizedStage,
                 message: error?.message || String(error || "unknown error"),
                 code: error?.code || null,
                 details: error?.details || null,
@@ -1325,13 +1358,40 @@ export default function GymApp() {
     }, []);
 
     const clearSyncFailure = useCallback((workoutDate) => {
-        const normalizedDate = String(workoutDate || "").trim();
+        const normalizedDate = String(workoutDate || "").slice(0, 10);
         if (!normalizedDate || !syncFailuresByDateRef.current[normalizedDate]) return;
         const nextFailures = { ...syncFailuresByDateRef.current };
         delete nextFailures[normalizedDate];
         syncFailuresByDateRef.current = nextFailures;
         setSyncFailuresByDate(nextFailures);
     }, []);
+
+    const fetchRemoteWorkoutRowsForDates = useCallback(async (userId, dates = []) => {
+        const normalizedDates = [...new Set(
+            (dates || [])
+                .map((date) => String(date || "").slice(0, 10))
+                .filter(Boolean)
+        )];
+
+        if (!userId || !normalizedDates.length) return [];
+
+        const { data, error } = await supabase
+            .from("workouts")
+            .select("date, data")
+            .eq("user_id", userId)
+            .in("date", normalizedDates);
+
+        if (error) throw error;
+        return data || [];
+    }, []);
+
+    const hasRemoteWorkoutForDate = useCallback(async (userId, workoutDate) => {
+        const normalizedDate = String(workoutDate || "").slice(0, 10);
+        if (!userId || !normalizedDate) return false;
+
+        const rows = await fetchRemoteWorkoutRowsForDates(userId, [normalizedDate]);
+        return rows.some((row) => String(row?.date || "").slice(0, 10) === normalizedDate);
+    }, [fetchRemoteWorkoutRowsForDates]);
 
     const dismissPendingDeleteUndo = useCallback(() => {
         const pending = pendingDeleteUndoRef.current;
@@ -1359,7 +1419,8 @@ export default function GymApp() {
     }, [getSyncFailureSignature]);
 
     const syncWorkoutRowsForDates = useCallback(async (userId, historyMap, dates = []) => {
-        const normalizedDates = [...new Set((dates || []).map((date) => String(date || "").trim()).filter(Boolean))];
+        const normalizedDates = [...new Set((dates || []).map((date) => String(date || "").slice(0, 10)).filter(Boolean))];
+        const normalizedHistoryMap = mergeHistoryMaps(historyMap || {});
         const results = {
             syncedDates: [],
             failedDates: [],
@@ -1370,14 +1431,14 @@ export default function GymApp() {
         await Promise.all(
             normalizedDates.map(async (workoutDate) => {
                 try {
-                    const hasWorkoutForDate = hasValidWorkoutOnDate(historyMap, workoutDate);
+                    const hasWorkoutForDate = hasValidWorkoutOnDate(normalizedHistoryMap, workoutDate);
                     const { error } = hasWorkoutForDate
                         ? await supabase
                             .from("workouts")
                             .upsert({
                                 user_id: userId,
                                 date: workoutDate,
-                                data: historyMap,
+                                data: normalizedHistoryMap,
                             }, {
                                 onConflict: "user_id,date",
                             })
@@ -1396,8 +1457,11 @@ export default function GymApp() {
                         error,
                         message: error?.message,
                         code: error?.code,
+                        details: error?.details,
+                        hint: error?.hint,
                         userId,
                         workoutDate,
+                        records: describeHistoryRecordsForDate(normalizedHistoryMap, workoutDate),
                     });
                     results.failedDates.push(workoutDate);
                 }
@@ -1408,7 +1472,7 @@ export default function GymApp() {
     }, [clearSyncFailure, recordSyncFailure]);
 
     const deleteRemoteWorkoutArtifactsForDate = useCallback(async (userId, workoutDate, nextHistoryMap = null) => {
-        const normalizedDate = String(workoutDate || "").trim();
+        const normalizedDate = String(workoutDate || "").slice(0, 10);
         if (!userId || !normalizedDate) return;
 
         const { data: sessionRows, error: sessionFetchError } = await supabase
@@ -1562,7 +1626,7 @@ export default function GymApp() {
     }, []);
 
     const syncWorkoutSessionSnapshot = useCallback(async (userId, historyMap, workoutDate, timing = null) => {
-        const normalizedDate = String(workoutDate || "").trim();
+        const normalizedDate = String(workoutDate || "").slice(0, 10);
         if (!userId || !normalizedDate) return;
 
         const payload = buildWorkoutSessionPayloadFromHistory(historyMap, normalizedDate);
@@ -1705,9 +1769,11 @@ export default function GymApp() {
 
         setSyncRetrying(true);
         try {
-            const currentHistory = latestHistoryRef.current || history || {};
+            const currentHistory = mergeHistoryMaps(latestHistoryRef.current || history || {});
             await Promise.all(failedDates.map(async (date) => {
                 const hasWorkoutForDate = hasValidWorkoutOnDate(currentHistory, date);
+                const previousFailure = syncFailuresByDateRef.current[date] || {};
+                const isDeleteRetry = String(previousFailure.stage || "").startsWith("delete_");
                 try {
                     if (hasWorkoutForDate) {
                         const rowSyncResults = await syncWorkoutRowsForDates(
@@ -1717,9 +1783,36 @@ export default function GymApp() {
                             savedWorkoutDurationSecByDate
                         );
                         if (rowSyncResults.failedDates.includes(date)) {
-                            throw new Error(`workouts sync failed for ${date}`);
+                            const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, date);
+                            if (!remoteAlreadyHasWorkout) {
+                                throw new Error(`workouts sync failed for ${date}`);
+                            }
                         }
-                        await syncWorkoutSessionSnapshot(user.id, currentHistory, date);
+                        try {
+                            await syncWorkoutSessionSnapshot(user.id, currentHistory, date);
+                        } catch (sessionError) {
+                            const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, date);
+                            console.error("[sync] workout session retry failed after workout row sync", {
+                                date,
+                                userId: user.id,
+                                records: describeHistoryRecordsForDate(currentHistory, date),
+                                error: sessionError,
+                                message: sessionError?.message,
+                                code: sessionError?.code,
+                                details: sessionError?.details,
+                                hint: sessionError?.hint,
+                            });
+                            if (!remoteAlreadyHasWorkout) throw sessionError;
+                        }
+                    } else if (!isDeleteRetry) {
+                        const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, date);
+                        if (!remoteAlreadyHasWorkout) {
+                            console.error("[sync] retry skipped stale failure without local or remote workout", {
+                                date,
+                                userId: user.id,
+                                previousFailure,
+                            });
+                        }
                     } else {
                         await deleteRemoteWorkoutArtifactsForDate(user.id, date, currentHistory);
                     }
@@ -1730,13 +1823,20 @@ export default function GymApp() {
                         recordSyncFailure(
                             date,
                             error,
-                            hasWorkoutForDate ? "workout_sessions_retry" : "delete_workout_artifacts_retry"
+                            hasWorkoutForDate
+                                ? "workout_sessions_retry"
+                                : isDeleteRetry
+                                    ? "delete_workout_artifacts_retry"
+                                    : "stale_sync_failure_retry"
                         );
                     }
                     console.error("[sync] retry failed for workout date", {
                         date,
                         userId: user.id,
                         hasWorkoutForDate,
+                        isDeleteRetry,
+                        previousFailure,
+                        records: describeHistoryRecordsForDate(currentHistory, date),
                         error,
                         message: error?.message,
                         code: error?.code,
@@ -1759,6 +1859,7 @@ export default function GymApp() {
     }, [
         clearSyncFailure,
         deleteRemoteWorkoutArtifactsForDate,
+        hasRemoteWorkoutForDate,
         history,
         recordSyncFailure,
         refreshHistorySyncDiagnostic,
@@ -2113,9 +2214,27 @@ export default function GymApp() {
                                 await syncWorkoutSessionSnapshot(currentUserId, mergedHistory, date, timing);
                                 clearSyncFailure(date);
                             } catch (error) {
-                                recordSyncFailure(date, error, "workout_sessions");
-                                console.error("workout session sync failed", { error, userId: currentUserId, date });
-                                pendingWorkoutSessionSyncDatesRef.current.add(date);
+                                const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(currentUserId, date).catch((remoteCheckError) => {
+                                    console.error("workout remote existence check failed after session sync error", {
+                                        error: remoteCheckError,
+                                        userId: currentUserId,
+                                        date,
+                                    });
+                                    return false;
+                                });
+                                console.error("workout session sync failed", {
+                                    error,
+                                    userId: currentUserId,
+                                    date,
+                                    remoteAlreadyHasWorkout,
+                                    records: describeHistoryRecordsForDate(mergedHistory, date),
+                                });
+                                if (remoteAlreadyHasWorkout) {
+                                    clearSyncFailure(date);
+                                } else {
+                                    recordSyncFailure(date, error, "workout_sessions");
+                                    pendingWorkoutSessionSyncDatesRef.current.add(date);
+                                }
                             }
                         })
                     );
@@ -2179,6 +2298,7 @@ export default function GymApp() {
         getCurrentHistoryDeleteMarkers,
         recordSyncFailure,
         refreshHistorySyncDiagnostic,
+        hasRemoteWorkoutForDate,
         savedWorkoutDurationSecByDate,
         syncWorkoutSessionSnapshot,
         syncWorkoutRowsForDates,
@@ -2210,13 +2330,27 @@ export default function GymApp() {
                             await syncWorkoutSessionSnapshot(user.id, history, dateKey, null);
                             clearSyncFailure(dateKey);
                         } catch (error) {
-                            recordSyncFailure(dateKey, error, "workout_sessions");
+                            const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, dateKey).catch((remoteCheckError) => {
+                                console.error("workout remote existence check failed after month backfill error", {
+                                    error: remoteCheckError,
+                                    userId: user.id,
+                                    workoutDate: dateKey,
+                                });
+                                return false;
+                            });
                             console.error("workout session month backfill failed", {
                                 error,
                                 userId: user.id,
                                 workoutDate: dateKey,
                                 currentMonthStart,
+                                remoteAlreadyHasWorkout,
+                                records: describeHistoryRecordsForDate(history, dateKey),
                             });
+                            if (remoteAlreadyHasWorkout) {
+                                clearSyncFailure(dateKey);
+                            } else {
+                                recordSyncFailure(dateKey, error, "workout_sessions");
+                            }
                         }
                     })
                 );
@@ -2242,6 +2376,7 @@ export default function GymApp() {
         };
     }, [
         clearSyncFailure,
+        hasRemoteWorkoutForDate,
         history,
         historySyncReady,
         recordSyncFailure,
