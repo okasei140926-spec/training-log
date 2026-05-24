@@ -366,6 +366,7 @@ export default function AnalyticsScreen({
   const [period, setPeriod] = useState(90);
   const [activeSummaryKey, setActiveSummaryKey] = useState(null);
   const [overviewScope, setOverviewScope] = useState("this_week");
+  const [selectedTrendMonth, setSelectedTrendMonth] = useState(null);
   const [activeAnalysisTab, setActiveAnalysisTab] = useState("overview");
   const [selectedOverviewMetric, setSelectedOverviewMetric] = useState(null);
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
@@ -1262,8 +1263,7 @@ export default function AnalyticsScreen({
           });
         });
         const sortedMonthlyEntries = Object.entries(monthlyMap)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .slice(-6);
+          .sort(([a], [b]) => a.localeCompare(b));
         const hasMultipleYears = new Set(sortedMonthlyEntries.map(([month]) => month.slice(0, 4))).size > 1;
         const formatMonthLabel = (month) => {
           const year = month.slice(0, 4);
@@ -1279,44 +1279,74 @@ export default function AnalyticsScreen({
             workouts: data.workouts.size,
           }));
         const monthlyTableList = monthlyList.slice().reverse();
-
-        const thisVol = thisMonthSummary.totalVolume;
-        const lastVol = lastMonthSummary.totalVolume;
-        const volDiff = lastVol > 0 ? Math.round(((thisVol - lastVol) / lastVol) * 100) : null;
+        const latestTrendMonth = monthlyTableList[0]?.month || null;
+        const selectedMonthExists = selectedTrendMonth && monthlyList.some((item) => item.month === selectedTrendMonth);
+        const activeTrendMonth = selectedMonthExists ? selectedTrendMonth : latestTrendMonth;
+        const activeTrendData = monthlyList.find((item) => item.month === activeTrendMonth) || monthlyTableList[0] || null;
+        const activeTrendIndex = monthlyList.findIndex((item) => item.month === activeTrendMonth);
+        const previousTrendData = activeTrendIndex > 0 ? monthlyList[activeTrendIndex - 1] : null;
+        const selectedVolDiff =
+          previousTrendData && previousTrendData.volume > 0 && activeTrendData
+            ? Math.round(((activeTrendData.volume - previousTrendData.volume) / previousTrendData.volume) * 100)
+            : null;
+        const maxMonthlyVolume = Math.max(0, ...monthlyList.map((item) => Number(item.volume) || 0));
+        const yStep = maxMonthlyVolume > 50000 ? 20000 : maxMonthlyVolume > 10000 ? 5000 : 1000;
+        const yUpper = Math.max(yStep, Math.ceil(maxMonthlyVolume / yStep) * yStep);
+        const yLower = -Math.max(Math.round(yUpper * 0.08), Math.round(yStep * 0.4));
+        const yTicks = Array.from({ length: Math.floor(yUpper / yStep) + 1 }, (_, index) => index * yStep);
 
 
         return (
           <>
             <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
               <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 14 }}>推移</div>
-              <div style={{ display: "inline-flex", gap: 6, padding: 5, borderRadius: 999, background: "var(--card2)", border: "1px solid rgba(18, 199, 194, 0.10)", marginBottom: 12 }}>
-                {SUMMARY_SCOPE_OPTIONS.map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => setOverviewScope(option.key)}
-                    style={{
-                      padding: "7px 14px",
-                      borderRadius: 999,
-                      border: "none",
-                      background: overviewScope === option.key ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "transparent",
-                      color: overviewScope === option.key ? "#fff" : "var(--text2)",
-                      fontSize: 12,
-                      fontWeight: 800,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
+              {monthlyTableList.length > 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    overflowX: "auto",
+                    WebkitOverflowScrolling: "touch",
+                    paddingBottom: 4,
+                    marginBottom: 12,
+                    scrollbarWidth: "none",
+                  }}
+                >
+                  {monthlyTableList.map((monthItem) => {
+                    const selected = activeTrendMonth === monthItem.month;
+                    return (
+                      <button
+                        key={monthItem.month}
+                        type="button"
+                        onClick={() => setSelectedTrendMonth(monthItem.month)}
+                        style={{
+                          flex: "0 0 auto",
+                          padding: "8px 14px",
+                          borderRadius: 999,
+                          border: selected ? "1px solid rgba(18, 199, 194, 0.30)" : "1px solid rgba(18, 199, 194, 0.12)",
+                          background: selected ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+                          color: selected ? "#fff" : "var(--text2)",
+                          fontSize: 12,
+                          fontWeight: 850,
+                          cursor: "pointer",
+                          boxShadow: selected ? "0 10px 24px rgba(18, 199, 194, 0.18)" : "none",
+                        }}
+                      >
+                        {monthItem.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ color: "var(--text3)", fontSize: 12, marginBottom: 12 }}>月別データがありません</div>
+              )}
+              <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 14 }}>{activeTrendData?.label || "-"}</div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 20 }}>
                 {[
-                  { label: "Volume", value: `${overviewSummary.totalVolume.toLocaleString("ja-JP")}kg`, diff: overviewScope === "this_month" ? volDiff : null, sub: overviewSummary.shortLabel },
-                  { label: "セット数", value: `${overviewSummary.totalSets}set`, diff: null, sub: overviewSummary.shortLabel },
-                  { label: "トレ回数", value: `${overviewSummary.workoutCount}回`, diff: null, sub: overviewSummary.shortLabel },
+                  { label: "Volume", value: `${(activeTrendData?.volume || 0).toLocaleString("ja-JP")}kg`, diff: selectedVolDiff, sub: activeTrendData?.label || "-" },
+                  { label: "セット数", value: `${activeTrendData?.sets || 0}set`, diff: null, sub: activeTrendData?.label || "-" },
+                  { label: "トレ回数", value: `${activeTrendData?.workouts || 0}回`, diff: null, sub: activeTrendData?.label || "-" },
                 ].map((card) => (
                   <div key={card.label} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: "12px 10px" }}>
                     <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 4 }}>{card.label}</div>
@@ -1333,17 +1363,41 @@ export default function AnalyticsScreen({
               {monthlyList.length > 0 && (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", marginBottom: 10 }}>Volumeの推移</div>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={monthlyList} margin={{ top: 5, right: 10, left: 4, bottom: 4 }}>
+                  <ResponsiveContainer width="100%" height={205}>
+                    <LineChart data={monthlyList} margin={{ top: 8, right: 12, left: 4, bottom: 22 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(18, 199, 194, 0.10)" vertical={false} />
-                      <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--text2)", fontWeight: 700 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "var(--text3)" }} width={40} tickFormatter={(v) => `${Math.round(v/1000)}k`} />
+                      <XAxis
+                        dataKey="label"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 11, fill: "var(--text2)", fontWeight: 700 }}
+                        interval={monthlyList.length > 8 ? "preserveStartEnd" : 0}
+                        minTickGap={0}
+                        padding={{ left: 10, right: 10 }}
+                        dy={8}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fill: "var(--text3)" }}
+                        width={40}
+                        domain={[yLower, yUpper]}
+                        ticks={yTicks}
+                        tickFormatter={(v) => `${Math.round(v/1000)}k`}
+                      />
                       <Tooltip
                         contentStyle={{ background: "var(--card)", border: "1px solid rgba(18, 199, 194, 0.12)", borderRadius: 14, fontSize: 12 }}
                         formatter={(v) => [`${Number(v).toLocaleString("ja-JP")}kg`, "Volume"]}
                         labelFormatter={(_label, payload) => payload?.[0]?.payload?.label || _label}
                       />
-                      <Line type="monotone" dataKey="volume" stroke="var(--accent)" strokeWidth={2.5} dot={{ fill: "var(--accent)", r: 4 }} activeDot={{ r: 6 }} />
+                      <Line
+                        type="monotone"
+                        dataKey="volume"
+                        stroke="var(--accent)"
+                        strokeWidth={2.5}
+                        dot={{ fill: "var(--accent)", stroke: "var(--card)", strokeWidth: 2, r: 5 }}
+                        activeDot={{ r: 7, stroke: "var(--card)", strokeWidth: 2 }}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </>
