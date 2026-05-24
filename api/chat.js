@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl =
-  process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+  process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey =
-  process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+  process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase =
@@ -30,6 +30,19 @@ const AI_DAILY_LIMIT = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 12;
 const rateLimitStore = new Map();
+
+function getSupabaseConfigStatus() {
+  const missingEnv = [];
+  if (!supabaseUrl) missingEnv.push("REACT_APP_SUPABASE_URL");
+  if (!supabaseAnonKey) missingEnv.push("REACT_APP_SUPABASE_ANON_KEY");
+  if (!supabaseServiceRoleKey) missingEnv.push("SUPABASE_SERVICE_ROLE_KEY");
+
+  return {
+    missingEnv,
+    authSupabaseReady: Boolean(supabase),
+    adminSupabaseReady: Boolean(adminSupabase),
+  };
+}
 
 function parseWorkoutPlanFromText(text) {
   const rawText = typeof text === "string" ? text : "";
@@ -165,7 +178,15 @@ export default async function handler(req, res) {
   }
 
   if (!supabase || !adminSupabase) {
-    return res.status(500).json({ error: "AI利用回数のDB設定が不足しています。" });
+    const configStatus = getSupabaseConfigStatus();
+    console.error("Supabase client initialization failed for /api/chat", configStatus);
+    return res.status(500).json({
+      error: "AI利用回数のDB設定が不足しています。",
+      detail: adminSupabase
+        ? "Supabase認証クライアントを初期化できませんでした。"
+        : "Supabase管理クライアントを初期化できませんでした。",
+      config: configStatus,
+    });
   }
 
   if (!process.env.CLAUDE_API_KEY) {
