@@ -16,6 +16,12 @@ const PERIODS = [
   { label: "6ヶ月", days: 180 },
   { label: "1年", days: 365 },
 ];
+const SUMMARY_SCOPE_OPTIONS = [
+  { key: "this_week", label: "今週" },
+  { key: "last_week", label: "先週" },
+  { key: "this_month", label: "今月" },
+  { key: "last_month", label: "先月" },
+];
 
 const FIXED_BODY_PART_LABELS = ["胸", "背中", "四頭", "ハムストリングス", "尻", "肩", "二頭", "三頭", "腹筋", "その他"];
 const BIG3_EXERCISES = [
@@ -1186,12 +1192,7 @@ export default function AnalyticsScreen({
         <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
           <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 12 }}>部位別ボリューム</div>
           <div style={{ display: "inline-flex", gap: 6, padding: 5, borderRadius: 999, background: "var(--card2)", border: "1px solid rgba(18, 199, 194, 0.10)", marginBottom: 14 }}>
-            {[
-              { key: "this_week", label: "今週" },
-              { key: "last_week", label: "先週" },
-              { key: "this_month", label: "今月" },
-              { key: "last_month", label: "先月" },
-            ].map((option) => (
+            {SUMMARY_SCOPE_OPTIONS.map((option) => (
               <button key={option.key} type="button" onClick={() => setOverviewScope(option.key)}
                 style={{ padding: "7px 14px", borderRadius: 999, border: "none", background: overviewScope === option.key ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "transparent", color: overviewScope === option.key ? "#fff" : "var(--text2)", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
                 {option.label}
@@ -1288,12 +1289,34 @@ export default function AnalyticsScreen({
           <>
             <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
               <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 14 }}>推移</div>
+              <div style={{ display: "inline-flex", gap: 6, padding: 5, borderRadius: 999, background: "var(--card2)", border: "1px solid rgba(18, 199, 194, 0.10)", marginBottom: 12 }}>
+                {SUMMARY_SCOPE_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setOverviewScope(option.key)}
+                    style={{
+                      padding: "7px 14px",
+                      borderRadius: 999,
+                      border: "none",
+                      background: overviewScope === option.key ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "transparent",
+                      color: overviewScope === option.key ? "#fff" : "var(--text2)",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 20 }}>
                 {[
-                  { label: "Volume", value: `${thisMonthSummary.totalVolume.toLocaleString("ja-JP")}kg`, diff: volDiff, sub: "今月" },
-                  { label: "セット数", value: `${thisMonthSummary.totalSets}set`, diff: null, sub: "今月" },
-                  { label: "トレ回数", value: `${thisMonthSummary.workoutCount}回`, diff: null, sub: "今月" },
+                  { label: "Volume", value: `${overviewSummary.totalVolume.toLocaleString("ja-JP")}kg`, diff: overviewScope === "this_month" ? volDiff : null, sub: overviewSummary.shortLabel },
+                  { label: "セット数", value: `${overviewSummary.totalSets}set`, diff: null, sub: overviewSummary.shortLabel },
+                  { label: "トレ回数", value: `${overviewSummary.workoutCount}回`, diff: null, sub: overviewSummary.shortLabel },
                 ].map((card) => (
                   <div key={card.label} style={{ borderRadius: 16, border: "1px solid rgba(18, 199, 194, 0.10)", background: "linear-gradient(180deg, var(--card2), var(--card))", padding: "12px 10px" }}>
                     <div style={{ fontSize: 10, color: "var(--text3)", marginBottom: 4 }}>{card.label}</div>
@@ -1363,12 +1386,7 @@ export default function AnalyticsScreen({
           alignSelf: "flex-start",
         }}
       >
-        {[
-          { key: "this_week", label: "今週" },
-          { key: "last_week", label: "先週" },
-          { key: "this_month", label: "今月" },
-          { key: "last_month", label: "先月" },
-        ].map((option) => (
+        {SUMMARY_SCOPE_OPTIONS.map((option) => (
           <button
             key={option.key}
             type="button"

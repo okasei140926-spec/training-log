@@ -616,6 +616,9 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))
         .filter(x => x.sets > 0);
+    const weeklyItems = weeklyDisplay.length
+        ? weeklyDisplay
+        : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }));
 
     return (
         <div className="fade-in" style={{
@@ -691,10 +694,10 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
 
                 <div style={{
                     display: "grid",
-                    gridTemplateColumns: `repeat(${Math.min(Math.max(weeklyDisplay.length, 1), 8)}, minmax(0, 1fr))`,
+                    gridTemplateColumns: `repeat(${Math.min(Math.max(weeklyItems.length, 1), 8)}, minmax(0, 1fr))`,
                     gap: 0,
                 }}>
-                    {(weeklyDisplay.length ? weeklyDisplay : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }))).map((x, index, arr) => (
+                    {weeklyItems.map((x, index, arr) => (
                         <button
                             key={x.part}
                             onClick={() => {
