@@ -159,6 +159,43 @@ const isPlainObject = (value) =>
 
 const serializeHistoryMap = (historyMap) => JSON.stringify(historyMap || {});
 const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
+const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
+const REMOTE_HISTORY_SESSION_LIMIT = 400;
+const DIAGNOSTIC_LOOKBACK_DAYS = 45;
+
+const getDateDaysAgoKey = (days) => {
+    const date = new Date();
+    date.setDate(date.getDate() - Number(days || 0));
+    return formatDateKey(date);
+};
+
+const getNextMonthPrefix = (prefix) => {
+    const [year, month] = String(prefix || "").split("-").map(Number);
+    if (!year || !month) return "";
+    const date = new Date(year, month, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const logRecordFetchError = (operation, table, error, context = {}) => {
+    console.error("[records] Supabase fetch failed", {
+        operation,
+        table,
+        ...context,
+        error,
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint,
+    });
+};
+
+const getHistoryLoadErrorMessage = (error) => {
+    const message = String(error?.message || "");
+    if (message.includes("statement timeout") || message.includes("canceling statement")) {
+        return "記録の取得に時間がかかっています。再取得してください。";
+    }
+    return "記録の取得に失敗しました。再取得してください。";
+};
 
 const persistHistoryForUser = (userId, nextHistory) => {
     save("history", nextHistory);
@@ -1650,24 +1687,51 @@ export default function GymApp() {
         try {
             const localHistoryDates = getValidWorkoutDatesFromHistory(historyMap || {}, { prefix });
 
+            const rangeStart = prefix ? `${prefix}-01` : getDateDaysAgoKey(DIAGNOSTIC_LOOKBACK_DAYS);
+            const rangeEndPrefix = prefix ? getNextMonthPrefix(prefix) : "";
+            let workoutsQuery = supabase
+                .from("workouts")
+                .select("date")
+                .eq("user_id", userId)
+                .gte("date", rangeStart)
+                .order("date", { ascending: true });
+            let sessionsQuery = supabase
+                .from("workout_sessions")
+                .select("workout_date")
+                .eq("user_id", userId)
+                .gte("workout_date", rangeStart)
+                .order("workout_date", { ascending: true });
+
+            if (rangeEndPrefix) {
+                workoutsQuery = workoutsQuery.lt("date", `${rangeEndPrefix}-01`);
+                sessionsQuery = sessionsQuery.lt("workout_date", `${rangeEndPrefix}-01`);
+            }
+
             const [remoteWorkoutsRes, remoteSessionsRes] = await Promise.all([
-                supabase
-                    .from("workouts")
-                    .select("date, data")
-                    .eq("user_id", userId)
-                    .order("date", { ascending: true }),
-                supabase
-                    .from("workout_sessions")
-                    .select("workout_date")
-                    .eq("user_id", userId)
-                    .order("workout_date", { ascending: true }),
+                workoutsQuery.limit(500),
+                sessionsQuery.limit(500),
             ]);
 
-            if (remoteWorkoutsRes.error) throw remoteWorkoutsRes.error;
-            if (remoteSessionsRes.error) throw remoteSessionsRes.error;
+            if (remoteWorkoutsRes.error) {
+                logRecordFetchError("history_sync_diagnostic", "workouts", remoteWorkoutsRes.error, {
+                    userId,
+                    dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
+                });
+                throw remoteWorkoutsRes.error;
+            }
+            if (remoteSessionsRes.error) {
+                logRecordFetchError("history_sync_diagnostic", "workout_sessions", remoteSessionsRes.error, {
+                    userId,
+                    dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
+                });
+                throw remoteSessionsRes.error;
+            }
 
-            const remoteHistory = buildHistoryFromWorkoutRows(remoteWorkoutsRes.data || []);
-            const remoteWorkoutDates = getValidWorkoutDatesFromHistory(remoteHistory, { prefix });
+            const remoteWorkoutDates = [...new Set(
+                (remoteWorkoutsRes.data || [])
+                    .map((row) => String(row?.date || "").slice(0, 10))
+                    .filter((date) => !prefix || date.startsWith(prefix))
+            )].sort();
             const sessionDates = [...new Set(
                 (remoteSessionsRes.data || [])
                     .map((row) => String(row?.workout_date || "").slice(0, 10))
@@ -1706,6 +1770,8 @@ export default function GymApp() {
                 error,
                 message: error?.message,
                 code: error?.code,
+                details: error?.details,
+                hint: error?.hint,
                 userId,
                 prefix,
             });
@@ -2143,21 +2209,37 @@ export default function GymApp() {
             const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
 
             try {
+                const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
                 const [workoutsRes, sessionsRes] = await Promise.all([
                     supabase
                         .from("workouts")
                         .select("date, data")
                         .eq("user_id", user.id)
-                        .order("date", { ascending: true }),
+                        .order("date", { ascending: false })
+                        .limit(1),
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
                         .eq("user_id", user.id)
-                        .order("workout_date", { ascending: true }),
+                        .gte("workout_date", sessionRangeStart)
+                        .order("workout_date", { ascending: true })
+                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
                 ]);
 
-                if (workoutsRes.error) throw workoutsRes.error;
-                if (sessionsRes.error) throw sessionsRes.error;
+                if (workoutsRes.error) {
+                    logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
+                        userId: user.id,
+                        dateRange: { latestOnly: true },
+                    });
+                    throw workoutsRes.error;
+                }
+                if (sessionsRes.error) {
+                    logRecordFetchError("history_initial_load", "workout_sessions", sessionsRes.error, {
+                        userId: user.id,
+                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                    });
+                    throw sessionsRes.error;
+                }
 
                 const remoteWorkoutHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
                 const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionsRes.data || []);
@@ -2189,13 +2271,15 @@ export default function GymApp() {
                     error,
                     message: error?.message,
                     code: error?.code,
+                    details: error?.details,
+                    hint: error?.hint,
                     userId: user.id,
                     email: user.email,
                 });
 
                 if (!isActive) return;
 
-                setHistoryLoadError(error?.message || "記録の取得に失敗しました");
+                setHistoryLoadError(getHistoryLoadErrorMessage(error));
                 const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
                 setHistory(fallbackHistory);
                 persistHistoryForUser(user.id, fallbackHistory);
@@ -2228,21 +2312,37 @@ export default function GymApp() {
                     effectiveDeleteMarkers
                 );
 
+                const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
                 const [workoutsRes, sessionsRes] = await Promise.all([
                     supabase
                         .from("workouts")
                         .select("date, data")
                         .eq("user_id", currentUserId)
-                        .order("date", { ascending: true }),
+                        .order("date", { ascending: false })
+                        .limit(1),
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
                         .eq("user_id", currentUserId)
-                        .order("workout_date", { ascending: true }),
+                        .gte("workout_date", sessionRangeStart)
+                        .order("workout_date", { ascending: true })
+                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
                 ]);
 
-                if (workoutsRes.error) throw workoutsRes.error;
-                if (sessionsRes.error) throw sessionsRes.error;
+                if (workoutsRes.error) {
+                    logRecordFetchError("history_save_reconcile", "workouts", workoutsRes.error, {
+                        userId: currentUserId,
+                        dateRange: { latestOnly: true },
+                    });
+                    throw workoutsRes.error;
+                }
+                if (sessionsRes.error) {
+                    logRecordFetchError("history_save_reconcile", "workout_sessions", sessionsRes.error, {
+                        userId: currentUserId,
+                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                    });
+                    throw sessionsRes.error;
+                }
                 if (latestUserIdRef.current !== currentUserId) return;
 
                 const remoteWorkoutHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
@@ -2255,12 +2355,12 @@ export default function GymApp() {
                     mergeHistoryMaps(remoteHistory, localHistorySnapshot),
                     effectiveDeleteMarkers
                 );
-                const validHistoryDates = getValidWorkoutDatesFromHistory(mergedHistory);
+                const pendingSessionSyncDates = Array.from(pendingWorkoutSessionSyncDatesRef.current);
                 const syncDates = [
                     ...new Set([
-                        ...validHistoryDates,
                         String(logDate || "").trim(),
                         formatDateKey(new Date()),
+                        ...pendingSessionSyncDates,
                     ]),
                 ];
 
@@ -2283,7 +2383,6 @@ export default function GymApp() {
                         : reconciledHistory;
                 });
 
-                const pendingSessionSyncDates = Array.from(pendingWorkoutSessionSyncDatesRef.current);
                 pendingWorkoutSessionSyncDatesRef.current = new Set();
 
                 if (pendingSessionSyncDates.length > 0) {
