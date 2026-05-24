@@ -186,6 +186,7 @@ export default function LogScreen({
     workoutElapsedSec = 0,
     workoutTimerStatus = "idle",
     onFinishWorkoutTimer,
+    onSetInputFocusChange,
 }) {
 
     const hasExercises = exercises.length > 0;
@@ -795,6 +796,8 @@ export default function LogScreen({
                                                 idx={idx}
                                                 setField={setField}
                                                 onWeightModeChange={(mode) => setWeightMode(ex, idx, mode)}
+                                                onSetInputFocusChange={onSetInputFocusChange}
+                                                inputId={`${ex.id || ex.name}-${idx}`}
                                                 previousSet={previousSets[idx]}
                                                 previousUnit={previousSets[idx]?.displayUnit || previousSets[idx]?.unit || previousSets[idx]?.weightUnit || previousSets[idx]?.weight_unit || previousUnit}
                                                 unit={getSetDisplayUnit(set, exUnit)}

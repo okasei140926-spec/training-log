@@ -814,9 +814,61 @@ export default function GymApp() {
     useEffect(() => {
         setShowTimerMenu(false);
         setTimerMenuAnchor(null);
+        setFocusedLogSetInputId(null);
+        setIsLogKeyboardOpen(false);
         const id = window.setTimeout(resetDocumentInteractionLocks, 0);
         return () => window.clearTimeout(id);
     }, [screen, setShowTimerMenu, resetDocumentInteractionLocks]);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") return undefined;
+        if (screen !== "log") {
+            setIsLogKeyboardOpen(false);
+            return undefined;
+        }
+
+        let timeoutId = 0;
+        const updateKeyboardState = () => {
+            const viewport = window.visualViewport;
+            const keyboardInset = viewport
+                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+                : 0;
+            const activeElement = document.activeElement;
+            const setInputFocused = activeElement?.getAttribute?.("data-log-set-input") === "true";
+            const keyboardOpen = keyboardInset > 120;
+            setIsLogKeyboardOpen(keyboardOpen);
+            if (setInputFocused && !keyboardOpen) {
+                window.setTimeout(() => {
+                    const nextViewport = window.visualViewport;
+                    const nextKeyboardInset = nextViewport
+                        ? Math.max(0, window.innerHeight - nextViewport.height - nextViewport.offsetTop)
+                        : 0;
+                    if (nextKeyboardInset <= 80) setFocusedLogSetInputId(null);
+                }, 450);
+            }
+        };
+        const scheduleKeyboardStateUpdate = () => {
+            window.clearTimeout(timeoutId);
+            updateKeyboardState();
+            timeoutId = window.setTimeout(updateKeyboardState, 120);
+        };
+
+        scheduleKeyboardStateUpdate();
+        window.addEventListener("focusin", scheduleKeyboardStateUpdate);
+        window.addEventListener("focusout", scheduleKeyboardStateUpdate);
+        window.addEventListener("resize", scheduleKeyboardStateUpdate);
+        window.visualViewport?.addEventListener("resize", scheduleKeyboardStateUpdate);
+        window.visualViewport?.addEventListener("scroll", scheduleKeyboardStateUpdate);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+            window.removeEventListener("focusin", scheduleKeyboardStateUpdate);
+            window.removeEventListener("focusout", scheduleKeyboardStateUpdate);
+            window.removeEventListener("resize", scheduleKeyboardStateUpdate);
+            window.visualViewport?.removeEventListener("resize", scheduleKeyboardStateUpdate);
+            window.visualViewport?.removeEventListener("scroll", scheduleKeyboardStateUpdate);
+        };
+    }, [screen]);
 
     useEffect(() => {
         if (!showTimerMenu) return undefined;
@@ -907,6 +959,8 @@ export default function GymApp() {
     const [syncRetrying, setSyncRetrying] = useState(false);
     const [pendingDeleteUndo, setPendingDeleteUndo] = useState(null);
     const [accountActionBusy, setAccountActionBusy] = useState(false);
+    const [focusedLogSetInputId, setFocusedLogSetInputId] = useState(null);
+    const [isLogKeyboardOpen, setIsLogKeyboardOpen] = useState(false);
     const [historySyncDiagnostic, setHistorySyncDiagnostic] = useState({
         localHistoryDates: [],
         remoteWorkoutDates: [],
@@ -916,6 +970,10 @@ export default function GymApp() {
         syncFailedDates: [],
         lastSyncErrorByDate: {},
     });
+
+    const handleLogSetInputFocusChange = useCallback((inputId) => {
+        setFocusedLogSetInputId(inputId || null);
+    }, []);
 
     useEffect(() => {
         const wasOnline = previousOnlineStateRef.current;
@@ -3757,6 +3815,7 @@ export default function GymApp() {
         { id: "feed", icon: "💬", label: "フィード" },
         { id: "ai", icon: "🤖", label: "AI" },
     ];
+    const shouldHideBottomNav = screen === "log" && (Boolean(focusedLogSetInputId) || isLogKeyboardOpen);
     const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
     const syncFailureDates = Object.keys(syncFailuresByDate);
     const syncFailureSignature = getSyncFailureSignature(syncFailuresByDate);
@@ -4211,6 +4270,7 @@ export default function GymApp() {
                             workoutElapsedSec={displayedWorkoutElapsedSec}
                             workoutTimerStatus={displayedWorkoutTimerStatus}
                             onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
+                            onSetInputFocusChange={handleLogSetInputFocusChange}
                             resetSession={() => {
                                 deleteAllHistoryForDate(logDate);
                             }}
@@ -4421,18 +4481,20 @@ export default function GymApp() {
                     </div>
                 )}
 
-                <BottomNav
-                    tabs={bottomTabs}
-                    activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
-                    onSelectTab={(nextScreen) => {
-                        if (nextScreen === "log") {
-                            handleLogForDate(getTodayKey());
-                            return;
-                        }
-                        setScreen(nextScreen);
-                    }}
-                    isRecording={isRecording}
-                />
+                {!shouldHideBottomNav && (
+                    <BottomNav
+                        tabs={bottomTabs}
+                        activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
+                        onSelectTab={(nextScreen) => {
+                            if (nextScreen === "log") {
+                                handleLogForDate(getTodayKey());
+                                return;
+                            }
+                            setScreen(nextScreen);
+                        }}
+                        isRecording={isRecording}
+                    />
+                )}
 
                 {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
                 <WorkoutDaySummaryModal

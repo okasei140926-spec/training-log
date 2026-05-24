@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const HEADER_OFFSET = 72;
-const AI_VIEWPORT_HEIGHT = `calc(var(--app-height, 100dvh) - ${HEADER_OFFSET}px - var(--bottom-nav-height, 56px) - 18px)`;
+const AI_VIEWPORT_HEIGHT = `calc(var(--app-height, 100dvh) - ${HEADER_OFFSET}px - var(--bottom-nav-clearance, 132px) - 10px)`;
 
 const AI_SUGGESTIONS = [
     { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },
@@ -11,21 +11,6 @@ const AI_SUGGESTIONS = [
     { label: "減量中メニュー", prompt: "減量中のメニューを作って" },
     { label: "肩メニュー作成", prompt: "肩メニューを作成して" },
 ];
-
-const formatConversationTime = (value) => {
-    if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-
-    const today = new Date();
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-    const time = date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-
-    if (startOfDate === startOfToday) return `今日 ${time}`;
-    if (startOfDate === startOfToday - 24 * 60 * 60 * 1000) return `昨日 ${time}`;
-    return `${date.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })} ${time}`;
-};
 
 const CompactBubble = ({ children, role }) => (
     <div style={{ display: "flex", justifyContent: role === "user" ? "flex-end" : "flex-start" }}>
@@ -342,175 +327,6 @@ const WorkoutPlanConfirmModal = ({ plan, selectedMap, setSelectedMap, onClose, o
     );
 };
 
-const ConversationHistorySection = ({
-    conversations,
-    loading,
-    error,
-    activeConversationId,
-    showAll,
-    setShowAll,
-    onOpenConversation,
-    onStartNewConversation,
-    onDeleteConversation,
-}) => {
-    const visibleConversations = showAll ? conversations : conversations.slice(0, 5);
-    const hasMore = conversations.length > 5;
-
-    const handleDelete = async (event, conversation) => {
-        event.stopPropagation();
-        if (!window.confirm(`「${conversation.title || "AI相談"}」を削除しますか？`)) return;
-        await onDeleteConversation?.(conversation.id);
-    };
-
-    return (
-        <div
-            style={{
-                background: "var(--card)",
-                borderRadius: 20,
-                border: "1px solid rgba(18, 199, 194, 0.10)",
-                boxShadow: "var(--shadow-card)",
-                padding: 14,
-                display: "flex",
-                flexDirection: "column",
-                gap: 10,
-            }}
-        >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                <div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: "var(--text)" }}>
-                        AIとの会話履歴
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
-                        過去の相談の続きから質問できます
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={onStartNewConversation}
-                    className="pressable"
-                    style={{
-                        flexShrink: 0,
-                        padding: "7px 10px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(18, 199, 194, 0.14)",
-                        background: "linear-gradient(180deg, var(--card2), var(--card))",
-                        color: "var(--text2)",
-                        fontSize: 11,
-                        fontWeight: 900,
-                    }}
-                >
-                    新規相談
-                </button>
-            </div>
-
-            {loading && (
-                <div style={{ fontSize: 12, color: "var(--text3)", padding: "6px 0" }}>
-                    会話履歴を読み込んでいます…
-                </div>
-            )}
-            {!loading && (error || !conversations.length) && (
-                <div
-                    style={{
-                        padding: "12px 12px",
-                        borderRadius: 14,
-                        background: "rgba(18, 199, 194, 0.06)",
-                        border: "1px solid rgba(18, 199, 194, 0.10)",
-                        color: "var(--text2)",
-                        fontSize: 12,
-                    }}
-                >
-                    まだ会話履歴はありません。
-                </div>
-            )}
-
-            {!!visibleConversations.length && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    {visibleConversations.map((conversation) => {
-                        const isActive = conversation.id === activeConversationId;
-                        return (
-                            <div
-                                key={conversation.id}
-                                style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "1fr auto",
-                                    gap: 8,
-                                    alignItems: "stretch",
-                                }}
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => onOpenConversation?.(conversation.id)}
-                                    className="pressable"
-                                    style={{
-                                        minWidth: 0,
-                                        textAlign: "left",
-                                        padding: "10px 11px",
-                                        borderRadius: 15,
-                                        border: isActive
-                                            ? "1px solid rgba(18, 199, 194, 0.32)"
-                                            : "1px solid rgba(18, 199, 194, 0.10)",
-                                        background: isActive
-                                            ? "linear-gradient(135deg, rgba(18, 199, 194, 0.16), rgba(51, 225, 219, 0.08))"
-                                            : "var(--card2)",
-                                        color: "var(--text)",
-                                    }}
-                                >
-                                    <div style={{ fontSize: 13, fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                        {conversation.title || "AI相談"}
-                                    </div>
-                                    <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 3 }}>
-                                        {formatConversationTime(conversation.updated_at || conversation.created_at)}
-                                    </div>
-                                    {conversation.preview && (
-                                        <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                            {conversation.preview}
-                                        </div>
-                                    )}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={(event) => handleDelete(event, conversation)}
-                                    aria-label="会話履歴を削除"
-                                    style={{
-                                        width: 38,
-                                        borderRadius: 14,
-                                        border: "1px solid rgba(139, 164, 168, 0.14)",
-                                        background: "var(--card2)",
-                                        color: "var(--text3)",
-                                        fontSize: 16,
-                                        fontWeight: 900,
-                                    }}
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {hasMore && (
-                <button
-                    type="button"
-                    onClick={() => setShowAll((prev) => !prev)}
-                    style={{
-                        width: "100%",
-                        padding: "9px 10px",
-                        borderRadius: 14,
-                        border: "1px solid rgba(18, 199, 194, 0.12)",
-                        background: "rgba(18, 199, 194, 0.06)",
-                        color: "var(--text2)",
-                        fontSize: 12,
-                        fontWeight: 900,
-                    }}
-                >
-                    {showAll ? "閉じる" : "すべて見る"}
-                </button>
-            )}
-        </div>
-    );
-};
-
 export default function AIScreen({
     aiMsgs,
     aiInput,
@@ -525,19 +341,11 @@ export default function AIScreen({
     aiUsageCount = 0,
     aiRemaining,
     onAddWorkoutPlan,
-    aiConversations = [],
-    aiConversationLoading = false,
-    aiConversationError = "",
-    activeConversationId = null,
-    onOpenConversation,
-    onStartNewConversation,
-    onDeleteConversation,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
     const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
     const [selectedWorkoutPlanMap, setSelectedWorkoutPlanMap] = useState({});
-    const [showAllConversations, setShowAllConversations] = useState(false);
     const [isProPaywallDismissed, setIsProPaywallDismissed] = useState(false);
 
     const showDevProControls = process.env.NODE_ENV !== "production" && isPro && typeof onDeactivateProDev === "function";
@@ -596,6 +404,12 @@ export default function AIScreen({
         setTimeout(() => setActiveQuickAction(""), 180);
     };
 
+    const handleConversationHistoryClick = () => {
+        if (typeof window !== "undefined") {
+            window.alert?.("会話履歴は準備中です");
+        }
+    };
+
     const openWorkoutPlanConfirm = (plan) => {
         const safePlan = Array.isArray(plan) ? plan : [];
         if (!safePlan.length) return;
@@ -631,7 +445,7 @@ export default function AIScreen({
                 maxHeight: AI_VIEWPORT_HEIGHT,
                 overflow: "hidden",
                 background: "var(--bg)",
-                padding: "0 16px 12px",
+                padding: "0 16px 4px",
                 gap: 8,
             }}
         >
@@ -640,12 +454,15 @@ export default function AIScreen({
                     flexShrink: 0,
                     display: "flex",
                     alignItems: "center",
-                    gap: 8,
+                    justifyContent: "space-between",
+                    gap: 10,
                     flexWrap: "wrap",
                 }}
             >
                 <div
                     style={{
+                        flex: "0 1 auto",
+                        maxWidth: "100%",
                         padding: "6px 10px",
                         borderRadius: 999,
                         background: "rgba(18, 199, 194, 0.08)",
@@ -659,23 +476,52 @@ export default function AIScreen({
                         ? "今日のAI相談 Pro 無制限"
                         : `今日のAI相談 残り${aiRemaining}回 / ${dailyFreeAiLimit}回`}
                 </div>
-                {showDevProControls && (
+                <div
+                    style={{
+                        marginLeft: "auto",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        gap: 7,
+                        flexWrap: "wrap",
+                    }}
+                >
+                    {showDevProControls && (
+                        <button
+                            type="button"
+                            onClick={onDeactivateProDev}
+                            style={{
+                                padding: "6px 10px",
+                                borderRadius: 999,
+                                background: "rgba(239, 68, 68, 0.08)",
+                                border: "1px solid rgba(239, 68, 68, 0.18)",
+                                color: "#B94A48",
+                                fontSize: 11,
+                                fontWeight: 800,
+                            }}
+                        >
+                            開発用：Pro解除
+                        </button>
+                    )}
                     <button
                         type="button"
-                        onClick={onDeactivateProDev}
+                        onClick={handleConversationHistoryClick}
+                        className="pressable"
                         style={{
-                            padding: "6px 10px",
+                            padding: "7px 11px",
                             borderRadius: 999,
-                            background: "rgba(239, 68, 68, 0.08)",
-                            border: "1px solid rgba(239, 68, 68, 0.18)",
-                            color: "#B94A48",
+                            border: "1px solid rgba(18, 199, 194, 0.14)",
+                            background: "linear-gradient(180deg, var(--card2), var(--card))",
+                            color: "var(--text2)",
                             fontSize: 11,
-                            fontWeight: 800,
+                            fontWeight: 900,
+                            boxShadow: "var(--shadow-soft)",
+                            whiteSpace: "nowrap",
                         }}
                     >
-                        開発用：Pro解除
+                        AI会話履歴
                     </button>
-                )}
+                </div>
             </div>
 
             <div
@@ -683,7 +529,7 @@ export default function AIScreen({
                     flex: 1,
                     minHeight: 0,
                     overflowY: "auto",
-                    padding: shouldShowProPaywall ? "8px 0 18px" : "8px 0 10px",
+                    padding: shouldShowProPaywall ? "8px 0 16px" : "8px 0 8px",
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
@@ -714,18 +560,6 @@ export default function AIScreen({
                         </div>
                     </div>
                 )}
-
-                <ConversationHistorySection
-                    conversations={aiConversations}
-                    loading={aiConversationLoading}
-                    error={aiConversationError}
-                    activeConversationId={activeConversationId}
-                    showAll={showAllConversations}
-                    setShowAll={setShowAllConversations}
-                    onOpenConversation={onOpenConversation}
-                    onStartNewConversation={onStartNewConversation}
-                    onDeleteConversation={onDeleteConversation}
-                />
 
                 {visibleMessages.map((msg, i) => {
                     const hasWorkoutPlan = msg.role === "assistant" && Array.isArray(msg.workoutPlan) && msg.workoutPlan.length > 0;
@@ -796,53 +630,51 @@ export default function AIScreen({
                 <div ref={aiEnd} />
             </div>
 
-            {!shouldShowProPaywall && (
-                <div
-                    style={{
-                        flexShrink: 0,
-                        display: "flex",
-                        gap: 6,
-                        overflowX: "auto",
-                        padding: "2px 0 4px",
-                        WebkitOverflowScrolling: "touch",
-                    }}
-                >
-                    {AI_SUGGESTIONS.map(({ label, prompt }) => (
-                        <button
-                            key={label}
-                            onClick={() => handleSuggestion({ label, prompt })}
-                            disabled={isAiLimitReached}
-                            className="pressable"
-                            style={{
-                                whiteSpace: "nowrap",
-                                padding: "7px 11px",
-                                borderRadius: 999,
-                                background:
-                                    isAiLimitReached
-                                        ? "linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0.30))"
-                                        : activeQuickAction === label
-                                        ? "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))"
-                                        : "linear-gradient(180deg, var(--card2), var(--card))",
-                                color: isAiLimitReached ? "var(--text4)" : activeQuickAction === label ? "var(--text)" : "var(--text2)",
-                                fontSize: 11,
-                                fontWeight: 800,
-                                border: isAiLimitReached ? "1px solid rgba(18, 199, 194, 0.06)" : "1px solid rgba(18, 199, 194, 0.12)",
-                                boxShadow: isAiLimitReached ? "none" : "var(--shadow-card)",
-                                transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
-                                opacity: isAiLimitReached ? 0.50 : 1,
-                                cursor: isAiLimitReached ? "not-allowed" : "pointer",
-                            }}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            )}
+            <div
+                style={{
+                    flexShrink: 0,
+                    display: "flex",
+                    gap: 6,
+                    overflowX: "auto",
+                    padding: "1px 0 3px",
+                    WebkitOverflowScrolling: "touch",
+                }}
+            >
+                {AI_SUGGESTIONS.map(({ label, prompt }) => (
+                    <button
+                        key={label}
+                        onClick={() => handleSuggestion({ label, prompt })}
+                        disabled={isAiLimitReached}
+                        className="pressable"
+                        style={{
+                            whiteSpace: "nowrap",
+                            padding: "7px 11px",
+                            borderRadius: 999,
+                            background:
+                                isAiLimitReached
+                                    ? "linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0.30))"
+                                    : activeQuickAction === label
+                                    ? "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))"
+                                    : "linear-gradient(180deg, var(--card2), var(--card))",
+                            color: isAiLimitReached ? "var(--text4)" : activeQuickAction === label ? "var(--text)" : "var(--text2)",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            border: isAiLimitReached ? "1px solid rgba(18, 199, 194, 0.06)" : "1px solid rgba(18, 199, 194, 0.12)",
+                            boxShadow: isAiLimitReached ? "none" : "var(--shadow-card)",
+                            transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
+                            opacity: isAiLimitReached ? 0.50 : 1,
+                            cursor: isAiLimitReached ? "not-allowed" : "pointer",
+                        }}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
 
             <div
                 style={{
                     flexShrink: 0,
-                    padding: "9px 10px 10px",
+                    padding: "8px 10px 9px",
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,

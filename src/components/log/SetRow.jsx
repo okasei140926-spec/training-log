@@ -66,6 +66,8 @@ export default function SetRow({
     idx,
     setField,
     onWeightModeChange,
+    onSetInputFocusChange,
+    inputId,
     previousSet,
     previousUnit = "kg",
     unit = "kg",
@@ -183,6 +185,18 @@ export default function SetRow({
         setShowUnitMenu(false);
         if (typeof onWeightModeChange === "function") onWeightModeChange(mode);
     };
+    const notifyInputFocus = (field) => {
+        if (typeof onSetInputFocusChange !== "function") return;
+        onSetInputFocusChange(`${inputId || `${ex?.name || "set"}-${idx}`}:${field}`);
+    };
+    const notifyInputBlur = () => {
+        if (typeof onSetInputFocusChange !== "function") return;
+        window.setTimeout(() => {
+            const activeElement = document.activeElement;
+            if (activeElement?.getAttribute?.("data-log-set-input") === "true") return;
+            onSetInputFocusChange(null);
+        }, 80);
+    };
     const closeKeyboard = () => {
         setShowUnitMenu(false);
         if (document.activeElement instanceof HTMLElement) {
@@ -272,9 +286,15 @@ export default function SetRow({
                     <input
                         type="text"
                         inputMode="decimal"
+                        data-log-set-input="true"
+                        data-log-set-input-id={`${inputId || `${ex?.name || "set"}-${idx}`}:weight`}
                         value={set.weight}
                         onChange={(e) => setField(ex, idx, "weight", e.target.value)}
-                        onFocus={() => setShowUnitMenu(false)}
+                        onFocus={() => {
+                            setShowUnitMenu(false);
+                            notifyInputFocus("weight");
+                        }}
+                        onBlur={notifyInputBlur}
                         placeholder="0"
                         style={weightInputStyle}
                     />
@@ -288,8 +308,12 @@ export default function SetRow({
                 <input
                     type="text"
                     inputMode="numeric"
+                    data-log-set-input="true"
+                    data-log-set-input-id={`${inputId || `${ex?.name || "set"}-${idx}`}:reps`}
                     value={set.reps}
                     onChange={(e) => setField(ex, idx, "reps", e.target.value)}
+                    onFocus={() => notifyInputFocus("reps")}
+                    onBlur={notifyInputBlur}
                     placeholder="0"
                     style={{ ...inputStyle, paddingRight: 39, boxShadow: "var(--shadow-soft)" }}
                 />
