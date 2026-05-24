@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const normalizeUnitLabel = (unit) => {
     const value = String(unit || "kg").toLowerCase();
@@ -71,6 +71,8 @@ export default function SetRow({
     unit = "kg",
 }) {
     const [showUnitMenu, setShowUnitMenu] = useState(false);
+    const [isWeightFocused, setIsWeightFocused] = useState(false);
+    const [keyboardInset, setKeyboardInset] = useState(0);
     const unitLabel = normalizeUnitLabel(unit);
     const previousLabel = formatPreviousSet(previousSet, previousUnit, unit);
     const isBodyweight = normalizeUnitKey(unit) === "BW" || String(set.weight || "").toUpperCase() === "BW";
@@ -79,6 +81,29 @@ export default function SetRow({
         { mode: "lbs", label: "lb" },
         { mode: "BW", label: "自重" },
     ];
+    const currentUnitKey = normalizeUnitKey(unit);
+
+    useEffect(() => {
+        if (!isWeightFocused) return undefined;
+
+        const updateKeyboardInset = () => {
+            const viewport = window.visualViewport;
+            if (!viewport) {
+                setKeyboardInset(0);
+                return;
+            }
+            const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+            setKeyboardInset(inset);
+        };
+
+        updateKeyboardInset();
+        window.visualViewport?.addEventListener("resize", updateKeyboardInset);
+        window.visualViewport?.addEventListener("scroll", updateKeyboardInset);
+        return () => {
+            window.visualViewport?.removeEventListener("resize", updateKeyboardInset);
+            window.visualViewport?.removeEventListener("scroll", updateKeyboardInset);
+        };
+    }, [isWeightFocused]);
 
     const inputWrapStyle = {
         position: "relative",
@@ -130,6 +155,49 @@ export default function SetRow({
         justifyContent: "center",
         whiteSpace: "nowrap",
     };
+    const bodyweightChipStyle = {
+        width: "100%",
+        minHeight: 48,
+        borderRadius: 16,
+        border: "1px solid rgba(18, 199, 194, 0.30)",
+        background: "linear-gradient(135deg, rgba(15, 94, 99, 0.50), rgba(18, 199, 194, 0.38))",
+        color: "var(--text)",
+        fontSize: 14,
+        fontWeight: 900,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 8px 18px rgba(15, 94, 99, 0.10)",
+        cursor: "pointer",
+    };
+    const unitMenuStyle = {
+        position: "absolute",
+        right: 0,
+        top: "calc(100% + 6px)",
+        zIndex: 25,
+        display: "flex",
+        gap: 4,
+        padding: 5,
+        borderRadius: 14,
+        border: "1px solid var(--border2)",
+        background: "var(--card)",
+        boxShadow: "var(--shadow-card)",
+    };
+    const unitOptionStyle = (mode) => {
+        const selected = currentUnitKey === normalizeUnitKey(mode);
+        return {
+            minWidth: 42,
+            padding: "7px 8px",
+            borderRadius: 10,
+            border: selected ? "1px solid rgba(18, 199, 194, 0.64)" : "1px solid var(--border2)",
+            background: selected
+                ? "linear-gradient(135deg, rgba(15, 94, 99, 0.92), rgba(18, 199, 194, 0.82))"
+                : "var(--card2)",
+            color: selected ? "#fff" : "var(--text2)",
+            fontSize: 12,
+            fontWeight: 900,
+        };
+    };
     const repsSuffixStyle = {
         position: "absolute",
         right: 13,
@@ -150,6 +218,36 @@ export default function SetRow({
         event.stopPropagation();
         setShowUnitMenu(false);
         if (typeof onWeightModeChange === "function") onWeightModeChange(mode);
+    };
+    const applyQuickUnit = (mode) => {
+        setShowUnitMenu(false);
+        if (typeof onWeightModeChange === "function") onWeightModeChange(mode);
+    };
+    const closeKeyboard = () => {
+        setShowUnitMenu(false);
+        setIsWeightFocused(false);
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+    };
+    const quickBarBottom = keyboardInset > 0
+        ? keyboardInset + 8
+        : "calc(var(--bottom-nav-clearance, 96px) + 8px)";
+    const quickBarOptionStyle = (mode) => {
+        const selected = currentUnitKey === normalizeUnitKey(mode);
+        return {
+            minWidth: mode === "BW" ? 72 : 54,
+            height: 38,
+            borderRadius: 12,
+            border: selected ? "1px solid rgba(18, 199, 194, 0.70)" : "1px solid var(--border2)",
+            background: selected
+                ? "linear-gradient(135deg, rgba(15, 94, 99, 0.96), rgba(18, 199, 194, 0.86))"
+                : "var(--card2)",
+            color: selected ? "#fff" : "var(--text2)",
+            fontSize: 13,
+            fontWeight: 900,
+            boxShadow: selected ? "0 8px 18px rgba(18, 199, 194, 0.16)" : "none",
+        };
     };
 
     return (
@@ -205,53 +303,18 @@ export default function SetRow({
                     <button
                         type="button"
                         onClick={toggleUnitMenu}
-                        style={{
-                            width: "100%",
-                            minHeight: 48,
-                            borderRadius: 16,
-                            border: "1px solid var(--border2)",
-                            background: "linear-gradient(135deg, rgba(15, 94, 99, 0.95), rgba(18, 199, 194, 0.86))",
-                            color: "#fff",
-                            fontSize: 14,
-                            fontWeight: 900,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            boxShadow: "var(--shadow-soft)",
-                            cursor: "pointer",
-                        }}
+                        style={bodyweightChipStyle}
                     >
                         自重▼
                     </button>
                     {showUnitMenu && (
-                        <div style={{
-                            position: "absolute",
-                            right: 0,
-                            top: "calc(100% + 6px)",
-                            zIndex: 25,
-                            display: "flex",
-                            gap: 4,
-                            padding: 5,
-                            borderRadius: 14,
-                            border: "1px solid var(--border2)",
-                            background: "var(--card)",
-                            boxShadow: "var(--shadow-card)",
-                        }}>
+                        <div style={unitMenuStyle}>
                             {unitOptions.map((option) => (
                                 <button
                                     key={option.mode}
                                     type="button"
                                     onClick={(event) => selectUnit(event, option.mode)}
-                                    style={{
-                                        minWidth: 42,
-                                        padding: "7px 8px",
-                                        borderRadius: 10,
-                                        border: "1px solid var(--border2)",
-                                        background: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
-                                        color: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "#fff" : "var(--text2)",
-                                        fontSize: 12,
-                                        fontWeight: 900,
-                                    }}
+                                    style={unitOptionStyle(option.mode)}
                                 >
                                     {option.label}
                                 </button>
@@ -266,6 +329,8 @@ export default function SetRow({
                         inputMode="decimal"
                         value={set.weight}
                         onChange={(e) => setField(ex, idx, "weight", e.target.value)}
+                        onFocus={() => setIsWeightFocused(true)}
+                        onBlur={() => setTimeout(() => setIsWeightFocused(false), 220)}
                         placeholder="0"
                         style={weightInputStyle}
                     />
@@ -273,34 +338,13 @@ export default function SetRow({
                         {unitLabel}▼
                     </button>
                     {showUnitMenu && (
-                        <div style={{
-                            position: "absolute",
-                            right: 0,
-                            top: "calc(100% + 6px)",
-                            zIndex: 25,
-                            display: "flex",
-                            gap: 4,
-                            padding: 5,
-                            borderRadius: 14,
-                            border: "1px solid var(--border2)",
-                            background: "var(--card)",
-                            boxShadow: "var(--shadow-card)",
-                        }}>
+                        <div style={unitMenuStyle}>
                             {unitOptions.map((option) => (
                                 <button
                                     key={option.mode}
                                     type="button"
                                     onClick={(event) => selectUnit(event, option.mode)}
-                                    style={{
-                                        minWidth: 42,
-                                        padding: "7px 8px",
-                                        borderRadius: 10,
-                                        border: "1px solid var(--border2)",
-                                        background: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
-                                        color: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "#fff" : "var(--text2)",
-                                        fontSize: 12,
-                                        fontWeight: 900,
-                                    }}
+                                    style={unitOptionStyle(option.mode)}
                                 >
                                     {option.label}
                                 </button>
@@ -321,6 +365,47 @@ export default function SetRow({
                 />
                 <span style={repsSuffixStyle}>回</span>
             </div>
+
+            {isWeightFocused && (
+                <div
+                    onMouseDown={(event) => event.preventDefault()}
+                    style={{
+                        position: "fixed",
+                        left: "50%",
+                        bottom: quickBarBottom,
+                        transform: "translateX(-50%)",
+                        zIndex: 260,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 7,
+                        padding: "7px",
+                        borderRadius: 18,
+                        border: "1px solid var(--border2)",
+                        background: "var(--card)",
+                        boxShadow: "0 14px 34px rgba(0, 0, 0, 0.20)",
+                    }}
+                >
+                    <button type="button" onClick={() => applyQuickUnit("BW")} style={quickBarOptionStyle("BW")}>自重</button>
+                    <button type="button" onClick={() => applyQuickUnit("kg")} style={quickBarOptionStyle("kg")}>kg</button>
+                    <button type="button" onClick={() => applyQuickUnit("lbs")} style={quickBarOptionStyle("lbs")}>lb</button>
+                    <button
+                        type="button"
+                        onClick={closeKeyboard}
+                        style={{
+                            minWidth: 58,
+                            height: 38,
+                            borderRadius: 12,
+                            border: "1px solid rgba(18, 199, 194, 0.32)",
+                            background: "rgba(18, 199, 194, 0.10)",
+                            color: "var(--accent)",
+                            fontSize: 13,
+                            fontWeight: 900,
+                        }}
+                    >
+                        完了
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

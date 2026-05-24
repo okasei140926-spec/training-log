@@ -831,7 +831,7 @@ export default function LogScreen({
 
             {/* フローティング＋ボタン */}
             <button onClick={() => setShowAdd(true)}
-                style={{ position: "fixed", bottom: 154, left: 20, width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, #0F5E63, #12C7C2)", color: "#fff", fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 14px 26px rgba(15, 94, 99, 0.16)", border: "1px solid rgba(255,255,255,0.62)", zIndex: 101 }}>
+                style={{ position: "fixed", bottom: 154, left: 20, width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, rgba(15, 94, 99, 0.96), rgba(18, 169, 164, 0.90))", color: "#fff", fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 20px rgba(15, 94, 99, 0.18)", border: "1px solid rgba(18, 199, 194, 0.40)", zIndex: 101 }}>
                 ＋
             </button>
 
