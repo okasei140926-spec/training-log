@@ -802,7 +802,7 @@ export default function LogScreen({
                                                 set={set}
                                                 idx={idx}
                                                 setField={setField}
-                                                onWeightModeChange={() => setWeightMode(ex, idx)}
+                                                onWeightModeChange={(mode) => setWeightMode(ex, idx, mode)}
                                                 previousSet={previousSets[idx]}
                                                 previousUnit={previousSets[idx]?.displayUnit || previousSets[idx]?.unit || previousSets[idx]?.weightUnit || previousSets[idx]?.weight_unit || previousUnit}
                                                 unit={getSetDisplayUnit(set, exUnit)}

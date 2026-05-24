@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 const normalizeUnitLabel = (unit) => {
     const value = String(unit || "kg").toLowerCase();
     if (value === "lbs" || value === "lb" || value === "pound" || value === "pounds") return "lb";
@@ -68,13 +70,27 @@ export default function SetRow({
     previousUnit = "kg",
     unit = "kg",
 }) {
+    const [showUnitMenu, setShowUnitMenu] = useState(false);
     const unitLabel = normalizeUnitLabel(unit);
     const previousLabel = formatPreviousSet(previousSet, previousUnit, unit);
     const isBodyweight = normalizeUnitKey(unit) === "BW" || String(set.weight || "").toUpperCase() === "BW";
+    const unitOptions = [
+        { mode: "kg", label: "kg" },
+        { mode: "lbs", label: "lb" },
+        { mode: "BW", label: "自重" },
+    ];
 
     const inputWrapStyle = {
         position: "relative",
         minWidth: 0,
+    };
+    const weightControlStyle = {
+        position: "relative",
+        display: "grid",
+        gridTemplateColumns: isBodyweight ? "1fr" : "minmax(0, 1fr) 46px",
+        minWidth: 0,
+        borderRadius: 16,
+        boxShadow: "var(--shadow-soft)",
     };
     const inputStyle = {
         width: "100%",
@@ -82,15 +98,38 @@ export default function SetRow({
         background: "var(--input-bg)",
         border: "1px solid var(--border2)",
         borderRadius: 16,
-        padding: "12px 36px 12px 8px",
+        padding: "12px 8px",
         color: "var(--text)",
         fontSize: 18,
         fontWeight: 900,
         textAlign: "center",
-        boxShadow: "var(--shadow-soft)",
         boxSizing: "border-box",
     };
-    const suffixStyle = {
+    const weightInputStyle = {
+        ...inputStyle,
+        borderTopRightRadius: 0,
+        borderBottomRightRadius: 0,
+        borderRight: "none",
+    };
+    const unitChipStyle = {
+        minHeight: 48,
+        border: "1px solid var(--border2)",
+        borderTopRightRadius: 16,
+        borderBottomRightRadius: 16,
+        borderTopLeftRadius: 0,
+        borderBottomLeftRadius: 0,
+        background: "var(--card2)",
+        color: "var(--text2)",
+        fontSize: 12,
+        fontWeight: 900,
+        padding: "0 6px",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        whiteSpace: "nowrap",
+    };
+    const repsSuffixStyle = {
         position: "absolute",
         right: 13,
         top: "50%",
@@ -98,17 +137,18 @@ export default function SetRow({
         color: "var(--text3)",
         fontSize: 12,
         fontWeight: 800,
-        border: "none",
-        background: "transparent",
-        padding: 0,
-        cursor: "pointer",
+        pointerEvents: "none",
     };
-    const cycleUnit = (event) => {
+    const toggleUnitMenu = (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (typeof onWeightModeChange === "function") {
-            onWeightModeChange();
-        }
+        setShowUnitMenu((prev) => !prev);
+    };
+    const selectUnit = (event, mode) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setShowUnitMenu(false);
+        if (typeof onWeightModeChange === "function") onWeightModeChange(mode);
     };
 
     return (
@@ -160,40 +200,112 @@ export default function SetRow({
             </div>
 
             {isBodyweight ? (
-                <button
-                    type="button"
-                    onClick={cycleUnit}
-                    style={{
-                        width: "100%",
-                        minHeight: 48,
-                        borderRadius: 16,
-                        border: "1px solid var(--border2)",
-                        background: "linear-gradient(135deg, rgba(15, 94, 99, 0.95), rgba(18, 199, 194, 0.86))",
-                        color: "#fff",
-                        fontSize: 14,
-                        fontWeight: 900,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "var(--shadow-soft)",
-                        cursor: "pointer",
-                    }}
-                >
-                    自重
-                </button>
+                <div style={weightControlStyle}>
+                    <button
+                        type="button"
+                        onClick={toggleUnitMenu}
+                        style={{
+                            width: "100%",
+                            minHeight: 48,
+                            borderRadius: 16,
+                            border: "1px solid var(--border2)",
+                            background: "linear-gradient(135deg, rgba(15, 94, 99, 0.95), rgba(18, 199, 194, 0.86))",
+                            color: "#fff",
+                            fontSize: 14,
+                            fontWeight: 900,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: "var(--shadow-soft)",
+                            cursor: "pointer",
+                        }}
+                    >
+                        自重▼
+                    </button>
+                    {showUnitMenu && (
+                        <div style={{
+                            position: "absolute",
+                            right: 0,
+                            top: "calc(100% + 6px)",
+                            zIndex: 25,
+                            display: "flex",
+                            gap: 4,
+                            padding: 5,
+                            borderRadius: 14,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card)",
+                            boxShadow: "var(--shadow-card)",
+                        }}>
+                            {unitOptions.map((option) => (
+                                <button
+                                    key={option.mode}
+                                    type="button"
+                                    onClick={(event) => selectUnit(event, option.mode)}
+                                    style={{
+                                        minWidth: 42,
+                                        padding: "7px 8px",
+                                        borderRadius: 10,
+                                        border: "1px solid var(--border2)",
+                                        background: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+                                        color: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "#fff" : "var(--text2)",
+                                        fontSize: 12,
+                                        fontWeight: 900,
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             ) : (
-                <div style={inputWrapStyle}>
+                <div style={weightControlStyle}>
                     <input
                         type="text"
                         inputMode="decimal"
                         value={set.weight}
                         onChange={(e) => setField(ex, idx, "weight", e.target.value)}
                         placeholder="0"
-                        style={inputStyle}
+                        style={weightInputStyle}
                     />
-                    <button type="button" onClick={cycleUnit} style={suffixStyle}>
-                        {unitLabel}
+                    <button type="button" onClick={toggleUnitMenu} style={unitChipStyle}>
+                        {unitLabel}▼
                     </button>
+                    {showUnitMenu && (
+                        <div style={{
+                            position: "absolute",
+                            right: 0,
+                            top: "calc(100% + 6px)",
+                            zIndex: 25,
+                            display: "flex",
+                            gap: 4,
+                            padding: 5,
+                            borderRadius: 14,
+                            border: "1px solid var(--border2)",
+                            background: "var(--card)",
+                            boxShadow: "var(--shadow-card)",
+                        }}>
+                            {unitOptions.map((option) => (
+                                <button
+                                    key={option.mode}
+                                    type="button"
+                                    onClick={(event) => selectUnit(event, option.mode)}
+                                    style={{
+                                        minWidth: 42,
+                                        padding: "7px 8px",
+                                        borderRadius: 10,
+                                        border: "1px solid var(--border2)",
+                                        background: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+                                        color: normalizeUnitKey(unit) === normalizeUnitKey(option.mode) ? "#fff" : "var(--text2)",
+                                        fontSize: 12,
+                                        fontWeight: 900,
+                                    }}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -204,9 +316,9 @@ export default function SetRow({
                     value={set.reps}
                     onChange={(e) => setField(ex, idx, "reps", e.target.value)}
                     placeholder="0"
-                    style={inputStyle}
+                    style={{ ...inputStyle, paddingRight: 39, boxShadow: "var(--shadow-soft)" }}
                 />
-                <span style={suffixStyle}>回</span>
+                <span style={repsSuffixStyle}>回</span>
             </div>
         </div>
     );
