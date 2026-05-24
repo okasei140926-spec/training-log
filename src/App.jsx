@@ -1037,6 +1037,39 @@ export default function GymApp() {
         setFocusedLogSetInputId(inputId || null);
     }, []);
 
+    const handleLogScreenFocusCapture = useCallback((event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const setInput = target.closest("[data-log-set-input='true']");
+        if (!setInput) return;
+        setFocusedLogSetInputId(setInput.getAttribute("data-log-set-input-id") || "__log_set_input__");
+    }, []);
+
+    const handleLogScreenInputPointerDownCapture = useCallback((event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const setInput = target.closest("[data-log-set-input='true']");
+        if (!setInput) return;
+        setFocusedLogSetInputId(setInput.getAttribute("data-log-set-input-id") || "__log_set_input__");
+    }, []);
+
+    const handleLogScreenBlurCapture = useCallback(() => {
+        window.setTimeout(() => {
+            const activeElement = document.activeElement;
+            if (activeElement instanceof HTMLElement && activeElement.closest("[data-log-set-input='true']")) {
+                setFocusedLogSetInputId(
+                    activeElement.getAttribute("data-log-set-input-id") || "__log_set_input__"
+                );
+                return;
+            }
+            const viewport = window.visualViewport;
+            const keyboardInset = viewport
+                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+                : 0;
+            if (keyboardInset <= 80) setFocusedLogSetInputId(null);
+        }, 360);
+    }, []);
+
     const handleAiInputFocusChange = useCallback((isFocused) => {
         setFocusedAiChatInput(Boolean(isFocused));
     }, []);
@@ -4320,6 +4353,9 @@ export default function GymApp() {
 
                 {screen === "log" && (
                     <div
+                        onPointerDownCapture={handleLogScreenInputPointerDownCapture}
+                        onFocusCapture={handleLogScreenFocusCapture}
+                        onBlurCapture={handleLogScreenBlurCapture}
                         onTouchStart={(e) => {
                             touchStartX.current = e.touches[0].clientX;
                             touchStartY.current = e.touches[0].clientY;

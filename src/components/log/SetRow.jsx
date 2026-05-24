@@ -108,7 +108,7 @@ export default function SetRow({
     const weightControlStyle = {
         position: "relative",
         display: "grid",
-        gridTemplateColumns: isBodyweight ? "1fr" : "minmax(64px, 1fr) 42px",
+        gridTemplateColumns: isBodyweight ? "1fr" : "minmax(78px, 1fr) 38px",
         minWidth: 0,
         borderRadius: 16,
         boxShadow: "var(--shadow-soft)",
@@ -119,13 +119,14 @@ export default function SetRow({
         background: "var(--input-bg)",
         border: "1px solid var(--border2)",
         borderRadius: 16,
-        padding: "12px 6px",
+        padding: "11px 8px",
         color: "var(--text)",
-        fontSize: 17,
+        fontSize: 18,
         fontWeight: 900,
         textAlign: "center",
         boxSizing: "border-box",
         minWidth: 0,
+        fontVariantNumeric: "tabular-nums",
     };
     const weightInputStyle = {
         ...inputStyle,
@@ -142,7 +143,7 @@ export default function SetRow({
         borderBottomLeftRadius: 0,
         background: "var(--card2)",
         color: "var(--text2)",
-        fontSize: 11.5,
+        fontSize: 11,
         fontWeight: 900,
         padding: "0 4px",
         cursor: "pointer",
@@ -168,11 +169,11 @@ export default function SetRow({
     };
     const repsSuffixStyle = {
         position: "absolute",
-        right: 13,
+        right: 10,
         top: "50%",
         transform: "translateY(-50%)",
         color: "var(--text3)",
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 800,
         pointerEvents: "none",
     };
@@ -232,11 +233,11 @@ export default function SetRow({
         <div
             style={{
                 display: "grid",
-                gridTemplateColumns: "34px minmax(74px, 0.74fr) minmax(116px, 1.28fr) minmax(66px, 0.68fr)",
-                gap: 8,
+                gridTemplateColumns: "30px minmax(48px, 0.48fr) minmax(126px, 1.42fr) minmax(78px, 0.82fr)",
+                gap: 7,
                 alignItems: "center",
                 marginBottom: 10,
-                padding: "10px",
+                padding: "9px",
                 borderRadius: 18,
                 background:
                     idx === 0
@@ -247,9 +248,9 @@ export default function SetRow({
         >
             <div
                 style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -266,11 +267,13 @@ export default function SetRow({
             <div
                 style={{
                     color: "var(--text2)",
-                    fontSize: 12,
-                    fontWeight: 800,
-                    lineHeight: 1.35,
+                    fontSize: 11,
+                    fontWeight: 750,
+                    lineHeight: 1.28,
                     minWidth: 0,
                     whiteSpace: "normal",
+                    overflowWrap: "anywhere",
+                    opacity: 0.82,
                 }}
             >
                 {previousLabel}
@@ -320,7 +323,7 @@ export default function SetRow({
                     onFocus={() => notifyInputFocus("reps")}
                     onBlur={notifyInputBlur}
                     placeholder="0"
-                    style={{ ...inputStyle, paddingRight: 39, boxShadow: "var(--shadow-soft)" }}
+                    style={{ ...inputStyle, paddingRight: 28, boxShadow: "var(--shadow-soft)" }}
                 />
                 <span style={repsSuffixStyle}>回</span>
             </div>
