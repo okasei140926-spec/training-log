@@ -1099,10 +1099,12 @@ export default function GymApp() {
             if (!user?.id) return;
 
             try {
+                const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
                 const sessionsRes = await supabase
                     .from("workout_sessions")
                     .select("workout_date, duration_sec")
-                    .eq("user_id", user.id);
+                    .eq("user_id", user.id)
+                    .gte("workout_date", sixtyDaysAgo);
 
                 if (sessionsRes.error) throw sessionsRes.error;
 
