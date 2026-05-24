@@ -262,15 +262,15 @@ export default function AddExModal({
                             width: "100%",
                             padding: "11px 14px",
                             borderRadius: 11,
-                            background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(18,199,194,0.03))",
-                            border: "1px solid rgba(18, 199, 194, 0.12)",
+                            background: isAdded ? "rgba(18, 199, 194, 0.08)" : "var(--card2)",
+                            border: "1px solid rgba(18, 199, 194, 0.22)",
                             color: isAdded ? "var(--text2)" : "var(--text)",
                             fontSize: 14,
                             textAlign: "left",
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
-                            boxShadow: "0 6px 14px rgba(15, 94, 99, 0.03)"
+                            boxShadow: "0 8px 18px rgba(0, 0, 0, 0.10)"
                         }}>
                         <span style={{ textDecoration: isAdded ? "line-through" : "none", opacity: isAdded ? 0.78 : 1 }}>{key}</span>
                         {isAdded

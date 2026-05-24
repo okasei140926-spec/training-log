@@ -87,7 +87,7 @@ export default function SetRow({
     const weightControlStyle = {
         position: "relative",
         display: "grid",
-        gridTemplateColumns: isBodyweight ? "1fr" : "minmax(0, 1fr) 46px",
+        gridTemplateColumns: isBodyweight ? "1fr" : "minmax(64px, 1fr) 42px",
         minWidth: 0,
         borderRadius: 16,
         boxShadow: "var(--shadow-soft)",
@@ -98,12 +98,13 @@ export default function SetRow({
         background: "var(--input-bg)",
         border: "1px solid var(--border2)",
         borderRadius: 16,
-        padding: "12px 8px",
+        padding: "12px 6px",
         color: "var(--text)",
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: 900,
         textAlign: "center",
         boxSizing: "border-box",
+        minWidth: 0,
     };
     const weightInputStyle = {
         ...inputStyle,
@@ -120,9 +121,9 @@ export default function SetRow({
         borderBottomLeftRadius: 0,
         background: "var(--card2)",
         color: "var(--text2)",
-        fontSize: 12,
+        fontSize: 11.5,
         fontWeight: 900,
-        padding: "0 6px",
+        padding: "0 4px",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -155,7 +156,7 @@ export default function SetRow({
         <div
             style={{
                 display: "grid",
-                gridTemplateColumns: "34px minmax(82px, 1fr) minmax(84px, 0.9fr) minmax(74px, 0.75fr)",
+                gridTemplateColumns: "34px minmax(74px, 0.74fr) minmax(116px, 1.28fr) minmax(66px, 0.68fr)",
                 gap: 8,
                 alignItems: "center",
                 marginBottom: 10,

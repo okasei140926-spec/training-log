@@ -182,7 +182,7 @@ export default function LogScreen({
     todayLabels,
     exercises, logData, getExSets, setField, setWeightMode, addSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, getPreviousPR, onCopyDown, onCopyDownReps, unit = "kg",
-    getExUnit, onToggleExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
+    getExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
     workoutElapsedSec = 0,
     workoutTimerStatus = "idle",
     onFinishWorkoutTimer,
@@ -681,14 +681,6 @@ export default function LogScreen({
                                                     ≡
                                                 </button>
 
-                                                {onToggleExUnit && (
-                                                    <button
-                                                        onClick={() => onToggleExUnit(ex.name)}
-                                                        style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 800, border: `1px solid ${softBorderColor}`, background: exUnit !== unit ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : subActionBg, color: exUnit !== unit ? "#ffffff" : subActionText, boxShadow: exUnit !== unit ? "0 8px 18px rgba(15, 94, 99, 0.10)" : "none" }}
-                                                    >
-                                                        {{ kg: "kg", lbs: "lb", BW: "自重" }[exUnit] || exUnit}
-                                                    </button>
-                                                )}
                                                 <button
                                                     onPointerDown={(e) => e.stopPropagation()}
                                                     onClick={(e) => {
