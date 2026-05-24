@@ -194,8 +194,13 @@ export default function SetRow({
         window.setTimeout(() => {
             const activeElement = document.activeElement;
             if (activeElement?.getAttribute?.("data-log-set-input") === "true") return;
+            const viewport = window.visualViewport;
+            const keyboardInset = viewport
+                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+                : 0;
+            if (keyboardInset > 80) return;
             onSetInputFocusChange(null);
-        }, 80);
+        }, 350);
     };
     const closeKeyboard = () => {
         setShowUnitMenu(false);

@@ -840,7 +840,16 @@ export default function GymApp() {
             const setInputFocused = activeElement?.getAttribute?.("data-log-set-input") === "true";
             const aiInputFocused = activeElement?.getAttribute?.("data-ai-chat-input") === "true";
             const keyboardOpen = keyboardInset > 120;
-            if (screen === "log") setIsLogKeyboardOpen(keyboardOpen);
+            if (screen === "log") {
+                setIsLogKeyboardOpen(keyboardOpen);
+                if (setInputFocused) {
+                    setFocusedLogSetInputId(
+                        activeElement?.getAttribute?.("data-log-set-input-id") || "__log_set_input__"
+                    );
+                } else if (!keyboardOpen) {
+                    setFocusedLogSetInputId(null);
+                }
+            }
             if (screen === "ai") setIsAiKeyboardOpen(keyboardOpen);
             if (setInputFocused && !keyboardOpen) {
                 window.setTimeout(() => {
