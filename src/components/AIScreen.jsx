@@ -186,6 +186,49 @@ const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit })
     </div>
 );
 
+const ProPaywallModal = ({ isOpen, onStartPro, onClose, aiUsageCount, dailyFreeAiLimit }) => {
+    if (!isOpen) return null;
+
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            onClick={onClose}
+            style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 900,
+                background: "rgba(5, 16, 18, 0.54)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "calc(18px + var(--safe-top)) 16px calc(18px + var(--safe-bottom))",
+                boxSizing: "border-box",
+            }}
+        >
+            <div
+                onClick={(event) => event.stopPropagation()}
+                style={{
+                    width: "min(620px, 100%)",
+                    maxHeight: "calc(100svh - var(--safe-top) - var(--safe-bottom) - 36px)",
+                    overflowY: "auto",
+                    WebkitOverflowScrolling: "touch",
+                    borderRadius: 24,
+                }}
+            >
+                <ProPaywallCard
+                    onStartPro={onStartPro}
+                    onClose={onClose}
+                    aiUsageCount={aiUsageCount}
+                    dailyFreeAiLimit={dailyFreeAiLimit}
+                />
+            </div>
+        </div>
+    );
+};
+
 const formatWorkoutPlanItem = (item) => {
     const setCount = Array.isArray(item?.sets) ? item.sets.length : 0;
     return `${item?.exerciseName || "種目"} ${setCount || 0}セット`;
@@ -359,7 +402,7 @@ export default function AIScreen({
     const isAiLimitReached = !isPro && Number(aiRemaining) <= 0;
     const canSendMessage = !aiLoad && !isAiLimitReached;
     const shouldShowProPaywall = isAiLimitReached && !isProPaywallDismissed;
-    const shouldShowCompactProNotice = isAiLimitReached && isProPaywallDismissed;
+    const shouldShowCompactProNotice = isAiLimitReached;
 
     useEffect(() => {
         if (!isAiLimitReached) {
@@ -389,7 +432,19 @@ export default function AIScreen({
         }
     };
 
+    const openProPaywall = () => {
+        setIsProPaywallDismissed(false);
+    };
+
+    const closeProPaywall = () => {
+        setIsProPaywallDismissed(true);
+    };
+
     const handleSend = (overrideMsg) => {
+        if (isAiLimitReached) {
+            openProPaywall();
+            return;
+        }
         if (!canSendMessage) return;
         const nextMessage = overrideMsg ?? aiInput;
         if (!nextMessage?.trim()) return;
@@ -609,15 +664,6 @@ export default function AIScreen({
                     );
                 })}
 
-                {shouldShowProPaywall && (
-                    <ProPaywallCard
-                        onStartPro={handleStartPro}
-                        onClose={() => setIsProPaywallDismissed(true)}
-                        aiUsageCount={aiUsageCount}
-                        dailyFreeAiLimit={dailyFreeAiLimit}
-                    />
-                )}
-
                 {aiLoad && (
                     <CompactBubble role="assistant">
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -730,7 +776,7 @@ export default function AIScreen({
                     />
                     <button
                         onClick={() => handleSend()}
-                        disabled={!canSendMessage}
+                        disabled={aiLoad}
                         className="pressable"
                         style={{
                             width: 44,
@@ -774,7 +820,7 @@ export default function AIScreen({
                         </div>
                         <button
                             type="button"
-                            onClick={handleStartPro}
+                            onClick={openProPaywall}
                             className="pressable"
                             style={{
                                 flexShrink: 0,
@@ -795,6 +841,14 @@ export default function AIScreen({
                     メニュー相談、記録分析、フォーム相談をそのまま聞けます。
                 </div>
             </div>
+
+            <ProPaywallModal
+                isOpen={shouldShowProPaywall}
+                onStartPro={handleStartPro}
+                onClose={closeProPaywall}
+                aiUsageCount={aiUsageCount}
+                dailyFreeAiLimit={dailyFreeAiLimit}
+            />
 
             {pendingWorkoutPlan && (
                 <WorkoutPlanConfirmModal
