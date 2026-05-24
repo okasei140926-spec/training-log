@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { sanitizeHistoryRecord } from "../utils/helpers";
 
 const HEADER_OFFSET = 72;
@@ -106,12 +106,16 @@ const CompactBubble = ({ children, role }) => (
     </div>
 );
 
-const ProPaywallCard = ({ onStartPro, aiUsageCount, dailyFreeAiLimit }) => (
+const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit }) => (
     <div
         style={{
             position: "relative",
             overflow: "hidden",
-            padding: 16,
+            width: "100%",
+            maxWidth: 620,
+            margin: "4px auto 0",
+            boxSizing: "border-box",
+            padding: "15px 15px 14px",
             borderRadius: 22,
             background:
                 "radial-gradient(circle at 82% 10%, rgba(51, 225, 219, 0.30), transparent 34%), linear-gradient(145deg, rgba(8, 28, 32, 0.96), rgba(13, 63, 68, 0.92) 52%, rgba(18, 199, 194, 0.20))",
@@ -124,7 +128,33 @@ const ProPaywallCard = ({ onStartPro, aiUsageCount, dailyFreeAiLimit }) => (
         }}
     >
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.08), transparent 42%)", pointerEvents: "none" }} />
-        <div style={{ position: "relative", zIndex: 1 }}>
+        <button
+            type="button"
+            aria-label="Pro案内を閉じる"
+            onClick={onClose}
+            style={{
+                position: "absolute",
+                zIndex: 2,
+                top: 10,
+                right: 10,
+                width: 30,
+                height: 30,
+                borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.16)",
+                background: "rgba(8, 28, 32, 0.46)",
+                color: "rgba(255,255,255,0.84)",
+                fontSize: 20,
+                lineHeight: 1,
+                fontWeight: 800,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 8px 18px rgba(0,0,0,0.14)",
+            }}
+        >
+            ×
+        </button>
+        <div style={{ position: "relative", zIndex: 1, paddingRight: 34 }}>
             <div
                 style={{
                     display: "inline-flex",
@@ -143,7 +173,7 @@ const ProPaywallCard = ({ onStartPro, aiUsageCount, dailyFreeAiLimit }) => (
             >
                 AI COACH PRO
             </div>
-            <div style={{ fontSize: 22, fontWeight: 950, color: "#FFFFFF", lineHeight: 1.12, marginBottom: 8 }}>
+            <div style={{ fontSize: 21, fontWeight: 950, color: "#FFFFFF", lineHeight: 1.12, marginBottom: 8 }}>
                 AI Coachをもっと使う
             </div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)", lineHeight: 1.65 }}>
@@ -570,6 +600,7 @@ export default function AIScreen({
     const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
     const [selectedWorkoutPlanMap, setSelectedWorkoutPlanMap] = useState({});
     const [showAllConversations, setShowAllConversations] = useState(false);
+    const [isProPaywallDismissed, setIsProPaywallDismissed] = useState(false);
 
     const overview = useMemo(() => buildAiOverview(history), [history]);
     const showDevProControls = process.env.NODE_ENV !== "production" && isPro && typeof onDeactivateProDev === "function";
@@ -581,7 +612,36 @@ export default function AIScreen({
     const visibleMessages = isInitialState ? [] : aiMsgs;
     const isAiLimitReached = !isPro && Number(aiRemaining) <= 0;
     const canSendMessage = !aiLoad && !isAiLimitReached;
-    const showProPaywall = () => isAiLimitReached;
+    const shouldShowProPaywall = isAiLimitReached && !isProPaywallDismissed;
+    const shouldShowCompactProNotice = isAiLimitReached && isProPaywallDismissed;
+
+    useEffect(() => {
+        if (!isAiLimitReached) {
+            setIsProPaywallDismissed(false);
+        }
+    }, [isAiLimitReached]);
+
+    const handleStartPro = async () => {
+        try {
+            const didStart = await onStartPro?.();
+            if (didStart) {
+                setIsProPaywallDismissed(false);
+                if (typeof window !== "undefined") {
+                    window.alert?.("Pump Proを有効にしました。");
+                }
+                return;
+            }
+
+            if (typeof window !== "undefined") {
+                window.alert?.("Pro機能は準備中です。設定のProプラン管理から確認できます。");
+            }
+        } catch (error) {
+            console.error("Pump Pro start failed", error);
+            if (typeof window !== "undefined") {
+                window.alert?.("Pro機能は準備中です。");
+            }
+        }
+    };
 
     const handleSend = (overrideMsg) => {
         if (!canSendMessage) return;
@@ -791,6 +851,15 @@ export default function AIScreen({
                     );
                 })}
 
+                {shouldShowProPaywall && (
+                    <ProPaywallCard
+                        onStartPro={handleStartPro}
+                        onClose={() => setIsProPaywallDismissed(true)}
+                        aiUsageCount={aiUsageCount}
+                        dailyFreeAiLimit={dailyFreeAiLimit}
+                    />
+                )}
+
                 {aiLoad && (
                     <CompactBubble role="assistant">
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -921,12 +990,45 @@ export default function AIScreen({
                         ↑
                     </button>
                 </div>
-                {showProPaywall() && (
-                    <ProPaywallCard
-                        onStartPro={onStartPro}
-                        aiUsageCount={aiUsageCount}
-                        dailyFreeAiLimit={dailyFreeAiLimit}
-                    />
+                {shouldShowCompactProNotice && (
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            padding: "8px 10px",
+                            borderRadius: 14,
+                            background: "rgba(18, 199, 194, 0.07)",
+                            border: "1px solid rgba(18, 199, 194, 0.12)",
+                        }}
+                    >
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 900, lineHeight: 1.35 }}>
+                                無料相談は本日分を使い切りました
+                            </div>
+                            <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.35 }}>
+                                ProでAI Coachをもっと使えます
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleStartPro}
+                            className="pressable"
+                            style={{
+                                flexShrink: 0,
+                                padding: "7px 10px",
+                                borderRadius: 999,
+                                border: "1px solid rgba(18, 199, 194, 0.18)",
+                                background: "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))",
+                                color: "var(--text)",
+                                fontSize: 11,
+                                fontWeight: 900,
+                            }}
+                        >
+                            Proを見る
+                        </button>
+                    </div>
                 )}
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
                     メニュー相談、記録分析、フォーム相談をそのまま聞けます。
