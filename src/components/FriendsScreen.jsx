@@ -570,6 +570,10 @@ export default function FriendsScreen({
             setFriendIds((prev) => (areStringArraysEqual(prev, nextFriendIds) ? prev : nextFriendIds));
 
             const currentMonthStart = `${currentMonthPrefix}-01`;
+            const prevMonthDate = new Date();
+            prevMonthDate.setDate(1);
+            prevMonthDate.setMonth(prevMonthDate.getMonth() - 1);
+            const previousMonthStart = prevMonthDate.toISOString().slice(0, 10).slice(0, 7) + "-01";
             const [profilesRes, workoutsRes, friendSessionsRes] = await Promise.all([
                 supabase
                     .from("profiles")
@@ -579,6 +583,7 @@ export default function FriendsScreen({
                     .from("workouts")
                     .select("user_id, date, data")
                     .in("user_id", nextFriendIds)
+                    .gte("date", previousMonthStart)
                     .order("date", { ascending: false }),
                 supabase
                     .from("workout_sessions")
