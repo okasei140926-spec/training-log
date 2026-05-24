@@ -44,6 +44,54 @@ function getSupabaseConfigStatus() {
   };
 }
 
+function serializeUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id || null,
+    email: user.email || null,
+  };
+}
+
+function serializeSupabaseError(error) {
+  if (!error) return null;
+  return {
+    code: error.code || null,
+    message: error.message || String(error),
+    details: error.details || null,
+    hint: error.hint || null,
+  };
+}
+
+function logSupabaseUsageStep(step, { user, usageDate, tableName, action, conditions, data, error }) {
+  const logPayload = {
+    step,
+    user: serializeUser(user),
+    userId: user?.id || conditions?.user_id || null,
+    usageDate: usageDate || conditions?.usage_date || null,
+    tableName,
+    action,
+    conditions,
+    data,
+    error: serializeSupabaseError(error),
+  };
+
+  if (error) {
+    console.error("ai usage supabase step failed", logPayload);
+  } else {
+    console.log("ai usage supabase step", logPayload);
+  }
+}
+
+function createSupabaseStepError(message, debug, error) {
+  const wrapped = new Error(message);
+  wrapped.cause = error;
+  wrapped.debug = {
+    ...debug,
+    error: serializeSupabaseError(error),
+  };
+  return wrapped;
+}
+
 function parseWorkoutPlanFromText(text) {
   const rawText = typeof text === "string" ? text : "";
   const marker = "PUMP_WORKOUT_PLAN_JSON:";
@@ -114,7 +162,22 @@ async function ensureProfileForUser(user) {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (lookupError) throw lookupError;
+  logSupabaseUsageStep("profile lookup before ai usage", {
+    user,
+    tableName: "profiles",
+    action: "select id",
+    conditions: { id: user.id },
+    data: existingProfile,
+    error: lookupError,
+  });
+
+  if (lookupError) {
+    throw createSupabaseStepError(
+      "profiles lookup failed",
+      { tableName: "profiles", action: "select", conditions: { id: user.id } },
+      lookupError
+    );
+  }
   if (existingProfile?.id) return;
 
   const metadata = user.user_metadata || {};
@@ -144,8 +207,23 @@ async function ensureProfileForUser(user) {
       username,
     });
 
+    logSupabaseUsageStep("profile insert before ai usage", {
+      user,
+      tableName: "profiles",
+      action: "insert",
+      conditions: { id: user.id, username },
+      data: error ? null : { id: user.id, username },
+      error,
+    });
+
     if (!error) return;
-    if (error.code !== "23505") throw error;
+    if (error.code !== "23505") {
+      throw createSupabaseStepError(
+        "profiles insert failed",
+        { tableName: "profiles", action: "insert", conditions: { id: user.id, username } },
+        error
+      );
+    }
 
     const { data: profileAfterConflict, error: conflictLookupError } = await adminSupabase
       .from("profiles")
@@ -153,54 +231,173 @@ async function ensureProfileForUser(user) {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (conflictLookupError) throw conflictLookupError;
+    logSupabaseUsageStep("profile conflict lookup before ai usage", {
+      user,
+      tableName: "profiles",
+      action: "select id",
+      conditions: { id: user.id },
+      data: profileAfterConflict,
+      error: conflictLookupError,
+    });
+
+    if (conflictLookupError) {
+      throw createSupabaseStepError(
+        "profiles conflict lookup failed",
+        { tableName: "profiles", action: "select", conditions: { id: user.id } },
+        conflictLookupError
+      );
+    }
     if (profileAfterConflict?.id) return;
   }
 
   throw new Error("プロフィールの初期作成に失敗しました。");
 }
 
-async function reserveAiChatUsage(userId) {
+async function reserveAiChatUsage(user) {
+  const userId = user?.id;
   const usageDate = getTodayKeyInTokyo();
-  const { data, error } = await adminSupabase.rpc("reserve_ai_chat_usage", {
-    p_user_id: userId,
-    p_usage_date: usageDate,
-    p_daily_limit: AI_DAILY_LIMIT,
-  });
-
-  if (error) throw error;
-
-  const usage = Array.isArray(data) ? data[0] : data;
-  return {
-    usageDate,
-    allowed: Boolean(usage?.allowed),
-    isPro: Boolean(usage?.is_pro),
-    usageCount: Number(usage?.usage_count || 0),
-    remaining: usage?.remaining == null ? null : Number(usage.remaining),
-    dailyLimit: AI_DAILY_LIMIT,
-  };
-}
-
-async function getTodayAiUsageCount(userId, usageDate) {
-  const { data, error } = await adminSupabase
-    .from("ai_chat_usage")
+  const tableName = "ai_chat_usage";
+  const conditions = { user_id: userId, usage_date: usageDate };
+  const { data: currentUsage, error: selectError } = await adminSupabase
+    .from(tableName)
     .select("usage_count")
     .eq("user_id", userId)
     .eq("usage_date", usageDate)
     .maybeSingle();
 
-  if (error) throw error;
+  logSupabaseUsageStep("ai usage select before reserve", {
+    user,
+    usageDate,
+    tableName,
+    action: "select usage_count",
+    conditions,
+    data: currentUsage,
+    error: selectError,
+  });
+
+  if (selectError) {
+    throw createSupabaseStepError(
+      "ai_chat_usage select failed",
+      { tableName, action: "select", conditions, usageDate },
+      selectError
+    );
+  }
+
+  const currentCount = Number(currentUsage?.usage_count || 0);
+  if (currentCount >= AI_DAILY_LIMIT) {
+    return {
+      usageDate,
+      allowed: false,
+      isPro: false,
+      usageCount: currentCount,
+      remaining: 0,
+      dailyLimit: AI_DAILY_LIMIT,
+    };
+  }
+
+  const nextCount = currentCount + 1;
+  const mutation = currentUsage
+    ? adminSupabase
+        .from(tableName)
+        .update({ usage_count: nextCount })
+        .eq("user_id", userId)
+        .eq("usage_date", usageDate)
+        .select("usage_count")
+        .maybeSingle()
+    : adminSupabase
+        .from(tableName)
+        .insert({ user_id: userId, usage_date: usageDate, usage_count: nextCount })
+        .select("usage_count")
+        .maybeSingle();
+
+  const { data: reservedUsage, error: reserveError } = await mutation;
+
+  logSupabaseUsageStep("ai usage reserve mutation", {
+    user,
+    usageDate,
+    tableName,
+    action: currentUsage ? "update usage_count" : "insert usage_count",
+    conditions,
+    data: reservedUsage,
+    error: reserveError,
+  });
+
+  if (reserveError) {
+    throw createSupabaseStepError(
+      "ai_chat_usage reserve mutation failed",
+      { tableName, action: currentUsage ? "update" : "insert", conditions, usageDate },
+      reserveError
+    );
+  }
+
+  const reservedCount = Number(reservedUsage?.usage_count || nextCount);
+  return {
+    usageDate,
+    allowed: true,
+    isPro: false,
+    usageCount: reservedCount,
+    remaining: Math.max(0, AI_DAILY_LIMIT - reservedCount),
+    dailyLimit: AI_DAILY_LIMIT,
+  };
+}
+
+async function getTodayAiUsageCount(user, usageDate) {
+  const userId = user?.id;
+  const tableName = "ai_chat_usage";
+  const conditions = { user_id: userId, usage_date: usageDate };
+  const { data, error } = await adminSupabase
+    .from(tableName)
+    .select("usage_count")
+    .eq("user_id", userId)
+    .eq("usage_date", usageDate)
+    .maybeSingle();
+
+  logSupabaseUsageStep("ai usage count lookup", {
+    user,
+    usageDate,
+    tableName,
+    action: "select usage_count",
+    conditions,
+    data,
+    error,
+  });
+
+  if (error) {
+    throw createSupabaseStepError(
+      "ai_chat_usage count lookup failed",
+      { tableName, action: "select", conditions, usageDate },
+      error
+    );
+  }
   return Number(data?.usage_count || 0);
 }
 
-async function getPumpProStatus(userId) {
+async function getPumpProStatus(user) {
+  const userId = user?.id;
+  const tableName = "pump_pro_subscriptions";
+  const conditions = { user_id: userId };
   const { data, error } = await adminSupabase
-    .from("pump_pro_subscriptions")
+    .from(tableName)
     .select("active, expires_at")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error) throw error;
+  logSupabaseUsageStep("pump pro status lookup", {
+    user,
+    tableName,
+    action: "select active, expires_at",
+    conditions,
+    data,
+    error,
+  });
+
+  if (error) {
+    throw createSupabaseStepError(
+      "pump_pro_subscriptions lookup failed",
+      { tableName, action: "select", conditions },
+      error
+    );
+  }
 
   const expiresAt = data?.expires_at ? new Date(data.expires_at).getTime() : null;
   const isNotExpired = !expiresAt || expiresAt > Date.now();
@@ -278,15 +475,23 @@ export default async function handler(req, res) {
     await ensureProfileForUser(user);
 
     if (!isPro) {
-      isPro = await getPumpProStatus(user.id);
+      isPro = await getPumpProStatus(user);
     }
 
     if (isPro) {
       let usageCount = 0;
       try {
-        usageCount = await getTodayAiUsageCount(user.id, usageDate);
+        usageCount = await getTodayAiUsageCount(user, usageDate);
       } catch (usageCountError) {
-        console.warn("pro ai usage count lookup failed; continuing without blocking", usageCountError);
+        console.warn("pro ai usage count lookup failed; continuing without blocking", {
+          user: serializeUser(user),
+          userId: user.id,
+          usageDate,
+          tableName: "ai_chat_usage",
+          conditions: { user_id: user.id, usage_date: usageDate },
+          error: serializeSupabaseError(usageCountError?.cause || usageCountError),
+          debug: usageCountError?.debug || null,
+        });
       }
 
       reservedUsage = {
@@ -298,10 +503,27 @@ export default async function handler(req, res) {
         dailyLimit: AI_DAILY_LIMIT,
       };
     } else {
-      reservedUsage = await reserveAiChatUsage(user.id);
+      reservedUsage = await reserveAiChatUsage(user);
     }
   } catch (usageError) {
-    console.error("ai usage/pro check failed", usageError);
+    console.error("ai usage/pro check failed", {
+      user: serializeUser(user),
+      userId: user.id,
+      usageDate,
+      tableName: "ai_chat_usage",
+      selectConditions: {
+        profiles: { id: user.id },
+        pump_pro_subscriptions: { user_id: user.id },
+        ai_chat_usage: { user_id: user.id, usage_date: usageDate },
+      },
+      supabaseConfig: getSupabaseConfigStatus(),
+      error: serializeSupabaseError(usageError?.cause || usageError),
+      errorCode: usageError?.cause?.code || usageError?.code || null,
+      errorMessage: usageError?.cause?.message || usageError?.message || null,
+      errorDetails: usageError?.cause?.details || usageError?.details || null,
+      errorHint: usageError?.cause?.hint || usageError?.hint || null,
+      debug: usageError?.debug || null,
+    });
     return res.status(500).json({ error: "AI利用回数の確認に失敗しました。" });
   }
 
