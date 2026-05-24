@@ -816,14 +816,17 @@ export default function GymApp() {
         setTimerMenuAnchor(null);
         setFocusedLogSetInputId(null);
         setIsLogKeyboardOpen(false);
+        setFocusedAiChatInput(false);
+        setIsAiKeyboardOpen(false);
         const id = window.setTimeout(resetDocumentInteractionLocks, 0);
         return () => window.clearTimeout(id);
     }, [screen, setShowTimerMenu, resetDocumentInteractionLocks]);
 
     useEffect(() => {
         if (typeof window === "undefined" || typeof document === "undefined") return undefined;
-        if (screen !== "log") {
+        if (screen !== "log" && screen !== "ai") {
             setIsLogKeyboardOpen(false);
+            setIsAiKeyboardOpen(false);
             return undefined;
         }
 
@@ -835,8 +838,10 @@ export default function GymApp() {
                 : 0;
             const activeElement = document.activeElement;
             const setInputFocused = activeElement?.getAttribute?.("data-log-set-input") === "true";
+            const aiInputFocused = activeElement?.getAttribute?.("data-ai-chat-input") === "true";
             const keyboardOpen = keyboardInset > 120;
-            setIsLogKeyboardOpen(keyboardOpen);
+            if (screen === "log") setIsLogKeyboardOpen(keyboardOpen);
+            if (screen === "ai") setIsAiKeyboardOpen(keyboardOpen);
             if (setInputFocused && !keyboardOpen) {
                 window.setTimeout(() => {
                     const nextViewport = window.visualViewport;
@@ -844,6 +849,15 @@ export default function GymApp() {
                         ? Math.max(0, window.innerHeight - nextViewport.height - nextViewport.offsetTop)
                         : 0;
                     if (nextKeyboardInset <= 80) setFocusedLogSetInputId(null);
+                }, 450);
+            }
+            if (aiInputFocused && !keyboardOpen) {
+                window.setTimeout(() => {
+                    const nextViewport = window.visualViewport;
+                    const nextKeyboardInset = nextViewport
+                        ? Math.max(0, window.innerHeight - nextViewport.height - nextViewport.offsetTop)
+                        : 0;
+                    if (nextKeyboardInset <= 80) setFocusedAiChatInput(false);
                 }, 450);
             }
         };
@@ -961,6 +975,8 @@ export default function GymApp() {
     const [accountActionBusy, setAccountActionBusy] = useState(false);
     const [focusedLogSetInputId, setFocusedLogSetInputId] = useState(null);
     const [isLogKeyboardOpen, setIsLogKeyboardOpen] = useState(false);
+    const [focusedAiChatInput, setFocusedAiChatInput] = useState(false);
+    const [isAiKeyboardOpen, setIsAiKeyboardOpen] = useState(false);
     const [historySyncDiagnostic, setHistorySyncDiagnostic] = useState({
         localHistoryDates: [],
         remoteWorkoutDates: [],
@@ -973,6 +989,10 @@ export default function GymApp() {
 
     const handleLogSetInputFocusChange = useCallback((inputId) => {
         setFocusedLogSetInputId(inputId || null);
+    }, []);
+
+    const handleAiInputFocusChange = useCallback((isFocused) => {
+        setFocusedAiChatInput(Boolean(isFocused));
     }, []);
 
     useEffect(() => {
@@ -3815,7 +3835,9 @@ export default function GymApp() {
         { id: "feed", icon: "💬", label: "フィード" },
         { id: "ai", icon: "🤖", label: "AI" },
     ];
-    const shouldHideBottomNav = screen === "log" && (Boolean(focusedLogSetInputId) || isLogKeyboardOpen);
+    const shouldHideBottomNav =
+        (screen === "log" && (Boolean(focusedLogSetInputId) || isLogKeyboardOpen)) ||
+        (screen === "ai" && (focusedAiChatInput || isAiKeyboardOpen));
     const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
     const syncFailureDates = Object.keys(syncFailuresByDate);
     const syncFailureSignature = getSyncFailureSignature(syncFailuresByDate);
@@ -4431,6 +4453,7 @@ export default function GymApp() {
                         onStartNewConversation={startNewAiConversation}
                         onDeleteConversation={deleteAiConversation}
                         onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
+                        onInputFocusChange={handleAiInputFocusChange}
                     />
                 )}
 

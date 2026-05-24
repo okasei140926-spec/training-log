@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const HEADER_OFFSET = 72;
-const AI_VIEWPORT_HEIGHT = `calc(var(--app-height, 100dvh) - ${HEADER_OFFSET}px - var(--bottom-nav-clearance, 132px) - 10px)`;
+const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--bottom-nav-clearance, 132px) - 10px)`;
 
 const AI_SUGGESTIONS = [
     { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },
@@ -341,6 +341,7 @@ export default function AIScreen({
     aiUsageCount = 0,
     aiRemaining,
     onAddWorkoutPlan,
+    onInputFocusChange,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
@@ -397,11 +398,25 @@ export default function AIScreen({
     };
 
     const handleSuggestion = ({ label, prompt }) => {
-        if (isAiLimitReached) return;
+        if (!canSendMessage) return;
         setActiveQuickAction(label);
-        setAiInput(prompt);
-        inputRef.current?.focus();
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+        }
+        sendAI(prompt);
         setTimeout(() => setActiveQuickAction(""), 180);
+    };
+
+    const handleInputFocus = () => {
+        onInputFocusChange?.(true);
+    };
+
+    const handleInputBlur = () => {
+        window.setTimeout(() => {
+            const activeElement = document.activeElement;
+            if (activeElement?.getAttribute?.("data-ai-chat-input") === "true") return;
+            onInputFocusChange?.(false);
+        }, 80);
     };
 
     const handleConversationHistoryClick = () => {
@@ -644,26 +659,26 @@ export default function AIScreen({
                     <button
                         key={label}
                         onClick={() => handleSuggestion({ label, prompt })}
-                        disabled={isAiLimitReached}
+                        disabled={!canSendMessage}
                         className="pressable"
                         style={{
                             whiteSpace: "nowrap",
                             padding: "7px 11px",
                             borderRadius: 999,
                             background:
-                                isAiLimitReached
+                                !canSendMessage
                                     ? "linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0.30))"
                                     : activeQuickAction === label
                                     ? "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))"
                                     : "linear-gradient(180deg, var(--card2), var(--card))",
-                            color: isAiLimitReached ? "var(--text4)" : activeQuickAction === label ? "var(--text)" : "var(--text2)",
+                            color: !canSendMessage ? "var(--text4)" : activeQuickAction === label ? "var(--text)" : "var(--text2)",
                             fontSize: 11,
                             fontWeight: 800,
-                            border: isAiLimitReached ? "1px solid rgba(18, 199, 194, 0.06)" : "1px solid rgba(18, 199, 194, 0.12)",
-                            boxShadow: isAiLimitReached ? "none" : "var(--shadow-card)",
+                            border: !canSendMessage ? "1px solid rgba(18, 199, 194, 0.06)" : "1px solid rgba(18, 199, 194, 0.12)",
+                            boxShadow: !canSendMessage ? "none" : "var(--shadow-card)",
                             transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
-                            opacity: isAiLimitReached ? 0.50 : 1,
-                            cursor: isAiLimitReached ? "not-allowed" : "pointer",
+                            opacity: !canSendMessage ? 0.50 : 1,
+                            cursor: !canSendMessage ? "not-allowed" : "pointer",
                         }}
                     >
                         {label}
@@ -687,8 +702,11 @@ export default function AIScreen({
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
                         ref={inputRef}
+                        data-ai-chat-input="true"
                         value={aiInput}
                         onChange={(e) => setAiInput(e.target.value)}
+                        onFocus={handleInputFocus}
+                        onBlur={handleInputBlur}
                         disabled={isAiLimitReached}
                         onKeyDown={(e) => {
                             if (e.key !== "Enter") return;
