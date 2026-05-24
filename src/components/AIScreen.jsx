@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { sanitizeHistoryRecord } from "../utils/helpers";
+import { useEffect, useRef, useState } from "react";
 
 const HEADER_OFFSET = 72;
-const BOTTOM_NAV_OFFSET = 124;
-const AI_VIEWPORT_HEIGHT = `calc(100dvh - ${HEADER_OFFSET}px - ${BOTTOM_NAV_OFFSET}px - var(--safe-top) - var(--safe-bottom))`;
-const FOOTER_SAFE_PADDING = "calc(8px + var(--safe-bottom))";
+const AI_VIEWPORT_HEIGHT = `calc(var(--app-height, 100dvh) - ${HEADER_OFFSET}px - var(--bottom-nav-height, 56px) - 18px)`;
 
 const AI_SUGGESTIONS = [
     { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },
@@ -14,13 +11,6 @@ const AI_SUGGESTIONS = [
     { label: "減量中メニュー", prompt: "減量中のメニューを作って" },
     { label: "肩メニュー作成", prompt: "肩メニューを作成して" },
 ];
-
-const formatDateLabel = (dateKey) => {
-    if (!dateKey) return "";
-    const [year, month, day] = String(dateKey).split("-");
-    if (!year || !month || !day) return dateKey;
-    return `${month}/${day}`;
-};
 
 const formatConversationTime = (value) => {
     if (!value) return "";
@@ -35,52 +25,6 @@ const formatConversationTime = (value) => {
     if (startOfDate === startOfToday) return `今日 ${time}`;
     if (startOfDate === startOfToday - 24 * 60 * 60 * 1000) return `昨日 ${time}`;
     return `${date.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })} ${time}`;
-};
-
-const buildAiOverview = (history) => {
-    const flattened = [];
-
-    Object.entries(history || {}).forEach(([exerciseName, records]) => {
-        (records || []).forEach((record) => {
-            const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
-            if (!sanitized?.date || !sanitized.sets?.length) return;
-            flattened.push({
-                exerciseName,
-                date: sanitized.date,
-                bodyPart: sanitized.bodyPart || "その他",
-                setCount: sanitized.sets.length,
-            });
-        });
-    });
-
-    const uniqueDates = Array.from(new Set(flattened.map((entry) => entry.date))).sort();
-    const latestDate = uniqueDates[uniqueDates.length - 1] || "";
-    const latestEntries = flattened.filter((entry) => entry.date === latestDate);
-
-    const partMap = latestEntries.reduce((acc, entry) => {
-        acc[entry.bodyPart] = (acc[entry.bodyPart] || 0) + entry.setCount;
-        return acc;
-    }, {});
-
-    const partSummary = Object.entries(partMap)
-        .map(([bodyPart, count]) => ({ bodyPart, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 2);
-
-    const latestSummary = partSummary.length
-        ? partSummary.map((item) => `${item.bodyPart}${item.count}セット`).join(" / ")
-        : "最近の記録";
-
-    const recommendation = latestDate
-        ? `${formatDateLabel(latestDate)}は${latestSummary}でした。次のメニューや重量調整を相談できます。`
-        : "最近の記録をもとに、メニューや重量調整を相談できます。";
-
-    return {
-        trainingDays: uniqueDates.length,
-        latestDate,
-        latestSummary,
-        recommendation,
-    };
 };
 
 const CompactBubble = ({ children, role }) => (
@@ -464,12 +408,7 @@ const ConversationHistorySection = ({
                     会話履歴を読み込んでいます…
                 </div>
             )}
-            {!loading && error && (
-                <div style={{ fontSize: 12, color: "var(--text3)", padding: "6px 0" }}>
-                    {error}
-                </div>
-            )}
-            {!loading && !error && !conversations.length && (
+            {!loading && (error || !conversations.length) && (
                 <div
                     style={{
                         padding: "12px 12px",
@@ -579,7 +518,6 @@ export default function AIScreen({
     sendAI,
     aiLoad,
     aiEnd,
-    history,
     isPro = false,
     onStartPro,
     onDeactivateProDev,
@@ -602,7 +540,6 @@ export default function AIScreen({
     const [showAllConversations, setShowAllConversations] = useState(false);
     const [isProPaywallDismissed, setIsProPaywallDismissed] = useState(false);
 
-    const overview = useMemo(() => buildAiOverview(history), [history]);
     const showDevProControls = process.env.NODE_ENV !== "production" && isPro && typeof onDeactivateProDev === "function";
     const isInitialState =
         aiMsgs.length === 1 &&
@@ -694,7 +631,7 @@ export default function AIScreen({
                 maxHeight: AI_VIEWPORT_HEIGHT,
                 overflow: "hidden",
                 background: "var(--bg)",
-                padding: "0 16px 8px",
+                padding: "0 16px 12px",
                 gap: 8,
             }}
         >
@@ -746,64 +683,36 @@ export default function AIScreen({
                     flex: 1,
                     minHeight: 0,
                     overflowY: "auto",
-                    padding: "8px 0 10px",
+                    padding: shouldShowProPaywall ? "8px 0 18px" : "8px 0 10px",
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
+                    WebkitOverflowScrolling: "touch",
                 }}
             >
                 {isInitialState && (
-                    <>
-                        <div
-                            style={{
-                                ...({
-                                    background: "var(--card)",
-                                    borderRadius: 20,
-                                    border: "1px solid rgba(18, 199, 194, 0.1)",
-                                    boxShadow: "var(--shadow-card)",
-                                    padding: 16,
-                                }),
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 7,
-                            }}
-                        >
-                            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.8, color: "var(--text3)" }}>
-                                AI COACH
-                            </div>
-                            <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.12, color: "var(--text)" }}>
-                                今日の判断を、すぐに。
-                            </div>
-                            <div style={{ fontSize: 13, lineHeight: 1.65, color: "var(--text2)" }}>
-                                メニュー提案・フォーム相談・重量相談ができます。
-                            </div>
+                    <div
+                        style={{
+                            background: "var(--card)",
+                            borderRadius: 20,
+                            border: "1px solid rgba(18, 199, 194, 0.1)",
+                            boxShadow: "var(--shadow-card)",
+                            padding: 16,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 7,
+                        }}
+                    >
+                        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.8, color: "var(--text3)" }}>
+                            AI COACH
                         </div>
-
-                        <div
-                            style={{
-                                background: "linear-gradient(180deg, rgba(18, 199, 194, 0.12), rgba(18, 199, 194, 0.04))",
-                                borderRadius: 18,
-                                border: "1px solid rgba(18, 199, 194, 0.12)",
-                                padding: 14,
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 6,
-                            }}
-                        >
-                            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.6, color: "var(--text3)" }}>
-                                最近のおすすめ
-                            </div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
-                                最近の記録 {overview.latestSummary}
-                            </div>
-                            <div style={{ fontSize: 12, lineHeight: 1.65, color: "var(--text2)" }}>
-                                {overview.recommendation}
-                            </div>
-                            <div style={{ fontSize: 11, color: "var(--text3)" }}>
-                                継続日数 {overview.trainingDays}日
-                            </div>
+                        <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.12, color: "var(--text)" }}>
+                            今日の判断を、すぐに。
                         </div>
-                    </>
+                        <div style={{ fontSize: 13, lineHeight: 1.65, color: "var(--text2)" }}>
+                            メニュー提案・フォーム相談・重量相談ができます。
+                        </div>
+                    </div>
                 )}
 
                 <ConversationHistorySection
@@ -887,51 +796,53 @@ export default function AIScreen({
                 <div ref={aiEnd} />
             </div>
 
-            <div
-                style={{
-                    flexShrink: 0,
-                    display: "flex",
-                    gap: 6,
-                    overflowX: "auto",
-                    padding: "2px 0 4px",
-                    WebkitOverflowScrolling: "touch",
-                }}
-            >
-                {AI_SUGGESTIONS.map(({ label, prompt }) => (
-                    <button
-                        key={label}
-                        onClick={() => handleSuggestion({ label, prompt })}
-                        disabled={isAiLimitReached}
-                        className="pressable"
-                        style={{
-                            whiteSpace: "nowrap",
-                            padding: "7px 11px",
-                            borderRadius: 999,
-                            background:
-                                isAiLimitReached
-                                    ? "linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0.30))"
-                                    : activeQuickAction === label
-                                    ? "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))"
-                                    : "linear-gradient(180deg, var(--card2), var(--card))",
-                            color: isAiLimitReached ? "var(--text4)" : activeQuickAction === label ? "var(--text)" : "var(--text2)",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            border: isAiLimitReached ? "1px solid rgba(18, 199, 194, 0.06)" : "1px solid rgba(18, 199, 194, 0.12)",
-                            boxShadow: isAiLimitReached ? "none" : "var(--shadow-card)",
-                            transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
-                            opacity: isAiLimitReached ? 0.50 : 1,
-                            cursor: isAiLimitReached ? "not-allowed" : "pointer",
-                        }}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
+            {!shouldShowProPaywall && (
+                <div
+                    style={{
+                        flexShrink: 0,
+                        display: "flex",
+                        gap: 6,
+                        overflowX: "auto",
+                        padding: "2px 0 4px",
+                        WebkitOverflowScrolling: "touch",
+                    }}
+                >
+                    {AI_SUGGESTIONS.map(({ label, prompt }) => (
+                        <button
+                            key={label}
+                            onClick={() => handleSuggestion({ label, prompt })}
+                            disabled={isAiLimitReached}
+                            className="pressable"
+                            style={{
+                                whiteSpace: "nowrap",
+                                padding: "7px 11px",
+                                borderRadius: 999,
+                                background:
+                                    isAiLimitReached
+                                        ? "linear-gradient(180deg, rgba(255,255,255,0.46), rgba(255,255,255,0.30))"
+                                        : activeQuickAction === label
+                                        ? "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))"
+                                        : "linear-gradient(180deg, var(--card2), var(--card))",
+                                color: isAiLimitReached ? "var(--text4)" : activeQuickAction === label ? "var(--text)" : "var(--text2)",
+                                fontSize: 11,
+                                fontWeight: 800,
+                                border: isAiLimitReached ? "1px solid rgba(18, 199, 194, 0.06)" : "1px solid rgba(18, 199, 194, 0.12)",
+                                boxShadow: isAiLimitReached ? "none" : "var(--shadow-card)",
+                                transform: activeQuickAction === label ? "scale(0.98)" : "scale(1)",
+                                opacity: isAiLimitReached ? 0.50 : 1,
+                                cursor: isAiLimitReached ? "not-allowed" : "pointer",
+                            }}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             <div
                 style={{
                     flexShrink: 0,
-                    padding: `9px 10px ${FOOTER_SAFE_PADDING}`,
+                    padding: "9px 10px 10px",
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
