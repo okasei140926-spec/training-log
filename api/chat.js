@@ -105,6 +105,61 @@ function checkRateLimit(userId) {
   return { allowed: true };
 }
 
+async function ensureProfileForUser(user) {
+  if (!user?.id) return;
+
+  const { data: existingProfile, error: lookupError } = await adminSupabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (lookupError) throw lookupError;
+  if (existingProfile?.id) return;
+
+  const metadata = user.user_metadata || {};
+  const emailPrefix = String(user.email || "").split("@")[0] || "";
+  const baseUsername = String(
+    metadata.user_name ||
+      metadata.preferred_username ||
+      metadata.username ||
+      metadata.full_name ||
+      metadata.name ||
+      emailPrefix ||
+      "pump-user"
+  )
+    .trim()
+    .replace(/\s+/g, "")
+    .slice(0, 20);
+
+  const candidates = [
+    `${baseUsername || "pumpuser"}-${user.id.slice(0, 4)}`,
+    `${baseUsername || "pumpuser"}-${user.id.slice(4, 8)}`,
+    `pumpuser-${user.id.slice(0, 8)}`,
+  ].filter(Boolean);
+
+  for (const username of candidates) {
+    const { error } = await adminSupabase.from("profiles").insert({
+      id: user.id,
+      username,
+    });
+
+    if (!error) return;
+    if (error.code !== "23505") throw error;
+
+    const { data: profileAfterConflict, error: conflictLookupError } = await adminSupabase
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (conflictLookupError) throw conflictLookupError;
+    if (profileAfterConflict?.id) return;
+  }
+
+  throw new Error("プロフィールの初期作成に失敗しました。");
+}
+
 async function reserveAiChatUsage(userId) {
   const usageDate = getTodayKeyInTokyo();
   const { data, error } = await adminSupabase.rpc("reserve_ai_chat_usage", {
@@ -220,6 +275,8 @@ export default async function handler(req, res) {
   const usageDate = getTodayKeyInTokyo();
   let isPro = clientProHint;
   try {
+    await ensureProfileForUser(user);
+
     if (!isPro) {
       isPro = await getPumpProStatus(user.id);
     }
