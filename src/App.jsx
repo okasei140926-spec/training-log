@@ -614,6 +614,23 @@ export default function GymApp() {
         return next;
     }, []);
 
+    const applyLocalHistoryDates = useCallback((baseHistory, localHistory, dates = []) => {
+        const normalizedDates = [...new Set((dates || []).map((date) => String(date || "").slice(0, 10)).filter(Boolean))];
+        let nextHistory = mergeHistoryMaps(baseHistory || {});
+
+        normalizedDates.forEach((date) => {
+            nextHistory = removeHistoryDate(nextHistory, date);
+            const dateRecords = {};
+            Object.entries(localHistory || {}).forEach(([exName, recs]) => {
+                const filtered = (recs || []).filter((record) => String(record?.date || "").slice(0, 10) === date);
+                if (filtered.length > 0) dateRecords[exName] = filtered;
+            });
+            nextHistory = mergeHistoryMaps(nextHistory, dateRecords);
+        });
+
+        return nextHistory;
+    }, [removeHistoryDate]);
+
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
@@ -967,12 +984,23 @@ export default function GymApp() {
         return exerciseUnits[name] ?? unit;
     }, [exerciseUnits, unit]);
 
+    const pendingWorkoutContentChangeDatesRef = useRef(new Map());
+
     const setLogDataAndSaveDraft = useCallback((nextOrUpdater) => {
         setLogData((prev) => {
             const next =
                 typeof nextOrUpdater === "function"
                     ? nextOrUpdater(prev)
                     : nextOrUpdater;
+            const normalizedDate = String(logDate || "").slice(0, 10);
+            if (normalizedDate) {
+                const previousChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
+                pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
+                    reason: "set_update",
+                    explicitDelete: Boolean(previousChange.explicitDelete),
+                    updatedAt: new Date().toISOString(),
+                });
+            }
 
             saveDraftForDate(logDate, {
                 todayLabels,
@@ -1775,6 +1803,19 @@ export default function GymApp() {
         pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
     }, []);
 
+    const markWorkoutContentChanged = useCallback((date, reason = "content_change", options = {}) => {
+        const normalizedDate = String(date || "").slice(0, 10);
+        if (!normalizedDate) return;
+
+        const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
+        pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
+            reason,
+            explicitDelete: Boolean(previous.explicitDelete || options.explicitDelete),
+            updatedAt: new Date().toISOString(),
+        });
+        queueWorkoutSessionSync(normalizedDate);
+    }, [queueWorkoutSessionSync]);
+
     const recordSyncFailure = useCallback((workoutDate, error, stage) => {
         const normalizedDate = String(workoutDate || "").slice(0, 10);
         if (!normalizedDate) return;
@@ -1871,6 +1912,7 @@ export default function GymApp() {
         const results = {
             syncedDates: [],
             failedDates: [],
+            skippedDates: [],
         };
 
         if (!userId || !normalizedDates.length) return results;
@@ -1895,6 +1937,8 @@ export default function GymApp() {
                         })
                         : getEmptyWorkoutMetrics();
                     const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
+                    const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(workoutDate) || {};
+                    const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
 
                     logWorkoutPersistenceDecision({
                         action: "workouts_sync_check",
@@ -1903,11 +1947,28 @@ export default function GymApp() {
                         localMetrics: incomingMetrics,
                         remoteMetrics,
                         reason: wouldDestructivelyOverwrite
-                            ? "allowed: user edit may reduce saved workouts row"
+                            ? allowDestructiveSave
+                                ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
+                                : "blocked: local workout is smaller than remote"
                             : hasWorkoutForDate
-                                ? "allowed: local workout for date"
+                                ? `allowed content edit: ${pendingChange.reason || "unknown"}`
                                 : "allowed: no local workout for date",
+                        level: wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log",
                     });
+
+                    if (wouldDestructivelyOverwrite && !allowDestructiveSave) {
+                        console.warn("[save guard] local workout is smaller than remote. Skip overwrite.", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            supabase: remoteMetrics,
+                            localStorage: incomingMetrics,
+                            savingExerciseNames: incomingMetrics.exerciseNames,
+                            reason: pendingChange.reason || "unknown",
+                        });
+                        results.skippedDates.push(workoutDate);
+                        return;
+                    }
 
                     const { error } = hasWorkoutForDate
                         ? await supabase
@@ -2154,6 +2215,8 @@ export default function GymApp() {
             })
             : getEmptyWorkoutMetrics();
         const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
+        const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
 
         logWorkoutPersistenceDecision({
             action: "workout_sessions_sync_check",
@@ -2162,11 +2225,27 @@ export default function GymApp() {
             localMetrics: incomingMetrics,
             remoteMetrics,
             reason: wouldDestructivelyOverwrite
-                ? "allowed: user edit may reduce saved session"
+                ? allowDestructiveSave
+                    ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
+                    : "blocked: local session is smaller than remote"
                 : payload
-                    ? "allowed: local snapshot for date"
+                    ? `allowed content edit: ${pendingChange.reason || "unknown"}`
                     : "allowed: no local payload",
+            level: wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log",
         });
+
+        if (wouldDestructivelyOverwrite && !allowDestructiveSave) {
+            console.warn("[save guard] local workout is smaller than remote. Skip overwrite.", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: userId,
+                date: normalizedDate,
+                supabase: remoteMetrics,
+                localStorage: incomingMetrics,
+                savingExerciseNames: incomingMetrics.exerciseNames,
+                reason: pendingChange.reason || "unknown",
+            });
+            return { skipped: true };
+        }
 
         if (!payload) {
             if (existingSession?.id) {
@@ -2182,7 +2261,7 @@ export default function GymApp() {
                     .eq("id", existingSession.id);
                 if (deleteSessionError) throw deleteSessionError;
             }
-            return;
+            return { deleted: true };
         }
 
         let latestPhotoId = null;
@@ -2264,6 +2343,7 @@ export default function GymApp() {
 
             if (insertExercisesError) throw insertExercisesError;
         }
+        return { synced: true };
     }, [getTodayKey]);
 
     const cleanupWorkoutSessionsForHistory = useCallback(async (userId, historyMap) => {
@@ -2599,13 +2679,13 @@ export default function GymApp() {
                 const [workoutsRes, sessionsRes] = await Promise.all([
                     supabase
                         .from("workouts")
-                        .select("date, data")
+                        .select("date, data, updated_at")
                         .eq("user_id", user.id)
                         .order("date", { ascending: false })
                         .limit(1),
                     supabase
                         .from("workout_sessions")
-                        .select("workout_date, duration_sec, summary_json")
+                        .select("workout_date, duration_sec, summary_json, updated_at")
                         .eq("user_id", user.id)
                         .gte("workout_date", sessionRangeStart)
                         .order("workout_date", { ascending: true })
@@ -2633,18 +2713,21 @@ export default function GymApp() {
                     mergeHistoryMaps(remoteSessionHistory, remoteWorkoutHistory),
                     effectiveDeleteMarkers
                 );
-                const mergedHistory = applyHistoryDeleteMarkers(
-                    mergeHistoryMaps(localMergeCandidate, remoteHistory),
-                    effectiveDeleteMarkers
-                );
+                const hasRemoteWorkout = getValidWorkoutDatesFromHistory(remoteHistory).length > 0;
+                const mergedHistory = hasRemoteWorkout
+                    ? remoteHistory
+                    : applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
 
-                debugLog("[history] remote load complete", {
-                    userId: user.id,
-                    email: user.email,
+                console.log("[restore] Supabase priority load", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    source: hasRemoteWorkout ? "supabase" : "localStorage_fallback",
                     workoutsRows: workoutsRes.data?.length || 0,
                     sessionRows: sessionsRes.data?.length || 0,
-                    remoteDates: getValidWorkoutDatesFromHistory(remoteHistory),
-                    mergedDates: getValidWorkoutDatesFromHistory(mergedHistory),
+                    supabaseDates: getValidWorkoutDatesFromHistory(remoteHistory),
+                    localStorageDates: getValidWorkoutDatesFromHistory(localMergeCandidate),
+                    appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
+                    latestWorkoutUpdatedAt: workoutsRes.data?.[0]?.updated_at || null,
                 });
 
                 if (!isActive) return;
@@ -2685,6 +2768,8 @@ export default function GymApp() {
         if (!user || !historySyncReady) return;
         const currentUserId = user.id;
         const pendingWorkoutNotification = pendingWorkoutNotificationRef.current;
+        const pendingContentDates = Array.from(pendingWorkoutContentChangeDatesRef.current.keys());
+        if (!pendingContentDates.length && !pendingWorkoutSessionSyncDatesRef.current.size) return;
 
         historySaveQueueRef.current = historySaveQueueRef.current
             .catch(() => {})
@@ -2737,22 +2822,40 @@ export default function GymApp() {
                     mergeHistoryMaps(remoteSessionHistory, remoteWorkoutHistory),
                     effectiveDeleteMarkers
                 );
-                const mergedHistory = applyHistoryDeleteMarkers(
-                    mergeHistoryMaps(localHistorySnapshot, remoteHistory),
-                    effectiveDeleteMarkers
-                );
                 const pendingSessionSyncDates = Array.from(pendingWorkoutSessionSyncDatesRef.current);
                 const syncDates = [
                     ...new Set([
-                        String(logDate || "").trim(),
-                        formatDateKey(new Date()),
+                        ...pendingContentDates,
                         ...pendingSessionSyncDates,
                     ]),
                 ];
+                let mergedHistory = applyHistoryDeleteMarkers(
+                    applyLocalHistoryDates(remoteHistory, localHistorySnapshot, syncDates),
+                    effectiveDeleteMarkers
+                );
+
+                console.log("[save] Supabase reconcile before write", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: currentUserId,
+                    dates: syncDates,
+                    supabaseDates: getValidWorkoutDatesFromHistory(remoteHistory),
+                    localStorageDates: getValidWorkoutDatesFromHistory(localHistorySnapshot),
+                    savingExerciseNames: syncDates.reduce((acc, date) => ({
+                        ...acc,
+                        [date]: getHistoryMetricsForDate(mergedHistory, date).exerciseNames,
+                    }), {}),
+                    reason: "pending content change only",
+                });
 
                 const workoutSyncResults = await syncWorkoutRowsForDates(currentUserId, mergedHistory, syncDates);
                 if (workoutSyncResults.failedDates.length > 0) {
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
+                }
+                if (workoutSyncResults.skippedDates.length > 0) {
+                    mergedHistory = applyHistoryDeleteMarkers(
+                        applyLocalHistoryDates(mergedHistory, remoteHistory, workoutSyncResults.skippedDates),
+                        effectiveDeleteMarkers
+                    );
                 }
 
                 if (latestUserIdRef.current !== currentUserId) return;
@@ -2769,11 +2872,16 @@ export default function GymApp() {
                         : reconciledHistory;
                 });
 
+                syncDates.forEach((date) => pendingWorkoutContentChangeDatesRef.current.delete(date));
                 pendingWorkoutSessionSyncDatesRef.current = new Set();
 
-                if (pendingSessionSyncDates.length > 0) {
+                const sessionSyncDates = pendingSessionSyncDates.filter(
+                    (date) => !workoutSyncResults.skippedDates.includes(date)
+                );
+
+                if (sessionSyncDates.length > 0) {
                     await Promise.all(
-                        pendingSessionSyncDates.map(async (date) => {
+                        sessionSyncDates.map(async (date) => {
                             try {
                                 const hasValidWorkoutForDate = hasValidWorkoutOnDate(mergedHistory, date);
                                 const shouldPersistWorkoutTiming =
@@ -2880,6 +2988,7 @@ export default function GymApp() {
         workoutLastActivityAt,
         workoutStartedAt,
         workoutStartedForDate,
+        applyLocalHistoryDates,
     ]);
 
     useEffect(() => {
@@ -3058,6 +3167,7 @@ export default function GymApp() {
 
     // ─── Per-exercise default unit ────────────────────
     const toggleExUnit = (name) => {
+        markWorkoutContentChanged(logDate, "weight_mode_change");
         const currentUnit = getExUnit(name);
         const CYCLE = { kg: "lbs", lbs: "BW", BW: "kg" };
         const newUnit = CYCLE[currentUnit] || "kg";
@@ -3239,6 +3349,9 @@ export default function GymApp() {
 
     // useEffectより前に定義
     const persistCurrentLog = useCallback(() => {
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(String(logDate || "").slice(0, 10));
+        if (!pendingChange) return;
+
         const timerPersistence =
             workoutStartedForDate === logDate
                 ? getWorkoutTimerPersistence(workoutTimerStateRef.current, Date.now())
@@ -3272,8 +3385,8 @@ export default function GymApp() {
             localMetrics: incomingMetrics,
             remoteMetrics: existingMetrics,
             reason: wouldDestructivelyOverwrite
-                ? "allowed: user edit may reduce saved history"
-                : "allowed: visible local draft for date",
+                ? `pending guarded save: ${pendingChange.reason}`
+                : `allowed content edit: ${pendingChange.reason}`,
         });
 
         pendingWorkoutNotificationRef.current = {
@@ -3525,6 +3638,7 @@ export default function GymApp() {
 
 
     const removeEx = (idOrName, maybeName) => {
+        markWorkoutContentChanged(logDate, "exercise_delete", { explicitDelete: true });
         const isNameOnly = maybeName === undefined;
         const targetId = isNameOnly ? null : idOrName;
         const targetName = isNameOnly ? idOrName : maybeName;
@@ -3648,6 +3762,7 @@ export default function GymApp() {
     }, []);
 
     const addExToSession = (name, labelOverride) => {
+        markWorkoutContentChanged(logDate, "exercise_add");
         const trimmed = String(name || "").trim();
         if (!trimmed) {
             console.error("[add-exercise] failed: empty exercise name", {
@@ -3759,6 +3874,7 @@ export default function GymApp() {
     };
 
     const reorderEx = (fromIdx, toIdx) => {
+        markWorkoutContentChanged(logDate, "exercise_reorder");
         setSessionEx(p => {
             const current = [...(p !== null ? p : baseExercises)];
             const [moved] = current.splice(fromIdx, 1);
@@ -3853,6 +3969,7 @@ export default function GymApp() {
         if (!remove) {
             addExToSession(name, labelOverride);
         } else {
+            markWorkoutContentChanged(logDate, "exercise_delete", { explicitDelete: true });
             // sessionExからも削除
             setSessionEx(prev => prev ? prev.filter(ex => ex.name !== name) : prev);
         }
@@ -3868,6 +3985,7 @@ export default function GymApp() {
         if (!plan.length) return;
 
         const todayKey = getTodayKey();
+        markWorkoutContentChanged(todayKey, "ai_workout_plan_add");
         const currentDraft = {
             todayLabels,
             logData,
@@ -4166,6 +4284,111 @@ export default function GymApp() {
         getExUnit,
     ]);
 
+    useEffect(() => {
+        if (screen !== "log" || !user?.id || !historySyncReady || !logDate) return;
+        const normalizedDate = String(logDate || "").slice(0, 10);
+        if (!normalizedDate) return;
+        if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
+
+        let cancelled = false;
+
+        const refreshLogDateFromSupabase = async () => {
+            try {
+                const [workoutsRes, sessionRes] = await Promise.all([
+                    supabase
+                        .from("workouts")
+                        .select("date, data, updated_at")
+                        .eq("user_id", user.id)
+                        .order("date", { ascending: false })
+                        .limit(1),
+                    supabase
+                        .from("workout_sessions")
+                        .select("workout_date, duration_sec, summary_json, updated_at")
+                        .eq("user_id", user.id)
+                        .eq("workout_date", normalizedDate)
+                        .maybeSingle(),
+                ]);
+
+                if (workoutsRes.error) throw workoutsRes.error;
+                if (sessionRes.error) throw sessionRes.error;
+                if (cancelled) return;
+                if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
+
+                const remoteWorkoutHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
+                const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionRes.data ? [sessionRes.data] : []);
+                const remoteHistory = mergeHistoryMaps(remoteWorkoutHistory, remoteSessionHistory);
+                const remoteMetrics = getHistoryMetricsForDate(remoteHistory, normalizedDate, {
+                    updatedAt: sessionRes.data?.updated_at || workoutsRes.data?.[0]?.updated_at || null,
+                });
+                const localDraft = loadDraftForDate(normalizedDate);
+                const localMetrics = getDraftMetricsForDate({
+                    exercises: localDraft.sessionEx || [],
+                    logData: localDraft.logData || {},
+                    getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
+                    workoutDate: normalizedDate,
+                });
+
+                if (!remoteMetrics.hasWorkout) {
+                    console.log("[restore] Supabase date refresh skipped empty remote", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        date: normalizedDate,
+                        supabase: remoteMetrics,
+                        localStorage: localMetrics,
+                    });
+                    return;
+                }
+
+                const nextHistory = applyLocalHistoryDates(latestHistoryRef.current || history || {}, remoteHistory, [normalizedDate]);
+                const savedDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, nextHistory);
+
+                console.log("[restore] Supabase date refresh applied", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    date: normalizedDate,
+                    supabase: remoteMetrics,
+                    localStorage: localMetrics,
+                    appliedExerciseNames: savedDraftForDate.sessionEx.map((ex) => ex.name),
+                });
+
+                if (serializeHistoryMap(nextHistory) !== serializeHistoryMap(latestHistoryRef.current || history || {})) {
+                    setHistory(nextHistory);
+                    persistHistoryForUser(user.id, nextHistory);
+                }
+                saveDraftForDate(normalizedDate, savedDraftForDate);
+                setTodayLabels(savedDraftForDate.todayLabels);
+                setSessionEx(savedDraftForDate.sessionEx);
+                setLogData(savedDraftForDate.logData);
+                setExerciseUnits(savedDraftForDate.exerciseUnits);
+            } catch (error) {
+                console.warn("[restore] Supabase date refresh failed", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    date: normalizedDate,
+                    error,
+                    message: error?.message,
+                });
+            }
+        };
+
+        refreshLogDateFromSupabase();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        applyLocalHistoryDates,
+        buildSavedWorkoutDraftForDate,
+        getExUnit,
+        history,
+        historySyncReady,
+        loadDraftForDate,
+        logDate,
+        saveDraftForDate,
+        screen,
+        user?.id,
+    ]);
+
     const handleLogForDate = (dateStr) => {
         const currentDraft = {
             todayLabels,
@@ -4247,6 +4470,7 @@ export default function GymApp() {
     };
 
     const handleEditHistory = (exName, updatedRecord, historyIdx) => {
+        markWorkoutContentChanged(updatedRecord?.date, "history_record_edit");
         setHistory(prev => {
             const recs = [...(prev[exName] || [])];
             const idx = historyIdx !== undefined
@@ -4266,6 +4490,7 @@ export default function GymApp() {
     };
 
     const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
+        markWorkoutContentChanged(recordDate, setIdx !== undefined ? "set_delete" : "history_record_delete", { explicitDelete: true });
         let shouldClearDateArtifacts = false;
         let deletedTargetDate = recordDate;
 
@@ -4430,6 +4655,7 @@ export default function GymApp() {
     const deleteAllHistoryForDate = (targetDate) => {
         const normalizedTargetDate = String(targetDate || "").trim();
         if (!normalizedTargetDate) return;
+        markWorkoutContentChanged(normalizedTargetDate, "date_delete", { explicitDelete: true });
 
         const currentHistory = latestHistoryRef.current || history || {};
         const nextHistory = removeHistoryDate(currentHistory, normalizedTargetDate);
