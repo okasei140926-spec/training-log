@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl =
-  process.env.REACT_APP_SUPABASE_URL;
+  process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnonKey =
-  process.env.REACT_APP_SUPABASE_ANON_KEY;
+  process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const supabase =
@@ -31,10 +31,16 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 12;
 const rateLimitStore = new Map();
 
+function setCorsHeaders(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
+
 function getSupabaseConfigStatus() {
   const missingEnv = [];
-  if (!supabaseUrl) missingEnv.push("REACT_APP_SUPABASE_URL");
-  if (!supabaseAnonKey) missingEnv.push("REACT_APP_SUPABASE_ANON_KEY");
+  if (!supabaseUrl) missingEnv.push("SUPABASE_URL or REACT_APP_SUPABASE_URL");
+  if (!supabaseAnonKey) missingEnv.push("SUPABASE_ANON_KEY or REACT_APP_SUPABASE_ANON_KEY");
   if (!supabaseServiceRoleKey) missingEnv.push("SUPABASE_SERVICE_ROLE_KEY");
 
   return {
@@ -425,6 +431,12 @@ async function refundAiChatUsage(userId, usageDate) {
 }
 
 export default async function handler(req, res) {
+  setCorsHeaders(res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -605,6 +617,27 @@ PUMP_WORKOUT_PLAN_JSON: [{"exerciseName":"種目名","bodyPart":"胸","unit":"kg
       });
     }
     const replyText = data?.content?.[0]?.text || "";
+    if (!replyText) {
+      if (!reservedUsage.isPro) {
+        try {
+          const refundedUsage = await refundAiChatUsage(user.id, reservedUsage.usageDate);
+          reservedUsage = refundedUsage || reservedUsage;
+        } catch (refundError) {
+          console.error("refund ai usage failed", refundError);
+        }
+      }
+      console.error("Claude API returned empty AI Coach reply", {
+        user: serializeUser(user),
+        userId: user.id,
+        usageDate,
+        status: response.status,
+        response: data,
+      });
+      return res.status(502).json({
+        error: "AI Coachの応答が空でした。",
+        aiUsage: reservedUsage,
+      });
+    }
     const parsedWorkoutPlan = parseWorkoutPlanFromText(replyText);
     const nextContent = Array.isArray(data?.content)
       ? data.content.map((part, index) =>
@@ -620,7 +653,17 @@ PUMP_WORKOUT_PLAN_JSON: [{"exerciseName":"種目名","bodyPart":"胸","unit":"kg
       workoutPlan: parsedWorkoutPlan.workoutPlan,
       aiUsage: reservedUsage,
     });
-  } catch {
+  } catch (error) {
+    console.error("Claude API request failed for AI Coach", {
+      user: serializeUser(user),
+      userId: user?.id || null,
+      usageDate,
+      error,
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    });
     if (reservedUsage && !reservedUsage.isPro) {
       try {
         const refundedUsage = await refundAiChatUsage(user.id, reservedUsage.usageDate);

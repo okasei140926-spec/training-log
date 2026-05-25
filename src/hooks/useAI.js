@@ -7,6 +7,7 @@ import { extractWorkoutPlanFromText, normalizeWorkoutPlan } from "../utils/aiWor
 const AI_DAILY_LIMIT = 5;
 const AI_USAGE_STORAGE_KEY = "ai_usage_state";
 const AI_PRO_STORAGE_KEY = "pump_pro_enabled";
+const AI_API_ORIGIN = process.env.REACT_APP_API_ORIGIN || "https://training-log-mu.vercel.app";
 const INITIAL_AI_MESSAGE = {
   role: "assistant",
   content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪",
@@ -14,6 +15,37 @@ const INITIAL_AI_MESSAGE = {
 
 const getTodayKey = () => formatDateKey(new Date());
 const getAiUsageKey = (dateKey = getTodayKey()) => `ai_usage_${dateKey}`;
+const isNativeCapacitorOrigin = () =>
+  typeof window !== "undefined" && window.location?.protocol === "capacitor:";
+const getApiUrl = (path) => {
+  const normalizedPath = String(path || "").startsWith("/") ? path : `/${path}`;
+  if (isNativeCapacitorOrigin()) return `${AI_API_ORIGIN}${normalizedPath}`;
+  return normalizedPath;
+};
+
+const readApiJson = async (response) => {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return {
+      error: "APIの応答を読み取れませんでした。",
+      rawText: text.slice(0, 500),
+      parseError: error?.message || String(error),
+    };
+  }
+};
+
+const logAiApiError = (label, details = {}) => {
+  console.error(`[AI Coach] ${label}`, {
+    env: isNativeCapacitorOrigin() ? "ios-capacitor" : "web",
+    origin: typeof window !== "undefined" ? window.location?.origin : "",
+    protocol: typeof window !== "undefined" ? window.location?.protocol : "",
+    ...details,
+  });
+};
 
 const normalizeAiUsageCount = (value) => {
   const count = Number(value);
@@ -548,19 +580,33 @@ export function useAI(history) {
 
       if (!accessToken) return false;
 
-      const res = await fetch("/api/activate-pro-dev", {
+      const apiUrl = getApiUrl("/api/activate-pro-dev");
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
-      const data = await res.json();
+      const data = await readApiJson(res);
 
-      if (!res.ok) return false;
+      if (!res.ok) {
+        logAiApiError("activate pro failed", {
+          apiUrl,
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+        });
+        return false;
+      }
 
       applyServerAiUsage(data?.aiUsage);
       return true;
-    } catch {
+    } catch (error) {
+      logAiApiError("activate pro request failed", {
+        apiUrl: getApiUrl("/api/activate-pro-dev"),
+        error,
+        message: error?.message,
+      });
       return false;
     }
   };
@@ -576,19 +622,33 @@ export function useAI(history) {
 
       if (!accessToken) return false;
 
-      const res = await fetch("/api/deactivate-pro-dev", {
+      const apiUrl = getApiUrl("/api/deactivate-pro-dev");
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
-      const data = await res.json();
+      const data = await readApiJson(res);
 
-      if (!res.ok) return false;
+      if (!res.ok) {
+        logAiApiError("deactivate pro failed", {
+          apiUrl,
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+        });
+        return false;
+      }
 
       applyServerAiUsage(data?.aiUsage);
       return true;
-    } catch {
+    } catch (error) {
+      logAiApiError("deactivate pro request failed", {
+        apiUrl: getApiUrl("/api/deactivate-pro-dev"),
+        error,
+        message: error?.message,
+      });
       return false;
     }
   };
@@ -602,19 +662,33 @@ export function useAI(history) {
 
       if (!accessToken) return null;
 
-      const res = await fetch("/api/pro-status", {
+      const apiUrl = getApiUrl("/api/pro-status");
+      const res = await fetch(apiUrl, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
-      const data = await res.json();
+      const data = await readApiJson(res);
 
-      if (!res.ok) return null;
+      if (!res.ok) {
+        logAiApiError("pro status failed", {
+          apiUrl,
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+        });
+        return null;
+      }
 
       applyServerAiUsage(data?.aiUsage);
       return data;
-    } catch {
+    } catch (error) {
+      logAiApiError("pro status request failed", {
+        apiUrl: getApiUrl("/api/pro-status"),
+        error,
+        message: error?.message,
+      });
       return null;
     }
   };
@@ -667,7 +741,8 @@ export function useAI(history) {
         return;
       }
 
-      const res = await fetch("/api/chat", {
+      const apiUrl = getApiUrl("/api/chat");
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -692,21 +767,46 @@ export function useAI(history) {
           },
         }),
       });
-      const data = await res.json();
+      const data = await readApiJson(res);
 
       if (!res.ok) {
         applyServerAiUsage(data?.aiUsage);
+        logAiApiError("chat api failed", {
+          apiUrl,
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+          userMessage: userMsg,
+          targetDate: targetDateKey || null,
+          coachMode: mode,
+        });
         const errorMessage =
           res.status === 401
             ? "ログインが必要です。"
             : res.status === 403
               ? "今日の無料AI相談回数を使い切りました。Pump ProでAI Coachを無制限に使えます。"
-              : data?.error || "AI Coachの応答に失敗しました。";
+              : res.status === 429
+                ? data?.error || "AI Coachの利用が集中しています。少し待ってからお試しください。"
+                : "通信に失敗しました。時間をおいて再試行してください。";
         setAiMsgs((p) => [...p, { role: "assistant", content: errorMessage }]);
         return;
       }
 
-      const reply = data.content?.[0]?.text || "AI Coachの応答に失敗しました。";
+      const reply = data.content?.[0]?.text || "";
+      if (!reply) {
+        logAiApiError("chat api returned empty reply", {
+          apiUrl,
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+          userMessage: userMsg,
+          targetDate: targetDateKey || null,
+          coachMode: mode,
+        });
+        applyServerAiUsage(data?.aiUsage);
+        setAiMsgs((p) => [...p, { role: "assistant", content: "通信に失敗しました。時間をおいて再試行してください。" }]);
+        return false;
+      }
       const structuredWorkoutPlan = normalizeWorkoutPlan(data.workoutPlan);
       const workoutPlan = mode.wantsMenu
         ? structuredWorkoutPlan.length
@@ -742,14 +842,18 @@ export function useAI(history) {
       });
       return true;
     } catch (error) {
-      console.error("AI Coach request failed", {
+      logAiApiError("chat request failed", {
+        apiUrl: getApiUrl("/api/chat"),
         error,
         message: error?.message,
         code: error?.code,
         details: error?.details,
         hint: error?.hint,
+        userMessage: userMsg,
+        targetDate: targetDateKey || null,
+        coachMode: mode,
       });
-      setAiMsgs((p) => [...p, { role: "assistant", content: "AI Coachの応答に失敗しました。" }]);
+      setAiMsgs((p) => [...p, { role: "assistant", content: "通信に失敗しました。時間をおいて再試行してください。" }]);
       return false;
     } finally {
       aiLoadRef.current = false;
