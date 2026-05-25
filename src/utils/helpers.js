@@ -186,6 +186,22 @@ const getHistoryRecordDurationSec = (record) => {
   return durationSec ? Math.floor(durationSec) : 0;
 };
 
+const getHistoryRecordMetrics = (record) => {
+  const sanitizedRecord = sanitizeHistoryRecord(record, { allowBodyweight: true });
+  const sets = sanitizedRecord?.sets || [];
+  const volume = sets.reduce((sum, set) => {
+    const weight = Number(set?.weight);
+    const reps = Number(set?.reps);
+    if (!Number.isFinite(weight) || !Number.isFinite(reps)) return sum;
+    return sum + (weight > 0 && reps > 0 ? weight * reps : 0);
+  }, 0);
+
+  return {
+    setCount: sets.length,
+    volume,
+  };
+};
+
 const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
   if (!existingRecord) return incomingRecord;
 
@@ -208,6 +224,18 @@ const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
       elapsedMinutes: durationMinutes,
     };
   }
+
+  const existingMetrics = getHistoryRecordMetrics(existingRecord);
+  const incomingMetrics = getHistoryRecordMetrics(incomingRecord);
+
+  if (incomingMetrics.setCount !== existingMetrics.setCount) {
+    return incomingMetrics.setCount > existingMetrics.setCount ? incomingRecord : existingRecord;
+  }
+
+  if (incomingMetrics.volume !== existingMetrics.volume) {
+    return incomingMetrics.volume > existingMetrics.volume ? incomingRecord : existingRecord;
+  }
+
   return incomingRecord;
 };
 

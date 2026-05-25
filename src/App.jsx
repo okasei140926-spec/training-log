@@ -306,6 +306,136 @@ const describeHistoryRecordsForDate = (historyMap, targetDate) => {
         .filter(Boolean);
 };
 
+const getEmptyWorkoutMetrics = (updatedAt = null) => ({
+    hasWorkout: false,
+    exerciseCount: 0,
+    setCount: 0,
+    volume: 0,
+    exerciseNames: [],
+    updatedAt: updatedAt || null,
+});
+
+const roundWorkoutMetric = (value) => Math.round(Number(value || 0) * 10) / 10;
+
+const getHistoryMetricsForDate = (historyMap, targetDate, { updatedAt = null } = {}) => {
+    const normalizedDate = String(targetDate || "").slice(0, 10);
+    if (!normalizedDate) return getEmptyWorkoutMetrics(updatedAt);
+
+    const exerciseNames = [];
+    let setCount = 0;
+    let volume = 0;
+
+    Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+        (records || []).forEach((record) => {
+            const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+            if (sanitized?.date !== normalizedDate) return;
+
+            const sets = sanitized.sets || [];
+            exerciseNames.push(exerciseName);
+            setCount += sets.length;
+            volume += sets.reduce((sum, set) => {
+                const weight = Number(set?.weight);
+                const reps = Number(set?.reps);
+                if (!Number.isFinite(weight) || !Number.isFinite(reps)) return sum;
+                return sum + (weight > 0 && reps > 0 ? weight * reps : 0);
+            }, 0);
+        });
+    });
+
+    const uniqueExerciseNames = [...new Set(exerciseNames)];
+
+    return {
+        hasWorkout: uniqueExerciseNames.length > 0 && setCount > 0,
+        exerciseCount: uniqueExerciseNames.length,
+        setCount,
+        volume: roundWorkoutMetric(volume),
+        exerciseNames: uniqueExerciseNames,
+        updatedAt: updatedAt || null,
+    };
+};
+
+const getWorkoutSummaryMetrics = (summaryJson, { totalVolume = null, exerciseCount = null, updatedAt = null } = {}) => {
+    const items = Array.isArray(summaryJson?.items) ? summaryJson.items : [];
+    const setCount = Number.isFinite(Number(summaryJson?.setCount))
+        ? Number(summaryJson.setCount)
+        : items.reduce((sum, item) => sum + Math.max(0, Number(item?.set_count) || 0), 0);
+    const resolvedVolume = Number.isFinite(Number(totalVolume))
+        ? Number(totalVolume)
+        : Number.isFinite(Number(summaryJson?.totalVolume))
+            ? Number(summaryJson.totalVolume)
+            : items.reduce((sum, item) => sum + Math.max(0, Number(item?.volume) || 0), 0);
+    const exerciseNames = [...new Set(items.map((item) => String(item?.exercise_name || item?.exerciseName || "").trim()).filter(Boolean))];
+    const resolvedExerciseCount = Number.isFinite(Number(exerciseCount))
+        ? Number(exerciseCount)
+        : Number.isFinite(Number(summaryJson?.exerciseCount))
+            ? Number(summaryJson.exerciseCount)
+            : exerciseNames.length;
+
+    return {
+        hasWorkout: resolvedExerciseCount > 0 && setCount > 0,
+        exerciseCount: resolvedExerciseCount,
+        setCount,
+        volume: roundWorkoutMetric(resolvedVolume),
+        exerciseNames,
+        updatedAt: updatedAt || null,
+    };
+};
+
+const getWorkoutPayloadMetrics = (payload, { updatedAt = null } = {}) =>
+    getWorkoutSummaryMetrics(payload?.session?.summary_json, {
+        totalVolume: payload?.session?.total_volume,
+        exerciseCount: payload?.session?.exercise_count,
+        updatedAt,
+    });
+
+const getDraftMetricsForDate = ({ exercises = [], logData = {}, getExUnit, workoutDate }) => {
+    const payload = buildWorkoutSessionPayloadFromDraft({
+        exercises,
+        logData,
+        getExUnit,
+        workoutDate,
+    });
+    return getWorkoutPayloadMetrics(payload);
+};
+
+const isDestructiveWorkoutRegression = (incomingMetrics, existingMetrics) => {
+    if (!existingMetrics?.hasWorkout) return false;
+    if (!incomingMetrics?.hasWorkout) return true;
+
+    return (
+        incomingMetrics.exerciseCount < existingMetrics.exerciseCount ||
+        incomingMetrics.setCount < existingMetrics.setCount ||
+        incomingMetrics.volume + 0.01 < existingMetrics.volume
+    );
+};
+
+const logWorkoutPersistenceDecision = ({
+    action,
+    userId,
+    date,
+    localMetrics,
+    remoteMetrics,
+    reason,
+    level = "log",
+}) => {
+    const payload = {
+        action,
+        env: getRuntimeEnvironmentLabel(),
+        origin: typeof window !== "undefined" ? window.location?.origin : "",
+        user_id: userId || null,
+        date,
+        local: localMetrics,
+        remote: remoteMetrics,
+        reason,
+    };
+
+    if (level === "warn") {
+        console.warn("[workout-save-guard]", payload);
+    } else {
+        console.log("[workout-save-guard]", payload);
+    }
+};
+
 const buildHistoryFromWorkoutSessionRows = (sessionRows = []) => {
     const historyMap = {};
 
@@ -1748,6 +1878,41 @@ export default function GymApp() {
             normalizedDates.map(async (workoutDate) => {
                 try {
                     const hasWorkoutForDate = hasValidWorkoutOnDate(normalizedHistoryMap, workoutDate);
+                    const incomingMetrics = getHistoryMetricsForDate(normalizedHistoryMap, workoutDate);
+                    const { data: existingWorkoutRow, error: existingWorkoutError } = await supabase
+                        .from("workouts")
+                        .select("date, data, updated_at")
+                        .eq("user_id", userId)
+                        .eq("date", workoutDate)
+                        .maybeSingle();
+
+                    if (existingWorkoutError) throw existingWorkoutError;
+
+                    const remoteMetrics = existingWorkoutRow
+                        ? getHistoryMetricsForDate(existingWorkoutRow.data || {}, workoutDate, {
+                            updatedAt: existingWorkoutRow.updated_at,
+                        })
+                        : getEmptyWorkoutMetrics();
+                    const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
+
+                    logWorkoutPersistenceDecision({
+                        action: "workouts_sync_check",
+                        userId,
+                        date: workoutDate,
+                        localMetrics: incomingMetrics,
+                        remoteMetrics,
+                        reason: wouldDestructivelyOverwrite
+                            ? "blocked: local data is smaller than remote workouts row"
+                            : hasWorkoutForDate
+                                ? "allowed: local data is not smaller than remote"
+                                : "allowed: no local workout for date",
+                        level: wouldDestructivelyOverwrite ? "warn" : "log",
+                    });
+
+                    if (wouldDestructivelyOverwrite) {
+                        throw new Error("ローカルデータがSupabaseより少ないため、workoutsの上書きを停止しました");
+                    }
+
                     const { error } = hasWorkoutForDate
                         ? await supabase
                             .from("workouts")
@@ -1977,12 +2142,40 @@ export default function GymApp() {
         const payload = buildWorkoutSessionPayloadFromHistory(historyMap, normalizedDate);
         const { data: existingSession, error: existingSessionError } = await supabase
             .from("workout_sessions")
-            .select("id, started_at, duration_sec")
+            .select("id, started_at, ended_at, duration_sec, total_volume, exercise_count, summary_json, updated_at")
             .eq("user_id", userId)
             .eq("workout_date", normalizedDate)
             .maybeSingle();
 
         if (existingSessionError) throw existingSessionError;
+
+        const incomingMetrics = getWorkoutPayloadMetrics(payload);
+        const remoteMetrics = existingSession
+            ? getWorkoutSummaryMetrics(existingSession.summary_json, {
+                totalVolume: existingSession.total_volume,
+                exerciseCount: existingSession.exercise_count,
+                updatedAt: existingSession.updated_at,
+            })
+            : getEmptyWorkoutMetrics();
+        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
+
+        logWorkoutPersistenceDecision({
+            action: "workout_sessions_sync_check",
+            userId,
+            date: normalizedDate,
+            localMetrics: incomingMetrics,
+            remoteMetrics,
+            reason: wouldDestructivelyOverwrite
+                ? "blocked: local snapshot is smaller than remote session"
+                : payload
+                    ? "allowed: local snapshot is not smaller than remote"
+                    : "allowed: no local payload",
+            level: wouldDestructivelyOverwrite ? "warn" : "log",
+        });
+
+        if (wouldDestructivelyOverwrite) {
+            throw new Error("ローカルデータがSupabaseより少ないため、workout_sessionsの上書きを停止しました");
+        }
 
         if (!payload) {
             if (existingSession?.id) {
@@ -2547,7 +2740,7 @@ export default function GymApp() {
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
-                    mergeHistoryMaps(remoteHistory, localHistorySnapshot),
+                    mergeHistoryMaps(localHistorySnapshot, remoteHistory),
                     effectiveDeleteMarkers
                 );
                 const pendingSessionSyncDates = Array.from(pendingWorkoutSessionSyncDatesRef.current);
@@ -3048,12 +3241,6 @@ export default function GymApp() {
 
     // useEffectより前に定義
     const persistCurrentLog = useCallback(() => {
-        pendingWorkoutNotificationRef.current = {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            userId: user?.id || null,
-            logDate,
-        };
-        queueWorkoutSessionSync(logDate);
         const timerPersistence =
             workoutStartedForDate === logDate
                 ? getWorkoutTimerPersistence(workoutTimerStateRef.current, Date.now())
@@ -3071,8 +3258,53 @@ export default function GymApp() {
             Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
         );
         const durationMinutes = durationSec > 0 ? Math.max(1, Math.round(durationSec / 60)) : 0;
+        const incomingMetrics = getDraftMetricsForDate({
+            exercises,
+            logData,
+            getExUnit,
+            workoutDate: logDate,
+        });
+        const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || history || {}, logDate);
+        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, existingMetrics);
+
+        logWorkoutPersistenceDecision({
+            action: "local_auto_persist_check",
+            userId: user?.id,
+            date: logDate,
+            localMetrics: incomingMetrics,
+            remoteMetrics: existingMetrics,
+            reason: wouldDestructivelyOverwrite
+                ? "blocked: visible local draft is smaller than saved history"
+                : "allowed: visible local draft is not smaller than saved history",
+            level: wouldDestructivelyOverwrite ? "warn" : "log",
+        });
+
+        if (wouldDestructivelyOverwrite) {
+            return;
+        }
+
+        pendingWorkoutNotificationRef.current = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            userId: user?.id || null,
+            logDate,
+        };
+        queueWorkoutSessionSync(logDate);
 
         setHistory((prev) => {
+            const previousMetrics = getHistoryMetricsForDate(prev, logDate);
+            if (isDestructiveWorkoutRegression(incomingMetrics, previousMetrics)) {
+                logWorkoutPersistenceDecision({
+                    action: "local_history_update_blocked",
+                    userId: user?.id,
+                    date: logDate,
+                    localMetrics: incomingMetrics,
+                    remoteMetrics: previousMetrics,
+                    reason: "blocked: state update would reduce saved workout",
+                    level: "warn",
+                });
+                return prev;
+            }
+
             const nh = { ...prev };
 
             Object.keys(nh).forEach((name) => {
@@ -3120,11 +3352,12 @@ export default function GymApp() {
 
             return nh;
         });
-    }, [exercises, logData, logDate, getExUnit, todayLabels, user?.id, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, workoutStartedForDate]); // ← 依存配列
+    }, [exercises, getExUnit, history, logData, logDate, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate]); // ← 依存配列
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (screen !== "log") return;
+        if (user?.id && !historySyncReady) return;
 
         const hasAnyValidSet = exercises.some((ex) =>
             (logData[ex.name] || []).some((s) => s.weight && s.reps)
@@ -3137,7 +3370,7 @@ export default function GymApp() {
         }, 400);
 
         return () => clearTimeout(t);
-    }, [screen, logData, exercises, logDate, exerciseUnits, persistCurrentLog]);
+    }, [screen, logData, exercises, logDate, exerciseUnits, persistCurrentLog, user?.id, historySyncReady]);
 
     // ─── Log data ─────────────────────────────────────
 
@@ -3839,6 +4072,11 @@ export default function GymApp() {
     }, [getExUnit, history]);
 
     const logRestoreDecision = useCallback((dateStr, savedDraft, localDraft, finalDraft, source) => {
+        const metricGetExUnit = (name) =>
+            finalDraft?.exerciseUnits?.[name] ||
+            localDraft?.exerciseUnits?.[name] ||
+            savedDraft?.exerciseUnits?.[name] ||
+            getExUnit(name);
         console.log("[restore] environment", {
             env: getRuntimeEnvironmentLabel(),
             origin: typeof window !== "undefined" ? window.location?.origin : "",
@@ -3846,11 +4084,29 @@ export default function GymApp() {
             user_id: user?.id || null,
             date: dateStr,
             source,
+            savedMetrics: getDraftMetricsForDate({
+                exercises: savedDraft?.sessionEx || [],
+                logData: savedDraft?.logData || {},
+                getExUnit: metricGetExUnit,
+                workoutDate: dateStr,
+            }),
+            localMetrics: getDraftMetricsForDate({
+                exercises: localDraft?.sessionEx || [],
+                logData: localDraft?.logData || {},
+                getExUnit: metricGetExUnit,
+                workoutDate: dateStr,
+            }),
+            finalMetrics: getDraftMetricsForDate({
+                exercises: finalDraft?.sessionEx || [],
+                logData: finalDraft?.logData || {},
+                getExUnit: metricGetExUnit,
+                workoutDate: dateStr,
+            }),
         });
         console.log("[restore] supabase exercises", (savedDraft?.sessionEx || []).map((ex) => ex.name));
         console.log("[restore] local draft exercises", (localDraft?.sessionEx || []).map((ex) => ex.name));
         console.log("[restore] final exercises", (finalDraft?.sessionEx || []).map((ex) => ex.name));
-    }, [user?.id]);
+    }, [getExUnit, user?.id]);
 
     useEffect(() => {
         if (screen !== "log" || !historySyncReady || !logDate) return;
@@ -3869,6 +4125,35 @@ export default function GymApp() {
         }
 
         const localDraft = loadDraftForDate(logDate);
+        const savedMetrics = getDraftMetricsForDate({
+            exercises: savedDraftForDate.sessionEx,
+            logData: savedDraftForDate.logData,
+            getExUnit,
+            workoutDate: logDate,
+        });
+        const localMetrics = getDraftMetricsForDate({
+            exercises: localDraft.sessionEx || [],
+            logData: localDraft.logData || {},
+            getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
+            workoutDate: logDate,
+        });
+
+        if (isDestructiveWorkoutRegression(savedMetrics, localMetrics)) {
+            console.warn("[restore] kept richer local draft instead of smaller saved workout", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                date: logDate,
+                local: localMetrics,
+                saved: savedMetrics,
+            });
+            setTodayLabels(localDraft.todayLabels);
+            setSessionEx(localDraft.sessionEx);
+            setLogData(localDraft.logData);
+            setExerciseUnits(localDraft.exerciseUnits);
+            logRestoreDecision(logDate, savedDraftForDate, localDraft, localDraft, "local_draft_richer_than_saved");
+            return;
+        }
+
         saveDraftForDate(logDate, savedDraftForDate);
         setTodayLabels(savedDraftForDate.todayLabels);
         setSessionEx(savedDraftForDate.sessionEx);
@@ -3888,6 +4173,8 @@ export default function GymApp() {
         screen,
         sessionEx,
         todayLabels,
+        user?.id,
+        getExUnit,
     ]);
 
     const handleLogForDate = (dateStr) => {
@@ -3908,11 +4195,24 @@ export default function GymApp() {
         const draftForDate = loadDraftForDate(dateStr);
         const savedDraftForDate = buildSavedWorkoutDraftForDate(dateStr, history);
         const hasSavedWorkout = savedDraftForDate.hasSavedWorkout;
+        const savedMetrics = getDraftMetricsForDate({
+            exercises: savedDraftForDate.sessionEx,
+            logData: savedDraftForDate.logData,
+            getExUnit,
+            workoutDate: dateStr,
+        });
+        const localMetrics = getDraftMetricsForDate({
+            exercises: draftForDate.sessionEx || [],
+            logData: draftForDate.logData || {},
+            getExUnit: (name) => draftForDate.exerciseUnits?.[name] || getExUnit(name),
+            workoutDate: dateStr,
+        });
         const isActiveLocalRecording =
             dateStr === logDate &&
             workoutStartedForDate === dateStr &&
             hasDraftContent(currentDraft);
-        const shouldUseSavedWorkout = hasSavedWorkout && !isActiveLocalRecording;
+        const localDraftIsRicher = isDestructiveWorkoutRegression(savedMetrics, localMetrics);
+        const shouldUseSavedWorkout = hasSavedWorkout && !isActiveLocalRecording && !localDraftIsRicher;
 
         if (shouldUseSavedWorkout) {
             saveDraftForDate(dateStr, savedDraftForDate);
@@ -3926,11 +4226,20 @@ export default function GymApp() {
         }
 
         if (hasDraftContent(draftForDate)) {
+            if (localDraftIsRicher) {
+                console.warn("[restore] using richer local draft for date", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user?.id || null,
+                    date: dateStr,
+                    local: localMetrics,
+                    saved: savedMetrics,
+                });
+            }
             setTodayLabels(draftForDate.todayLabels);
             setSessionEx(draftForDate.sessionEx);
             setLogData(draftForDate.logData);
             setExerciseUnits(draftForDate.exerciseUnits);
-            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, draftForDate, "local_draft");
+            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, draftForDate, localDraftIsRicher ? "local_draft_richer_than_saved" : "local_draft");
         } else {
             setTodayLabels([]);
             setSessionEx(null);
