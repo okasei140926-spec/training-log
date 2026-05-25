@@ -1021,6 +1021,7 @@ export default function GymApp() {
     const [accountActionBusy, setAccountActionBusy] = useState(false);
     const [focusedLogSetInputId, setFocusedLogSetInputId] = useState(null);
     const [isLogKeyboardOpen, setIsLogKeyboardOpen] = useState(false);
+    const [logExerciseFocusRequest, setLogExerciseFocusRequest] = useState(null);
     const [focusedAiChatInput, setFocusedAiChatInput] = useState(false);
     const [isAiKeyboardOpen, setIsAiKeyboardOpen] = useState(false);
     const [historySyncDiagnostic, setHistorySyncDiagnostic] = useState({
@@ -1038,6 +1039,15 @@ export default function GymApp() {
             document.body?.setAttribute("data-log-set-input-active", "true");
         }
         setFocusedLogSetInputId(inputId || null);
+    }, []);
+
+    const requestLogExerciseFocus = useCallback((exercise) => {
+        if (!exercise?.id && !exercise?.name) return;
+        setLogExerciseFocusRequest({
+            id: exercise.id,
+            name: exercise.name,
+            nonce: Date.now() + Math.random(),
+        });
     }, []);
 
     const markLogSetInputActive = useCallback((setInput, shouldScroll = true) => {
@@ -3485,6 +3495,7 @@ export default function GymApp() {
         const nextLogData = { ...baseLogData };
         const nextUnits = { ...baseUnits };
         const nextLabels = [...baseLabels];
+        let firstAddedExercise = null;
 
         const ensureLabel = (label) => {
             const safeLabel = label && QUICK_LABELS.includes(label) ? label : (label || "その他");
@@ -3538,12 +3549,14 @@ export default function GymApp() {
             const safeSets = draftSets.length ? draftSets : makeDefaultDraftSets();
 
             if (!nextSession.some((ex) => ex.name === name)) {
-                nextSession.push({
+                const addedExercise = {
                     id: Date.now() + Math.floor(Math.random() * 100000),
                     name,
                     label,
                     bodyPart: label,
-                });
+                };
+                nextSession.push(addedExercise);
+                if (!firstAddedExercise) firstAddedExercise = addedExercise;
             }
 
             nextLogData[name] = nextLogData[name]
@@ -3587,6 +3600,7 @@ export default function GymApp() {
         setSessionEx(nextSession);
         setExerciseUnits(nextUnits);
         startWorkoutTimerIfNeeded(todayKey, { markAsActivity: true });
+        requestLogExerciseFocus(firstAddedExercise || nextSession.find((ex) => ex.name === plan[0]?.exerciseName));
         setScreen("log");
     };
 
@@ -4517,6 +4531,12 @@ export default function GymApp() {
                             workoutTimerStatus={displayedWorkoutTimerStatus}
                             onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
                             onSetInputFocusChange={handleLogSetInputFocusChange}
+                            focusExerciseRequest={logExerciseFocusRequest}
+                            onFocusExerciseHandled={(request) => {
+                                setLogExerciseFocusRequest((current) =>
+                                    current?.nonce === request?.nonce ? null : current
+                                );
+                            }}
                             resetSession={() => {
                                 deleteAllHistoryForDate(logDate);
                             }}

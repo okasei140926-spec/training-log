@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { calc1RM, dispW, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
@@ -187,6 +187,8 @@ export default function LogScreen({
     workoutTimerStatus = "idle",
     onFinishWorkoutTimer,
     onSetInputFocusChange,
+    focusExerciseRequest,
+    onFocusExerciseHandled,
 }) {
 
     const hasExercises = exercises.length > 0;
@@ -206,6 +208,27 @@ export default function LogScreen({
     const [showSessionShare, setShowSessionShare] = useState(false);
     const [showWorkoutTimerMenu, setShowWorkoutTimerMenu] = useState(false);
     const editRef = useRef(null);
+    const previousExerciseIdsRef = useRef(exercises.map((ex) => ex.id));
+    const firstAddedDuringAddModalRef = useRef(null);
+    const exerciseCardRefs = useRef(new Map());
+    const [pendingScrollExerciseId, setPendingScrollExerciseId] = useState(null);
+
+    const setExerciseCardRef = (exerciseId) => (node) => {
+        if (!exerciseId) return;
+        if (node) {
+            exerciseCardRefs.current.set(exerciseId, node);
+        } else {
+            exerciseCardRefs.current.delete(exerciseId);
+        }
+    };
+
+    const openExerciseById = useCallback((exerciseId, { scroll = true } = {}) => {
+        const targetIndex = exercises.findIndex((exercise) => exercise.id === exerciseId);
+        if (targetIndex < 0) return false;
+        setActiveExIdx(targetIndex);
+        if (scroll) setPendingScrollExerciseId(exerciseId);
+        return true;
+    }, [exercises]);
 
     const setCountByBodyPart = getSetCountByBodyPart(
         exercises.map((exercise) => {
@@ -369,6 +392,75 @@ export default function LogScreen({
         }
     }, [exercises, reorderMenuId]);
 
+    useEffect(() => {
+        if (!showAdd) firstAddedDuringAddModalRef.current = null;
+    }, [showAdd]);
+
+    useEffect(() => {
+        const previousIds = previousExerciseIdsRef.current || [];
+        const previousIdSet = new Set(previousIds);
+        const addedExercises = exercises.filter((exercise) => !previousIdSet.has(exercise.id));
+        previousExerciseIdsRef.current = exercises.map((exercise) => exercise.id);
+
+        if (!addedExercises.length) {
+            if (activeExIdx >= exercises.length) {
+                setActiveExIdx(Math.max(0, exercises.length - 1));
+            }
+            return;
+        }
+
+        const firstModalAddedName = firstAddedDuringAddModalRef.current;
+        const targetExercise =
+            (firstModalAddedName && exercises.find((exercise) => exercise.name === firstModalAddedName)) ||
+            addedExercises[0];
+
+        if (!targetExercise) return;
+        const targetIndex = exercises.findIndex((exercise) => exercise.id === targetExercise.id);
+        if (targetIndex < 0) return;
+        setActiveExIdx(targetIndex);
+        setPendingScrollExerciseId(targetExercise.id);
+    }, [activeExIdx, exercises]);
+
+    useEffect(() => {
+        if (!focusExerciseRequest) return;
+        const targetExercise = exercises.find((exercise) =>
+            exercise.id === focusExerciseRequest.id ||
+            exercise.name === focusExerciseRequest.name
+        );
+
+        if (targetExercise) {
+            openExerciseById(targetExercise.id);
+        }
+        onFocusExerciseHandled?.(focusExerciseRequest);
+    }, [exercises, focusExerciseRequest, onFocusExerciseHandled, openExerciseById]);
+
+    useEffect(() => {
+        if (!pendingScrollExerciseId) return;
+        const timeoutId = window.setTimeout(() => {
+            const node = exerciseCardRefs.current.get(pendingScrollExerciseId);
+            node?.scrollIntoView?.({ behavior: "smooth", block: "start", inline: "nearest" });
+            setPendingScrollExerciseId(null);
+        }, 120);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [pendingScrollExerciseId, activeExIdx]);
+
+    const handleAddConfirm = () => {
+        const trimmed = addName.trim();
+        if (trimmed && !firstAddedDuringAddModalRef.current) {
+            firstAddedDuringAddModalRef.current = trimmed;
+        }
+        onAddEx(addName);
+        setAddName("");
+    };
+
+    const handleQuickAdd = (name, remove, labelOverride) => {
+        if (!remove && name && !firstAddedDuringAddModalRef.current) {
+            firstAddedDuringAddModalRef.current = name;
+        }
+        onQuickAddEx(name, remove, labelOverride);
+    };
+
     return (
         <div className="fade-in" style={{ ...S.page, paddingBottom: "calc(var(--bottom-nav-clearance) + 56px)" }}>
             <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
@@ -516,7 +608,7 @@ export default function LogScreen({
                             return (
                                 <SortableExerciseItem key={ex.id} id={ex.id}>
                                     {() => (
-                                        <>
+                                        <div ref={setExerciseCardRef(ex.id)}>
                                             <div
                                                 onClick={() => setActiveExIdx(i)}
                                                 style={{
@@ -627,7 +719,7 @@ export default function LogScreen({
                                                     </button>
                                                 </div>
                                             )}
-                                        </>
+                                        </div>
                                     )}
                                 </SortableExerciseItem>
                             );
@@ -636,7 +728,7 @@ export default function LogScreen({
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
                                 {() => (
-                                    <div style={{ background: "var(--card)", borderRadius: 22, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : softBorderColor}`, boxShadow: isPR ? "var(--shadow-soft)" : "var(--shadow-card)" }}>
+                                    <div ref={setExerciseCardRef(ex.id)} style={{ background: "var(--card)", borderRadius: 22, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : softBorderColor}`, boxShadow: isPR ? "var(--shadow-soft)" : "var(--shadow-card)" }}>
 
                                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                             <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
@@ -841,10 +933,10 @@ export default function LogScreen({
             {showAdd && (
                 <AddExModal
                     name={addName} setName={setAddName}
-                    onConfirm={() => { onAddEx(addName); setAddName(""); }}
+                    onConfirm={handleAddConfirm}
                     onClose={() => { setShowAdd(false); setAddName(""); }}
                     target={null}
-                    onQuickAdd={onQuickAddEx}
+                    onQuickAdd={handleQuickAdd}
                     existingNames={exercises.map(e => e.name)}
                     muscleEx={muscleEx}
                     history={history}
