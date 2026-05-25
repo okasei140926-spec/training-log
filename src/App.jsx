@@ -197,6 +197,25 @@ const getHistoryLoadErrorMessage = (error) => {
     return "記録の取得に失敗しました。再取得してください。";
 };
 
+const getRuntimeEnvironmentLabel = () => {
+    if (typeof window === "undefined") return "server";
+    const protocol = window.location?.protocol || "";
+    if (protocol === "capacitor:") return "ios-capacitor";
+    return protocol.replace(":", "") || "web";
+};
+
+const getWorkoutDraftSignature = (draft) => JSON.stringify({
+    todayLabels: draft?.todayLabels || [],
+    sessionEx: (draft?.sessionEx || []).map((ex) => ({
+        id: ex?.id || "",
+        name: ex?.name || "",
+        label: ex?.label || "",
+        bodyPart: ex?.bodyPart || "",
+    })),
+    logData: draft?.logData || {},
+    exerciseUnits: draft?.exerciseUnits || {},
+});
+
 const persistHistoryForUser = (userId, nextHistory) => {
     save("history", nextHistory);
 
@@ -2389,7 +2408,7 @@ export default function GymApp() {
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
-                    mergeHistoryMaps(remoteHistory, localMergeCandidate),
+                    mergeHistoryMaps(localMergeCandidate, remoteHistory),
                     effectiveDeleteMarkers
                 );
 
@@ -3622,6 +3641,100 @@ export default function GymApp() {
         setScreen("log");
     };
 
+    const buildSavedWorkoutDraftForDate = useCallback((dateStr, sourceHistory = history) => {
+        const dayExercises = Object.entries(sourceHistory || {})
+            .map(([name, recs]) => {
+                const rec = (recs || []).find(r => r.date === dateStr);
+                const sanitizedRecord = sanitizeHistoryRecord(rec, { allowBodyweight: true });
+                if (!sanitizedRecord) return null;
+                const recordBodyPart = String(sanitizedRecord.bodyPart || sanitizedRecord.body_part || "").trim();
+                return {
+                    id: name,
+                    name,
+                    label: recordBodyPart || EX_TO_LABEL[name] || null,
+                    bodyPart: recordBodyPart || EX_TO_LABEL[name] || null,
+                    order: typeof sanitizedRecord.order === "number" ? sanitizedRecord.order : 999,
+                    rec: sanitizedRecord,
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.order - b.order);
+
+        const inferredLabels = [...new Set(
+            dayExercises
+                .map(({ bodyPart, name }) => bodyPart || EX_TO_LABEL[name])
+                .filter(Boolean)
+        )];
+
+        const dayLogData = {};
+        dayExercises.forEach(({ name, rec }) => {
+            if (rec?.sets) {
+                const fallbackUnit = rec?.displayUnit || rec?.unit || rec?.weightUnit || rec?.weight_unit || getExUnit(name);
+                dayLogData[name] = rec.sets.map(s => normalizeDraftSetFromRecord(s, fallbackUnit));
+            }
+        });
+
+        return {
+            hasSavedWorkout: dayExercises.length > 0,
+            todayLabels: inferredLabels,
+            sessionEx: dayExercises.map(({ id, name, label, bodyPart }) => ({ id, name, label, bodyPart })),
+            logData: dayLogData,
+            exerciseUnits: {},
+        };
+    }, [getExUnit, history]);
+
+    const logRestoreDecision = useCallback((dateStr, savedDraft, localDraft, finalDraft, source) => {
+        console.log("[restore] environment", {
+            env: getRuntimeEnvironmentLabel(),
+            origin: typeof window !== "undefined" ? window.location?.origin : "",
+            protocol: typeof window !== "undefined" ? window.location?.protocol : "",
+            user_id: user?.id || null,
+            date: dateStr,
+            source,
+        });
+        console.log("[restore] supabase exercises", (savedDraft?.sessionEx || []).map((ex) => ex.name));
+        console.log("[restore] local draft exercises", (localDraft?.sessionEx || []).map((ex) => ex.name));
+        console.log("[restore] final exercises", (finalDraft?.sessionEx || []).map((ex) => ex.name));
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (screen !== "log" || !historySyncReady || !logDate) return;
+
+        const savedDraftForDate = buildSavedWorkoutDraftForDate(logDate, history);
+        if (!savedDraftForDate.hasSavedWorkout) return;
+
+        const currentDraft = {
+            todayLabels,
+            logData,
+            sessionEx,
+            exerciseUnits,
+        };
+        if (getWorkoutDraftSignature(currentDraft) === getWorkoutDraftSignature(savedDraftForDate)) {
+            return;
+        }
+
+        const localDraft = loadDraftForDate(logDate);
+        saveDraftForDate(logDate, savedDraftForDate);
+        setTodayLabels(savedDraftForDate.todayLabels);
+        setSessionEx(savedDraftForDate.sessionEx);
+        setLogData(savedDraftForDate.logData);
+        setExerciseUnits(savedDraftForDate.exerciseUnits);
+        logRestoreDecision(logDate, savedDraftForDate, localDraft, savedDraftForDate, "supabase_saved_workout_refresh");
+    }, [
+        buildSavedWorkoutDraftForDate,
+        exerciseUnits,
+        history,
+        historySyncReady,
+        loadDraftForDate,
+        logData,
+        logDate,
+        logRestoreDecision,
+        saveDraftForDate,
+        screen,
+        sessionEx,
+        todayLabels,
+    ]);
+
     const handleLogForDate = (dateStr) => {
         const currentDraft = {
             todayLabels,
@@ -3638,56 +3751,38 @@ export default function GymApp() {
         setLogDate(dateStr);
 
         const draftForDate = loadDraftForDate(dateStr);
+        const savedDraftForDate = buildSavedWorkoutDraftForDate(dateStr, history);
+        const hasSavedWorkout = savedDraftForDate.hasSavedWorkout;
+        const isActiveLocalRecording =
+            dateStr === logDate &&
+            workoutStartedForDate === dateStr &&
+            hasDraftContent(currentDraft);
+        const shouldUseSavedWorkout = hasSavedWorkout && !isActiveLocalRecording;
+
+        if (shouldUseSavedWorkout) {
+            saveDraftForDate(dateStr, savedDraftForDate);
+            setTodayLabels(savedDraftForDate.todayLabels);
+            setSessionEx(savedDraftForDate.sessionEx);
+            setLogData(savedDraftForDate.logData);
+            setExerciseUnits(savedDraftForDate.exerciseUnits);
+            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, savedDraftForDate, "supabase_saved_workout");
+            setScreen("log");
+            return;
+        }
+
         if (hasDraftContent(draftForDate)) {
             setTodayLabels(draftForDate.todayLabels);
             setSessionEx(draftForDate.sessionEx);
             setLogData(draftForDate.logData);
             setExerciseUnits(draftForDate.exerciseUnits);
-            setScreen("log");
-            return;
-        }
-
-        const dayExercises = Object.entries(history)
-            .map(([name, recs]) => {
-                const rec = recs.find(r => r.date === dateStr);
-                if (!rec) return null;
-                const recordBodyPart = String(rec.bodyPart || rec.body_part || "").trim();
-                return {
-                    id: name,
-                    name,
-                    label: recordBodyPart || EX_TO_LABEL[name] || null,
-                    bodyPart: recordBodyPart || EX_TO_LABEL[name] || null,
-                    order: typeof rec.order === "number" ? rec.order : 999,
-                    rec,
-                };
-            })
-            .filter(Boolean)
-            .sort((a, b) => a.order - b.order);
-
-        const inferredLabels = [...new Set(
-            dayExercises
-                .map(({ bodyPart, name }) => bodyPart || EX_TO_LABEL[name])
-                .filter(Boolean)
-        )];
-
-        if (dayExercises.length > 0) {
-            const dayLogData = {};
-            dayExercises.forEach(({ name, rec }) => {
-                if (rec?.sets) {
-                    const fallbackUnit = rec?.displayUnit || rec?.unit || rec?.weightUnit || rec?.weight_unit || getExUnit(name);
-                    dayLogData[name] = rec.sets.map(s => normalizeDraftSetFromRecord(s, fallbackUnit));
-                }
-            });
-
-            setTodayLabels(inferredLabels);
-            setSessionEx(dayExercises.map(({ id, name, label, bodyPart }) => ({ id, name, label, bodyPart })));
-            setLogData(dayLogData);
+            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, draftForDate, "local_draft");
         } else {
             setTodayLabels([]);
             setSessionEx(null);
             setLogData({});
+            setExerciseUnits({});
+            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, { sessionEx: [] }, "empty");
         }
-        setExerciseUnits({});
 
         setScreen("log");
     };
