@@ -3762,7 +3762,6 @@ export default function GymApp() {
     }, []);
 
     const addExToSession = (name, labelOverride) => {
-        markWorkoutContentChanged(logDate, "exercise_add");
         const trimmed = String(name || "").trim();
         if (!trimmed) {
             console.error("[add-exercise] failed: empty exercise name", {
@@ -3799,6 +3798,8 @@ export default function GymApp() {
             requestLogExerciseFocus(existingExercise);
             return;
         }
+
+        markWorkoutContentChanged(logDate, "exercise_add");
 
         const ex = {
             id: Date.now() + (Math.random() * 1000 | 0),
@@ -4207,6 +4208,7 @@ export default function GymApp() {
 
     useEffect(() => {
         if (screen !== "log" || !historySyncReady || !logDate) return;
+        if (pendingWorkoutContentChangeDatesRef.current.has(String(logDate || "").slice(0, 10))) return;
 
         const savedDraftForDate = buildSavedWorkoutDraftForDate(logDate, history);
         if (!savedDraftForDate.hasSavedWorkout) return;
