@@ -214,6 +214,30 @@ export default function LogScreen({
     const firstAddedDuringAddModalRef = useRef(null);
     const exerciseCardRefs = useRef(new Map());
     const [pendingScrollExerciseId, setPendingScrollExerciseId] = useState(null);
+    const compactIconButtonStyle = {
+        width: 34,
+        height: 32,
+        minWidth: 34,
+        borderRadius: 10,
+        background: "transparent",
+        border: "1px solid transparent",
+        color: "var(--text3)",
+        fontSize: 16,
+        fontWeight: 900,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+    };
+    const compactTextButtonStyle = {
+        minHeight: 32,
+        padding: "0 9px",
+        borderRadius: 10,
+        fontSize: 11,
+        fontWeight: 800,
+        border: `1px solid ${softBorderColor}`,
+        background: "transparent",
+        color: "var(--text2)",
+    };
 
     const setExerciseCardRef = (exerciseId) => (node) => {
         if (!exerciseId) return;
@@ -621,8 +645,6 @@ export default function LogScreen({
                         const previousUnit = prev?.displayUnit || prev?.unit || prev?.weightUnit || prev?.weight_unit || "kg";
                         const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
-                        const exerciseBodyPartLabel = ex.bodyPart || ex.label || ex.target || "";
-                        const prIsAlsoPrev = pr && prev && pr.date === prev.date;
 
                         const doneSets = sets.filter(s => {
                             const w = Number(getSetStoredWeightKg(s, exUnit));
@@ -656,6 +678,11 @@ export default function LogScreen({
                                 ? "自重"
                                 : convertWeightToTargetUnit(prTopSet, exUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg"))
                             : "";
+                        const compactPrLabel = prTopSet
+                            ? `PR ${prTopSetLabel} × ${prTopSet.reps}`
+                            : pr
+                                ? `PR ${dispW(roundTo1Decimal(pr.rm), exUnit)}${formatWeightUnit(exUnit)}`
+                                : "";
 
                         if (i !== activeExIdx) {
                             const doneSetsCount = sets.filter((s) => isCompletedWorkoutSet(s)).length;
@@ -669,8 +696,8 @@ export default function LogScreen({
                                                 style={{
                                                     background: "var(--card)",
                                                     borderRadius: 20,
-                                                    padding: "12px 16px",
-                                                    marginBottom: 12,
+                                                    padding: "10px 14px",
+                                                    marginBottom: 10,
                                                     border: "1px solid var(--border2)",
                                                     boxShadow: "var(--shadow-card)",
                                                     display: "flex",
@@ -685,8 +712,8 @@ export default function LogScreen({
                                                     e.currentTarget.style.transform = "scale(1)";
                                                 }}
                                             >
-                                                <div>
-                                                    <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontSize: 15, fontWeight: 850, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                         {ex.name}
                                                     </div>
                                                     <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>
@@ -694,7 +721,7 @@ export default function LogScreen({
                                                     </div>
                                                 </div>
 
-                                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
@@ -702,15 +729,12 @@ export default function LogScreen({
                                                             setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
                                                         }}
                                                         style={{
-                                                            background: subActionBg,
-                                                            border: `1px solid ${softBorderColor}`,
-                                                            padding: "6px 10px",
-                                                            color: subActionText,
-                                                            fontSize: 16,
-                                                            borderRadius: 10,
+                                                            ...compactIconButtonStyle,
+                                                            color: "var(--text3)",
                                                         }}
+                                                        aria-label="並べ替え"
                                                     >
-                                                        ≡
+                                                        ⋮⋮
                                                     </button>
                                                 </div>
                                             </div>
@@ -783,9 +807,9 @@ export default function LogScreen({
                         return (
                             <SortableExerciseItem key={ex.id} id={ex.id}>
                                 {() => (
-                                    <div ref={setExerciseCardRef(ex.id)} style={{ background: "var(--card)", borderRadius: 22, padding: "16px", marginBottom: 12, border: `1px solid ${isPR ? "var(--success-border)" : softBorderColor}`, boxShadow: isPR ? "var(--shadow-soft)" : "var(--shadow-card)" }}>
+                                    <div ref={setExerciseCardRef(ex.id)} style={{ background: "var(--card)", borderRadius: 20, padding: "12px", marginBottom: 10, border: `1px solid ${isPR ? "var(--success-border)" : softBorderColor}`, boxShadow: isPR ? "var(--shadow-soft)" : "var(--shadow-card)" }}>
 
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
                                             <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                                                 {isEditing ? (
                                                     <input
@@ -798,19 +822,28 @@ export default function LogScreen({
                                                     />
                                                 ) : (
                                                     <div>
-                                                        <div onClick={() => startEdit(ex)} style={{ fontSize: 19, fontWeight: 900, cursor: "text", color: "var(--text)", lineHeight: 1.25 }}>
+                                                        <div onClick={() => startEdit(ex)} style={{ fontSize: 18, fontWeight: 900, cursor: "text", color: "var(--text)", lineHeight: 1.22, whiteSpace: "normal", overflowWrap: "anywhere" }}>
                                                             {ex.name}
                                                         </div>
-                                                        {exerciseBodyPartLabel && (
-                                                            <div style={{ marginTop: 5, fontSize: 12, color: "var(--text2)", fontWeight: 800 }}>
-                                                                {exerciseBodyPartLabel}
+                                                        {(compactPrLabel || (isPR && prDiff > 0)) && (
+                                                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
+                                                                {compactPrLabel && (
+                                                                    <span style={{ fontSize: 11, color: "var(--text2)", fontWeight: 800, lineHeight: 1.2 }}>
+                                                                        🏆 {compactPrLabel}
+                                                                    </span>
+                                                                )}
+                                                                {isPR && prDiff > 0 && (
+                                                                    <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, lineHeight: 1.2 }}>
+                                                                        PR更新 +{prDiff.toFixed(1)}kg
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
                                                 )}
                                             </div>
 
-                                            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                                            <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
                                                 <button
                                                     type="button"
                                                     onClick={(e) => {
@@ -818,15 +851,11 @@ export default function LogScreen({
                                                         setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
                                                     }}
                                                     style={{
-                                                        background: subActionBg,
-                                                        border: `1px solid ${softBorderColor}`,
-                                                        padding: "6px 10px",
-                                                        color: subActionText,
-                                                        fontSize: 16,
-                                                        borderRadius: 10,
+                                                        ...compactIconButtonStyle,
                                                     }}
+                                                    aria-label="並べ替え"
                                                 >
-                                                    ≡
+                                                    ⋮⋮
                                                 </button>
 
                                                 <button
@@ -835,19 +864,11 @@ export default function LogScreen({
                                                         e.stopPropagation();
                                                         setHistoryTarget(ex.name);
                                                     }}
-                                                    style={{
-                                                        padding: "4px 10px",
-                                                        borderRadius: 10,
-                                                        fontSize: 11,
-                                                        fontWeight: 700,
-                                                        border: `1px solid ${softBorderColor}`,
-                                                        background: subActionBg,
-                                                        color: subActionText,
-                                                    }}
+                                                    style={compactTextButtonStyle}
                                                 >
                                                     履歴
                                                 </button>
-                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ background: subActionBg, border: `1px solid ${softBorderColor}`, color: subActionText, fontSize: 16, padding: "4px 10px", borderRadius: 10 }}>×</button>
+                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ ...compactIconButtonStyle, color: "var(--text2)", borderColor: softBorderColor }}>×</button>
                                             </div>
                                         </div>
 
@@ -900,38 +921,6 @@ export default function LogScreen({
                                                 >
                                                     閉じる
                                                 </button>
-                                            </div>
-                                        )}
-
-                                        {/* 前回の記録 + PR */}
-                                        {(prev || pr) && (
-                                            <div style={{ marginBottom: 12, padding: "10px 12px", background: "var(--card2)", borderRadius: 16, border: `1px solid ${softBorderColor}` }}>
-                                                {prev && (
-                                                    <>
-                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                                                            <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 800 }}>前回 <span style={{ color: "var(--text3)" }}>{prev.date}</span></div>
-                                                            {isPR && <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900 }}>PR更新！</div>}
-                                                        </div>
-                                                    </>
-                                                )}
-                                                {pr && !prIsAlsoPrev && (
-                                                    <div style={{ marginTop: prev ? 7 : 0, paddingTop: prev ? 7 : 0, borderTop: prev ? "1px solid var(--border2)" : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                                        <div style={{ fontSize: 11, color: "var(--text2)" }}>🏆 PR <span style={{ color: "var(--text3)", fontWeight: 400 }}>{pr.date}</span></div>
-                                                        <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)" }}>
-                                                            {prTopSet ? `${prTopSetLabel} × ${prTopSet.reps}rep` : `${dispW(roundTo1Decimal(pr.rm), exUnit)}${formatWeightUnit(exUnit)}`}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {pr && prIsAlsoPrev && (
-                                                    <div style={{ marginTop: 6, fontSize: 11, color: "var(--text2)" }}>
-                                                        🏆 前回がPR（{prTopSet ? `${prTopSetLabel}×${prTopSet.reps}rep` : `${dispW(roundTo1Decimal(pr.rm), exUnit)}${formatWeightUnit(exUnit)}`}）
-                                                    </div>
-                                                )}
-                                                {isPR && prDiff > 0 && (
-                                                    <div style={{ marginTop: 6, fontSize: 11, color: "var(--accent)", fontWeight: 900 }}>
-                                                        PR更新！ +{prDiff.toFixed(1)}kg
-                                                    </div>
-                                                )}
                                             </div>
                                         )}
 
