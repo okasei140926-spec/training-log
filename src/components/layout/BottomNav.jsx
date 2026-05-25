@@ -43,7 +43,7 @@ function DumbbellIcon() {
 
 export default function BottomNav({ tabs, activeTab, onSelectTab, isRecording }) {
     return (
-        <div style={S.bottomNav}>
+        <div data-bottom-nav="true" style={S.bottomNav}>
             <div style={S.bottomNavInner}>
                 {tabs.map((tab) => {
                     const isCenter = tab.id === "log";

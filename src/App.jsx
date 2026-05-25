@@ -1034,45 +1034,125 @@ export default function GymApp() {
     });
 
     const handleLogSetInputFocusChange = useCallback((inputId) => {
+        if (inputId && typeof document !== "undefined") {
+            document.body?.setAttribute("data-log-set-input-active", "true");
+        }
         setFocusedLogSetInputId(inputId || null);
     }, []);
+
+    const markLogSetInputActive = useCallback((setInput, shouldScroll = true) => {
+        if (!(setInput instanceof HTMLElement)) return;
+        document.body?.setAttribute("data-log-set-input-active", "true");
+        setFocusedLogSetInputId(setInput.getAttribute("data-log-set-input-id") || "__log_set_input__");
+        if (!shouldScroll) return;
+        window.setTimeout(() => {
+            setInput.scrollIntoView?.({ block: "center", inline: "nearest", behavior: "smooth" });
+        }, 120);
+    }, []);
+
+    const clearLogSetInputActiveIfClosed = useCallback(() => {
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLElement && activeElement.closest("[data-log-set-input='true']")) {
+            markLogSetInputActive(activeElement);
+            return;
+        }
+        const viewport = window.visualViewport;
+        const keyboardInset = viewport
+            ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+            : 0;
+        if (keyboardInset > 80) {
+            document.body?.setAttribute("data-log-set-input-active", "true");
+            setIsLogKeyboardOpen(true);
+            return;
+        }
+        document.body?.removeAttribute("data-log-set-input-active");
+        setFocusedLogSetInputId(null);
+        setIsLogKeyboardOpen(false);
+    }, [markLogSetInputActive]);
 
     const handleLogScreenFocusCapture = useCallback((event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const setInput = target.closest("[data-log-set-input='true']");
         if (!setInput) return;
-        setFocusedLogSetInputId(setInput.getAttribute("data-log-set-input-id") || "__log_set_input__");
-    }, []);
+        markLogSetInputActive(setInput);
+    }, [markLogSetInputActive]);
 
     const handleLogScreenInputPointerDownCapture = useCallback((event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const setInput = target.closest("[data-log-set-input='true']");
         if (!setInput) return;
-        setFocusedLogSetInputId(setInput.getAttribute("data-log-set-input-id") || "__log_set_input__");
-    }, []);
+        markLogSetInputActive(setInput);
+    }, [markLogSetInputActive]);
 
     const handleLogScreenBlurCapture = useCallback(() => {
-        window.setTimeout(() => {
-            const activeElement = document.activeElement;
-            if (activeElement instanceof HTMLElement && activeElement.closest("[data-log-set-input='true']")) {
-                setFocusedLogSetInputId(
-                    activeElement.getAttribute("data-log-set-input-id") || "__log_set_input__"
-                );
-                return;
-            }
-            const viewport = window.visualViewport;
-            const keyboardInset = viewport
-                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
-                : 0;
-            if (keyboardInset <= 80) setFocusedLogSetInputId(null);
-        }, 360);
-    }, []);
+        window.setTimeout(clearLogSetInputActiveIfClosed, 360);
+    }, [clearLogSetInputActiveIfClosed]);
 
     const handleAiInputFocusChange = useCallback((isFocused) => {
         setFocusedAiChatInput(Boolean(isFocused));
     }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") return undefined;
+        if (screen !== "log") {
+            document.body?.removeAttribute("data-log-set-input-active");
+            return undefined;
+        }
+
+        const activateFromTarget = (target) => {
+            if (!(target instanceof HTMLElement)) return;
+            const setInput = target.closest("[data-log-set-input='true']");
+            if (setInput) markLogSetInputActive(setInput);
+        };
+        const handleFocusIn = (event) => activateFromTarget(event.target);
+        const handleTouchStart = (event) => activateFromTarget(event.target);
+        const handlePointerDown = (event) => activateFromTarget(event.target);
+        const scheduleClear = () => window.setTimeout(clearLogSetInputActiveIfClosed, 360);
+
+        const syncKeyboardState = () => {
+            const viewport = window.visualViewport;
+            const keyboardInset = viewport
+                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+                : 0;
+            const keyboardOpen = keyboardInset > 80;
+            const activeElement = document.activeElement;
+            const activeLogInput =
+                activeElement instanceof HTMLElement
+                    ? activeElement.closest("[data-log-set-input='true']")
+                    : null;
+            setIsLogKeyboardOpen(keyboardOpen);
+            if (activeLogInput) {
+                markLogSetInputActive(activeLogInput, false);
+                return;
+            }
+            if (keyboardOpen) {
+                document.body?.setAttribute("data-log-set-input-active", "true");
+                return;
+            }
+            document.body?.removeAttribute("data-log-set-input-active");
+            setFocusedLogSetInputId(null);
+        };
+
+        document.addEventListener("focusin", handleFocusIn, true);
+        document.addEventListener("touchstart", handleTouchStart, true);
+        document.addEventListener("pointerdown", handlePointerDown, true);
+        document.addEventListener("focusout", scheduleClear, true);
+        window.visualViewport?.addEventListener("resize", syncKeyboardState);
+        window.visualViewport?.addEventListener("scroll", syncKeyboardState);
+        syncKeyboardState();
+
+        return () => {
+            document.removeEventListener("focusin", handleFocusIn, true);
+            document.removeEventListener("touchstart", handleTouchStart, true);
+            document.removeEventListener("pointerdown", handlePointerDown, true);
+            document.removeEventListener("focusout", scheduleClear, true);
+            window.visualViewport?.removeEventListener("resize", syncKeyboardState);
+            window.visualViewport?.removeEventListener("scroll", syncKeyboardState);
+            document.body?.removeAttribute("data-log-set-input-active");
+        };
+    }, [screen, markLogSetInputActive, clearLogSetInputActiveIfClosed]);
 
     useEffect(() => {
         const wasOnline = previousOnlineStateRef.current;

@@ -187,6 +187,9 @@ export const css = `
   button { cursor: pointer; border: none; }
   html, body, #root { background: var(--bg); }
   body { background: var(--bg); }
+  body[data-log-set-input-active="true"] [data-bottom-nav="true"] {
+    display: none !important;
+  }
   input:focus, textarea:focus, select:focus {
     border-color: var(--accent2) !important;
     box-shadow: var(--focus-ring);
