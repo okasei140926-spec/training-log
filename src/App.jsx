@@ -1481,6 +1481,7 @@ export default function GymApp() {
         const { markAsActivity = true } = options;
         const normalizedDate = String(targetDate || "").trim();
         if (!normalizedDate) return;
+        if (normalizedDate !== getTodayKey()) return;
 
         const now = Date.now();
         const currentState = workoutTimerStateRef.current;
@@ -1509,7 +1510,7 @@ export default function GymApp() {
             isFinished: false,
             finishedAt: null,
         });
-    }, [applyWorkoutTimerState]);
+    }, [applyWorkoutTimerState, getTodayKey]);
 
     const markWorkoutActivity = useCallback((targetDate) => {
         const normalizedDate = String(targetDate || "").trim();
@@ -1902,16 +1903,11 @@ export default function GymApp() {
                         localMetrics: incomingMetrics,
                         remoteMetrics,
                         reason: wouldDestructivelyOverwrite
-                            ? "blocked: local data is smaller than remote workouts row"
+                            ? "allowed: user edit may reduce saved workouts row"
                             : hasWorkoutForDate
-                                ? "allowed: local data is not smaller than remote"
+                                ? "allowed: local workout for date"
                                 : "allowed: no local workout for date",
-                        level: wouldDestructivelyOverwrite ? "warn" : "log",
                     });
-
-                    if (wouldDestructivelyOverwrite) {
-                        throw new Error("ローカルデータがSupabaseより少ないため、workoutsの上書きを停止しました");
-                    }
 
                     const { error } = hasWorkoutForDate
                         ? await supabase
@@ -2166,16 +2162,11 @@ export default function GymApp() {
             localMetrics: incomingMetrics,
             remoteMetrics,
             reason: wouldDestructivelyOverwrite
-                ? "blocked: local snapshot is smaller than remote session"
+                ? "allowed: user edit may reduce saved session"
                 : payload
-                    ? "allowed: local snapshot is not smaller than remote"
+                    ? "allowed: local snapshot for date"
                     : "allowed: no local payload",
-            level: wouldDestructivelyOverwrite ? "warn" : "log",
         });
-
-        if (wouldDestructivelyOverwrite) {
-            throw new Error("ローカルデータがSupabaseより少ないため、workout_sessionsの上書きを停止しました");
-        }
 
         if (!payload) {
             if (existingSession?.id) {
@@ -2208,15 +2199,22 @@ export default function GymApp() {
             console.error("workout session latest photo fetch failed", error);
         }
 
-        const startedAt = timing?.startedAtIso || existingSession?.started_at || new Date().toISOString();
-        const endedAt = timing?.endedAtIso || existingSession?.ended_at || new Date().toISOString();
+        const shouldUpdateTiming = normalizedDate === getTodayKey() && timing;
+        const startedAt = shouldUpdateTiming
+            ? (timing.startedAtIso || existingSession?.started_at || new Date().toISOString())
+            : (existingSession?.started_at || null);
+        const endedAt = shouldUpdateTiming
+            ? (timing.endedAtIso || existingSession?.ended_at || new Date().toISOString())
+            : (existingSession?.ended_at || null);
         const existingDurationSec = Number.isFinite(Number(existingSession?.duration_sec)) && Number(existingSession?.duration_sec) > 0 && Number(existingSession?.duration_sec) < 86400
             ? Math.floor(Number(existingSession.duration_sec))
             : 0;
-        // timingがある（今日進行中）場合のみ更新、それ以外は既存値を保持
-        const durationSec = Number.isFinite(timing?.durationSec)
+        const payloadDurationSec = Number.isFinite(Number(payload.session?.duration_sec)) && Number(payload.session.duration_sec) > 0 && Number(payload.session.duration_sec) < 86400
+            ? Math.floor(Number(payload.session.duration_sec))
+            : 0;
+        const durationSec = shouldUpdateTiming && Number.isFinite(timing?.durationSec)
             ? Math.max(0, Math.floor(timing.durationSec))
-            : existingDurationSec;
+            : (existingDurationSec || payloadDurationSec);
 
         const { data: upsertedSession, error: sessionUpsertError } = await supabase
             .from("workout_sessions")
@@ -2266,7 +2264,7 @@ export default function GymApp() {
 
             if (insertExercisesError) throw insertExercisesError;
         }
-    }, []);
+    }, [getTodayKey]);
 
     const cleanupWorkoutSessionsForHistory = useCallback(async (userId, historyMap) => {
         if (!userId) return;
@@ -3274,14 +3272,9 @@ export default function GymApp() {
             localMetrics: incomingMetrics,
             remoteMetrics: existingMetrics,
             reason: wouldDestructivelyOverwrite
-                ? "blocked: visible local draft is smaller than saved history"
-                : "allowed: visible local draft is not smaller than saved history",
-            level: wouldDestructivelyOverwrite ? "warn" : "log",
+                ? "allowed: user edit may reduce saved history"
+                : "allowed: visible local draft for date",
         });
-
-        if (wouldDestructivelyOverwrite) {
-            return;
-        }
 
         pendingWorkoutNotificationRef.current = {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -3291,20 +3284,6 @@ export default function GymApp() {
         queueWorkoutSessionSync(logDate);
 
         setHistory((prev) => {
-            const previousMetrics = getHistoryMetricsForDate(prev, logDate);
-            if (isDestructiveWorkoutRegression(incomingMetrics, previousMetrics)) {
-                logWorkoutPersistenceDecision({
-                    action: "local_history_update_blocked",
-                    userId: user?.id,
-                    date: logDate,
-                    localMetrics: incomingMetrics,
-                    remoteMetrics: previousMetrics,
-                    reason: "blocked: state update would reduce saved workout",
-                    level: "warn",
-                });
-                return prev;
-            }
-
             const nh = { ...prev };
 
             Object.keys(nh).forEach((name) => {
@@ -4120,11 +4099,20 @@ export default function GymApp() {
             sessionEx,
             exerciseUnits,
         };
-        if (getWorkoutDraftSignature(currentDraft) === getWorkoutDraftSignature(savedDraftForDate)) {
+        const currentDraftSignature = getWorkoutDraftSignature(currentDraft);
+        const savedDraftSignature = getWorkoutDraftSignature(savedDraftForDate);
+        if (currentDraftSignature === savedDraftSignature) {
             return;
         }
 
         const localDraft = loadDraftForDate(logDate);
+        if (
+            hasDraftContent(currentDraft) &&
+            currentDraftSignature === getWorkoutDraftSignature(localDraft)
+        ) {
+            return;
+        }
+
         const savedMetrics = getDraftMetricsForDate({
             exercises: savedDraftForDate.sessionEx,
             logData: savedDraftForDate.logData,
@@ -4165,6 +4153,7 @@ export default function GymApp() {
         exerciseUnits,
         history,
         historySyncReady,
+        hasDraftContent,
         loadDraftForDate,
         logData,
         logDate,
@@ -4212,7 +4201,7 @@ export default function GymApp() {
             workoutStartedForDate === dateStr &&
             hasDraftContent(currentDraft);
         const localDraftIsRicher = isDestructiveWorkoutRegression(savedMetrics, localMetrics);
-        const shouldUseSavedWorkout = hasSavedWorkout && !isActiveLocalRecording && !localDraftIsRicher;
+        const shouldUseSavedWorkout = hasSavedWorkout && !isActiveLocalRecording;
 
         if (shouldUseSavedWorkout) {
             saveDraftForDate(dateStr, savedDraftForDate);
@@ -4226,7 +4215,7 @@ export default function GymApp() {
         }
 
         if (hasDraftContent(draftForDate)) {
-            if (localDraftIsRicher) {
+            if (localDraftIsRicher && !hasSavedWorkout) {
                 console.warn("[restore] using richer local draft for date", {
                     env: getRuntimeEnvironmentLabel(),
                     user_id: user?.id || null,
@@ -4239,7 +4228,7 @@ export default function GymApp() {
             setSessionEx(draftForDate.sessionEx);
             setLogData(draftForDate.logData);
             setExerciseUnits(draftForDate.exerciseUnits);
-            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, draftForDate, localDraftIsRicher ? "local_draft_richer_than_saved" : "local_draft");
+            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, draftForDate, localDraftIsRicher && !hasSavedWorkout ? "local_draft_richer_than_saved" : "local_draft");
         } else {
             setTodayLabels([]);
             setSessionEx(null);
