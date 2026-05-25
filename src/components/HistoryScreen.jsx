@@ -17,6 +17,7 @@ import {
   formatDateKey,
   getBestRmSet,
   getValidWorkoutDatesFromHistory,
+  hasValidWorkoutOnDate,
   hasMeaningfulPRIncrease,
   sanitizeHistoryRecord,
   sanitizeWorkoutSets,
@@ -767,11 +768,7 @@ export default function HistoryScreen({
               hiddenBodyParts={hiddenBodyParts}
               exerciseBodyPartOverrides={exerciseBodyPartOverrides}
               onDayOpen={(date) => {
-                const hasData = Object.values(history || {}).some((records) =>
-                  (records || []).some((record) => record.date === date)
-                );
-
-                if (hasData) {
+                if (hasValidWorkoutOnDate(history || {}, date)) {
                   setSelectedDate(date);
                 } else {
                   onLogForDate(date);

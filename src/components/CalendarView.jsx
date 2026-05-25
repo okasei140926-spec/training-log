@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { LABEL_COLORS } from "../constants/suggestions";
 import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
+import {
+  getValidWorkoutDatesFromHistory,
+  sanitizeHistoryRecord,
+} from "../utils/helpers";
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -20,21 +24,20 @@ export default function CalendarView({
   const dateLabelColors = {};
   Object.entries(safeHistory).forEach(([exName, recs]) => {
     (recs || []).forEach((r) => {
-      if (!r?.date) return;
-      const label = resolveRecordedBodyPartLabel(r, exName, {
+      const sanitized = sanitizeHistoryRecord(r, { allowBodyweight: true });
+      if (!sanitized?.date || !sanitized.sets?.length) return;
+      const label = resolveRecordedBodyPartLabel(sanitized, exName, {
         muscleEx,
         hiddenBodyParts,
         exerciseBodyPartOverrides,
       });
-      if (!dateLabelColors[r.date]) dateLabelColors[r.date] = [];
+      if (!dateLabelColors[sanitized.date]) dateLabelColors[sanitized.date] = [];
       const color = label ? LABEL_COLORS[label] : "#4ade80";
-      if (!dateLabelColors[r.date].includes(color)) dateLabelColors[r.date].push(color);
+      if (!dateLabelColors[sanitized.date].includes(color)) dateLabelColors[sanitized.date].push(color);
     });
   });
 
-  const trainedDates = new Set(
-    Object.values(safeHistory).flatMap((recs) => (recs || []).map((r) => r.date).filter(Boolean))
-  );
+  const trainedDates = new Set(getValidWorkoutDatesFromHistory(safeHistory));
 
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();

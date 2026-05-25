@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { resolveRecordedBodyPartLabel, resolveVisibleBodyPartLabel } from "../utils/bodyPartClassification";
+import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
 
 const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
 
@@ -195,21 +196,17 @@ function getWeekRange() {
     const fmt = d => `${d.getMonth() + 1}/${d.getDate()}`;
     return {
         label: `${fmt(mon)} - ${fmt(sun)}`,
-        start: mon.toISOString().slice(0, 10),
-        end: sun.toISOString().slice(0, 10),
+        start: formatDateKey(mon),
+        end: formatDateKey(sun),
     };
 }
 
 function getRecordSets(record) {
-    if (Array.isArray(record?.sets)) {
-        return record.sets.filter(s => toNumber(s?.reps) > 0);
-    }
-    return [];
+    return sanitizeHistoryRecord(record, { allowBodyweight: true })?.sets || [];
 }
 
 function getRecordSetCount(record) {
-    const sets = getRecordSets(record);
-    return sets.length || toNumber(record?.setCount);
+    return getRecordSets(record).length;
 }
 
 function getRecordVolume(record) {
@@ -262,10 +259,7 @@ function getSetFatigueScore(exName, set) {
 
 function getRecordFatigueScore(exName, record) {
     const sets = getRecordSets(record);
-
-    if (sets.length === 0) {
-        return getRecordSetCount(record) * getExerciseFatigueCoeff(exName);
-    }
+    if (sets.length === 0) return 0;
 
     return sets.reduce((sum, set) => sum + getSetFatigueScore(exName, set), 0);
 }
@@ -277,6 +271,7 @@ function calcRecovery(history, bodyPart, muscleEx, overrides) {
 
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
+            if (!getRecordSets(record).length) return;
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
             if (bp !== bodyPart) return;
 
@@ -322,9 +317,11 @@ function collectWeeklySets(history, muscleEx, overrides) {
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
             if (!record.date || record.date < start || record.date > end) return;
+            const setCount = getRecordSetCount(record);
+            if (setCount <= 0) return;
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
             if (bp === "その他") return;
-            map[bp] = (map[bp] || 0) + getRecordSetCount(record);
+            map[bp] = (map[bp] || 0) + setCount;
         });
     });
 
@@ -337,6 +334,8 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
             if (!record.date) return;
+            const setCount = getRecordSetCount(record);
+            if (setCount <= 0) return;
             const dateKey = String(record.date || "").slice(0, 10);
             const recordMinutes =
                 Number(record.elapsedMinutes) > 0 ? Math.round(Number(record.elapsedMinutes))
@@ -362,7 +361,6 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
             if (bp !== "その他") sessions[dateKey].parts.add(bp);
 
-            const setCount = getRecordSetCount(record);
             const volume = getRecordVolume(record);
 
             sessions[dateKey].sets += setCount;
@@ -412,13 +410,14 @@ function collectPartDetail(history, muscleEx, overrides, targetPart) {
 
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
+            const sets = getRecordSetCount(record);
+            if (sets <= 0) return;
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
             if (bp !== targetPart) return;
 
             const d = new Date(record.date + "T00:00:00");
             if (Number.isNaN(d.getTime())) return;
 
-            const sets = getRecordSetCount(record);
             const volume = getRecordVolume(record);
             const hoursAgo = (now - d.getTime()) / 3600000;
 
@@ -467,11 +466,12 @@ function collectWeeklyPartDetail(history, muscleEx, overrides, targetPart) {
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
             if (!record.date || record.date < start || record.date > end) return;
+            const sets = getRecordSetCount(record);
+            if (sets <= 0) return;
 
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
             if (bp !== targetPart) return;
 
-            const sets = getRecordSetCount(record);
             const volume = getRecordVolume(record);
 
             if (!exerciseMap[exName]) {
