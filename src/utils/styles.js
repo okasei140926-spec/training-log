@@ -6,10 +6,10 @@ export const S = {
     width: "100%",
     maxWidth: 430,
     margin: "0 auto",
-    paddingBottom: "var(--bottom-nav-clearance)",
+    paddingBottom: "var(--bottom-nav-scroll-padding)",
   },
   page: {
-    padding: "18px 18px var(--bottom-nav-clearance)",
+    padding: "18px 18px var(--bottom-nav-scroll-padding)",
     display: "flex",
     flexDirection: "column",
     gap: 16,
@@ -96,7 +96,8 @@ export const css = `
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --bottom-nav-base-height: 56px;
     --bottom-nav-height: calc(var(--bottom-nav-base-height) + var(--safe-bottom));
-    --bottom-nav-clearance: calc(132px + var(--safe-bottom));
+    --bottom-nav-clearance: calc(188px + var(--safe-bottom));
+    --bottom-nav-scroll-padding: calc(var(--bottom-nav-clearance) + 24px);
   }
   :root {
     --bg: #0f0f0f;

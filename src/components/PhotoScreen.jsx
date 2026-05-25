@@ -406,7 +406,7 @@ export default function PhotoScreen({ user }) {
     for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
     return (
-        <div className="fade-in" style={{ ...S.page, paddingBottom: 24 }}>
+        <div className="fade-in" style={{ ...S.page, paddingBottom: "var(--bottom-nav-scroll-padding)" }}>
             <div style={{ ...S.sLabel, marginBottom: 0 }}>
                 写真比較
             </div>

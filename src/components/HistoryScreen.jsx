@@ -736,6 +736,7 @@ export default function HistoryScreen({
       className="fade-in"
       style={{
         padding: "18px",
+        paddingBottom: "var(--bottom-nav-scroll-padding)",
         paddingTop: hasTodayWorkout ? "18px" : "30px",
         display: "flex",
         flexDirection: "column",

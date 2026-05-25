@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const HEADER_OFFSET = 72;
-const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--bottom-nav-clearance, 132px) - 10px)`;
+const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--bottom-nav-clearance, 188px) - 10px)`;
 
 const AI_SUGGESTIONS = [
     { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },

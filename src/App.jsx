@@ -4722,7 +4722,7 @@ export default function GymApp() {
                 )}
 
                 {showOfflineOnlyCard && (
-                    <div style={{ padding: "18px" }}>
+                    <div style={{ padding: "18px 18px var(--bottom-nav-scroll-padding)" }}>
                         <div style={{
                             ...S.sectionCard,
                             display: "flex",

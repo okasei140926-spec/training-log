@@ -622,7 +622,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
 
     return (
         <div className="fade-in" style={{
-            padding: "16px 14px var(--bottom-nav-clearance)",
+            padding: "16px 14px var(--bottom-nav-scroll-padding)",
             background: "var(--home-bg)",
             color: "var(--home-text)",
         }}>

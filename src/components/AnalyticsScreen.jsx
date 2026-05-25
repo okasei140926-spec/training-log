@@ -1203,7 +1203,7 @@ export default function AnalyticsScreen({
   }
 
   return (
-    <div ref={screenScrollRef} style={{ padding: "20px 20px var(--bottom-nav-clearance)", display: "flex", flexDirection: "column", gap: 18 }}>
+    <div ref={screenScrollRef} style={{ padding: "20px 20px var(--bottom-nav-scroll-padding)", display: "flex", flexDirection: "column", gap: 18 }}>
       <div
         style={{
           display: "grid",
