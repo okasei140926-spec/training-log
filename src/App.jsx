@@ -3436,13 +3436,42 @@ export default function GymApp() {
     }, []);
 
     const addExToSession = (name, labelOverride) => {
-        const trimmed = name.trim();
-        if (!trimmed) return;
+        const trimmed = String(name || "").trim();
+        if (!trimmed) {
+            console.error("[add-exercise] failed: empty exercise name", {
+                labelOverride,
+                logDate,
+            });
+            return;
+        }
 
-        const label = labelOverride || todayLabels[0];
-        if (!label) return;
+        const normalizedName = normalizeExerciseName(trimmed);
+        const label = labelOverride || todayLabels[0] || getPrimaryDefaultBodyPartLabel(normalizedName) || "その他";
+        if (!label) {
+            console.error("[add-exercise] failed: missing body part label", {
+                name: trimmed,
+                labelOverride,
+                todayLabels,
+                logDate,
+            });
+            return;
+        }
         const currentSessionExercises = sessionEx !== null ? sessionEx : baseExercises;
-        const alreadyInSession = currentSessionExercises.some((e) => e.name === trimmed);
+        const beforeNames = currentSessionExercises.map((e) => e.name);
+        const existingExercise = currentSessionExercises.find(
+            (e) => normalizeExerciseName(e.name) === normalizedName
+        );
+        const alreadyInSession = !!existingExercise;
+
+        if (alreadyInSession) {
+            console.log("[add-exercise] duplicate ignored", {
+                name: trimmed,
+                label,
+                before: beforeNames,
+            });
+            requestLogExerciseFocus(existingExercise);
+            return;
+        }
 
         const ex = {
             id: Date.now() + (Math.random() * 1000 | 0),
@@ -3454,9 +3483,22 @@ export default function GymApp() {
             ? currentSessionExercises
             : [...currentSessionExercises, ex];
 
+        console.log("[add-exercise] adding exercise", {
+            name: trimmed,
+            label,
+            before: beforeNames,
+            after: nextSessionForDraft.map((exercise) => exercise.name),
+        });
+
         setSessionEx((p) => {
             const current = p !== null ? p : [...baseExercises];
-            if (current.find((e) => e.name === trimmed)) return current;
+            if (current.find((e) => normalizeExerciseName(e.name) === normalizedName)) {
+                console.log("[add-exercise] duplicate ignored during state update", {
+                    name: trimmed,
+                    current: current.map((exercise) => exercise.name),
+                });
+                return current;
+            }
 
             const next = [...current, ex];
             saveDraftForDate(logDate, {
@@ -3499,6 +3541,7 @@ export default function GymApp() {
         setExerciseOverrideForLabel(trimmed, label);
 
         if (!alreadyInSession) {
+            requestLogExerciseFocus(ex);
             startWorkoutTimerIfNeeded(logDate, { markAsActivity: true });
         }
     };

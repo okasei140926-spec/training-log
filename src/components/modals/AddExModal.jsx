@@ -228,13 +228,43 @@ export default function AddExModal({
         onUpdateHiddenBodyParts?.([...hiddenBodyParts, bodyPart]);
     };
 
+    const hasAddedExercise = (exerciseName) => {
+        const normalizedName = normalizeExerciseName(exerciseName);
+        if (!normalizedName) return false;
+        return Array.from(added).some((addedName) => normalizeExerciseName(addedName) === normalizedName);
+    };
+
     const handleQuick = (s) => {
-        if (added.has(s)) {
-            onQuickAdd(s, true, activeTab);
-            setAdded(p => { const n = new Set(p); n.delete(s); return n; });
-        } else {
-            onQuickAdd(s, false, activeTab);
-            setAdded(p => new Set([...p, s]));
+        const exerciseName = String(s || "").trim();
+        if (!exerciseName) {
+            console.error("[add-exercise] failed: empty exercise name", { activeTab });
+            return;
+        }
+
+        if (hasAddedExercise(exerciseName)) {
+            console.log("[add-exercise] duplicate ignored", {
+                name: exerciseName,
+                activeTab,
+                existingNames: Array.from(added),
+            });
+            return;
+        }
+
+        try {
+            onQuickAdd(exerciseName, false, activeTab);
+            setAdded((prev) => new Set([...prev, exerciseName]));
+            console.log("[add-exercise] modal selection added", {
+                name: exerciseName,
+                activeTab,
+                before: Array.from(added),
+                after: [...Array.from(added), exerciseName],
+            });
+        } catch (error) {
+            console.error("[add-exercise] failed while adding from modal", {
+                name: exerciseName,
+                activeTab,
+                error,
+            });
         }
     };
 
@@ -250,7 +280,7 @@ export default function AddExModal({
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {items.map(s => {
                 const key = typeof s === "string" ? s : s.name;
-                const isAdded = added.has(key);
+                const isAdded = hasAddedExercise(key);
                 return (
                     <button
                         key={key}
