@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from "react";
 import { isSupabaseConfigured, missingSupabaseEnvKeys, supabase, supabaseConfigError } from "./utils/supabase";
 import {
     load,
@@ -2859,6 +2859,83 @@ export default function GymApp() {
 
     const exercises = sessionEx !== null ? sessionEx : baseExercises;
 
+    const displayHistory = useMemo(() => {
+        if (!logDate) return history;
+        const shouldOverlayDraft = screen === "log" || workoutStartedForDate === logDate;
+        if (!shouldOverlayDraft) return history;
+
+        const next = {};
+        Object.entries(history || {}).forEach(([name, records]) => {
+            const keptRecords = (records || []).filter((record) => record?.date !== logDate);
+            if (keptRecords.length > 0) next[name] = keptRecords;
+        });
+
+        let hasDraftWorkout = false;
+        (exercises || []).forEach((exercise, index) => {
+            const exerciseName = String(exercise?.name || "").trim();
+            if (!exerciseName) return;
+
+            const exUnit = getExUnit(exerciseName);
+            const stored = sanitizeWorkoutSets(
+                (logData[exerciseName] || []).map((set) => ({
+                    ...set,
+                    weight: storeSetWeightForUnit(set, exUnit),
+                    displayWeight: set.weight,
+                    displayUnit: getSetDisplayUnit(set, exUnit),
+                    unit: getSetWeightMode(set, exUnit),
+                    weightMode: getSetWeightMode(set, exUnit),
+                    weightType: getSetWeightMode(set, exUnit),
+                    weightUnit: getSetWeightMode(set, exUnit),
+                    weight_unit: getSetWeightMode(set, exUnit),
+                })),
+                { allowBodyweight: true }
+            );
+
+            if (!stored.length) return;
+            hasDraftWorkout = true;
+
+            const bodyPart = getExerciseRecordBodyPart(exercise, todayLabels[0] || null);
+            const durationSec = Math.max(
+                0,
+                workoutStartedForDate === logDate
+                    ? computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current)
+                    : 0,
+                Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
+            );
+            const durationMinutes = durationSec > 0 ? Math.max(1, Math.round(durationSec / 60)) : 0;
+
+            if (!next[exerciseName]) next[exerciseName] = [];
+            next[exerciseName].push({
+                sets: stored,
+                weight: stored[0].weight === "BW" ? "BW" : Number(stored[0].weight),
+                reps: Number(stored[0].reps),
+                date: logDate,
+                order: index,
+                bodyPart,
+                ...(durationSec > 0
+                    ? {
+                        duration_sec: durationSec,
+                        durationSec,
+                        durationMinutes,
+                        elapsedMinutes: durationMinutes,
+                    }
+                    : {}),
+            });
+        });
+
+        return hasDraftWorkout ? next : history;
+    }, [
+        exercises,
+        getExUnit,
+        history,
+        logData,
+        logDate,
+        savedWorkoutDurationSecByDate,
+        screen,
+        todayLabels,
+        workoutStartedForDate,
+    ]);
+
     useEffect(() => {
         if (screen !== "log") return;
 
@@ -4663,7 +4740,7 @@ export default function GymApp() {
 
                 {screen === "analytics" && (
                     <AnalyticsScreen
-                        history={history}
+                        history={displayHistory}
                         manualBests={manualBests}
                         muscleEx={muscleEx}
                         hiddenBodyParts={hiddenBodyParts}
@@ -4736,7 +4813,7 @@ export default function GymApp() {
 
                 {screen === "history" && (
                     <HomeScreen
-                        history={history}
+                        history={displayHistory}
                         muscleEx={muscleEx}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                         hiddenBodyParts={hiddenBodyParts}
@@ -4750,7 +4827,7 @@ export default function GymApp() {
 
                 {screen === "calendar" && (
                     <HistoryScreen
-                        history={history}
+                        history={displayHistory}
                         todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
                         muscleEx={muscleEx}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
@@ -4796,7 +4873,7 @@ export default function GymApp() {
                         sendAI={sendAI}
                         aiLoad={aiLoad}
                         aiEnd={aiEnd}
-                        history={history}
+                        history={displayHistory}
                         isPro={isPro}
                         onStartPro={activatePumpPro}
                         onDeactivateProDev={deactivatePumpProDev}

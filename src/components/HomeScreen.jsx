@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { resolveRecordedBodyPartLabel, resolveVisibleBodyPartLabel } from "../utils/bodyPartClassification";
+import { normalizeBodyPartLabel, resolveRecordedBodyPartLabel, resolveVisibleBodyPartLabel } from "../utils/bodyPartClassification";
 import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
 
 const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
@@ -39,21 +39,7 @@ const FALLBACK_PART_MAP = {
 
 
 function normalizeHomeBodyPart(label) {
-    const raw = String(label || "").trim();
-    if (!raw) return "その他";
-
-    const map = {
-        "ハムストリングス": "ハム",
-        "ハムストリング": "ハム",
-        "大腿二頭筋": "ハム",
-        "お尻": "尻",
-        "臀部": "尻",
-        "ケツ": "尻",
-        "腹": "腹筋",
-        "腹部": "腹筋",
-    };
-
-    return map[raw] || raw;
+    return normalizeBodyPartLabel(label);
 }
 
 const recoveryStatCard = {

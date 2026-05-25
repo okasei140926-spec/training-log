@@ -2,6 +2,7 @@ import {
   BODY_PART_DISPLAY_ORDER,
   BODY_PART_ENGLISH_LABELS,
 } from "./exerciseCountByBodyPart";
+import { normalizeBodyPartLabel } from "./bodyPartClassification";
 
 const getBodyPartOrderIndex = (bodyPart) => {
   const index = BODY_PART_DISPLAY_ORDER.indexOf(bodyPart);
@@ -10,7 +11,7 @@ const getBodyPartOrderIndex = (bodyPart) => {
 
 const getEntryBodyPart = (entry, fallbackBodyPart = "その他") => {
   const raw = String(entry?.bodyPart || entry?.body_part || "").trim();
-  return raw || fallbackBodyPart;
+  return normalizeBodyPartLabel(raw, fallbackBodyPart);
 };
 
 const getEntrySets = (entry) => (Array.isArray(entry?.sets) ? entry.sets.filter(Boolean) : []);
@@ -87,7 +88,7 @@ export function getSetCountByBodyPart(
     sort = "fixed",
   } = {}
 ) {
-  const hiddenSet = new Set(hiddenBodyParts || []);
+  const hiddenSet = new Set((hiddenBodyParts || []).map((part) => normalizeBodyPartLabel(part)));
   const countsMap = {};
 
   (entries || []).forEach((entry) => {

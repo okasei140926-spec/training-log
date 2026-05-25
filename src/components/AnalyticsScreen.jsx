@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
-import { buildBodyPartExerciseKey, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
+import { buildBodyPartExerciseKey, normalizeBodyPartLabel, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 import { buildTrainingSummary } from "../utils/trainingSummary";
 import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 
@@ -82,7 +82,7 @@ function PeriodSegmentedControl({
   );
 }
 
-const FIXED_BODY_PART_LABELS = ["胸", "背中", "四頭", "ハムストリングス", "尻", "肩", "二頭", "三頭", "腹筋", "その他"];
+const FIXED_BODY_PART_LABELS = ["胸", "背中", "四頭", "ハム", "尻", "肩", "二頭", "三頭", "腹筋", "その他"];
 const BIG3_EXERCISES = [
   { key: "bench", label: "ベンチプレス" },
   { key: "squat", label: "スクワット" },
@@ -133,8 +133,7 @@ const BodyPartChartTooltip = ({ active, payload, label, valueLabel, unit, format
 };
 
 const formatDate = (date) => (date ? date.replace(/-/g, "/") : null);
-const getBodyPartDisplayLabel = (bodyPart) =>
-  bodyPart === "ハムストリングス" ? "ハム" : bodyPart;
+const getBodyPartDisplayLabel = (bodyPart) => normalizeBodyPartLabel(bodyPart);
 
 const buildValidSets = (record) =>
   sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });

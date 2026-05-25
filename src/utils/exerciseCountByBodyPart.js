@@ -1,10 +1,10 @@
-import { buildBodyPartExerciseKey } from "./bodyPartClassification";
+import { buildBodyPartExerciseKey, normalizeBodyPartLabel } from "./bodyPartClassification";
 
 export const BODY_PART_DISPLAY_ORDER = [
   "胸",
   "背中",
   "四頭",
-  "ハムストリングス",
+  "ハム",
   "尻",
   "肩",
   "二頭",
@@ -17,7 +17,7 @@ export const BODY_PART_ENGLISH_LABELS = {
   胸: "CHEST",
   背中: "BACK",
   四頭: "QUADS",
-  ハムストリングス: "HAMSTRINGS",
+  ハム: "HAMSTRINGS",
   尻: "GLUTES",
   肩: "SHOULDERS",
   二頭: "BICEPS",
@@ -42,7 +42,7 @@ const getEntryExerciseName = (entry) =>
 
 const getEntryBodyPart = (entry, fallbackBodyPart = "その他") => {
   const raw = String(entry?.bodyPart || entry?.body_part || "").trim();
-  return raw || fallbackBodyPart;
+  return normalizeBodyPartLabel(raw, fallbackBodyPart);
 };
 
 const getEntrySets = (entry) => (Array.isArray(entry?.sets) ? entry.sets.filter(Boolean) : []);
@@ -125,7 +125,7 @@ export function getExerciseCountByBodyPart(
     sort = "fixed",
   } = {}
 ) {
-  const hiddenSet = new Set(hiddenBodyParts || []);
+  const hiddenSet = new Set((hiddenBodyParts || []).map((part) => normalizeBodyPartLabel(part)));
   const keys = new Set();
   const countsMap = {};
 

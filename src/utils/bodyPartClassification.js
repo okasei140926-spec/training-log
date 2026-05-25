@@ -1,10 +1,27 @@
 import { QUICK_LABELS, SUGGESTIONS } from "../constants/suggestions";
 import { normalizeExerciseName } from "./exerciseName";
 
-const BODY_PART_PRIORITY = [...QUICK_LABELS, "その他"];
+const BODY_PART_ALIASES = {
+  ハムストリングス: "ハム",
+  ハムストリング: "ハム",
+  大腿二頭筋: "ハム",
+  お尻: "尻",
+  臀部: "尻",
+  ケツ: "尻",
+  腹: "腹筋",
+  腹部: "腹筋",
+};
+
+const BODY_PART_PRIORITY = [...new Set(QUICK_LABELS.map((label) => BODY_PART_ALIASES[label] || label)), "その他"];
 
 const normalizeName = (name) =>
   normalizeExerciseName(String(name || "").replace(/\s+/g, "").trim());
+
+export const normalizeBodyPartLabel = (label, fallbackBodyPart = "その他") => {
+  const raw = String(label || "").trim();
+  if (!raw) return fallbackBodyPart;
+  return BODY_PART_ALIASES[raw] || raw;
+};
 
 export const matchesExerciseName = (candidateName, exName) => {
   const base = normalizeName(candidateName);
@@ -80,7 +97,7 @@ const getOverrideLabel = (exName, exerciseBodyPartOverrides = {}, hiddenBodyPart
 };
 
 export const buildBodyPartExerciseKey = (bodyPart, exName) =>
-  `${String(bodyPart || "").trim()}::${normalizeExerciseName(exName)}`;
+  `${normalizeBodyPartLabel(bodyPart, "")}::${normalizeExerciseName(exName)}`;
 
 export const resolveRecordBodyPartLabel = (
   record,
@@ -88,18 +105,18 @@ export const resolveRecordBodyPartLabel = (
   { muscleEx = {}, exerciseBodyPartOverrides = {} } = {}
 ) => {
   const explicitBodyPart = String(record?.bodyPart || record?.body_part || "").trim();
-  if (explicitBodyPart) return explicitBodyPart;
+  if (explicitBodyPart) return normalizeBodyPartLabel(explicitBodyPart);
 
   const overrideLabel = getOverrideLabel(exName, exerciseBodyPartOverrides, []);
-  if (overrideLabel) return overrideLabel;
+  if (overrideLabel) return normalizeBodyPartLabel(overrideLabel);
 
   const visibleCustomLabels = getVisibleCustomBodyPartLabels(exName, muscleEx, []);
-  if (visibleCustomLabels.length === 1) return visibleCustomLabels[0];
+  if (visibleCustomLabels.length === 1) return normalizeBodyPartLabel(visibleCustomLabels[0]);
 
   const defaultLabels = getDefaultBodyPartLabels(exName);
-  if (defaultLabels.length > 0) return defaultLabels[0];
+  if (defaultLabels.length > 0) return normalizeBodyPartLabel(defaultLabels[0]);
 
-  return visibleCustomLabels[0] || null;
+  return visibleCustomLabels[0] ? normalizeBodyPartLabel(visibleCustomLabels[0]) : null;
 };
 
 export const resolveVisibleBodyPartLabel = (
@@ -112,16 +129,16 @@ export const resolveVisibleBodyPartLabel = (
   const overrideLabel = getOverrideLabel(exName, exerciseBodyPartOverrides, hiddenBodyParts);
 
   if (overrideLabel) {
-    return overrideLabel;
+    return normalizeBodyPartLabel(overrideLabel);
   }
 
   if (visibleDefaultLabels.length === 1) {
-    return visibleDefaultLabels[0];
+    return normalizeBodyPartLabel(visibleDefaultLabels[0]);
   }
 
   if (visibleDefaultLabels.length > 1) {
     const explicitCustomLabels = getExplicitCustomBodyPartLabels(exName, muscleEx, hiddenBodyParts);
-    return explicitCustomLabels[0] || visibleDefaultLabels[0];
+    return normalizeBodyPartLabel(explicitCustomLabels[0] || visibleDefaultLabels[0]);
   }
 
   if (defaultLabels.length > 0) {
@@ -129,7 +146,7 @@ export const resolveVisibleBodyPartLabel = (
   }
 
   const visibleCustomLabels = getVisibleCustomBodyPartLabels(exName, muscleEx, hiddenBodyParts);
-  return visibleCustomLabels[0] || null;
+  return visibleCustomLabels[0] ? normalizeBodyPartLabel(visibleCustomLabels[0]) : null;
 };
 
 export const resolveRecordedBodyPartLabel = (
@@ -141,8 +158,10 @@ export const resolveRecordedBodyPartLabel = (
     muscleEx,
     exerciseBodyPartOverrides,
   });
-  if (!bodyPart || (hiddenBodyParts || []).includes(bodyPart)) return null;
-  return bodyPart;
+  const normalizedBodyPart = normalizeBodyPartLabel(bodyPart);
+  const hiddenSet = new Set((hiddenBodyParts || []).map((part) => normalizeBodyPartLabel(part)));
+  if (!normalizedBodyPart || hiddenSet.has(normalizedBodyPart)) return null;
+  return normalizedBodyPart;
 };
 
 export const getBodyPartResolutionSamples = (

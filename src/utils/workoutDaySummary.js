@@ -1,5 +1,6 @@
 import { dispW } from "./helpers";
 import { normalizeExerciseName } from "./exerciseName";
+import { normalizeBodyPartLabel } from "./bodyPartClassification";
 import {
   getExerciseCountByBodyPart,
   getExerciseCountTotal,
@@ -29,7 +30,7 @@ export const formatWorkoutDaySummarySet = (set, unit = "kg") =>
   `${formatWorkoutDaySummaryWeight(set?.weight, unit)} × ${Number(set?.reps || 0)}rep`;
 
 export const buildWorkoutDaySummaryPrKey = (bodyPart, exerciseName) =>
-  `${String(bodyPart || "").trim()}::${normalizeExerciseName(exerciseName)}`;
+  `${normalizeBodyPartLabel(bodyPart, "")}::${normalizeExerciseName(exerciseName)}`;
 
 export function buildWorkoutDaySummary({
   title,
@@ -49,14 +50,14 @@ export function buildWorkoutDaySummary({
   const bodyParts = [
     ...new Set(
       normalizedEntries
-        .map((entry) => String(entry?.bodyPart || "").trim())
+        .map((entry) => normalizeBodyPartLabel(entry?.bodyPart, ""))
         .filter(Boolean)
     ),
   ];
 
   const items = normalizedEntries.map((entry, index) => {
     const exerciseName = String(entry?.name || "").trim();
-    const bodyPart = String(entry?.bodyPart || "").trim();
+    const bodyPart = normalizeBodyPartLabel(entry?.bodyPart, "");
     const setCount = Number(entry?.setCount || entry?.sets?.length || 0);
     const unit =
       (typeof getExUnit === "function" ? getExUnit(exerciseName) : fallbackUnit) || fallbackUnit;

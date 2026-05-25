@@ -9,11 +9,12 @@ import {
   getExerciseCountTotal,
 } from "./exerciseCountByBodyPart";
 import { getSetCountByBodyPart } from "./setCountByBodyPart";
+import { normalizeBodyPartLabel } from "./bodyPartClassification";
 
 const buildSessionExerciseKey = (exerciseName, bodyPart) =>
-  `${String(bodyPart || "").trim()}::${String(exerciseName || "").trim()}`;
+  `${normalizeBodyPartLabel(bodyPart, "")}::${String(exerciseName || "").trim()}`;
 
-const sanitizeBodyPart = (value) => String(value || "").trim();
+const sanitizeBodyPart = (value) => normalizeBodyPartLabel(value, "");
 const normalizeUnit = (value) => {
   const unit = String(value || "kg").toLowerCase();
   if (unit === "lbs" || unit === "lb" || unit === "pound" || unit === "pounds") return "lb";
