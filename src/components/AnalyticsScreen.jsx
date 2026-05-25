@@ -23,6 +23,65 @@ const SUMMARY_SCOPE_OPTIONS = [
   { key: "last_month", label: "先月" },
 ];
 
+function PeriodSegmentedControl({
+  options = [],
+  value,
+  onChange,
+  scroll = false,
+  style = {},
+}) {
+  const getOptionValue = (option) => option.value ?? option.key ?? option.month ?? option.days;
+
+  return (
+    <div
+      style={{
+        display: scroll ? "flex" : "grid",
+        gridTemplateColumns: scroll ? undefined : `repeat(${Math.max(options.length, 1)}, minmax(0, 1fr))`,
+        gap: 8,
+        width: "100%",
+        padding: 6,
+        borderRadius: 999,
+        background: "var(--card)",
+        border: "1px solid rgba(18, 199, 194, 0.10)",
+        boxShadow: "var(--shadow-soft)",
+        overflowX: scroll ? "auto" : "visible",
+        WebkitOverflowScrolling: scroll ? "touch" : undefined,
+        scrollbarWidth: scroll ? "none" : undefined,
+        ...style,
+      }}
+    >
+      {options.map((option) => {
+        const optionValue = getOptionValue(option);
+        const selected = value === optionValue;
+        return (
+          <button
+            key={optionValue}
+            type="button"
+            onClick={() => onChange?.(optionValue)}
+            style={{
+              flex: scroll ? "0 0 auto" : undefined,
+              minWidth: scroll ? 92 : 0,
+              minHeight: 44,
+              padding: "10px 14px",
+              borderRadius: 999,
+              border: selected ? "1px solid transparent" : "1px solid rgba(18, 199, 194, 0.12)",
+              background: selected ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
+              color: selected ? "#fff" : "var(--text2)",
+              fontSize: 13,
+              fontWeight: 900,
+              cursor: "pointer",
+              boxShadow: selected ? "0 10px 22px rgba(15, 94, 99, 0.12)" : "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const FIXED_BODY_PART_LABELS = ["胸", "背中", "四頭", "ハムストリングス", "尻", "肩", "二頭", "三頭", "腹筋", "その他"];
 const BIG3_EXERCISES = [
   { key: "bench", label: "ベンチプレス" },
@@ -1192,14 +1251,12 @@ export default function AnalyticsScreen({
       {activeAnalysisTab === "parts" && (
         <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
           <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 12 }}>部位別ボリューム</div>
-          <div style={{ display: "inline-flex", gap: 6, padding: 5, borderRadius: 999, background: "var(--card2)", border: "1px solid rgba(18, 199, 194, 0.10)", marginBottom: 14 }}>
-            {SUMMARY_SCOPE_OPTIONS.map((option) => (
-              <button key={option.key} type="button" onClick={() => setOverviewScope(option.key)}
-                style={{ padding: "7px 14px", borderRadius: 999, border: "none", background: overviewScope === option.key ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "transparent", color: overviewScope === option.key ? "#fff" : "var(--text2)", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <PeriodSegmentedControl
+            options={SUMMARY_SCOPE_OPTIONS}
+            value={overviewScope}
+            onChange={setOverviewScope}
+            style={{ marginBottom: 14 }}
+          />
           <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 14 }}>{overviewSummary.rangeLabel}</div>
 
           {(overviewBodyPartStats || []).length > 0 ? (
@@ -1301,42 +1358,16 @@ export default function AnalyticsScreen({
             <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
               <div style={{ fontSize: 18, fontWeight: 900, color: "var(--text)", marginBottom: 14 }}>推移</div>
               {monthlyTableList.length > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    overflowX: "auto",
-                    WebkitOverflowScrolling: "touch",
-                    paddingBottom: 4,
-                    marginBottom: 12,
-                    scrollbarWidth: "none",
-                  }}
-                >
-                  {monthlyTableList.map((monthItem) => {
-                    const selected = activeTrendMonth === monthItem.month;
-                    return (
-                      <button
-                        key={monthItem.month}
-                        type="button"
-                        onClick={() => setSelectedTrendMonth(monthItem.month)}
-                        style={{
-                          flex: "0 0 auto",
-                          padding: "8px 14px",
-                          borderRadius: 999,
-                          border: selected ? "1px solid rgba(18, 199, 194, 0.30)" : "1px solid rgba(18, 199, 194, 0.12)",
-                          background: selected ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)",
-                          color: selected ? "#fff" : "var(--text2)",
-                          fontSize: 12,
-                          fontWeight: 850,
-                          cursor: "pointer",
-                          boxShadow: selected ? "0 10px 24px rgba(18, 199, 194, 0.18)" : "none",
-                        }}
-                      >
-                        {monthItem.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <PeriodSegmentedControl
+                  options={monthlyTableList.map((monthItem) => ({
+                    key: monthItem.month,
+                    label: monthItem.label,
+                  }))}
+                  value={activeTrendMonth}
+                  onChange={setSelectedTrendMonth}
+                  scroll
+                  style={{ marginBottom: 12 }}
+                />
               ) : (
                 <div style={{ color: "var(--text3)", fontSize: 12, marginBottom: 12 }}>月別データがありません</div>
               )}
@@ -1428,43 +1459,11 @@ export default function AnalyticsScreen({
         );
       })()}
       {activeAnalysisTab === "overview" && (<>
-      <div
-        style={{
-          display: "inline-flex",
-          gap: 8,
-          padding: 6,
-          borderRadius: 999,
-          background: "var(--card)",
-          border: "1px solid rgba(18, 199, 194, 0.10)",
-          boxShadow: "var(--shadow-soft)",
-          alignSelf: "flex-start",
-        }}
-      >
-        {SUMMARY_SCOPE_OPTIONS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => setOverviewScope(option.key)}
-            style={{
-              minWidth: 82,
-              padding: "9px 16px",
-              borderRadius: 999,
-              border: "1px solid rgba(18, 199, 194, 0.10)",
-              background:
-                overviewScope === option.key
-                  ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                  : "transparent",
-              color: overviewScope === option.key ? "#fff" : "var(--text2)",
-              fontSize: 13,
-              fontWeight: 800,
-              boxShadow:
-                overviewScope === option.key ? "0 10px 22px rgba(15, 94, 99, 0.12)" : "none",
-            }}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <PeriodSegmentedControl
+        options={SUMMARY_SCOPE_OPTIONS}
+        value={overviewScope}
+        onChange={setOverviewScope}
+      />
 
       <div style={{ textAlign: "center", fontSize: 12, color: "var(--text2)", fontWeight: 700, marginBottom: 4 }}>
         {overviewSummary.rangeLabel}
