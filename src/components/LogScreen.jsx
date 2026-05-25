@@ -189,6 +189,8 @@ export default function LogScreen({
     onSetInputFocusChange,
     focusExerciseRequest,
     onFocusExerciseHandled,
+    lastActiveExercise,
+    onActiveExerciseChange,
 }) {
 
     const hasExercises = exercises.length > 0;
@@ -222,13 +224,27 @@ export default function LogScreen({
         }
     };
 
+    const notifyActiveExercise = useCallback((exercise) => {
+        if (exercise?.id || exercise?.name) onActiveExerciseChange?.(exercise);
+    }, [onActiveExerciseChange]);
+
     const openExerciseById = useCallback((exerciseId, { scroll = true } = {}) => {
         const targetIndex = exercises.findIndex((exercise) => exercise.id === exerciseId);
         if (targetIndex < 0) return false;
         setActiveExIdx(targetIndex);
+        notifyActiveExercise(exercises[targetIndex]);
         if (scroll) setPendingScrollExerciseId(exerciseId);
         return true;
-    }, [exercises]);
+    }, [exercises, notifyActiveExercise]);
+
+    const openExerciseAtIndex = useCallback((index, { scroll = false } = {}) => {
+        if (index < 0 || index >= exercises.length) return false;
+        const targetExercise = exercises[index];
+        setActiveExIdx(index);
+        notifyActiveExercise(targetExercise);
+        if (scroll) setPendingScrollExerciseId(targetExercise.id);
+        return true;
+    }, [exercises, notifyActiveExercise]);
 
     const setCountByBodyPart = getSetCountByBodyPart(
         exercises.map((exercise) => {
@@ -254,6 +270,7 @@ export default function LogScreen({
 
 
     const startEdit = (ex) => {
+        notifyActiveExercise(ex);
         setEditingId(ex.id);
         setEditingName(ex.name);
         setTimeout(() => editRef.current?.focus(), 30);
@@ -396,6 +413,43 @@ export default function LogScreen({
         if (!showAdd) firstAddedDuringAddModalRef.current = null;
     }, [showAdd]);
 
+    const hasEditedSets = useCallback((exercise) => {
+        const sets = logData[exercise.name] || getExSets(exercise);
+        return (sets || []).some((set) => {
+            const weight = String(set?.weight ?? "").trim();
+            const reps = String(set?.reps ?? "").trim();
+            return Boolean(weight || reps);
+        });
+    }, [getExSets, logData]);
+
+    useEffect(() => {
+        if (!exercises.length) return;
+
+        const rememberedExercise = lastActiveExercise
+            ? exercises.find((exercise) =>
+                exercise.id === lastActiveExercise.id ||
+                exercise.name === lastActiveExercise.name
+            )
+            : null;
+
+        if (rememberedExercise) {
+            openExerciseById(rememberedExercise.id, { scroll: false });
+            return;
+        }
+
+        const lastEditedIndex = [...exercises]
+            .map((exercise, index) => ({ exercise, index }))
+            .reverse()
+            .find(({ exercise }) => hasEditedSets(exercise))?.index;
+
+        if (Number.isInteger(lastEditedIndex)) {
+            openExerciseAtIndex(lastEditedIndex, { scroll: false });
+            return;
+        }
+
+        openExerciseAtIndex(0, { scroll: false });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     useEffect(() => {
         const previousIds = previousExerciseIdsRef.current || [];
         const previousIdSet = new Set(previousIds);
@@ -418,8 +472,9 @@ export default function LogScreen({
         const targetIndex = exercises.findIndex((exercise) => exercise.id === targetExercise.id);
         if (targetIndex < 0) return;
         setActiveExIdx(targetIndex);
+        notifyActiveExercise(targetExercise);
         setPendingScrollExerciseId(targetExercise.id);
-    }, [activeExIdx, exercises]);
+    }, [activeExIdx, exercises, notifyActiveExercise]);
 
     useEffect(() => {
         if (!focusExerciseRequest) return;
@@ -610,7 +665,7 @@ export default function LogScreen({
                                     {() => (
                                         <div ref={setExerciseCardRef(ex.id)}>
                                             <div
-                                                onClick={() => setActiveExIdx(i)}
+                                                onClick={() => openExerciseAtIndex(i)}
                                                 style={{
                                                     background: "var(--card)",
                                                     borderRadius: 20,
@@ -888,7 +943,10 @@ export default function LogScreen({
                                                 idx={idx}
                                                 setField={setField}
                                                 onWeightModeChange={(mode) => setWeightMode(ex, idx, mode)}
-                                                onSetInputFocusChange={onSetInputFocusChange}
+                                                onSetInputFocusChange={(inputId) => {
+                                                    if (inputId) notifyActiveExercise(ex);
+                                                    onSetInputFocusChange?.(inputId);
+                                                }}
                                                 inputId={`${ex.id || ex.name}-${idx}`}
                                                 previousSet={previousSets[idx]}
                                                 previousUnit={previousSets[idx]?.displayUnit || previousSets[idx]?.unit || previousSets[idx]?.weightUnit || previousSets[idx]?.weight_unit || previousUnit}

@@ -1022,6 +1022,9 @@ export default function GymApp() {
     const [focusedLogSetInputId, setFocusedLogSetInputId] = useState(null);
     const [isLogKeyboardOpen, setIsLogKeyboardOpen] = useState(false);
     const [logExerciseFocusRequest, setLogExerciseFocusRequest] = useState(null);
+    const [lastActiveLogExerciseByDate, setLastActiveLogExerciseByDate] = useState(() =>
+        load("lastActiveLogExerciseByDate", {})
+    );
     const [focusedAiChatInput, setFocusedAiChatInput] = useState(false);
     const [isAiKeyboardOpen, setIsAiKeyboardOpen] = useState(false);
     const [historySyncDiagnostic, setHistorySyncDiagnostic] = useState({
@@ -1049,6 +1052,18 @@ export default function GymApp() {
             nonce: Date.now() + Math.random(),
         });
     }, []);
+
+    const handleLogExerciseActiveChange = useCallback((exercise) => {
+        if (!exercise?.id && !exercise?.name) return;
+        setLastActiveLogExerciseByDate((prev) => ({
+            ...(prev || {}),
+            [logDate]: {
+                id: exercise.id,
+                name: exercise.name,
+                updatedAt: Date.now(),
+            },
+        }));
+    }, [logDate]);
 
     const markLogSetInputActive = useCallback((setInput, shouldScroll = true) => {
         if (!(setInput instanceof HTMLElement)) return;
@@ -2151,6 +2166,9 @@ export default function GymApp() {
     useEffect(() => {
         persistHistoryForUser(user?.id, history);
     }, [history, user]);
+    useEffect(() => {
+        save("lastActiveLogExerciseByDate", lastActiveLogExerciseByDate || {});
+    }, [lastActiveLogExerciseByDate]);
     useEffect(() => { save("customBodyParts", customBodyParts); }, [customBodyParts]);
     useEffect(() => { save(EXERCISE_BODY_PART_OVERRIDES_KEY, exerciseBodyPartOverrides); }, [exerciseBodyPartOverrides]);
     useEffect(() => { save("hiddenBodyParts", hiddenBodyParts); }, [hiddenBodyParts]);
@@ -4537,6 +4555,8 @@ export default function GymApp() {
                                     current?.nonce === request?.nonce ? null : current
                                 );
                             }}
+                            lastActiveExercise={lastActiveLogExerciseByDate?.[logDate] || null}
+                            onActiveExerciseChange={handleLogExerciseActiveChange}
                             resetSession={() => {
                                 deleteAllHistoryForDate(logDate);
                             }}
