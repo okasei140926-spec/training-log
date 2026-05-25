@@ -11,6 +11,7 @@ import {
   isAppleOAuthEnabled,
   isNativeApp,
 } from "../utils/oauth";
+import { isInAppBrowser } from "../utils/invite";
 
 export default function Auth({ onClose, isDark }) {
   const [mode, setMode] = useState("login");
@@ -20,6 +21,7 @@ export default function Auth({ onClose, isDark }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [oauthLoadingProvider, setOauthLoadingProvider] = useState("");
   const oauthTimeoutRef = useRef(null);
   const oauthResumeCheckTimeoutRef = useRef(null);
@@ -164,15 +166,6 @@ export default function Auth({ onClose, isDark }) {
         if (error) throw error;
         if (data.user) {
           await supabase.from("profiles").insert({ id: data.user.id, username });
-          const pending = localStorage.getItem("pendingFriendId");
-          if (pending && pending !== data.user.id) {
-            await supabase.from("friendships").upsert({
-              requester_id: data.user.id,
-              receiver_id: pending,
-              status: "accepted",
-            });
-            localStorage.removeItem("pendingFriendId");
-          }
         }
         setSent(true);
       } else if (mode === "reset") {
@@ -182,16 +175,6 @@ export default function Auth({ onClose, isDark }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        const { data: { user } } = await supabase.auth.getUser();
-        const pending = localStorage.getItem("pendingFriendId");
-        if (pending && user && pending !== user.id) {
-          await supabase.from("friendships").upsert({
-            requester_id: user.id,
-            receiver_id: pending,
-            status: "accepted",
-          });
-          localStorage.removeItem("pendingFriendId");
-        }
         onClose();
       }
     } catch (e) {
@@ -202,6 +185,13 @@ export default function Auth({ onClose, isDark }) {
   };
 
   const handleOAuth = async (provider) => {
+    if (provider === "google" && !isNativeApp() && isInAppBrowser()) {
+      setError("Googleログインはアプリ内ブラウザでは利用できません。SafariまたはChromeで開いてください。");
+      setOauthLoadingProvider("");
+      setLoading(false);
+      return;
+    }
+
     if (provider === "apple" && !isAppleOAuthEnabled()) {
       setError(getAppleOAuthDisabledMessage());
       setOauthLoadingProvider("");
@@ -240,6 +230,22 @@ export default function Auth({ onClose, isDark }) {
       setError(getOAuthErrorMessage(provider, e));
       completeNativeOAuth("");
     }
+  };
+
+  const copyCurrentLink = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = url;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopiedLink(true);
+    window.setTimeout(() => setCopiedLink(false), 1800);
   };
 
   const inputStyle = {
@@ -323,7 +329,28 @@ export default function Auth({ onClose, isDark }) {
       )}
       <input placeholder="メールアドレス" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
       <input type="password" placeholder="パスワード（6文字以上）" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} />
-      {error && <p style={{ color: "red", marginBottom: 12, fontSize: 14 }}>{error}</p>}
+      {error && (
+        <div style={{ color: "red", marginBottom: 12, fontSize: 14, lineHeight: 1.6 }}>
+          <div>{error}</div>
+          {error.includes("アプリ内ブラウザ") && (
+            <button
+              onClick={copyCurrentLink}
+              style={{
+                marginTop: 10,
+                padding: "9px 12px",
+                borderRadius: 999,
+                border: `1px solid ${border}`,
+                background: inputBg,
+                color: text,
+                fontWeight: 800,
+                fontSize: 13,
+              }}
+            >
+              {copiedLink ? "コピーしました" : "リンクをコピー"}
+            </button>
+          )}
+        </div>
+      )}
       <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, marginBottom: 12, opacity: loading ? 0.7 : 1 }}>
         {loading ? "処理中..." : mode === "login" ? "ログイン" : "登録する"}
       </button>

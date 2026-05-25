@@ -445,7 +445,7 @@ export default function FriendsScreen({
     }, [hasTodayWorkoutRecord, today, user]);
 
     const handleCopyInvite = async () => {
-        const url = `${window.location.origin}?ref=${user.id}`;
+        const url = `${window.location.origin}/invite?code=${encodeURIComponent(user.id)}`;
         const text = "一緒にトレーニングを記録しよう！ PUMP";
         if (navigator.share) {
             try { await navigator.share({ title: "PUMP", text, url }); return; } catch { }

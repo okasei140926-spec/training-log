@@ -45,6 +45,11 @@ import {
     buildWorkoutSessionPayloadFromHistory,
 } from "./utils/workoutSessions";
 import { getPrimaryDefaultBodyPartLabel } from "./utils/bodyPartClassification";
+import {
+    getInviteCodeFromLocation,
+    processPendingInviteForUser,
+    savePendingInviteCode,
+} from "./utils/invite";
 import WorkoutSessionShareModal from "./components/modals/WorkoutSessionShareModal";
 import SettingsModal from "./components/modals/SettingsModal";
 import {
@@ -485,6 +490,7 @@ export default function GymApp() {
     const [, setAuthReady] = useState(!isSupabaseConfigured);
     const [splashMinElapsed, setSplashMinElapsed] = useState(false);
     const [splashForceDone, setSplashForceDone] = useState(false);
+    const processingInviteCodeRef = useRef("");
 
     const ensureProfileForUser = useCallback(async (nextUser) => {
         if (!nextUser?.id) return;
@@ -536,17 +542,15 @@ export default function GymApp() {
 
     const connectPendingFriendForUser = useCallback(async (nextUser) => {
         if (!nextUser?.id) return;
-        const pending = localStorage.getItem("pendingFriendId");
-        if (!pending || pending === nextUser.id) return;
-
-        const { error } = await supabase.from("friendships").upsert({
-            requester_id: nextUser.id,
-            receiver_id: pending,
-            status: "accepted",
+        const result = await processPendingInviteForUser({
+            supabase,
+            user: nextUser,
         });
 
-        if (error) throw error;
-        localStorage.removeItem("pendingFriendId");
+        if (result?.message) {
+            console.log("[invite]", result);
+            window.alert(result.message);
+        }
     }, []);
 
     useEffect(() => {
@@ -689,14 +693,45 @@ export default function GymApp() {
     }, []);
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const ref = params.get("ref");
-        if (ref) {
-            localStorage.setItem("pendingFriendId", ref);
+        const inviteCode = getInviteCodeFromLocation(window.location);
+        if (inviteCode) {
+            savePendingInviteCode(inviteCode);
             setScreen("ranking");
-            setShowAuth(true);
+            if (user?.id) {
+                const processingKey = `${user.id}:${inviteCode}`;
+                if (processingInviteCodeRef.current === processingKey) return;
+                processingInviteCodeRef.current = processingKey;
+                processPendingInviteForUser({
+                    supabase,
+                    user,
+                    code: inviteCode,
+                })
+                    .then((result) => {
+                        if (result?.message) {
+                            console.log("[invite]", result);
+                            window.alert(result.message);
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("[invite] immediate processing failed", {
+                            error,
+                            code: error?.code,
+                            message: error?.message,
+                            details: error?.details,
+                            hint: error?.hint,
+                            inviteCode,
+                            userId: user.id,
+                        });
+                        window.alert("友達追加に失敗しました。時間をおいて再試行してください。");
+                    })
+                    .finally(() => {
+                        processingInviteCodeRef.current = "";
+                    });
+            } else {
+                setShowAuth(true);
+            }
         }
-    }, []);
+    }, [user]);
 
 
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
@@ -2404,7 +2439,7 @@ export default function GymApp() {
                 const remoteWorkoutHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
                 const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionsRes.data || []);
                 const remoteHistory = applyHistoryDeleteMarkers(
-                    mergeHistoryMaps(remoteWorkoutHistory, remoteSessionHistory),
+                    mergeHistoryMaps(remoteSessionHistory, remoteWorkoutHistory),
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
@@ -2508,7 +2543,7 @@ export default function GymApp() {
                 const remoteWorkoutHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
                 const remoteSessionHistory = buildHistoryFromWorkoutSessionRows(sessionsRes.data || []);
                 const remoteHistory = applyHistoryDeleteMarkers(
-                    mergeHistoryMaps(remoteWorkoutHistory, remoteSessionHistory),
+                    mergeHistoryMaps(remoteSessionHistory, remoteWorkoutHistory),
                     effectiveDeleteMarkers
                 );
                 const mergedHistory = applyHistoryDeleteMarkers(
@@ -2535,7 +2570,7 @@ export default function GymApp() {
                 persistHistoryForUser(currentUserId, mergedHistory);
                 setHistory((prev) => {
                     const reconciledHistory = applyHistoryDeleteMarkers(
-                        mergeHistoryMaps(mergedHistory, prev),
+                        mergeHistoryMaps(prev, mergedHistory),
                         effectiveDeleteMarkers
                     );
                     return serializeHistoryMap(reconciledHistory) === serializeHistoryMap(prev)
