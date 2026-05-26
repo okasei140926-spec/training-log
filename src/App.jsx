@@ -1180,7 +1180,7 @@ export default function GymApp() {
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
-    const [, setAuthReady] = useState(!isSupabaseConfigured);
+    const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
     const [splashMinElapsed, setSplashMinElapsed] = useState(false);
     const [splashForceDone, setSplashForceDone] = useState(false);
     const processingInviteCodeRef = useRef("");
@@ -3294,18 +3294,37 @@ export default function GymApp() {
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => {
-        if (user?.id && (!historySyncReady || historyRemoteLoadFailedRef.current)) {
+        if (!authReady) {
+            console.warn("[restore] skip local history persistence before auth is ready", {
+                env: getRuntimeEnvironmentLabel(),
+                currentDisplayed: getHistoryOverallMetrics(history),
+            });
+            return;
+        }
+        if (user?.id && (!historySyncReady || !historyRemoteReady || historyRemoteLoadFailedRef.current)) {
             console.warn("[restore] skip local history persistence while remote history is not trusted", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user.id,
                 historySyncReady,
+                historyRemoteReady,
                 remoteLoadFailed: historyRemoteLoadFailedRef.current,
                 currentDisplayed: getHistoryOverallMetrics(history),
             });
             return;
         }
+        if (user?.id && getValidWorkoutDatesFromHistory(history).length === 0) {
+            console.warn("[restore] skip empty history persistence for logged-in user", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user.id,
+                reason: "empty history must not overwrite Supabase-backed cache",
+            });
+            return;
+        }
+        if (!user?.id && getValidWorkoutDatesFromHistory(history).length === 0) {
+            return;
+        }
         persistHistoryForUser(user?.id, history);
-    }, [history, historySyncReady, user]);
+    }, [authReady, history, historyRemoteReady, historySyncReady, user]);
     useEffect(() => {
         save("lastActiveLogExerciseByDate", lastActiveLogExerciseByDate || {});
     }, [lastActiveLogExerciseByDate]);
@@ -6979,7 +6998,7 @@ export default function GymApp() {
                         }}
                         user={user}
                         workoutDurationSecByDate={savedWorkoutDurationSecByDate}
-                        recordsLoading={Boolean(user?.id && !historyRemoteReady && !historyLoadError)}
+                        recordsLoading={Boolean(!authReady || (user?.id && !historyRemoteReady && !historyLoadError))}
                     />
                 )}
 

@@ -603,14 +603,14 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
     }, []);
 
     const weeklySets = useMemo(() => {
-        if (!homeMetricsReady) return {};
+        if (!homeMetricsReady || recordsLoading) return {};
         const nextWeeklySets = collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides);
         console.log("[home weekly aggregation]", {
             ...collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides),
             bodyPartCounts: nextWeeklySets,
         });
         return nextWeeklySets;
-    }, [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides]);
+    }, [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides]);
 
     const partsToShow = useMemo(() => {
         const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));
@@ -619,7 +619,7 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
     }, [hiddenBodyParts, weeklySets]);
 
     const recoveries = useMemo(() => (
-        homeMetricsReady
+        homeMetricsReady && !recordsLoading
             ? partsToShow.map(part => ({
                 part,
                 ...calcRecovery(history, part, muscleEx, exerciseBodyPartOverrides),
@@ -629,20 +629,22 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                 pct: 100,
                 status: "excellent",
             }))
-    ), [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
+    ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
 
     const recentSessions = useMemo(() => (
-        homeMetricsReady
+        homeMetricsReady && !recordsLoading
             ? collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
             : []
-    ), [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
+    ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
 
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))
         .filter(x => x.sets > 0);
     const weeklyItems = weeklyDisplay.length
         ? weeklyDisplay
-        : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }));
+        : recordsLoading
+            ? []
+            : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }));
 
     return (
         <div className="fade-in" style={{
