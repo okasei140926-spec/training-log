@@ -186,9 +186,12 @@ const logRecordFetchError = (operation, table, error, context = {}) => {
         operation,
         table,
         ...context,
+        query: context.query || null,
+        user_id: context.userId || context.user_id || null,
+        date: context.date || context.workoutDate || context.workout_date || null,
         error,
-        message: error?.message,
         code: error?.code,
+        message: error?.message,
         details: error?.details,
         hint: error?.hint,
     });
@@ -413,6 +416,17 @@ const isDestructiveWorkoutRegression = (incomingMetrics, existingMetrics) => {
         incomingMetrics.setCount < existingMetrics.setCount ||
         incomingMetrics.volume + 0.01 < existingMetrics.volume
     );
+};
+
+const isMetricPersistenceMismatch = (expectedMetrics, actualMetrics) => {
+    if (!expectedMetrics?.hasWorkout && !actualMetrics?.hasWorkout) return false;
+    if (expectedMetrics?.exerciseCount !== actualMetrics?.exerciseCount) return true;
+    if (expectedMetrics?.setCount !== actualMetrics?.setCount) return true;
+    if (Math.abs(Number(expectedMetrics?.volume || 0) - Number(actualMetrics?.volume || 0)) > 0.01) return true;
+
+    const expectedNames = [...new Set((expectedMetrics?.exerciseNames || []).map((name) => normalizeExerciseName(name)).filter(Boolean))].sort();
+    const actualNames = [...new Set((actualMetrics?.exerciseNames || []).map((name) => normalizeExerciseName(name)).filter(Boolean))].sort();
+    return JSON.stringify(expectedNames) !== JSON.stringify(actualNames);
 };
 
 const logWorkoutPersistenceDecision = ({
@@ -2004,6 +2018,40 @@ export default function GymApp() {
                             .eq("date", workoutDate);
 
                     if (error) throw error;
+
+                    const { data: verifyWorkoutRow, error: verifyWorkoutError } = await supabase
+                        .from("workouts")
+                        .select("date, data, updated_at")
+                        .eq("user_id", userId)
+                        .eq("date", workoutDate)
+                        .maybeSingle();
+
+                    if (verifyWorkoutError) {
+                        logRecordFetchError("workouts_post_save_verify", "workouts", verifyWorkoutError, {
+                            userId,
+                            workoutDate,
+                            query: "workouts.select(date,data,updated_at).eq(user_id).eq(date).maybeSingle",
+                        });
+                        throw verifyWorkoutError;
+                    }
+
+                    const verifiedMetrics = verifyWorkoutRow
+                        ? getHistoryMetricsForDate(verifyWorkoutRow.data || {}, workoutDate, {
+                            updatedAt: verifyWorkoutRow.updated_at,
+                        })
+                        : getEmptyWorkoutMetrics();
+                    if (isMetricPersistenceMismatch(incomingMetrics, verifiedMetrics)) {
+                        console.error("[save verify] workouts.data mismatch after save", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            expected: incomingMetrics,
+                            actual: verifiedMetrics,
+                            savingExerciseNames: incomingMetrics.exerciseNames,
+                        });
+                        throw new Error(`workouts.data verification failed for ${workoutDate}`);
+                    }
+
                     clearSyncFailure(workoutDate);
                     results.syncedDates.push(workoutDate);
                 } catch (error) {
@@ -2360,6 +2408,42 @@ export default function GymApp() {
 
             if (insertExercisesError) throw insertExercisesError;
         }
+
+        const { data: verifiedSession, error: verifySessionError } = await supabase
+            .from("workout_sessions")
+            .select("workout_date, duration_sec, total_volume, exercise_count, summary_json, updated_at")
+            .eq("user_id", userId)
+            .eq("workout_date", normalizedDate)
+            .maybeSingle();
+
+        if (verifySessionError) {
+            logRecordFetchError("workout_sessions_post_save_verify", "workout_sessions", verifySessionError, {
+                userId,
+                workoutDate: normalizedDate,
+                query: "workout_sessions.select(workout_date,duration_sec,total_volume,exercise_count,summary_json,updated_at).eq(user_id).eq(workout_date).maybeSingle",
+            });
+            throw verifySessionError;
+        }
+
+        const verifiedMetrics = verifiedSession
+            ? getWorkoutSummaryMetrics(verifiedSession.summary_json, {
+                totalVolume: verifiedSession.total_volume,
+                exerciseCount: verifiedSession.exercise_count,
+                updatedAt: verifiedSession.updated_at,
+            })
+            : getEmptyWorkoutMetrics();
+        if (isMetricPersistenceMismatch(incomingMetrics, verifiedMetrics)) {
+            console.error("[save verify] workout_sessions.summary_json mismatch after save", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: userId,
+                date: normalizedDate,
+                expected: incomingMetrics,
+                actual: verifiedMetrics,
+                savingExerciseNames: incomingMetrics.exerciseNames,
+            });
+            throw new Error(`workout_sessions verification failed for ${normalizedDate}`);
+        }
+
         return { synced: true };
     }, [getTodayKey]);
 
@@ -2713,6 +2797,7 @@ export default function GymApp() {
                     logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
                         userId: user.id,
                         dateRange: { latestOnly: true },
+                        query: "workouts.select(date,data,updated_at).eq(user_id).order(date desc).limit(1)",
                     });
                     throw workoutsRes.error;
                 }
@@ -2720,6 +2805,7 @@ export default function GymApp() {
                     logRecordFetchError("history_initial_load", "workout_sessions", sessionsRes.error, {
                         userId: user.id,
                         dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                        query: "workout_sessions.select(workout_date,duration_sec,summary_json,updated_at).eq(user_id).gte(workout_date).order(workout_date asc).limit",
                     });
                     throw sessionsRes.error;
                 }
@@ -2834,6 +2920,7 @@ export default function GymApp() {
                     logRecordFetchError("history_save_reconcile", "workouts", workoutsRes.error, {
                         userId: currentUserId,
                         dateRange: { latestOnly: true },
+                        query: "workouts.select(date,data,updated_at).eq(user_id).order(date desc).limit(1)",
                     });
                     throw workoutsRes.error;
                 }
@@ -2841,6 +2928,7 @@ export default function GymApp() {
                     logRecordFetchError("history_save_reconcile", "workout_sessions", sessionsRes.error, {
                         userId: currentUserId,
                         dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                        query: "workout_sessions.select(workout_date,duration_sec,summary_json,updated_at).eq(user_id).gte(workout_date).order(workout_date asc).limit",
                     });
                     throw sessionsRes.error;
                 }
@@ -2896,9 +2984,6 @@ export default function GymApp() {
                         : reconciledHistory;
                 });
 
-                syncDates.forEach((date) => pendingWorkoutContentChangeDatesRef.current.delete(date));
-                pendingWorkoutSessionSyncDatesRef.current = new Set();
-
                 const sessionSyncDates = syncDates.filter(
                     (date) => !workoutSyncResults.skippedDates.includes(date)
                 );
@@ -2918,31 +3003,21 @@ export default function GymApp() {
                                 await syncWorkoutSessionSnapshot(currentUserId, mergedHistory, date, timing);
                                 clearSyncFailure(date);
                             } catch (error) {
-                                const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(currentUserId, date).catch((remoteCheckError) => {
-                                    console.error("workout remote existence check failed after session sync error", {
-                                        error: remoteCheckError,
-                                        userId: currentUserId,
-                                        date,
-                                    });
-                                    return false;
-                                });
                                 console.error("workout session sync failed", {
                                     error,
                                     userId: currentUserId,
                                     date,
-                                    remoteAlreadyHasWorkout,
                                     records: describeHistoryRecordsForDate(mergedHistory, date),
                                 });
-                                if (remoteAlreadyHasWorkout) {
-                                    clearSyncFailure(date);
-                                } else {
-                                    recordSyncFailure(date, error, "workout_sessions");
-                                    pendingWorkoutSessionSyncDatesRef.current.add(date);
-                                }
+                                recordSyncFailure(date, error, "workout_sessions");
+                                pendingWorkoutSessionSyncDatesRef.current.add(date);
                             }
                         })
                     );
                 }
+
+                syncDates.forEach((date) => pendingWorkoutContentChangeDatesRef.current.delete(date));
+                pendingWorkoutSessionSyncDatesRef.current = new Set();
 
                 try {
                     await cleanupWorkoutSessionsForHistory(currentUserId, mergedHistory);
@@ -4309,8 +4384,22 @@ export default function GymApp() {
                         .maybeSingle(),
                 ]);
 
-                if (workoutsRes.error) throw workoutsRes.error;
-                if (sessionRes.error) throw sessionRes.error;
+                if (workoutsRes.error) {
+                    logRecordFetchError("log_date_refresh", "workouts", workoutsRes.error, {
+                        userId: user.id,
+                        workoutDate: normalizedDate,
+                        query: "workouts.select(date,data,updated_at).eq(user_id).order(date desc).limit(1)",
+                    });
+                    throw workoutsRes.error;
+                }
+                if (sessionRes.error) {
+                    logRecordFetchError("log_date_refresh", "workout_sessions", sessionRes.error, {
+                        userId: user.id,
+                        workoutDate: normalizedDate,
+                        query: "workout_sessions.select(workout_date,duration_sec,summary_json,updated_at).eq(user_id).eq(workout_date).maybeSingle",
+                    });
+                    throw sessionRes.error;
+                }
                 if (cancelled) return;
                 if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
 
@@ -4360,6 +4449,7 @@ export default function GymApp() {
                 setSessionEx(savedDraftForDate.sessionEx);
                 setLogData(savedDraftForDate.logData);
                 setExerciseUnits(savedDraftForDate.exerciseUnits);
+                setHistoryLoadError("");
             } catch (error) {
                 console.warn("[restore] Supabase date refresh failed", {
                     env: getRuntimeEnvironmentLabel(),
