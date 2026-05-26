@@ -590,7 +590,7 @@ function RecoveryCard({ part, pct, status, onClick }) {
     );
 }
 
-export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts, onStartLog, user, workoutDurationSecByDate = {} }) {
+export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts, onStartLog, user, workoutDurationSecByDate = {}, recordsLoading = false }) {
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
     const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
@@ -757,7 +757,11 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                     <span />
                 </div>
 
-                {recentSessions.length === 0 ? (
+                {recordsLoading ? (
+                    <div style={{ padding: "28px 0", textAlign: "center", color: "var(--home-muted)", fontWeight: 800 }}>
+                        記録を取得しています
+                    </div>
+                ) : recentSessions.length === 0 ? (
                     <div style={{ padding: "28px 0", textAlign: "center", color: "var(--home-muted)", fontWeight: 800 }}>
                         まだ記録がありません
                     </div>

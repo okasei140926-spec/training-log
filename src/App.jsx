@@ -210,6 +210,7 @@ const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
 const REMOTE_HISTORY_SESSION_LIMIT = 400;
 const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 21;
 const INITIAL_HOME_HISTORY_LIMIT = 80;
+const HISTORY_RECOVERY_LIMIT = 250;
 const DIAGNOSTIC_LOOKBACK_DAYS = 45;
 
 const getDateDaysAgoKey = (days) => {
@@ -943,6 +944,30 @@ const getHistoryOverallMetrics = (historyMap) => {
     };
 };
 
+const getWorkoutRowsDebugSummary = (rows = []) => ({
+    rowCount: rows.length,
+    dates: rows.map((row) => String(row?.date || "").slice(0, 10)).filter(Boolean),
+    "2026-05-25": rows
+        .filter((row) => String(row?.date || "").slice(0, 10) === "2026-05-25")
+        .map((row) => getHistoryMetricsForDate(row?.data || {}, "2026-05-25")),
+});
+
+const getWorkoutSessionRowsDebugSummary = (rows = []) => ({
+    rowCount: rows.length,
+    dates: rows.map((row) => String(row?.workout_date || "").slice(0, 10)).filter(Boolean),
+    "2026-05-25": rows
+        .filter((row) => String(row?.workout_date || "").slice(0, 10) === "2026-05-25")
+        .map((row) => ({
+            workout_date: String(row?.workout_date || "").slice(0, 10),
+            total_volume: row?.total_volume ?? null,
+            exercise_count: row?.exercise_count ?? null,
+            summaryMetrics: getWorkoutSummaryMetrics(row?.summary_json, {
+                totalVolume: row?.total_volume,
+                exerciseCount: row?.exercise_count,
+            }),
+        })),
+});
+
 const normalizeHomeSummaryBodyPart = (label) => {
     const raw = String(label || "").trim();
     if (raw === "ハムストリングス" || raw === "ハムストリング" || raw === "大腿二頭筋") return "ハム";
@@ -1423,6 +1448,7 @@ export default function GymApp() {
     const [workoutsDataHistory, setWorkoutsDataHistory] = useState({});
     const [manualBests, setManualBests] = useState([]);
     const [historySyncReady, setHistorySyncReady] = useState(false);
+    const [historyRemoteReady, setHistoryRemoteReady] = useState(false);
     const [historyLoadError, setHistoryLoadError] = useState("");
     const [historyReloadNonce, setHistoryReloadNonce] = useState(0);
     const [customBodyParts, setCustomBodyParts] = useState(() => {
@@ -3436,12 +3462,14 @@ export default function GymApp() {
                 historyHasTrustedRemoteSnapshotRef.current = false;
                 historyDeleteMarkersRef.current = createEmptyHistoryDeleteMarkers();
                 if (isActive) setHistoryLoadError("");
+                if (isActive) setHistoryRemoteReady(false);
                 if (isActive) setHistorySyncReady(true);
                 return;
             }
 
             if (isActive) {
                 setHistorySyncReady(false);
+                setHistoryRemoteReady(false);
                 setHistoryLoadError("");
                 if (!historyHasTrustedRemoteSnapshotRef.current) {
                     console.log("[restore] ignore localStorage bootstrap until Supabase history load succeeds", {
@@ -3495,7 +3523,7 @@ export default function GymApp() {
                                 .limit(initialHistoryLimit),
                             supabase
                                 .from("workout_sessions")
-                                .select("workout_date, duration_sec, summary_json")
+                                .select("workout_date, duration_sec, total_volume, exercise_count, summary_json")
                                 .eq("user_id", user.id)
                                 .gte("workout_date", sessionRangeStart)
                                 .order("workout_date", { ascending: true })
@@ -3537,7 +3565,7 @@ export default function GymApp() {
                     return;
                 }
 
-                const { workoutsRes, sessionsRes } = initialFetch.value;
+                let { workoutsRes, sessionsRes } = initialFetch.value;
 
                 if (sessionsRes.error) {
                     logRecordFetchError("history_initial_load", "workout_sessions", sessionsRes.error, {
@@ -3559,6 +3587,103 @@ export default function GymApp() {
                     });
                 }
 
+                console.log("[restore] history initial load response", {
+                    env: getRuntimeEnvironmentLabel(),
+                    fetchName: "history_initial_load",
+                    user_id: user.id,
+                    dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
+                    workouts: getWorkoutRowsDebugSummary(workoutsRes.data || []),
+                    workout_sessions: sessionsRes.error
+                        ? { rowCount: 0, error: sessionsRes.error?.message || String(sessionsRes.error) }
+                        : getWorkoutSessionRowsDebugSummary(sessionsRes.data || []),
+                    error: {
+                        workouts: workoutsRes.error?.message || null,
+                        workout_sessions: sessionsRes.error?.message || null,
+                    },
+                });
+
+                if (!(workoutsRes.data || []).length && !(sessionsRes.error ? [] : (sessionsRes.data || [])).length) {
+                    const recoveryFetchKey = `history_recovery_latest:${user.id}:${HISTORY_RECOVERY_LIMIT}`;
+                    const recoveryFetch = await runDedupeSupabaseFetch(
+                        recoveryFetchKey,
+                        async () => {
+                            const [recoveryWorkoutsRes, recoverySessionsRes] = await Promise.all([
+                                supabase
+                                    .from("workouts")
+                                    .select("date, data")
+                                    .eq("user_id", user.id)
+                                    .order("date", { ascending: false })
+                                    .limit(HISTORY_RECOVERY_LIMIT),
+                                supabase
+                                    .from("workout_sessions")
+                                    .select("workout_date, duration_sec, total_volume, exercise_count, summary_json")
+                                    .eq("user_id", user.id)
+                                    .order("workout_date", { ascending: false })
+                                    .limit(HISTORY_RECOVERY_LIMIT),
+                            ]);
+
+                            if (recoveryWorkoutsRes.error) {
+                                const context = logRecordFetchError("history_recovery_latest", "workouts", recoveryWorkoutsRes.error, {
+                                    userId: user.id,
+                                    dateRange: { latest: true, limit: HISTORY_RECOVERY_LIMIT },
+                                    query: "workouts.select(date,data).eq(user_id).order(date desc).limit",
+                                    responseData: recoveryWorkoutsRes.data,
+                                });
+                                throw attachRecordFetchContext(recoveryWorkoutsRes.error, context);
+                            }
+
+                            return {
+                                workoutsRes: {
+                                    ...recoveryWorkoutsRes,
+                                    data: [...(recoveryWorkoutsRes.data || [])].reverse(),
+                                },
+                                sessionsRes: {
+                                    ...recoverySessionsRes,
+                                    data: [...(recoverySessionsRes.data || [])].reverse(),
+                                },
+                            };
+                        },
+                        {
+                            minIntervalMs: 20000,
+                            freshTtlMs: 45000,
+                            backoffMs: 30000,
+                            context: {
+                                fetchName: "history_recovery_latest",
+                                user_id: user.id,
+                                dateRange: { latest: true, limit: HISTORY_RECOVERY_LIMIT },
+                                tables: ["workouts", "workout_sessions"],
+                            },
+                        }
+                    );
+
+                    if (!recoveryFetch.skipped) {
+                        workoutsRes = recoveryFetch.value.workoutsRes;
+                        sessionsRes = recoveryFetch.value.sessionsRes;
+                        console.log("[restore] history recovery latest response", {
+                            env: getRuntimeEnvironmentLabel(),
+                            fetchName: "history_recovery_latest",
+                            user_id: user.id,
+                            dateRange: { latest: true, limit: HISTORY_RECOVERY_LIMIT },
+                            workouts: getWorkoutRowsDebugSummary(workoutsRes.data || []),
+                            workout_sessions: sessionsRes.error
+                                ? { rowCount: 0, error: sessionsRes.error?.message || String(sessionsRes.error) }
+                                : getWorkoutSessionRowsDebugSummary(sessionsRes.data || []),
+                            error: {
+                                workouts: workoutsRes.error?.message || null,
+                                workout_sessions: sessionsRes.error?.message || null,
+                            },
+                        });
+                    } else {
+                        console.warn("[restore] history recovery latest skipped", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: user.id,
+                            reason: recoveryFetch.reason,
+                            fallbackUsed: false,
+                            currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
+                        });
+                    }
+                }
+
                 const remoteHistory = applyHistoryDeleteMarkers(
                     buildRemoteHistoryWithWorkoutRowsPriority(
                         workoutsRes.data || [],
@@ -3571,6 +3696,42 @@ export default function GymApp() {
                     effectiveDeleteMarkers
                 );
                 const hasRemoteWorkout = getValidWorkoutDatesFromHistory(remoteHistory).length > 0;
+                const fetchedWorkoutRowsCount = (workoutsRes.data || []).length;
+                const fetchedSessionRowsCount = sessionsRes.error ? 0 : (sessionsRes.data || []).length;
+                const currentDisplayedBeforeApply = latestHistoryRef.current || {};
+
+                if (!hasRemoteWorkout && (fetchedWorkoutRowsCount > 0 || fetchedSessionRowsCount > 0)) {
+                    console.warn("[restore] fetched rows did not produce history; keeping current state", {
+                        env: getRuntimeEnvironmentLabel(),
+                        fetchName: "history_initial_load",
+                        user_id: user.id,
+                        workoutsRowsCount: fetchedWorkoutRowsCount,
+                        workoutSessionsRowsCount: fetchedSessionRowsCount,
+                        workouts: getWorkoutRowsDebugSummary(workoutsRes.data || []),
+                        workout_sessions: sessionsRes.error
+                            ? { rowCount: 0, error: sessionsRes.error?.message || String(sessionsRes.error) }
+                            : getWorkoutSessionRowsDebugSummary(sessionsRes.data || []),
+                        currentDisplayed: getHistoryOverallMetrics(currentDisplayedBeforeApply),
+                        fallbackUsed: false,
+                        emptyHistoryApplied: false,
+                        reason: "Supabase rows exist but could not be converted to valid history",
+                    });
+                    setHistoryLoadError("記録データの復元形式を確認中です。再取得してください。");
+                    return;
+                }
+
+                if (!hasRemoteWorkout && !historyHasTrustedRemoteSnapshotRef.current) {
+                    console.warn("[restore] no remote workout rows found; empty history not persisted as cache", {
+                        env: getRuntimeEnvironmentLabel(),
+                        fetchName: "history_initial_load",
+                        user_id: user.id,
+                        workoutsRowsCount: fetchedWorkoutRowsCount,
+                        workoutSessionsRowsCount: fetchedSessionRowsCount,
+                        currentDisplayed: getHistoryOverallMetrics(currentDisplayedBeforeApply),
+                        fallbackUsed: false,
+                    });
+                }
+
                 const mergedHistory = remoteHistory;
                 const appliedWorkoutsDataHistory = workoutsOnlyHistory;
                 const currentWeekRange = getCurrentWeekRangeForHomeSummary();
@@ -3606,11 +3767,14 @@ export default function GymApp() {
 
                 historyRemoteLoadFailedRef.current = false;
                 historyHasTrustedRemoteSnapshotRef.current = true;
+                setHistoryRemoteReady(true);
                 setHistoryLoadError("");
                 setHistory(mergedHistory);
                 workoutsDataHistoryRef.current = appliedWorkoutsDataHistory;
                 setWorkoutsDataHistory(appliedWorkoutsDataHistory);
-                persistHistoryForUser(user.id, mergedHistory);
+                if (hasRemoteWorkout) {
+                    persistHistoryForUser(user.id, mergedHistory);
+                }
             } catch (error) {
                 console.error("history sync load failed", {
                     error,
@@ -3625,6 +3789,7 @@ export default function GymApp() {
                 if (!isActive) return;
 
                 historyRemoteLoadFailedRef.current = true;
+                setHistoryRemoteReady(false);
                 setHistoryLoadError(getHistoryLoadErrorMessage(error));
                 const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
                 const currentDisplayedHistory = latestHistoryRef.current || {};
@@ -6814,6 +6979,7 @@ export default function GymApp() {
                         }}
                         user={user}
                         workoutDurationSecByDate={savedWorkoutDurationSecByDate}
+                        recordsLoading={Boolean(user?.id && !historyRemoteReady && !historyLoadError)}
                     />
                 )}
 
