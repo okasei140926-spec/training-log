@@ -25,6 +25,8 @@ const FALLBACK_PART_MAP = {
     "カール": "二頭",
     "プレスダウン": "三頭",
     "トライセプス": "三頭",
+    "ハイパーエクステンション": "ハム",
+    "バックエクステンション": "ハム",
     "エクステンション": "三頭",
     "スクワット": "四頭",
     "レッグプレス": "四頭",
@@ -314,6 +316,36 @@ function collectWeeklySets(history, muscleEx, overrides) {
     return map;
 }
 
+function collectWeeklyAggregationDebug(history, muscleEx, overrides) {
+    const { start, end } = getWeekRange();
+    const exerciseNames = [];
+    const bodyPartCounts = {};
+    const setCountByExercise = {};
+
+    Object.entries(history || {}).forEach(([exName, records]) => {
+        (records || []).forEach(record => {
+            if (!record.date || record.date < start || record.date > end) return;
+            const setCount = getRecordSetCount(record);
+            if (setCount <= 0) return;
+
+            const bp = resolveBodyPart(exName, muscleEx, overrides, record);
+            exerciseNames.push(exName);
+            setCountByExercise[exName] = (setCountByExercise[exName] || 0) + setCount;
+            if (bp !== "その他") {
+                bodyPartCounts[bp] = (bodyPartCounts[bp] || 0) + setCount;
+            }
+        });
+    });
+
+    return {
+        source: "App history (workouts.data priority)",
+        week: { start, end },
+        exerciseNames: [...new Set(exerciseNames)],
+        setCountByExercise,
+        bodyPartCounts,
+    };
+}
+
 function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecByDate = {}) {
     const sessions = {};
 
@@ -570,9 +602,15 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
         return () => window.clearTimeout(timeoutId);
     }, []);
 
-    const weeklySets = useMemo(() => (
-        homeMetricsReady ? collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides) : {}
-    ), [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides]);
+    const weeklySets = useMemo(() => {
+        if (!homeMetricsReady) return {};
+        const nextWeeklySets = collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides);
+        console.log("[home weekly aggregation]", {
+            ...collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides),
+            bodyPartCounts: nextWeeklySets,
+        });
+        return nextWeeklySets;
+    }, [homeMetricsReady, history, muscleEx, exerciseBodyPartOverrides]);
 
     const partsToShow = useMemo(() => {
         const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));

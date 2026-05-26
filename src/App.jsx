@@ -569,12 +569,124 @@ const applyPreferredHistoryDates = (baseHistory, preferredHistory, dates = []) =
     return nextHistory;
 };
 
+const removeExerciseRecordOnDate = (historyMap, exerciseName, targetDate) => {
+    const normalizedDate = String(targetDate || "").slice(0, 10);
+    if (!normalizedDate || !exerciseName) return historyMap || {};
+
+    const next = { ...(historyMap || {}) };
+    const keptRecords = (next[exerciseName] || []).filter((record) => (
+        String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) !== normalizedDate
+    ));
+
+    if (keptRecords.length > 0) {
+        next[exerciseName] = keptRecords;
+    } else {
+        delete next[exerciseName];
+    }
+
+    return next;
+};
+
 const buildRemoteHistoryWithWorkoutRowsPriority = (workoutRows = [], sessionRows = []) => {
     const workoutHistory = buildHistoryFromWorkoutRows(workoutRows || []);
     const sessionHistory = buildHistoryFromWorkoutSessionRows(sessionRows || []);
     const workoutDates = getValidWorkoutDatesFromHistory(workoutHistory);
 
     return applyPreferredHistoryDates(sessionHistory, workoutHistory, workoutDates);
+};
+
+const buildDraftHistoryForDate = ({
+    baseHistory = {},
+    workoutDate,
+    exercises = [],
+    logData = {},
+    getExUnit,
+    labels = [],
+    durationSec = 0,
+    replaceDate = false,
+} = {}) => {
+    const normalizedDate = String(workoutDate || "").slice(0, 10);
+    if (!normalizedDate) return baseHistory || {};
+
+    const duration = Math.max(0, Math.floor(Number(durationSec) || 0));
+    const durationMinutes = duration > 0 ? Math.max(1, Math.round(duration / 60)) : 0;
+    const draftRecords = {};
+
+    (exercises || []).forEach((exercise, index) => {
+        const exerciseName = String(exercise?.name || "").trim();
+        if (!exerciseName) return;
+
+        const exUnit = typeof getExUnit === "function" ? getExUnit(exerciseName) : "kg";
+        const stored = sanitizeWorkoutSets(
+            (logData[exerciseName] || []).map((set) => ({
+                ...set,
+                weight: storeSetWeightForUnit(set, exUnit),
+                displayWeight: set.weight,
+                displayUnit: getSetDisplayUnit(set, exUnit),
+                unit: getSetWeightMode(set, exUnit),
+                weightMode: getSetWeightMode(set, exUnit),
+                weightType: getSetWeightMode(set, exUnit),
+                weightUnit: getSetWeightMode(set, exUnit),
+                weight_unit: getSetWeightMode(set, exUnit),
+            })),
+            { allowBodyweight: true }
+        );
+
+        if (!stored.length) return;
+
+        const bodyPart = getExerciseRecordBodyPart(exercise, labels[0] || null);
+        draftRecords[exerciseName] = [{
+            sets: stored,
+            weight: stored[0].weight === "BW" ? "BW" : Number(stored[0].weight),
+            reps: Number(stored[0].reps),
+            date: normalizedDate,
+            order: index,
+            bodyPart,
+            ...(duration > 0
+                ? {
+                    duration_sec: duration,
+                    durationSec: duration,
+                    durationMinutes,
+                    elapsedMinutes: durationMinutes,
+                }
+                : {}),
+        }];
+    });
+
+    const draftExerciseNames = Object.keys(draftRecords);
+    if (!draftExerciseNames.length) {
+        return replaceDate ? removeHistoryDateFromMap(baseHistory, normalizedDate) : (baseHistory || {});
+    }
+
+    let nextHistory = replaceDate
+        ? removeHistoryDateFromMap(baseHistory, normalizedDate)
+        : mergeHistoryMaps(baseHistory || {});
+
+    if (!replaceDate) {
+        draftExerciseNames.forEach((exerciseName) => {
+            nextHistory = removeExerciseRecordOnDate(nextHistory, exerciseName, normalizedDate);
+        });
+    }
+
+    return mergeHistoryMaps(nextHistory, draftRecords);
+};
+
+const getHistoryDebugSummaryForDate = (historyMap, targetDate) => {
+    const normalizedDate = String(targetDate || "").slice(0, 10);
+    const records = describeHistoryRecordsForDate(historyMap, normalizedDate);
+    const metrics = getHistoryMetricsForDate(historyMap, normalizedDate);
+
+    return {
+        date: normalizedDate,
+        exerciseNames: metrics.exerciseNames,
+        bodyPartNames: [...new Set(records.map((record) => record.bodyPart).filter(Boolean))],
+        setCountByExercise: records.reduce((acc, record) => {
+            acc[record.exerciseName] = (acc[record.exerciseName] || 0) + (record.setCount || 0);
+            return acc;
+        }, {}),
+        totalSetCount: metrics.setCount,
+        totalVolume: metrics.volume,
+    };
 };
 
 const attachWorkoutDurationToHistoryDate = (historyMap, targetDate, durationSecValue) => {
@@ -2049,6 +2161,15 @@ export default function GymApp() {
                                 : "allowed: no local workout for date",
                         level: wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log",
                     });
+                    console.log("[save] workouts.data before save", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: userId,
+                        date: workoutDate,
+                        saving: getHistoryDebugSummaryForDate(normalizedHistoryMap, workoutDate),
+                        remote: existingWorkoutRow
+                            ? getHistoryDebugSummaryForDate(existingWorkoutRow.data || {}, workoutDate)
+                            : getHistoryDebugSummaryForDate({}, workoutDate),
+                    });
 
                     if (wouldDestructivelyOverwrite && !allowDestructiveSave) {
                         console.warn("[save guard] local workout is smaller than remote. Skip overwrite.", {
@@ -2115,6 +2236,14 @@ export default function GymApp() {
                         });
                         throw new Error(`workouts.data verification failed for ${workoutDate}`);
                     }
+                    console.log("[save] workouts.data after save verified", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: userId,
+                        date: workoutDate,
+                        workoutsDataAfterSave: verifyWorkoutRow
+                            ? getHistoryDebugSummaryForDate(verifyWorkoutRow.data || {}, workoutDate)
+                            : getHistoryDebugSummaryForDate({}, workoutDate),
+                    });
 
                     clearSyncFailure(workoutDate);
                     results.syncedDates.push(workoutDate);
@@ -2362,6 +2491,19 @@ export default function GymApp() {
                     : "allowed: no local payload",
             level: wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log",
         });
+        console.log("[save] workout_sessions.summary_json before save", {
+            env: getRuntimeEnvironmentLabel(),
+            user_id: userId,
+            date: normalizedDate,
+            savingExerciseNames: payload?.session?.summary_json?.items?.map((item) => item.exercise_name) || [],
+            savingBodyPartNames: [...new Set((payload?.session?.summary_json?.items || []).map((item) => item.body_part).filter(Boolean))],
+            savingSetCountByExercise: (payload?.session?.summary_json?.items || []).reduce((acc, item) => {
+                acc[item.exercise_name] = item.set_count || 0;
+                return acc;
+            }, {}),
+            savingMetrics: incomingMetrics,
+            remoteMetrics,
+        });
 
         if (wouldDestructivelyOverwrite && !allowDestructiveSave) {
             console.warn("[save guard] local workout is smaller than remote. Skip overwrite.", {
@@ -2508,6 +2650,18 @@ export default function GymApp() {
             });
             throw new Error(`workout_sessions verification failed for ${normalizedDate}`);
         }
+        console.log("[save] workout_sessions.summary_json after save verified", {
+            env: getRuntimeEnvironmentLabel(),
+            user_id: userId,
+            date: normalizedDate,
+            summaryJsonAfterSaveExerciseNames: verifiedSession?.summary_json?.items?.map((item) => item.exercise_name) || [],
+            summaryJsonAfterSaveBodyPartNames: [...new Set((verifiedSession?.summary_json?.items || []).map((item) => item.body_part).filter(Boolean))],
+            summaryJsonAfterSaveSetCountByExercise: (verifiedSession?.summary_json?.items || []).reduce((acc, item) => {
+                acc[item.exercise_name] = item.set_count || 0;
+                return acc;
+            }, {}),
+            summaryJsonAfterSaveMetrics: verifiedMetrics,
+        });
 
         return { synced: true };
     }, [getTodayKey]);
@@ -3024,12 +3178,23 @@ export default function GymApp() {
                         query: "workout_sessions.select(workout_date,duration_sec,summary_json).eq(user_id).gte(workout_date).order(workout_date asc).limit",
                         responseData: sessionsRes.data,
                     });
-                    throw sessionsRes.error;
+                    console.warn("[save] workout_sessions reconcile failed; continuing with workouts.data as canonical", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: currentUserId,
+                        code: sessionsRes.error?.code,
+                        message: sessionsRes.error?.message,
+                        details: sessionsRes.error?.details,
+                        hint: sessionsRes.error?.hint,
+                        responseData: sessionsRes.data,
+                    });
                 }
                 if (latestUserIdRef.current !== currentUserId) return;
 
                 const remoteHistory = applyHistoryDeleteMarkers(
-                    buildRemoteHistoryWithWorkoutRowsPriority(workoutsRes.data || [], sessionsRes.data || []),
+                    buildRemoteHistoryWithWorkoutRowsPriority(
+                        workoutsRes.data || [],
+                        sessionsRes.error ? [] : (sessionsRes.data || [])
+                    ),
                     effectiveDeleteMarkers
                 );
                 const syncDates = [...new Set(pendingContentDates)];
@@ -3266,7 +3431,9 @@ export default function GymApp() {
                     ),
                     effectiveDeleteMarkers
                 );
-                const remoteDates = getValidWorkoutDatesFromHistory(remoteHistory);
+                const pendingLocalDates = new Set(Array.from(pendingWorkoutContentChangeDatesRef.current.keys()));
+                const remoteDates = getValidWorkoutDatesFromHistory(remoteHistory)
+                    .filter((date) => !pendingLocalDates.has(date));
                 if (!remoteDates.length) return;
 
                 const currentHistory = latestHistoryRef.current || {};
@@ -3282,6 +3449,7 @@ export default function GymApp() {
                     workoutsRows: workoutsRes.data?.length || 0,
                     sessionRows: sessionsRes.error ? 0 : (sessionsRes.data?.length || 0),
                     appliedDates: remoteDates,
+                    skippedPendingLocalDates: Array.from(pendingLocalDates),
                     exerciseNamesByDate: remoteDates.reduce((acc, date) => {
                         acc[date] = getHistoryMetricsForDate(nextHistory, date).exerciseNames;
                         return acc;
@@ -3510,66 +3678,26 @@ export default function GymApp() {
         const shouldOverlayDraft = screen === "log" || workoutStartedForDate === logDate || hasPendingDraftEdit;
         if (!shouldOverlayDraft) return history;
 
-        const next = {};
-        Object.entries(history || {}).forEach(([name, records]) => {
-            const keptRecords = (records || []).filter((record) => record?.date !== logDate);
-            if (keptRecords.length > 0) next[name] = keptRecords;
+        const durationSec = Math.max(
+            0,
+            workoutStartedForDate === logDate
+                ? computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current)
+                : 0,
+            Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
+        );
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(String(logDate || "").slice(0, 10)) || {};
+        const nextHistory = buildDraftHistoryForDate({
+            baseHistory: history,
+            workoutDate: logDate,
+            exercises,
+            logData,
+            getExUnit,
+            labels: todayLabels,
+            durationSec,
+            replaceDate: Boolean(pendingChange.explicitDelete),
         });
 
-        let hasDraftWorkout = false;
-        (exercises || []).forEach((exercise, index) => {
-            const exerciseName = String(exercise?.name || "").trim();
-            if (!exerciseName) return;
-
-            const exUnit = getExUnit(exerciseName);
-            const stored = sanitizeWorkoutSets(
-                (logData[exerciseName] || []).map((set) => ({
-                    ...set,
-                    weight: storeSetWeightForUnit(set, exUnit),
-                    displayWeight: set.weight,
-                    displayUnit: getSetDisplayUnit(set, exUnit),
-                    unit: getSetWeightMode(set, exUnit),
-                    weightMode: getSetWeightMode(set, exUnit),
-                    weightType: getSetWeightMode(set, exUnit),
-                    weightUnit: getSetWeightMode(set, exUnit),
-                    weight_unit: getSetWeightMode(set, exUnit),
-                })),
-                { allowBodyweight: true }
-            );
-
-            if (!stored.length) return;
-            hasDraftWorkout = true;
-
-            const bodyPart = getExerciseRecordBodyPart(exercise, todayLabels[0] || null);
-            const durationSec = Math.max(
-                0,
-                workoutStartedForDate === logDate
-                    ? computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current)
-                    : 0,
-                Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
-            );
-            const durationMinutes = durationSec > 0 ? Math.max(1, Math.round(durationSec / 60)) : 0;
-
-            if (!next[exerciseName]) next[exerciseName] = [];
-            next[exerciseName].push({
-                sets: stored,
-                weight: stored[0].weight === "BW" ? "BW" : Number(stored[0].weight),
-                reps: Number(stored[0].reps),
-                date: logDate,
-                order: index,
-                bodyPart,
-                ...(durationSec > 0
-                    ? {
-                        duration_sec: durationSec,
-                        durationSec,
-                        durationMinutes,
-                        elapsedMinutes: durationMinutes,
-                    }
-                    : {}),
-            });
-        });
-
-        return hasDraftWorkout ? next : history;
+        return nextHistory;
     }, [
         exercises,
         getExUnit,
@@ -3678,7 +3806,6 @@ export default function GymApp() {
             timerDurationSec,
             Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
         );
-        const durationMinutes = durationSec > 0 ? Math.max(1, Math.round(durationSec / 60)) : 0;
         const incomingMetrics = getDraftMetricsForDate({
             exercises,
             logData,
@@ -3707,52 +3834,32 @@ export default function GymApp() {
         queueWorkoutSessionSync(logDate);
 
         setHistory((prev) => {
-            const nh = { ...prev };
-
-            Object.keys(nh).forEach((name) => {
-                nh[name] = (nh[name] || []).filter((r) => r.date !== logDate);
-                if (nh[name].length === 0) delete nh[name];
+            const nextHistory = buildDraftHistoryForDate({
+                baseHistory: prev,
+                workoutDate: logDate,
+                exercises,
+                logData,
+                getExUnit,
+                labels: todayLabels,
+                durationSec,
+                replaceDate: Boolean(pendingChange.explicitDelete),
             });
 
-            exercises.forEach((ex, index) => {
-                const sets = logData[ex.name] || [];
-                const exUnit = getExUnit(ex.name);
-                const bodyPart = getExerciseRecordBodyPart(ex, todayLabels[0] || null);
-                const stored = sanitizeWorkoutSets(sets.map((s) => ({
-                    ...s,
-                    weight: storeSetWeightForUnit(s, exUnit),
-                    displayWeight: s.weight,
-                    displayUnit: getSetDisplayUnit(s, exUnit),
-                    unit: getSetWeightMode(s, exUnit),
-                    weightMode: getSetWeightMode(s, exUnit),
-                    weightType: getSetWeightMode(s, exUnit),
-                    weightUnit: getSetWeightMode(s, exUnit),
-                    weight_unit: getSetWeightMode(s, exUnit),
-                })), { allowBodyweight: true });
-
-                if (!stored.length) return;
-
-                if (!nh[ex.name]) nh[ex.name] = [];
-
-                nh[ex.name].push({
-                    sets: stored,
-                    weight: stored[0].weight === "BW" ? "BW" : Number(stored[0].weight),
-                    reps: Number(stored[0].reps),
-                    date: logDate,
-                    order: index,
-                    bodyPart,
-                    ...(durationSec > 0
-                        ? {
-                            duration_sec: durationSec,
-                            durationSec,
-                            durationMinutes,
-                            elapsedMinutes: durationMinutes,
-                        }
-                        : {}),
-                });
+            console.log("[save] local draft applied to history", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                date: logDate,
+                reason: pendingChange.reason,
+                explicitDelete: Boolean(pendingChange.explicitDelete),
+                saving: getHistoryDebugSummaryForDate(nextHistory, logDate),
+                previous: getHistoryDebugSummaryForDate(prev, logDate),
             });
 
-            return nh;
+            if (serializeHistoryMap(nextHistory) === serializeHistoryMap(prev)) return prev;
+            latestHistoryRef.current = nextHistory;
+            historyRevisionRef.current += 1;
+            persistHistoryForUser(user?.id, nextHistory);
+            return nextHistory;
         });
     }, [exercises, getExUnit, history, logData, logDate, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate]); // ← 依存配列
 
@@ -3773,6 +3880,32 @@ export default function GymApp() {
 
         return () => clearTimeout(t);
     }, [screen, logData, exercises, logDate, exerciseUnits, persistCurrentLog, user?.id, historySyncReady]);
+
+    const previousScreenRef = useRef(screen);
+    useEffect(() => {
+        const previousScreen = previousScreenRef.current;
+        if (previousScreen === "log" && screen !== "log") {
+            persistCurrentLog();
+        }
+        previousScreenRef.current = screen;
+    }, [persistCurrentLog, screen]);
+
+    useEffect(() => {
+        const flushPendingLog = () => {
+            persistCurrentLog();
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "hidden") flushPendingLog();
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.addEventListener("pagehide", flushPendingLog);
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener("pagehide", flushPendingLog);
+        };
+    }, [persistCurrentLog]);
 
     // ─── Log data ─────────────────────────────────────
 
@@ -4637,14 +4770,23 @@ export default function GymApp() {
                         query: "workout_sessions.select(workout_date,duration_sec,summary_json).eq(user_id).eq(workout_date).maybeSingle",
                         responseData: sessionRes.data,
                     });
-                    throw sessionRes.error;
+                    console.warn("[restore] workout_sessions date refresh failed; using workouts.data", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        date: normalizedDate,
+                        code: sessionRes.error?.code,
+                        message: sessionRes.error?.message,
+                        details: sessionRes.error?.details,
+                        hint: sessionRes.error?.hint,
+                        responseData: sessionRes.data,
+                    });
                 }
                 if (cancelled) return;
                 if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
 
                 const remoteHistory = buildRemoteHistoryWithWorkoutRowsPriority(
                     workoutsRes.data || [],
-                    sessionRes.data ? [sessionRes.data] : []
+                    sessionRes.error ? [] : (sessionRes.data ? [sessionRes.data] : [])
                 );
                 const remoteMetrics = getHistoryMetricsForDate(remoteHistory, normalizedDate, {
                     updatedAt: null,
@@ -5301,7 +5443,12 @@ export default function GymApp() {
                     showSettingsButton={true}
                     onOpenSettings={() => setShowSettingsModal(true)}
                     showCalendarButton={true}
-                    onOpenCalendar={() => setScreen("calendar")}
+                    onOpenCalendar={() => {
+                        if (screen === "log") {
+                            persistCurrentLog();
+                        }
+                        setScreen("calendar");
+                    }}
                 />
 
                 {!isOnline && (
@@ -5880,6 +6027,9 @@ export default function GymApp() {
                             if (nextScreen === "log") {
                                 handleLogForDate(getTodayKey());
                                 return;
+                            }
+                            if (screen === "log") {
+                                persistCurrentLog();
                             }
                             setScreen(nextScreen);
                         }}
