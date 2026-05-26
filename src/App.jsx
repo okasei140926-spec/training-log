@@ -206,6 +206,8 @@ const serializeHistoryMap = (historyMap) => JSON.stringify(historyMap || {});
 const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
 const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
 const REMOTE_HISTORY_SESSION_LIMIT = 400;
+const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 21;
+const INITIAL_HOME_HISTORY_LIMIT = 80;
 const DIAGNOSTIC_LOOKBACK_DAYS = 45;
 
 const getDateDaysAgoKey = (days) => {
@@ -814,6 +816,35 @@ const getCurrentWeekRangeForHomeSummary = () => {
     };
 };
 
+const getHistoryOverallMetrics = (historyMap) => {
+    const exerciseNames = new Set();
+    let setCount = 0;
+    let volume = 0;
+
+    Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+        (records || []).forEach((record) => {
+            const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+            if (!sanitized?.date) return;
+            exerciseNames.add(exerciseName);
+            (sanitized.sets || []).forEach((set) => {
+                setCount += 1;
+                const weight = Number(set?.weight);
+                const reps = Number(set?.reps);
+                if (Number.isFinite(weight) && Number.isFinite(reps) && weight > 0 && reps > 0) {
+                    volume += weight * reps;
+                }
+            });
+        });
+    });
+
+    return {
+        exerciseCount: exerciseNames.size,
+        exerciseNames: Array.from(exerciseNames).sort(),
+        setCount,
+        volume,
+    };
+};
+
 const normalizeHomeSummaryBodyPart = (label) => {
     const raw = String(label || "").trim();
     if (raw === "ハムストリングス" || raw === "ハムストリング" || raw === "大腿二頭筋") return "ハム";
@@ -1274,8 +1305,8 @@ export default function GymApp() {
 
 
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
-    const [history, setHistory] = useState(() => mergeHistoryMaps(load("history", {})));
-    const [workoutsDataHistory, setWorkoutsDataHistory] = useState(() => mergeHistoryMaps(load("history", {})));
+    const [history, setHistory] = useState({});
+    const [workoutsDataHistory, setWorkoutsDataHistory] = useState({});
     const [manualBests, setManualBests] = useState([]);
     const [historySyncReady, setHistorySyncReady] = useState(false);
     const [historyLoadError, setHistoryLoadError] = useState("");
@@ -1610,6 +1641,7 @@ export default function GymApp() {
     const workoutsDataHistoryRef = useRef(workoutsDataHistory);
     const displayHistoryRefreshRequestIdRef = useRef(0);
     const homeWeeklySummaryRequestIdRef = useRef(0);
+    const historyHasTrustedRemoteSnapshotRef = useRef(false);
     const previousWorkoutActivitySignatureRef = useRef("");
     const previousWorkoutActivityDateRef = useRef("");
     const workoutTimerStateRef = useRef(initialWorkoutTimerState);
@@ -3011,8 +3043,18 @@ export default function GymApp() {
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => {
+        if (user?.id && (!historySyncReady || historyRemoteLoadFailedRef.current)) {
+            console.warn("[restore] skip local history persistence while remote history is not trusted", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user.id,
+                historySyncReady,
+                remoteLoadFailed: historyRemoteLoadFailedRef.current,
+                currentDisplayed: getHistoryOverallMetrics(history),
+            });
+            return;
+        }
         persistHistoryForUser(user?.id, history);
-    }, [history, user]);
+    }, [history, historySyncReady, user]);
     useEffect(() => {
         save("lastActiveLogExerciseByDate", lastActiveLogExerciseByDate || {});
     }, [lastActiveLogExerciseByDate]);
@@ -3166,6 +3208,7 @@ export default function GymApp() {
         const syncHistoryFromSupabase = async () => {
             if (!user?.id) {
                 historyRemoteLoadFailedRef.current = false;
+                historyHasTrustedRemoteSnapshotRef.current = false;
                 historyDeleteMarkersRef.current = createEmptyHistoryDeleteMarkers();
                 if (isActive) setHistoryLoadError("");
                 if (isActive) setHistorySyncReady(true);
@@ -3175,6 +3218,17 @@ export default function GymApp() {
             if (isActive) {
                 setHistorySyncReady(false);
                 setHistoryLoadError("");
+                if (!historyHasTrustedRemoteSnapshotRef.current) {
+                    console.log("[restore] ignore localStorage bootstrap until Supabase history load succeeds", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
+                        cachedHistory: getHistoryOverallMetrics(load(getUserHistoryCacheKey(user.id), load("history", {}))),
+                    });
+                    setHistory({});
+                    workoutsDataHistoryRef.current = {};
+                    setWorkoutsDataHistory({});
+                }
             }
 
             const rawLocalHistory = load("history", {});
@@ -3198,7 +3252,8 @@ export default function GymApp() {
             const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
 
             try {
-                const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
+                const sessionRangeStart = getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS);
+                const initialHistoryLimit = INITIAL_HOME_HISTORY_LIMIT;
                 const [workoutsRes, sessionsRes] = await Promise.all([
                     supabase
                         .from("workouts")
@@ -3206,20 +3261,20 @@ export default function GymApp() {
                         .eq("user_id", user.id)
                         .gte("date", sessionRangeStart)
                         .order("date", { ascending: true })
-                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
+                        .limit(initialHistoryLimit),
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
                         .eq("user_id", user.id)
                         .gte("workout_date", sessionRangeStart)
                         .order("workout_date", { ascending: true })
-                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
+                        .limit(initialHistoryLimit),
                 ]);
 
                 if (workoutsRes.error) {
                     const context = logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
                         userId: user.id,
-                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                        dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
                         query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
                         responseData: workoutsRes.data,
                     });
@@ -3228,7 +3283,7 @@ export default function GymApp() {
                 if (sessionsRes.error) {
                     logRecordFetchError("history_initial_load", "workout_sessions", sessionsRes.error, {
                         userId: user.id,
-                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                        dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
                         query: "workout_sessions.select(workout_date,duration_sec,summary_json).eq(user_id).gte(workout_date).order(workout_date asc).limit",
                         responseData: sessionsRes.data,
                     });
@@ -3257,17 +3312,18 @@ export default function GymApp() {
                     effectiveDeleteMarkers
                 );
                 const hasRemoteWorkout = getValidWorkoutDatesFromHistory(remoteHistory).length > 0;
-                const mergedHistory = hasRemoteWorkout
-                    ? remoteHistory
-                    : applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
-                const appliedWorkoutsDataHistory = getValidWorkoutDatesFromHistory(workoutsOnlyHistory).length > 0
-                    ? workoutsOnlyHistory
-                    : applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
+                const mergedHistory = remoteHistory;
+                const appliedWorkoutsDataHistory = workoutsOnlyHistory;
 
                 console.log("[restore] Supabase priority load", {
                     env: getRuntimeEnvironmentLabel(),
                     user_id: user.id,
-                    source: hasRemoteWorkout ? "supabase" : "localStorage_fallback",
+                    source: hasRemoteWorkout ? "supabase" : "supabase_empty",
+                    fallbackUsed: false,
+                    fallbackSource: "localStorage/history_cache",
+                    fallbackRejected: true,
+                    rejectedReason: "logged-in initial load uses Supabase only",
+                    dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
                     workoutsRows: workoutsRes.data?.length || 0,
                     sessionRows: sessionsRes.data?.length || 0,
                     supabaseDates: getValidWorkoutDatesFromHistory(remoteHistory),
@@ -3275,7 +3331,7 @@ export default function GymApp() {
                     appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
                 });
                 console.log("[home weekly summary] apply", {
-                    source: getValidWorkoutDatesFromHistory(workoutsOnlyHistory).length > 0 ? "workouts.data" : "localStorage",
+                    source: "workouts.data",
                     env: getRuntimeEnvironmentLabel(),
                     user_id: user.id,
                     requestId: "initial-load",
@@ -3287,6 +3343,7 @@ export default function GymApp() {
                 if (!isActive) return;
 
                 historyRemoteLoadFailedRef.current = false;
+                historyHasTrustedRemoteSnapshotRef.current = true;
                 setHistoryLoadError("");
                 setHistory(mergedHistory);
                 workoutsDataHistoryRef.current = appliedWorkoutsDataHistory;
@@ -3308,7 +3365,21 @@ export default function GymApp() {
                 historyRemoteLoadFailedRef.current = true;
                 setHistoryLoadError(getHistoryLoadErrorMessage(error));
                 const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
-                setHistory(fallbackHistory);
+                const currentDisplayedHistory = latestHistoryRef.current || {};
+                console.warn("[restore] fallback rejected after Supabase history load failure", {
+                    env: getRuntimeEnvironmentLabel(),
+                    fetchName: "history_initial_load",
+                    user_id: user.id,
+                    dateRange: { from: getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS), limit: INITIAL_HOME_HISTORY_LIMIT },
+                    query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                    errorMessage: error?.message || String(error || "unknown error"),
+                    fallbackUsed: false,
+                    fallbackSource: "localStorage/history_cache",
+                    fallback: getHistoryOverallMetrics(fallbackHistory),
+                    currentDisplayed: getHistoryOverallMetrics(currentDisplayedHistory),
+                    fallbackRejected: true,
+                    rejectedReason: "Supabase fetch failed; stale fallback must not overwrite trusted/current displayed state",
+                });
             } finally {
                 if (isActive) setHistorySyncReady(true);
             }
@@ -3612,33 +3683,50 @@ export default function GymApp() {
         const refreshDisplayHistoryFromSupabase = async () => {
             const requestId = displayHistoryRefreshRequestIdRef.current + 1;
             displayHistoryRefreshRequestIdRef.current = requestId;
-            const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
             const queryLabel = "display_history_refresh";
             const weekRange = getCurrentWeekRangeForHomeSummary();
+            const sessionRangeStart = screen === "history"
+                ? weekRange.start
+                : getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
+            const sessionRangeEnd = screen === "history" ? weekRange.end : null;
+            const displayHistoryLimit = screen === "history"
+                ? INITIAL_HOME_HISTORY_LIMIT
+                : REMOTE_HISTORY_SESSION_LIMIT;
 
             try {
-                const [workoutsRes, sessionsRes] = await Promise.all([
-                    supabase
+                let workoutsQuery = supabase
                         .from("workouts")
                         .select("date, data")
                         .eq("user_id", user.id)
-                        .gte("date", sessionRangeStart)
-                        .order("date", { ascending: true })
-                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
-                    supabase
+                        .gte("date", sessionRangeStart);
+                let sessionsQuery = supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
                         .eq("user_id", user.id)
-                        .gte("workout_date", sessionRangeStart)
-                        .order("workout_date", { ascending: true })
-                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
+                        .gte("workout_date", sessionRangeStart);
+
+                if (sessionRangeEnd) {
+                    workoutsQuery = workoutsQuery.lte("date", sessionRangeEnd);
+                    sessionsQuery = sessionsQuery.lte("workout_date", sessionRangeEnd);
+                }
+
+                workoutsQuery = workoutsQuery
+                    .order("date", { ascending: true })
+                    .limit(displayHistoryLimit);
+                sessionsQuery = sessionsQuery
+                    .order("workout_date", { ascending: true })
+                    .limit(displayHistoryLimit);
+
+                const [workoutsRes, sessionsRes] = await Promise.all([
+                    workoutsQuery,
+                    sessionsQuery,
                 ]);
 
                 if (workoutsRes.error) {
                     const context = logRecordFetchError(queryLabel, "workouts", workoutsRes.error, {
                         userId: user.id,
-                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
-                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                        dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: displayHistoryLimit },
+                        query: "workouts.select(date,data).eq(user_id).gte(date).lte(date?).order(date asc).limit",
                         responseData: workoutsRes.data,
                     });
                     throw attachRecordFetchContext(workoutsRes.error, context);
@@ -3646,8 +3734,8 @@ export default function GymApp() {
                 if (sessionsRes.error) {
                     logRecordFetchError(queryLabel, "workout_sessions", sessionsRes.error, {
                         userId: user.id,
-                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
-                        query: "workout_sessions.select(workout_date,duration_sec,summary_json).eq(user_id).gte(workout_date).order(workout_date asc).limit",
+                        dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: displayHistoryLimit },
+                        query: "workout_sessions.select(workout_date,duration_sec,summary_json).eq(user_id).gte(workout_date).lte(workout_date?).order(workout_date asc).limit",
                         responseData: sessionsRes.data,
                     });
                     console.warn("[restore] workout_sessions display summary refresh failed; using workouts.data", {
@@ -3724,6 +3812,8 @@ export default function GymApp() {
                     }, {}),
                 });
 
+                historyHasTrustedRemoteSnapshotRef.current = true;
+                historyRemoteLoadFailedRef.current = false;
                 if (serializeHistoryMap(nextHistory) !== serializeHistoryMap(currentHistory)) {
                     setHistory(nextHistory);
                     persistHistoryForUser(user.id, nextHistory);
@@ -3746,15 +3836,23 @@ export default function GymApp() {
                 if (cancelled) return;
                 console.error("[restore] display history refresh failed", {
                     env: getRuntimeEnvironmentLabel(),
+                    fetchName: queryLabel,
                     user_id: user.id,
                     screen,
+                    dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: displayHistoryLimit },
                     table: error?.recordFetch?.table || "workouts",
-                    query: error?.recordFetch?.query || "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                    query: error?.recordFetch?.query || "workouts.select(date,data).eq(user_id).gte(date).lte(date?).order(date asc).limit",
                     code: error?.code || null,
                     message: error?.message || String(error || "unknown error"),
                     details: error?.details || null,
                     hint: error?.hint || null,
                     responseData: error?.recordFetch?.responseData || null,
+                    fallbackUsed: false,
+                    fallbackSource: "none",
+                    fallbackRejected: true,
+                    rejectedReason: "display refresh keeps current displayed state on fetch failure",
+                    currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
+                    currentWorkoutsDataDisplayed: getHistoryOverallMetrics(workoutsDataHistoryRef.current || {}),
                 });
                 setHistoryLoadError(getHistoryLoadErrorMessage(error));
             }
@@ -3784,7 +3882,9 @@ export default function GymApp() {
         const weekRange = getCurrentWeekRangeForHomeSummary();
 
         const refreshHomeWeeklySummaryFromWorkouts = async () => {
-            const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
+            const sessionRangeStart = weekRange.start;
+            const sessionRangeEnd = weekRange.end;
+            const homeHistoryLimit = INITIAL_HOME_HISTORY_LIMIT;
 
             try {
                 const { data, error } = await supabase
@@ -3792,14 +3892,15 @@ export default function GymApp() {
                     .select("date, data")
                     .eq("user_id", user.id)
                     .gte("date", sessionRangeStart)
+                    .lte("date", sessionRangeEnd)
                     .order("date", { ascending: true })
-                    .limit(REMOTE_HISTORY_SESSION_LIMIT);
+                    .limit(homeHistoryLimit);
 
                 if (error) {
                     logRecordFetchError("home_weekly_summary_refresh", "workouts", error, {
                         userId: user.id,
-                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
-                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                        dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: homeHistoryLimit },
+                        query: "workouts.select(date,data).eq(user_id).gte(date).lte(date).order(date asc).limit",
                         responseData: data,
                     });
                     throw error;
@@ -3834,7 +3935,10 @@ export default function GymApp() {
                 }
 
                 workoutsDataHistoryRef.current = nextWorkoutsDataHistory;
+                historyHasTrustedRemoteSnapshotRef.current = true;
+                historyRemoteLoadFailedRef.current = false;
                 setWorkoutsDataHistory(nextWorkoutsDataHistory);
+                setHistoryLoadError("");
 
                 console.log("[home weekly summary] apply", {
                     source: "workouts.data",
@@ -3854,6 +3958,13 @@ export default function GymApp() {
                     requestId,
                     applied: false,
                     reason: "workouts.data fetch failed",
+                    dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: homeHistoryLimit },
+                    query: "workouts.select(date,data).eq(user_id).gte(date).lte(date).order(date asc).limit",
+                    fallbackUsed: false,
+                    fallbackSource: "none",
+                    fallbackRejected: true,
+                    rejectedReason: "home weekly keeps current workoutsDataHistory on fetch failure",
+                    currentDisplayed: getHistoryOverallMetrics(workoutsDataHistoryRef.current || {}),
                     code: error?.code || null,
                     message: error?.message || String(error || "unknown error"),
                     details: error?.details || null,
