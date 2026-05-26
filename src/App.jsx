@@ -272,6 +272,22 @@ const getRuntimeEnvironmentLabel = () => {
     return protocol.replace(":", "") || "web";
 };
 
+const isTransientSupabaseFetchError = (error) => {
+    const message = String(error?.message || error || "").toLowerCase();
+    const status = Number(error?.status || error?.statusCode || error?.code);
+    return (
+        status === 503 ||
+        status === 504 ||
+        message.includes("503") ||
+        message.includes("service unavailable") ||
+        message.includes("err_failed") ||
+        message.includes("failed to fetch") ||
+        message.includes("cors") ||
+        message.includes("statement timeout") ||
+        message.includes("canceling statement")
+    );
+};
+
 const getWorkoutDraftSignature = (draft) => JSON.stringify({
     todayLabels: draft?.todayLabels || [],
     sessionEx: (draft?.sessionEx || []).map((ex) => ({
@@ -1061,53 +1077,69 @@ export default function GymApp() {
     const [splashMinElapsed, setSplashMinElapsed] = useState(false);
     const [splashForceDone, setSplashForceDone] = useState(false);
     const processingInviteCodeRef = useRef("");
+    const ensuredProfileUserIdsRef = useRef(new Set());
+    const ensuringProfileUserIdsRef = useRef(new Set());
 
     const ensureProfileForUser = useCallback(async (nextUser) => {
         if (!nextUser?.id) return;
+        if (ensuredProfileUserIdsRef.current.has(nextUser.id)) return;
+        if (ensuringProfileUserIdsRef.current.has(nextUser.id)) return;
 
-        const { data: existingProfile, error: profileError } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("id", nextUser.id)
-            .maybeSingle();
+        ensuringProfileUserIdsRef.current.add(nextUser.id);
 
-        if (profileError) throw profileError;
-        if (existingProfile?.id) return;
+        try {
+            const { data: existingProfile, error: profileError } = await supabase
+                .from("profiles")
+                .select("id")
+                .eq("id", nextUser.id)
+                .maybeSingle();
 
-        const metadata = nextUser.user_metadata || {};
-        const emailPrefix = String(nextUser.email || "").split("@")[0] || "";
-        const baseUsername = String(
-            metadata.user_name ||
-            metadata.preferred_username ||
-            metadata.username ||
-            metadata.full_name ||
-            metadata.name ||
-            emailPrefix ||
-            "pump-user"
-        )
-            .trim()
-            .replace(/\s+/g, "")
-            .slice(0, 20);
-
-        const candidates = [
-            baseUsername,
-            `${baseUsername || "pumpuser"}-${nextUser.id.slice(0, 4)}`,
-            `${baseUsername || "pumpuser"}-${nextUser.id.slice(4, 8)}`,
-        ].filter(Boolean);
-
-        for (const candidate of candidates) {
-            const { error } = await supabase.from("profiles").insert({
-                id: nextUser.id,
-                username: candidate,
-            });
-
-            if (!error) return;
-            if (error.code !== "23505") {
-                throw error;
+            if (profileError) throw profileError;
+            if (existingProfile?.id) {
+                ensuredProfileUserIdsRef.current.add(nextUser.id);
+                return;
             }
-        }
 
-        throw new Error("プロフィールの初期作成に失敗しました。");
+            const metadata = nextUser.user_metadata || {};
+            const emailPrefix = String(nextUser.email || "").split("@")[0] || "";
+            const baseUsername = String(
+                metadata.user_name ||
+                metadata.preferred_username ||
+                metadata.username ||
+                metadata.full_name ||
+                metadata.name ||
+                emailPrefix ||
+                "pump-user"
+            )
+                .trim()
+                .replace(/\s+/g, "")
+                .slice(0, 20);
+
+            const candidates = [
+                baseUsername,
+                `${baseUsername || "pumpuser"}-${nextUser.id.slice(0, 4)}`,
+                `${baseUsername || "pumpuser"}-${nextUser.id.slice(4, 8)}`,
+            ].filter(Boolean);
+
+            for (const candidate of candidates) {
+                const { error } = await supabase.from("profiles").insert({
+                    id: nextUser.id,
+                    username: candidate,
+                });
+
+                if (!error) {
+                    ensuredProfileUserIdsRef.current.add(nextUser.id);
+                    return;
+                }
+                if (error.code !== "23505") {
+                    throw error;
+                }
+            }
+
+            throw new Error("プロフィールの初期作成に失敗しました。");
+        } finally {
+            ensuringProfileUserIdsRef.current.delete(nextUser.id);
+        }
     }, []);
 
     const connectPendingFriendForUser = useCallback(async (nextUser) => {
@@ -1642,6 +1674,96 @@ export default function GymApp() {
     const displayHistoryRefreshRequestIdRef = useRef(0);
     const homeWeeklySummaryRequestIdRef = useRef(0);
     const historyHasTrustedRemoteSnapshotRef = useRef(false);
+    const supabaseFetchInFlightRef = useRef(new Set());
+    const supabaseFetchBackoffRef = useRef({});
+    const supabaseFetchFreshUntilRef = useRef({});
+
+    const markSupabaseFetchFresh = useCallback((key, ttlMs = 30000) => {
+        if (!key) return;
+        supabaseFetchFreshUntilRef.current[key] = Date.now() + ttlMs;
+    }, []);
+
+    const isSupabaseFetchFresh = useCallback((key) => {
+        if (!key) return false;
+        return Number(supabaseFetchFreshUntilRef.current[key] || 0) > Date.now();
+    }, []);
+
+    const runDedupeSupabaseFetch = useCallback(async (
+        key,
+        fetcher,
+        {
+            minIntervalMs = 15000,
+            freshTtlMs = 30000,
+            backoffMs = 30000,
+            context = {},
+        } = {}
+    ) => {
+        const now = Date.now();
+        const nextAllowedAt = Number(supabaseFetchBackoffRef.current[key]?.nextAllowedAt || 0);
+
+        if (supabaseFetchInFlightRef.current.has(key)) {
+            console.warn("[supabase fetch] dedupe in-flight", {
+                env: getRuntimeEnvironmentLabel(),
+                key,
+                applied: false,
+                reason: "same request already in flight",
+                ...context,
+            });
+            return { skipped: true, reason: "in-flight" };
+        }
+
+        if (nextAllowedAt > now) {
+            console.warn("[supabase fetch] backoff skip", {
+                env: getRuntimeEnvironmentLabel(),
+                key,
+                applied: false,
+                reason: "transient error backoff",
+                retryAfterMs: nextAllowedAt - now,
+                ...context,
+            });
+            return { skipped: true, reason: "backoff", retryAfterMs: nextAllowedAt - now };
+        }
+
+        if (isSupabaseFetchFresh(key)) {
+            console.log("[supabase fetch] fresh skip", {
+                env: getRuntimeEnvironmentLabel(),
+                key,
+                applied: false,
+                reason: "fresh identical range already fetched",
+                ...context,
+            });
+            return { skipped: true, reason: "fresh" };
+        }
+
+        supabaseFetchInFlightRef.current.add(key);
+        try {
+            const value = await fetcher();
+            markSupabaseFetchFresh(key, freshTtlMs || minIntervalMs);
+            delete supabaseFetchBackoffRef.current[key];
+            return { skipped: false, value };
+        } catch (error) {
+            if (isTransientSupabaseFetchError(error)) {
+                const previousBackoffMs = Number(supabaseFetchBackoffRef.current[key]?.backoffMs || backoffMs);
+                const nextBackoffMs = Math.min(Math.max(backoffMs, previousBackoffMs * 2), 120000);
+                supabaseFetchBackoffRef.current[key] = {
+                    nextAllowedAt: Date.now() + nextBackoffMs,
+                    backoffMs: nextBackoffMs,
+                };
+                console.warn("[supabase fetch] transient error backoff set", {
+                    env: getRuntimeEnvironmentLabel(),
+                    key,
+                    nextBackoffMs,
+                    message: error?.message || String(error || "unknown error"),
+                    code: error?.code || null,
+                    status: error?.status || null,
+                    ...context,
+                });
+            }
+            throw error;
+        } finally {
+            supabaseFetchInFlightRef.current.delete(key);
+        }
+    }, [isSupabaseFetchFresh, markSupabaseFetchFresh]);
     const previousWorkoutActivitySignatureRef = useRef("");
     const previousWorkoutActivityDateRef = useRef("");
     const workoutTimerStateRef = useRef(initialWorkoutTimerState);
@@ -2608,25 +2730,46 @@ export default function GymApp() {
                 sessionsQuery = sessionsQuery.lt("workout_date", `${rangeEndPrefix}-01`);
             }
 
-            const [remoteWorkoutsRes, remoteSessionsRes] = await Promise.all([
-                workoutsQuery.limit(500),
-                sessionsQuery.limit(500),
-            ]);
+            const diagnosticFetchKey = `history_sync_diagnostic:${userId}:${rangeStart}:${rangeEndPrefix || "open"}`;
+            const diagnosticFetch = await runDedupeSupabaseFetch(
+                diagnosticFetchKey,
+                async () => {
+                    const [remoteWorkoutsRes, remoteSessionsRes] = await Promise.all([
+                        workoutsQuery.limit(120),
+                        sessionsQuery.limit(120),
+                    ]);
+                    if (remoteWorkoutsRes.error) {
+                        logRecordFetchError("history_sync_diagnostic", "workouts", remoteWorkoutsRes.error, {
+                            userId,
+                            dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
+                        });
+                        throw remoteWorkoutsRes.error;
+                    }
+                    if (remoteSessionsRes.error) {
+                        logRecordFetchError("history_sync_diagnostic", "workout_sessions", remoteSessionsRes.error, {
+                            userId,
+                            dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
+                        });
+                        throw remoteSessionsRes.error;
+                    }
+                    return { remoteWorkoutsRes, remoteSessionsRes };
+                },
+                {
+                    minIntervalMs: 60000,
+                    freshTtlMs: 90000,
+                    backoffMs: 60000,
+                    context: {
+                        fetchName: "history_sync_diagnostic",
+                        user_id: userId,
+                        dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
+                        tables: ["workouts", "workout_sessions"],
+                    },
+                }
+            );
 
-            if (remoteWorkoutsRes.error) {
-                logRecordFetchError("history_sync_diagnostic", "workouts", remoteWorkoutsRes.error, {
-                    userId,
-                    dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
-                });
-                throw remoteWorkoutsRes.error;
-            }
-            if (remoteSessionsRes.error) {
-                logRecordFetchError("history_sync_diagnostic", "workout_sessions", remoteSessionsRes.error, {
-                    userId,
-                    dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
-                });
-                throw remoteSessionsRes.error;
-            }
+            if (diagnosticFetch.skipped) return;
+
+            const { remoteWorkoutsRes, remoteSessionsRes } = diagnosticFetch.value;
 
             const remoteWorkoutDates = [...new Set(
                 (remoteWorkoutsRes.data || [])
@@ -2677,7 +2820,7 @@ export default function GymApp() {
                 prefix,
             });
         }
-    }, []);
+    }, [runDedupeSupabaseFetch]);
 
     const syncWorkoutSessionSnapshot = useCallback(async (userId, historyMap, workoutDate, timing = null) => {
         const normalizedDate = String(workoutDate || "").slice(0, 10);
@@ -3254,32 +3397,64 @@ export default function GymApp() {
             try {
                 const sessionRangeStart = getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS);
                 const initialHistoryLimit = INITIAL_HOME_HISTORY_LIMIT;
-                const [workoutsRes, sessionsRes] = await Promise.all([
-                    supabase
-                        .from("workouts")
-                        .select("date, data")
-                        .eq("user_id", user.id)
-                        .gte("date", sessionRangeStart)
-                        .order("date", { ascending: true })
-                        .limit(initialHistoryLimit),
-                    supabase
-                        .from("workout_sessions")
-                        .select("workout_date, duration_sec, summary_json")
-                        .eq("user_id", user.id)
-                        .gte("workout_date", sessionRangeStart)
-                        .order("workout_date", { ascending: true })
-                        .limit(initialHistoryLimit),
-                ]);
+                const initialFetchKey = `history_initial_load:${user.id}:${sessionRangeStart}:${initialHistoryLimit}`;
+                const initialFetch = await runDedupeSupabaseFetch(
+                    initialFetchKey,
+                    async () => {
+                        const [workoutsRes, sessionsRes] = await Promise.all([
+                            supabase
+                                .from("workouts")
+                                .select("date, data")
+                                .eq("user_id", user.id)
+                                .gte("date", sessionRangeStart)
+                                .order("date", { ascending: true })
+                                .limit(initialHistoryLimit),
+                            supabase
+                                .from("workout_sessions")
+                                .select("workout_date, duration_sec, summary_json")
+                                .eq("user_id", user.id)
+                                .gte("workout_date", sessionRangeStart)
+                                .order("workout_date", { ascending: true })
+                                .limit(initialHistoryLimit),
+                        ]);
+                        if (workoutsRes.error) {
+                            const context = logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
+                                userId: user.id,
+                                dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
+                                query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                                responseData: workoutsRes.data,
+                            });
+                            throw attachRecordFetchContext(workoutsRes.error, context);
+                        }
+                        return { workoutsRes, sessionsRes };
+                    },
+                    {
+                        minIntervalMs: 20000,
+                        freshTtlMs: 45000,
+                        backoffMs: 30000,
+                        context: {
+                            fetchName: "history_initial_load",
+                            user_id: user.id,
+                            dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
+                            tables: ["workouts", "workout_sessions"],
+                        },
+                    }
+                );
 
-                if (workoutsRes.error) {
-                    const context = logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
-                        userId: user.id,
+                if (initialFetch.skipped) {
+                    console.warn("[restore] history initial load skipped by fetch guard", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
                         dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
-                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
-                        responseData: workoutsRes.data,
+                        reason: initialFetch.reason,
+                        fallbackUsed: false,
+                        currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
                     });
-                    throw attachRecordFetchContext(workoutsRes.error, context);
+                    return;
                 }
+
+                const { workoutsRes, sessionsRes } = initialFetch.value;
+
                 if (sessionsRes.error) {
                     logRecordFetchError("history_initial_load", "workout_sessions", sessionsRes.error, {
                         userId: user.id,
@@ -3314,6 +3489,9 @@ export default function GymApp() {
                 const hasRemoteWorkout = getValidWorkoutDatesFromHistory(remoteHistory).length > 0;
                 const mergedHistory = remoteHistory;
                 const appliedWorkoutsDataHistory = workoutsOnlyHistory;
+                const currentWeekRange = getCurrentWeekRangeForHomeSummary();
+                markSupabaseFetchFresh(`home_weekly:${user.id}:${currentWeekRange.start}:${currentWeekRange.end}`, 45000);
+                markSupabaseFetchFresh(`display_history:history:${user.id}:${currentWeekRange.start}:${currentWeekRange.end}:${INITIAL_HOME_HISTORY_LIMIT}`, 45000);
 
                 console.log("[restore] Supabase priority load", {
                     env: getRuntimeEnvironmentLabel(),
@@ -3390,7 +3568,13 @@ export default function GymApp() {
         return () => {
             isActive = false;
         };
-    }, [getCurrentHistoryDeleteMarkers, historyReloadNonce, user]);
+    }, [
+        getCurrentHistoryDeleteMarkers,
+        historyReloadNonce,
+        markSupabaseFetchFresh,
+        runDedupeSupabaseFetch,
+        user,
+    ]);
 
     useEffect(() => {
         if (!user || !historySyncReady) return;
@@ -3676,7 +3860,7 @@ export default function GymApp() {
 
     useEffect(() => {
         if (!user?.id || !historySyncReady) return;
-        if (!["history", "calendar", "analytics"].includes(screen)) return;
+        if (!["calendar", "analytics"].includes(screen)) return;
 
         let cancelled = false;
 
@@ -3717,20 +3901,56 @@ export default function GymApp() {
                     .order("workout_date", { ascending: true })
                     .limit(displayHistoryLimit);
 
-                const [workoutsRes, sessionsRes] = await Promise.all([
-                    workoutsQuery,
-                    sessionsQuery,
-                ]);
+                const displayFetchKey = `display_history:${screen}:${user.id}:${sessionRangeStart}:${sessionRangeEnd || "open"}:${displayHistoryLimit}`;
+                const displayFetch = await runDedupeSupabaseFetch(
+                    displayFetchKey,
+                    async () => {
+                        const [workoutsRes, sessionsRes] = await Promise.all([
+                            workoutsQuery,
+                            sessionsQuery,
+                        ]);
+                        if (workoutsRes.error) {
+                            const context = logRecordFetchError(queryLabel, "workouts", workoutsRes.error, {
+                                userId: user.id,
+                                dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: displayHistoryLimit },
+                                query: "workouts.select(date,data).eq(user_id).gte(date).lte(date?).order(date asc).limit",
+                                responseData: workoutsRes.data,
+                            });
+                            throw attachRecordFetchContext(workoutsRes.error, context);
+                        }
+                        return { workoutsRes, sessionsRes };
+                    },
+                    {
+                        minIntervalMs: 20000,
+                        freshTtlMs: 30000,
+                        backoffMs: 30000,
+                        context: {
+                            fetchName: queryLabel,
+                            user_id: user.id,
+                            screen,
+                            dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: displayHistoryLimit },
+                            tables: ["workouts", "workout_sessions"],
+                        },
+                    }
+                );
 
-                if (workoutsRes.error) {
-                    const context = logRecordFetchError(queryLabel, "workouts", workoutsRes.error, {
-                        userId: user.id,
+                if (displayFetch.skipped) {
+                    console.log("[restore] display history fetch skipped", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        screen,
+                        requestId,
+                        applied: false,
+                        reason: displayFetch.reason,
                         dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: displayHistoryLimit },
-                        query: "workouts.select(date,data).eq(user_id).gte(date).lte(date?).order(date asc).limit",
-                        responseData: workoutsRes.data,
+                        currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
+                        currentWorkoutsDataDisplayed: getHistoryOverallMetrics(workoutsDataHistoryRef.current || {}),
                     });
-                    throw attachRecordFetchContext(workoutsRes.error, context);
+                    return;
                 }
+
+                const { workoutsRes, sessionsRes } = displayFetch.value;
+
                 if (sessionsRes.error) {
                     logRecordFetchError(queryLabel, "workout_sessions", sessionsRes.error, {
                         userId: user.id,
@@ -3868,6 +4088,7 @@ export default function GymApp() {
         getCurrentHistoryDeleteMarkers,
         historyReloadNonce,
         historySyncReady,
+        runDedupeSupabaseFetch,
         screen,
         sessionSyncVersion,
         user?.id,
@@ -3885,26 +4106,60 @@ export default function GymApp() {
             const sessionRangeStart = weekRange.start;
             const sessionRangeEnd = weekRange.end;
             const homeHistoryLimit = INITIAL_HOME_HISTORY_LIMIT;
+            const homeFetchKey = `home_weekly:${user.id}:${sessionRangeStart}:${sessionRangeEnd}`;
 
             try {
-                const { data, error } = await supabase
-                    .from("workouts")
-                    .select("date, data")
-                    .eq("user_id", user.id)
-                    .gte("date", sessionRangeStart)
-                    .lte("date", sessionRangeEnd)
-                    .order("date", { ascending: true })
-                    .limit(homeHistoryLimit);
+                const homeFetch = await runDedupeSupabaseFetch(
+                    homeFetchKey,
+                    async () => {
+                        const result = await supabase
+                            .from("workouts")
+                            .select("date, data")
+                            .eq("user_id", user.id)
+                            .gte("date", sessionRangeStart)
+                            .lte("date", sessionRangeEnd)
+                            .order("date", { ascending: true })
+                            .limit(homeHistoryLimit);
+                        if (result.error) {
+                            logRecordFetchError("home_weekly_summary_refresh", "workouts", result.error, {
+                                userId: user.id,
+                                dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: homeHistoryLimit },
+                                query: "workouts.select(date,data).eq(user_id).gte(date).lte(date).order(date asc).limit",
+                                responseData: result.data,
+                            });
+                            throw result.error;
+                        }
+                        return result;
+                    },
+                    {
+                        minIntervalMs: 20000,
+                        freshTtlMs: 30000,
+                        backoffMs: 30000,
+                        context: {
+                            fetchName: "home_weekly_summary_refresh",
+                            user_id: user.id,
+                            dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: homeHistoryLimit },
+                            table: "workouts",
+                        },
+                    }
+                );
 
-                if (error) {
-                    logRecordFetchError("home_weekly_summary_refresh", "workouts", error, {
-                        userId: user.id,
+                if (homeFetch.skipped) {
+                    console.log("[home weekly summary] fetch skipped", {
+                        source: "workouts.data",
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        requestId,
+                        applied: false,
+                        reason: homeFetch.reason,
                         dateRange: { from: sessionRangeStart, to: sessionRangeEnd, limit: homeHistoryLimit },
-                        query: "workouts.select(date,data).eq(user_id).gte(date).lte(date).order(date asc).limit",
-                        responseData: data,
+                        currentDisplayed: getHistoryOverallMetrics(workoutsDataHistoryRef.current || {}),
+                        ...getHomeWeeklySummaryDebug(workoutsDataHistoryRef.current || {}, weekRange),
                     });
-                    throw error;
+                    return;
                 }
+
+                const { data } = homeFetch.value;
 
                 const remoteWorkoutsHistory = applyHistoryDeleteMarkers(
                     buildHistoryFromWorkoutRows(data || []),
@@ -3983,6 +4238,7 @@ export default function GymApp() {
         getCurrentHistoryDeleteMarkers,
         historyReloadNonce,
         historySyncReady,
+        runDedupeSupabaseFetch,
         screen,
         sessionSyncVersion,
         user?.id,
@@ -4010,8 +4266,11 @@ export default function GymApp() {
                 });
 
                 if (!cancelled) {
-                    await refreshHistorySyncDiagnostic(user.id, history, { prefix: todayKey.slice(0, 7) });
-                    setSessionSyncVersion((prev) => prev + 1);
+                    console.log("[sync] automatic month diagnostic skipped", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        reason: "avoid repeated Supabase fetches on home open",
+                    });
                 }
             } catch (error) {
                 console.error("workout session month backfill batch failed", {
@@ -4034,13 +4293,13 @@ export default function GymApp() {
         history,
         historySyncReady,
         recordSyncFailure,
-        refreshHistorySyncDiagnostic,
         isOnline,
         user?.id,
     ]);
 
     useEffect(() => {
         if (!user?.id || !historySyncReady) return;
+        if (Object.keys(syncFailuresByDateRef.current || {}).length === 0) return;
         const monthPrefix = formatDateKey(new Date()).slice(0, 7);
         refreshHistorySyncDiagnostic(user.id, history, { prefix: monthPrefix });
     }, [history, historySyncReady, refreshHistorySyncDiagnostic, sessionSyncVersion, user?.id]);
