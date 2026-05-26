@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import { APP_VERSION } from "../appVersion";
 
 function isProbablyIOS() {
   if (typeof navigator === "undefined") return false;
@@ -56,7 +57,7 @@ export async function registerPushServiceWorker() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js");
+    const registration = await navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(APP_VERSION)}`);
     await navigator.serviceWorker.ready;
     return registration;
   } catch (error) {

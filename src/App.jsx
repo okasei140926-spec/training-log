@@ -84,6 +84,7 @@ import {
     persistWorkoutTimerState,
     readWorkoutTimerState,
 } from "./utils/workoutTimer";
+import { APP_VERSION, HISTORY_CACHE_SCHEMA_VERSION } from "./appVersion";
 
 const AnalyticsScreen = lazy(() => import("./components/AnalyticsScreen"));
 const PhotoScreen = lazy(() => import("./components/PhotoScreen"));
@@ -204,6 +205,7 @@ const isPlainObject = (value) =>
 
 const serializeHistoryMap = (historyMap) => JSON.stringify(historyMap || {});
 const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
+const APP_VERSION_STORAGE_KEY = "pumpAppVersion";
 const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
 const REMOTE_HISTORY_SESSION_LIMIT = 400;
 const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 21;
@@ -300,14 +302,94 @@ const getWorkoutDraftSignature = (draft) => JSON.stringify({
     exerciseUnits: draft?.exerciseUnits || {},
 });
 
+const unwrapVersionedHistoryCache = (value, { allowLegacy = false } = {}) => {
+    if (!isPlainObject(value)) return allowLegacy ? value : null;
+
+    if (
+        value.__schema === "pump.history_cache" &&
+        value.schemaVersion === HISTORY_CACHE_SCHEMA_VERSION &&
+        value.appVersion === APP_VERSION &&
+        isPlainObject(value.history)
+    ) {
+        return value.history;
+    }
+
+    if (value.__schema || value.schemaVersion || value.appVersion || value.history) {
+        return null;
+    }
+
+    return allowLegacy ? value : null;
+};
+
+const buildVersionedHistoryCache = (historyMap) => ({
+    __schema: "pump.history_cache",
+    schemaVersion: HISTORY_CACHE_SCHEMA_VERSION,
+    appVersion: APP_VERSION,
+    savedAt: new Date().toISOString(),
+    history: historyMap || {},
+});
+
+const loadTrustedHistoryCache = (key, fallback = null) => {
+    const raw = load(key, null);
+    const trusted = unwrapVersionedHistoryCache(raw, { allowLegacy: false });
+    return trusted || fallback;
+};
+
 const persistHistoryForUser = (userId, nextHistory) => {
-    save("history", nextHistory);
+    const versionedHistory = buildVersionedHistoryCache(nextHistory);
+    save("history", versionedHistory);
 
     if (userId) {
-        save(getUserHistoryCacheKey(userId), nextHistory);
+        save(getUserHistoryCacheKey(userId), versionedHistory);
         save(HISTORY_OWNER_KEY, userId);
     }
 };
+
+const clearVersionedAppCachesIfNeeded = () => {
+    if (typeof window === "undefined") return;
+
+    const previousVersion = load(APP_VERSION_STORAGE_KEY, "");
+    if (previousVersion === APP_VERSION) return;
+
+    const removedKeys = [];
+    try {
+        for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+            if (
+                key === "history" ||
+                key.startsWith("history_cache_") ||
+                key === "workoutsDataHistory" ||
+                key.startsWith("workoutsDataHistory") ||
+                key.startsWith("cachedWeeklySummary") ||
+                key.startsWith("homeWeeklySummary")
+            ) {
+                localStorage.removeItem(key);
+                removedKeys.push(key);
+            }
+        }
+        save(APP_VERSION_STORAGE_KEY, APP_VERSION);
+    } catch (error) {
+        console.error("[app version] cache migration failed", {
+            appVersion: APP_VERSION,
+            previousVersion,
+            removedKeys,
+            error,
+            message: error?.message,
+        });
+        return;
+    }
+
+    if (removedKeys.length > 0) {
+        console.warn("[app version] cleared stale local workout caches", {
+            appVersion: APP_VERSION,
+            previousVersion: previousVersion || null,
+            removedKeys,
+        });
+    }
+};
+
+clearVersionedAppCachesIfNeeded();
 
 const createEmptyHistoryDeleteMarkers = () => ({
     dates: [],
@@ -3366,7 +3448,9 @@ export default function GymApp() {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
                         currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
-                        cachedHistory: getHistoryOverallMetrics(load(getUserHistoryCacheKey(user.id), load("history", {}))),
+                        cachedHistory: getHistoryOverallMetrics(
+                            loadTrustedHistoryCache(getUserHistoryCacheKey(user.id), loadTrustedHistoryCache("history", {}))
+                        ),
                     });
                     setHistory({});
                     workoutsDataHistoryRef.current = {};
@@ -3374,9 +3458,9 @@ export default function GymApp() {
                 }
             }
 
-            const rawLocalHistory = load("history", {});
+            const rawLocalHistory = loadTrustedHistoryCache("history", {});
             const localOwnerUserId = load(HISTORY_OWNER_KEY, null);
-            const scopedLocalHistory = load(getUserHistoryCacheKey(user.id), null);
+            const scopedLocalHistory = loadTrustedHistoryCache(getUserHistoryCacheKey(user.id), null);
             const persistedDeleteMarkers = normalizeHistoryDeleteMarkers(
                 load(getHistoryDeleteMarkersKey(user.id), createEmptyHistoryDeleteMarkers())
             );
@@ -3389,7 +3473,7 @@ export default function GymApp() {
             } else if (!localOwnerUserId || localOwnerUserId === user.id) {
                 localMergeCandidate = rawLocalHistory;
             } else {
-                save(getUserHistoryCacheKey(localOwnerUserId), rawLocalHistory);
+                save(getUserHistoryCacheKey(localOwnerUserId), buildVersionedHistoryCache(rawLocalHistory));
             }
 
             const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();

@@ -1,5 +1,6 @@
-const APP_SHELL_CACHE = "pump-app-shell-v1";
-const RUNTIME_CACHE = "pump-runtime-v1";
+const APP_VERSION = "2026-05-26-pwa-cache-v4";
+const APP_SHELL_CACHE = `pump-app-shell-${APP_VERSION}`;
+const RUNTIME_CACHE = `pump-runtime-${APP_VERSION}`;
 const APP_SHELL_URLS = [
   "/",
   "/index.html",
@@ -17,6 +18,23 @@ self.addEventListener("install", (event) => {
     caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL_URLS)).catch(() => undefined)
   );
   self.skipWaiting();
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+  if (event.data?.type === "CLEAR_PUMP_CACHES") {
+    event.waitUntil(
+      caches.keys().then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith("pump-"))
+            .map((key) => caches.delete(key))
+        )
+      )
+    );
+  }
 });
 
 self.addEventListener("activate", (event) => {
@@ -43,15 +61,13 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then((response) => {
           const clone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone)).catch(() => undefined);
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put("/index.html", clone)).catch(() => undefined);
           return response;
         })
         .catch(async () => {
-          const cachedPage = await caches.match(request);
-          if (cachedPage) return cachedPage;
           const cachedIndex = await caches.match("/index.html");
           if (cachedIndex) return cachedIndex;
           return caches.match("/offline.html");
@@ -61,6 +77,27 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (!isSameOrigin) return;
+
+  const isBuildAsset =
+    url.pathname.startsWith("/static/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".json");
+
+  if (isBuildAsset) {
+    event.respondWith(
+      fetch(request, { cache: "no-store" })
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone)).catch(() => undefined);
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {
