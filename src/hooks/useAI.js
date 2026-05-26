@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  buildHistoryFromWorkoutRows,
+  calc1RM,
+  formatDateKey,
+  sanitizeHistoryRecord,
+} from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
 import { extractWorkoutPlanFromText, normalizeWorkoutPlan } from "../utils/aiWorkoutPlan";
@@ -8,6 +13,8 @@ const AI_DAILY_LIMIT = 5;
 const AI_USAGE_STORAGE_KEY = "ai_usage_state";
 const AI_PRO_STORAGE_KEY = "pump_pro_enabled";
 const AI_API_ORIGIN = process.env.REACT_APP_API_ORIGIN || "https://training-log-mu.vercel.app";
+const AI_WORKOUTS_SELECT_QUERY = "workouts.select(date,data).eq(user_id).order(date.asc).limit(500)";
+const AI_CONTEXT_CANONICAL_SOURCE = "workouts.data";
 const INITIAL_AI_MESSAGE = {
   role: "assistant",
   content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪",
@@ -17,6 +24,7 @@ const getTodayKey = () => formatDateKey(new Date());
 const getAiUsageKey = (dateKey = getTodayKey()) => `ai_usage_${dateKey}`;
 const isNativeCapacitorOrigin = () =>
   typeof window !== "undefined" && window.location?.protocol === "capacitor:";
+const getAiEnvironment = () => (isNativeCapacitorOrigin() ? "capacitor" : "web");
 const getApiUrl = (path) => {
   const normalizedPath = String(path || "").startsWith("/") ? path : `/${path}`;
   if (isNativeCapacitorOrigin()) return `${AI_API_ORIGIN}${normalizedPath}`;
@@ -142,6 +150,19 @@ const calcSetVolume = (set) => {
   return Number(set.weight || 0) * Number(set.reps || 0);
 };
 
+const roundToNearest = (value, step = 2.5) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.max(step, Math.round(numeric / step) * step);
+};
+
+const normalizeAiBodyPart = (bodyPart) => {
+  const value = String(bodyPart || "").trim();
+  if (!value) return "その他";
+  if (value === "ハムストリングス" || value.toLowerCase().includes("hamstring")) return "ハム";
+  return value;
+};
+
 const formatSetLabel = (set) => {
   if (!set) return "";
   const weightLabel = set.weight === "BW" ? "自重" : `${Number(set.weight)}kg`;
@@ -162,7 +183,7 @@ const flattenHistoryByDate = (history) => {
       grouped.get(dateKey).push({
         exerciseName,
         normalizedExerciseName: normalizeExerciseName(exerciseName),
-        bodyPart: sanitized.bodyPart || "その他",
+        bodyPart: normalizeAiBodyPart(sanitized.bodyPart),
         sets: sanitized.sets,
         setCount: sanitized.sets.length,
         totalVolume: sanitized.sets.reduce((sum, set) => sum + calcSetVolume(set), 0),
@@ -176,6 +197,113 @@ const flattenHistoryByDate = (history) => {
   });
 
   return grouped;
+};
+
+const getHistoryDateRange = (groupedHistory) => {
+  const dates = Array.from(groupedHistory.keys()).sort();
+  return {
+    from: dates[0] || null,
+    to: dates[dates.length - 1] || null,
+    dates,
+  };
+};
+
+const getBodyPartCountsByDate = (groupedHistory, dateKey) => {
+  return (groupedHistory.get(dateKey) || []).reduce((acc, entry) => {
+    const bodyPart = normalizeAiBodyPart(entry.bodyPart);
+    acc[bodyPart] = (acc[bodyPart] || 0) + Number(entry.setCount || 0);
+    return acc;
+  }, {});
+};
+
+const getExerciseNamesByDate = (groupedHistory, dateKey) =>
+  (groupedHistory.get(dateKey) || []).map((entry) => entry.exerciseName).filter(Boolean);
+
+const logAiContextSnapshot = ({
+  source,
+  userId,
+  groupedHistory,
+  appStateUpdated = false,
+  readOnly = true,
+  extra = {},
+}) => {
+  const range = getHistoryDateRange(groupedHistory);
+  const dates = range.dates;
+  const trackedDate = "2026-05-25";
+
+  const exerciseNamesByDate = dates.reduce((acc, dateKey) => {
+    acc[dateKey] = getExerciseNamesByDate(groupedHistory, dateKey);
+    return acc;
+  }, {});
+
+  const bodyPartCountsByDate = dates.reduce((acc, dateKey) => {
+    acc[dateKey] = getBodyPartCountsByDate(groupedHistory, dateKey);
+    return acc;
+  }, {});
+
+  console.log("[AI Coach context]", {
+    source,
+    environment: getAiEnvironment(),
+    user_id: userId || null,
+    dateRange: { from: range.from, to: range.to },
+    includedWorkoutDates: dates,
+    exerciseNamesByDate,
+    bodyPartCountsByDate,
+    "2026-05-25 ham set count": bodyPartCountsByDate[trackedDate]?.ハム ?? 0,
+    "2026-05-25 exercise names": exerciseNamesByDate[trackedDate] || [],
+    readOnly,
+    appHistoryStateUpdated: Boolean(appStateUpdated),
+    appStateUpdated: Boolean(appStateUpdated),
+    ...extra,
+  });
+};
+
+const fetchLatestWorkoutHistoryForAI = async (userId) => {
+  if (!userId) {
+    return {
+      source: "no-user",
+      history: {},
+      rows: [],
+      error: null,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("workouts")
+    .select("date,data")
+    .eq("user_id", userId)
+    .order("date", { ascending: true })
+    .limit(500);
+
+  if (error) {
+    console.error("[AI Coach context] workouts.data fetch failed", {
+      source: AI_CONTEXT_CANONICAL_SOURCE,
+      environment: getAiEnvironment(),
+      user_id: userId,
+      table: "workouts",
+      query: AI_WORKOUTS_SELECT_QUERY,
+      errorCode: error?.code || null,
+      errorMessage: error?.message || null,
+      errorDetails: error?.details || null,
+      errorHint: error?.hint || null,
+      responseData: data || null,
+      readOnly: true,
+      appHistoryStateUpdated: false,
+    });
+    return {
+      source: "workouts.data.fetch_failed",
+      history: {},
+      rows: data || [],
+      error,
+    };
+  }
+
+  return {
+    source: AI_CONTEXT_CANONICAL_SOURCE,
+    history: buildHistoryFromWorkoutRows(data || []),
+    rows: data || [],
+    error: null,
+  };
 };
 
 const summarizeWorkoutDay = (groupedHistory, dateKey) => {
@@ -285,7 +413,189 @@ const buildRecentSummaryText = (groupedHistory) => {
     .join("\n");
 };
 
-export function useAI(history) {
+const getPriorityBodyPartsForMessage = (message) => {
+  const text = String(message || "").toLowerCase();
+  const parts = [];
+  if (text.includes("胸") || text.includes("ベンチ") || text.includes("bench") || text.includes("チェスト")) {
+    parts.push("胸");
+  }
+  if (text.includes("肩") || text.includes("ショルダー")) parts.push("肩");
+  if (text.includes("背中") || text.includes("背") || text.includes("懸垂") || text.includes("ラット")) {
+    parts.push("背中");
+  }
+  if (text.includes("脚") || text.includes("足") || text.includes("スクワット")) parts.push("脚");
+  if (text.includes("ハム") || text.includes("ルーマニアン") || text.includes("レッグカール")) parts.push("ハム");
+  if (text.includes("腕") || text.includes("二頭") || text.includes("三頭")) parts.push("腕");
+  return [...new Set(parts)];
+};
+
+const getPriorityExerciseNameHints = (message) => {
+  const text = String(message || "").toLowerCase();
+  const hints = [];
+  if (text.includes("ベンチ") || text.includes("bench")) hints.push("ベンチプレス");
+  if (text.includes("インクライン")) hints.push("インクライン");
+  if (text.includes("フライ")) hints.push("フライ");
+  if (text.includes("ルーマニアン")) hints.push("ルーマニアンデッドリフト");
+  if (text.includes("ハイパー")) hints.push("ハイパーエクステンション");
+  if (text.includes("レッグカール")) hints.push("レッグカール");
+  return hints;
+};
+
+const getExercisePriorityScore = (exerciseName, bodyPart, message) => {
+  const normalizedName = normalizeExerciseName(exerciseName);
+  const lowerName = normalizedName.toLowerCase();
+  const text = String(message || "").toLowerCase();
+  const bodyParts = getPriorityBodyPartsForMessage(message);
+  const hints = getPriorityExerciseNameHints(message);
+
+  let score = 0;
+  if (text && (text.includes(lowerName) || lowerName.includes(text))) score += 20;
+  if (bodyParts.includes(normalizeAiBodyPart(bodyPart))) score += 12;
+  if (hints.some((hint) => normalizedName.includes(hint) || hint.includes(normalizedName))) score += 16;
+
+  if (bodyParts.includes("胸")) {
+    if (normalizedName.includes("ベンチプレス")) score += 10;
+    if (normalizedName.includes("インクライン")) score += 8;
+    if (normalizedName.includes("フライ")) score += 7;
+    if (normalizedName.includes("チェスト")) score += 6;
+  }
+
+  return score;
+};
+
+const buildExerciseHistoryStats = (history, message) => {
+  const stats = [];
+
+  Object.entries(history || {}).forEach(([exerciseName, records]) => {
+    const sanitizedRecords = (records || [])
+      .map((record) => sanitizeHistoryRecord(record, { allowBodyweight: true }))
+      .filter((record) => record?.date && Array.isArray(record.sets) && record.sets.length)
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    if (!sanitizedRecords.length) return;
+
+    const allSets = sanitizedRecords.flatMap((record) =>
+      record.sets.map((set) => ({
+        ...set,
+        date: record.date,
+      }))
+    );
+    const weightedSets = allSets.filter((set) => set.weight !== "BW" && Number(set.weight) > 0 && Number(set.reps) > 0);
+    const bestSet = weightedSets.reduce((best, set) => {
+      const estimated1RM = calc1RM([set]);
+      if (!best || estimated1RM > best.estimated1RM) {
+        return {
+          date: set.date,
+          weight: Number(set.weight),
+          reps: Number(set.reps),
+          estimated1RM,
+        };
+      }
+      return best;
+    }, null);
+    const latestRecord = sanitizedRecords[0];
+    const latestWeightedSets = latestRecord.sets.filter((set) => set.weight !== "BW" && Number(set.weight) > 0);
+    const latestMaxWeight = latestWeightedSets.reduce((max, set) => Math.max(max, Number(set.weight || 0)), 0);
+    const bodyPart = normalizeAiBodyPart(
+      latestRecord.bodyPart ||
+      sanitizedRecords.find((record) => normalizeAiBodyPart(record.bodyPart) !== "その他")?.bodyPart ||
+      "その他"
+    );
+    const estimated1RM = Number(bestSet?.estimated1RM || 0);
+    const recommendations = estimated1RM > 0
+      ? {
+          hypertrophy: {
+            weight: roundToNearest(estimated1RM * 0.8),
+            reps: "6〜8",
+            sets: 3,
+          },
+          light: {
+            weight: roundToNearest(estimated1RM * 0.72),
+            reps: "8〜10",
+            sets: 3,
+          },
+          highIntensity: {
+            weight: roundToNearest(estimated1RM * 0.87),
+            reps: "4〜6",
+            sets: 3,
+          },
+        }
+      : null;
+
+    stats.push({
+      exerciseName,
+      normalizedExerciseName: normalizeExerciseName(exerciseName),
+      bodyPart,
+      latestDate: latestRecord.date,
+      latestSetCount: latestRecord.sets.length,
+      latestSets: latestRecord.sets.map((set) => ({
+        weight: set.weight,
+        reps: Number(set.reps || 0),
+        label: formatSetLabel(set),
+      })),
+      recentRecords: sanitizedRecords.slice(0, 3).map((record) => ({
+        date: record.date,
+        setCount: record.sets.length,
+        maxWeight: record.sets.reduce((max, set) => (
+          set.weight === "BW" ? max : Math.max(max, Number(set.weight || 0))
+        ), 0),
+        sets: record.sets.map((set) => ({
+          weight: set.weight,
+          reps: Number(set.reps || 0),
+          label: formatSetLabel(set),
+        })),
+      })),
+      pr: bestSet
+        ? {
+            date: bestSet.date,
+            weight: bestSet.weight,
+            reps: bestSet.reps,
+            estimated1RM: Math.round(bestSet.estimated1RM * 10) / 10,
+          }
+        : null,
+      recentMaxWeight: latestMaxWeight,
+      estimated1RM: Math.round(estimated1RM * 10) / 10,
+      recommendedWorkingSets: recommendations,
+      priorityScore: getExercisePriorityScore(exerciseName, bodyPart, message),
+    });
+  });
+
+  return stats.sort((a, b) => (
+    b.priorityScore - a.priorityScore ||
+    String(b.latestDate).localeCompare(String(a.latestDate)) ||
+    (b.estimated1RM || 0) - (a.estimated1RM || 0)
+  ));
+};
+
+const buildExerciseHistoryContextText = (history, message) => {
+  const stats = buildExerciseHistoryStats(history, message);
+  if (!stats.length) return "種目別の過去記録はありません。";
+
+  return stats.slice(0, 18).map((item) => {
+    const latestSets = item.latestSets.map((set) => set.label).join(" / ");
+    const recentRecords = item.recentRecords
+      .map((record) => `${record.date} ${record.setCount}セット ${record.sets.map((set) => set.label).join(" / ")}`)
+      .join(" ; ");
+    const prText = item.pr
+      ? `PR ${item.pr.weight}kg×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
+      : "PRなし";
+    const rec = item.recommendedWorkingSets;
+    const recommendationText = rec
+      ? `推奨: 筋肥大${rec.hypertrophy.weight}kg×${rec.hypertrophy.reps}回×${rec.hypertrophy.sets}セット / 軽め${rec.light.weight}kg×${rec.light.reps}回×${rec.light.sets}セット / 高強度${rec.highIntensity.weight}kg×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
+      : "推奨重量: 自重または重量履歴なし";
+
+    return [
+      `${item.exerciseName} (${item.bodyPart})`,
+      `最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets}`,
+      prText,
+      `直近最高重量 ${item.recentMaxWeight || 0}kg`,
+      recommendationText,
+      `最近: ${recentRecords}`,
+    ].join(" | ");
+  }).join("\n");
+};
+
+export function useAI() {
   const initialAiUsageDate = getTodayKey();
   const [aiMsgs, setAiMsgs] = useState([INITIAL_AI_MESSAGE]);
   const [aiInput, setAiInput] = useState("");
@@ -309,8 +619,6 @@ export function useAI(history) {
     aiUsageCountRef.current = usage.count;
     return usage.count;
   });
-
-  const groupedHistory = useMemo(() => flattenHistoryByDate(history), [history]);
 
   const setActiveConversationId = useCallback((conversationId) => {
     activeConversationIdRef.current = conversationId || null;
@@ -716,9 +1024,6 @@ export function useAI(history) {
 
     const mode = detectCoachMode(userMsg);
     const targetDateKey = getTargetDateKey(userMsg);
-    const targetWorkoutSummary = targetDateKey ? summarizeWorkoutDay(groupedHistory, targetDateKey) : null;
-    const latestDateKey = Array.from(groupedHistory.keys()).sort().slice(-1)[0] || "";
-    const latestWorkoutSummary = latestDateKey ? summarizeWorkoutDay(groupedHistory, latestDateKey) : null;
 
     setAiInput("");
     const userMessage = {
@@ -741,6 +1046,55 @@ export function useAI(history) {
         return;
       }
 
+      const latestWorkoutFetch = await fetchLatestWorkoutHistoryForAI(session?.user?.id);
+      if (latestWorkoutFetch.error) {
+        logAiContextSnapshot({
+          source: latestWorkoutFetch.source,
+          userId: session?.user?.id,
+          groupedHistory: flattenHistoryByDate({}),
+          readOnly: true,
+          appStateUpdated: false,
+          extra: {
+            table: "workouts",
+            query: AI_WORKOUTS_SELECT_QUERY,
+            rowCount: latestWorkoutFetch.rows?.length ?? 0,
+            blockedReason: "workouts.data fetch failed; stale local history was not used",
+            targetDate: targetDateKey || null,
+            coachMode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
+          },
+        });
+        setAiMsgs((p) => [...p, { role: "assistant", content: "最新の記録を取得できませんでした。時間をおいて再試行してください。" }]);
+        return false;
+      }
+
+      const aiHistory = latestWorkoutFetch.history;
+      const contextSource = latestWorkoutFetch.source;
+      const requestGroupedHistory = flattenHistoryByDate(aiHistory);
+      const targetWorkoutSummary = targetDateKey ? summarizeWorkoutDay(requestGroupedHistory, targetDateKey) : null;
+      const latestDateKey = Array.from(requestGroupedHistory.keys()).sort().slice(-1)[0] || "";
+      const latestWorkoutSummary = latestDateKey ? summarizeWorkoutDay(requestGroupedHistory, latestDateKey) : null;
+      const exerciseHistoryContext = buildExerciseHistoryContextText(aiHistory, userMsg);
+
+      logAiContextSnapshot({
+        source: contextSource,
+        userId: session?.user?.id,
+        groupedHistory: requestGroupedHistory,
+        readOnly: true,
+        appStateUpdated: false,
+        extra: {
+          table: "workouts",
+          query: AI_WORKOUTS_SELECT_QUERY,
+          rowCount: latestWorkoutFetch.rows?.length ?? 0,
+          fallbackUsed: Boolean(latestWorkoutFetch.error),
+          targetDate: targetDateKey || null,
+          latestDate: latestDateKey || null,
+          coachMode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
+          exerciseHistoryNames: buildExerciseHistoryStats(aiHistory, userMsg)
+            .slice(0, 18)
+            .map((item) => item.exerciseName),
+        },
+      });
+
       const apiUrl = getApiUrl("/api/chat");
       const res = await fetch(apiUrl, {
         method: "POST",
@@ -759,10 +1113,14 @@ export function useAI(history) {
           coachContext: {
             mode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
             level: mode.wantsBeginner ? "beginner" : mode.wantsAdvanced ? "advanced" : "standard",
+            source: contextSource,
+            readOnly: true,
+            appStateUpdated: false,
             targetDate: targetDateKey || null,
             targetWorkoutContext: buildWorkoutContextText(targetWorkoutSummary),
             latestWorkoutContext: buildWorkoutContextText(latestWorkoutSummary),
-            recentSummaryContext: buildRecentSummaryText(groupedHistory),
+            recentSummaryContext: buildRecentSummaryText(requestGroupedHistory),
+            exerciseHistoryContext,
             hasTargetWorkout: Boolean(targetWorkoutSummary),
           },
         }),

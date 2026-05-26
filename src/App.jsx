@@ -1820,7 +1820,7 @@ export default function GymApp() {
         openAiConversation,
         startNewAiConversation,
         deleteAiConversation,
-    } = useAI(history);
+    } = useAI();
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
