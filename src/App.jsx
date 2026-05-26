@@ -402,7 +402,13 @@ const isDestructiveWorkoutRegression = (incomingMetrics, existingMetrics) => {
     if (!existingMetrics?.hasWorkout) return false;
     if (!incomingMetrics?.hasWorkout) return true;
 
+    const incomingNames = new Set((incomingMetrics.exerciseNames || []).map((name) => normalizeExerciseName(name)));
+    const missingExistingNames = (existingMetrics.exerciseNames || [])
+        .map((name) => normalizeExerciseName(name))
+        .filter((name) => name && !incomingNames.has(name));
+
     return (
+        missingExistingNames.length > 0 ||
         incomingMetrics.exerciseCount < existingMetrics.exerciseCount ||
         incomingMetrics.setCount < existingMetrics.setCount ||
         incomingMetrics.volume + 0.01 < existingMetrics.volume
@@ -424,8 +430,19 @@ const logWorkoutPersistenceDecision = ({
         origin: typeof window !== "undefined" ? window.location?.origin : "",
         user_id: userId || null,
         date,
+        source: reason?.includes("explicit") || reason?.includes("content edit") ? "user edit" : "system",
+        allowed: !String(reason || "").includes("blocked"),
+        blockedReason: String(reason || "").includes("blocked") ? reason : null,
         local: localMetrics,
         remote: remoteMetrics,
+        localExerciseNames: localMetrics?.exerciseNames || [],
+        remoteExerciseNames: remoteMetrics?.exerciseNames || [],
+        localSetCount: localMetrics?.setCount ?? 0,
+        remoteSetCount: remoteMetrics?.setCount ?? 0,
+        localVolume: localMetrics?.volume ?? 0,
+        remoteVolume: remoteMetrics?.volume ?? 0,
+        localUpdatedAt: localMetrics?.updatedAt || null,
+        remoteUpdatedAt: remoteMetrics?.updatedAt || null,
         reason,
     };
 
@@ -2769,7 +2786,20 @@ export default function GymApp() {
         const currentUserId = user.id;
         const pendingWorkoutNotification = pendingWorkoutNotificationRef.current;
         const pendingContentDates = Array.from(pendingWorkoutContentChangeDatesRef.current.keys());
-        if (!pendingContentDates.length && !pendingWorkoutSessionSyncDatesRef.current.size) return;
+        if (!pendingContentDates.length) {
+            if (pendingWorkoutSessionSyncDatesRef.current.size) {
+                console.warn("[save guard] skipped pending session sync without user edit", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: currentUserId,
+                    dates: Array.from(pendingWorkoutSessionSyncDatesRef.current),
+                    source: "queue retry / timer restore / screen open",
+                    allowed: false,
+                    blockedReason: "no explicit workout content edit",
+                });
+                pendingWorkoutSessionSyncDatesRef.current = new Set();
+            }
+            return;
+        }
 
         historySaveQueueRef.current = historySaveQueueRef.current
             .catch(() => {})
@@ -2787,13 +2817,13 @@ export default function GymApp() {
                 const [workoutsRes, sessionsRes] = await Promise.all([
                     supabase
                         .from("workouts")
-                        .select("date, data")
+                        .select("date, data, updated_at")
                         .eq("user_id", currentUserId)
                         .order("date", { ascending: false })
                         .limit(1),
                     supabase
                         .from("workout_sessions")
-                        .select("workout_date, duration_sec, summary_json")
+                        .select("workout_date, duration_sec, summary_json, updated_at")
                         .eq("user_id", currentUserId)
                         .gte("workout_date", sessionRangeStart)
                         .order("workout_date", { ascending: true })
@@ -2822,13 +2852,7 @@ export default function GymApp() {
                     mergeHistoryMaps(remoteSessionHistory, remoteWorkoutHistory),
                     effectiveDeleteMarkers
                 );
-                const pendingSessionSyncDates = Array.from(pendingWorkoutSessionSyncDatesRef.current);
-                const syncDates = [
-                    ...new Set([
-                        ...pendingContentDates,
-                        ...pendingSessionSyncDates,
-                    ]),
-                ];
+                const syncDates = [...new Set(pendingContentDates)];
                 let mergedHistory = applyHistoryDeleteMarkers(
                     applyLocalHistoryDates(remoteHistory, localHistorySnapshot, syncDates),
                     effectiveDeleteMarkers
@@ -2875,7 +2899,7 @@ export default function GymApp() {
                 syncDates.forEach((date) => pendingWorkoutContentChangeDatesRef.current.delete(date));
                 pendingWorkoutSessionSyncDatesRef.current = new Set();
 
-                const sessionSyncDates = pendingSessionSyncDates.filter(
+                const sessionSyncDates = syncDates.filter(
                     (date) => !workoutSyncResults.skippedDates.includes(date)
                 );
 
@@ -3003,38 +3027,14 @@ export default function GymApp() {
             if (!targetDates.length) return;
 
             try {
-                await syncWorkoutRowsForDates(user.id, history, targetDates);
-                await Promise.all(
-                    targetDates.map(async (dateKey) => {
-                        if (cancelled) return;
-                        try {
-                            await syncWorkoutSessionSnapshot(user.id, history, dateKey, null);
-                            clearSyncFailure(dateKey);
-                        } catch (error) {
-                            const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, dateKey).catch((remoteCheckError) => {
-                                console.error("workout remote existence check failed after month backfill error", {
-                                    error: remoteCheckError,
-                                    userId: user.id,
-                                    workoutDate: dateKey,
-                                });
-                                return false;
-                            });
-                            console.error("workout session month backfill failed", {
-                                error,
-                                userId: user.id,
-                                workoutDate: dateKey,
-                                currentMonthStart,
-                                remoteAlreadyHasWorkout,
-                                records: describeHistoryRecordsForDate(history, dateKey),
-                            });
-                            if (remoteAlreadyHasWorkout) {
-                                clearSyncFailure(dateKey);
-                            } else {
-                                recordSyncFailure(dateKey, error, "workout_sessions");
-                            }
-                        }
-                    })
-                );
+                console.warn("[save guard] automatic month backfill write disabled", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    dates: targetDates,
+                    source: "automatic queue retry / screen open",
+                    allowed: false,
+                    blockedReason: "auto resend is disabled until explicit user edit",
+                });
 
                 if (!cancelled) {
                     await refreshHistorySyncDiagnostic(user.id, history, { prefix: todayKey.slice(0, 7) });
@@ -3062,8 +3062,6 @@ export default function GymApp() {
         historySyncReady,
         recordSyncFailure,
         refreshHistorySyncDiagnostic,
-        syncWorkoutSessionSnapshot,
-        syncWorkoutRowsForDates,
         isOnline,
         user?.id,
     ]);
