@@ -3525,21 +3525,30 @@ export default function GymApp() {
             }
 
             if (isActive) {
+                const currentDisplayedMetrics = getHistoryOverallMetrics(latestHistoryRef.current || {});
+                const currentWorkoutsDataMetrics = getHistoryOverallMetrics(workoutsDataHistoryRef.current || {});
+                const hasCurrentTrustedDisplay =
+                    currentDisplayedMetrics.setCount > 0 ||
+                    currentWorkoutsDataMetrics.setCount > 0;
                 setHistorySyncReady(false);
-                setHistoryRemoteReady(false);
+                setHistoryRemoteReady(hasCurrentTrustedDisplay);
                 setHistoryLoadError("");
                 if (!historyHasTrustedRemoteSnapshotRef.current) {
                     console.log("[restore] ignore localStorage bootstrap until Supabase history load succeeds", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
-                        currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
+                        currentDisplayed: currentDisplayedMetrics,
+                        currentWorkoutsDataDisplayed: currentWorkoutsDataMetrics,
+                        historyRemoteReady: hasCurrentTrustedDisplay,
                         cachedHistory: getHistoryOverallMetrics(
                             loadTrustedHistoryCache(getUserHistoryCacheKey(user.id), loadTrustedHistoryCache("history", {}))
                         ),
                     });
-                    setHistory({});
-                    workoutsDataHistoryRef.current = {};
-                    setWorkoutsDataHistory({});
+                    if (!hasCurrentTrustedDisplay) {
+                        setHistory({});
+                        workoutsDataHistoryRef.current = {};
+                        setWorkoutsDataHistory({});
+                    }
                 }
             }
 
@@ -3610,14 +3619,30 @@ export default function GymApp() {
                 );
 
                 if (initialFetch.skipped) {
+                    const currentDisplayed = latestHistoryRef.current || {};
+                    const currentWorkoutsData = workoutsDataHistoryRef.current || {};
+                    const currentDisplayedMetrics = getHistoryOverallMetrics(currentDisplayed);
+                    const currentWorkoutsDataMetrics = getHistoryOverallMetrics(currentWorkoutsData);
+                    const hasCurrentTrustedDisplay =
+                        currentDisplayedMetrics.setCount > 0 ||
+                        currentWorkoutsDataMetrics.setCount > 0;
                     console.warn("[restore] history initial load skipped by fetch guard", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
                         dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
                         reason: initialFetch.reason,
                         fallbackUsed: false,
-                        currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
+                        currentDisplayed: currentDisplayedMetrics,
+                        currentWorkoutsDataDisplayed: currentWorkoutsDataMetrics,
+                        historyRemoteReady: hasCurrentTrustedDisplay,
+                        remoteLoadFailed: historyRemoteLoadFailedRef.current,
                     });
+                    if (isActive && hasCurrentTrustedDisplay) {
+                        historyRemoteLoadFailedRef.current = false;
+                        historyHasTrustedRemoteSnapshotRef.current = true;
+                        setHistoryRemoteReady(true);
+                        setHistoryLoadError("");
+                    }
                     return;
                 }
 
@@ -3759,6 +3784,7 @@ export default function GymApp() {
                 const currentDisplayedBeforeApply = latestHistoryRef.current || {};
 
                 if (!hasRemoteWorkout && (fetchedWorkoutRowsCount > 0 || fetchedSessionRowsCount > 0)) {
+                    const canShowWorkoutsData = getValidWorkoutDatesFromHistory(workoutsOnlyHistory).length > 0;
                     console.warn("[restore] fetched rows did not produce history; keeping current state", {
                         env: getRuntimeEnvironmentLabel(),
                         fetchName: "history_initial_load",
@@ -3772,8 +3798,29 @@ export default function GymApp() {
                         currentDisplayed: getHistoryOverallMetrics(currentDisplayedBeforeApply),
                         fallbackUsed: false,
                         emptyHistoryApplied: false,
+                        workoutsDataFallbackCanDisplay: canShowWorkoutsData,
                         reason: "Supabase rows exist but could not be converted to valid history",
                     });
+                    if (isActive && canShowWorkoutsData) {
+                        historyRemoteLoadFailedRef.current = false;
+                        historyHasTrustedRemoteSnapshotRef.current = true;
+                        setHistoryRemoteReady(true);
+                        setHistoryLoadError("");
+                        workoutsDataHistoryRef.current = workoutsOnlyHistory;
+                        setWorkoutsDataHistory(workoutsOnlyHistory);
+                        console.log("[restore] workouts.data applied despite session conversion issue", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: user.id,
+                            historyRemoteReady: true,
+                            remoteLoadFailed: false,
+                            workoutsRowsCount: fetchedWorkoutRowsCount,
+                            workoutSessionsRowsCount: fetchedSessionRowsCount,
+                            history: getHistoryOverallMetrics(latestHistoryRef.current || {}),
+                            workoutsDataHistory: getHistoryOverallMetrics(workoutsOnlyHistory),
+                            appliedDates: getValidWorkoutDatesFromHistory(workoutsOnlyHistory),
+                        });
+                        return;
+                    }
                     setHistoryLoadError("記録データの復元形式を確認中です。再取得してください。");
                     return;
                 }
@@ -3830,6 +3877,17 @@ export default function GymApp() {
                 setHistory(mergedHistory);
                 workoutsDataHistoryRef.current = appliedWorkoutsDataHistory;
                 setWorkoutsDataHistory(appliedWorkoutsDataHistory);
+                console.log("[restore] history ready state applied", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    historyRemoteReady: true,
+                    remoteLoadFailed: false,
+                    workoutsRowsCount: fetchedWorkoutRowsCount,
+                    workoutSessionsRowsCount: fetchedSessionRowsCount,
+                    history: getHistoryOverallMetrics(mergedHistory),
+                    workoutsDataHistory: getHistoryOverallMetrics(appliedWorkoutsDataHistory),
+                    appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
+                });
                 if (hasRemoteWorkout) {
                     persistHistoryForUser(user.id, mergedHistory);
                 }
