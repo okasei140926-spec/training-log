@@ -2804,8 +2804,9 @@ export default function GymApp() {
                         .from("workouts")
                         .select("date, data")
                         .eq("user_id", user.id)
-                        .order("date", { ascending: false })
-                        .limit(1),
+                        .gte("date", sessionRangeStart)
+                        .order("date", { ascending: true })
+                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
@@ -2818,8 +2819,8 @@ export default function GymApp() {
                 if (workoutsRes.error) {
                     const context = logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
                         userId: user.id,
-                        dateRange: { latestOnly: true },
-                        query: "workouts.select(date,data).eq(user_id).order(date desc).limit(1)",
+                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
                         responseData: workoutsRes.data,
                     });
                     throw attachRecordFetchContext(workoutsRes.error, context);
@@ -2950,8 +2951,9 @@ export default function GymApp() {
                         .from("workouts")
                         .select("date, data")
                         .eq("user_id", currentUserId)
-                        .order("date", { ascending: false })
-                        .limit(1),
+                        .gte("date", sessionRangeStart)
+                        .order("date", { ascending: true })
+                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
@@ -2964,8 +2966,8 @@ export default function GymApp() {
                 if (workoutsRes.error) {
                     logRecordFetchError("history_save_reconcile", "workouts", workoutsRes.error, {
                         userId: currentUserId,
-                        dateRange: { latestOnly: true },
-                        query: "workouts.select(date,data).eq(user_id).order(date desc).limit(1)",
+                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
                         responseData: workoutsRes.data,
                     });
                     throw workoutsRes.error;
@@ -3317,7 +3319,8 @@ export default function GymApp() {
 
     const displayHistory = useMemo(() => {
         if (!logDate) return history;
-        const shouldOverlayDraft = screen === "log" || workoutStartedForDate === logDate;
+        const hasPendingDraftEdit = pendingWorkoutContentChangeDatesRef.current.has(String(logDate || "").slice(0, 10));
+        const shouldOverlayDraft = screen === "log" || workoutStartedForDate === logDate || hasPendingDraftEdit;
         if (!shouldOverlayDraft) return history;
 
         const next = {};
@@ -4421,7 +4424,7 @@ export default function GymApp() {
                         .from("workouts")
                         .select("date, data")
                         .eq("user_id", user.id)
-                        .order("date", { ascending: false })
+                        .eq("date", normalizedDate)
                         .limit(1),
                     supabase
                         .from("workout_sessions")
@@ -4435,7 +4438,7 @@ export default function GymApp() {
                     logRecordFetchError("log_date_refresh", "workouts", workoutsRes.error, {
                         userId: user.id,
                         workoutDate: normalizedDate,
-                        query: "workouts.select(date,data).eq(user_id).order(date desc).limit(1)",
+                        query: "workouts.select(date,data).eq(user_id).eq(date).limit(1)",
                         responseData: workoutsRes.data,
                     });
                     throw workoutsRes.error;
