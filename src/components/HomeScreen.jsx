@@ -718,12 +718,17 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                     <span style={{ color: "var(--home-muted)", fontSize: 14, fontWeight: 850 }}>{week.label}</span>
                 </div>
 
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${Math.min(Math.max(weeklyItems.length, 1), 8)}, minmax(0, 1fr))`,
-                    gap: 0,
-                }}>
-                    {weeklyItems.map((x, index, arr) => (
+                {recordsLoading ? (
+                    <div style={{ padding: "18px 0 4px", textAlign: "center", color: "var(--home-muted)", fontWeight: 800 }}>
+                        取得中
+                    </div>
+                ) : (
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: `repeat(${Math.min(Math.max(weeklyItems.length, 1), 8)}, minmax(0, 1fr))`,
+                        gap: 0,
+                    }}>
+                        {weeklyItems.map((x, index, arr) => (
                         <button
                             key={x.part}
                             onClick={() => {
@@ -743,8 +748,9 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
                             <div style={{ fontSize: 30, color: "var(--home-text)", fontWeight: 950, marginTop: 7, lineHeight: 1 }}>{x.sets}</div>
                             <div style={{ fontSize: 13, color: "var(--home-muted)", fontWeight: 800, marginTop: 2 }}>set</div>
                         </button>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
             </section>
 
             <section style={{

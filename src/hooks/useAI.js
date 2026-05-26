@@ -595,7 +595,7 @@ const buildExerciseHistoryContextText = (history, message) => {
   }).join("\n");
 };
 
-export function useAI() {
+export function useAI({ loadConversationsOnMount = false } = {}) {
   const initialAiUsageDate = getTodayKey();
   const [aiMsgs, setAiMsgs] = useState([INITIAL_AI_MESSAGE]);
   const [aiInput, setAiInput] = useState("");
@@ -809,8 +809,14 @@ export function useAI() {
   );
 
   useEffect(() => {
+    if (!loadConversationsOnMount) {
+      console.log("[home fetch] ai_conversations skipped on home initial load", {
+        reason: "AI screen is not active",
+      });
+      return;
+    }
     loadAiConversations();
-  }, [loadAiConversations]);
+  }, [loadAiConversations, loadConversationsOnMount]);
 
   useEffect(() => {
     aiMsgsRef.current = aiMsgs;

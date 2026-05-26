@@ -1844,12 +1844,50 @@ export default function GymApp() {
         }
 
         supabaseFetchInFlightRef.current.add(key);
+        const fetchName = context.fetchName || key;
+        const startedAt = Date.now();
+        console.log(`[home fetch] ${fetchName} start`, {
+            env: getRuntimeEnvironmentLabel(),
+            key,
+            user_id: context.user_id || context.userId || null,
+            dateRange: context.dateRange || null,
+            table: context.table || null,
+            tables: context.tables || null,
+        });
         try {
             const value = await fetcher();
             markSupabaseFetchFresh(key, freshTtlMs || minIntervalMs);
             delete supabaseFetchBackoffRef.current[key];
+            const rowsCount =
+                Array.isArray(value?.data)
+                    ? value.data.length
+                    : Object.entries(value || {}).reduce((acc, [name, result]) => {
+                        if (Array.isArray(result?.data)) acc[name] = result.data.length;
+                        return acc;
+                    }, {});
+            console.log(`[home fetch] ${fetchName} end`, {
+                env: getRuntimeEnvironmentLabel(),
+                key,
+                durationMs: Date.now() - startedAt,
+                rowsCount,
+                skipped: false,
+                applied: true,
+                reason: "success",
+                user_id: context.user_id || context.userId || null,
+                dateRange: context.dateRange || null,
+            });
             return { skipped: false, value };
         } catch (error) {
+            console.warn(`[home fetch] ${fetchName} failed`, {
+                env: getRuntimeEnvironmentLabel(),
+                key,
+                durationMs: Date.now() - startedAt,
+                user_id: context.user_id || context.userId || null,
+                dateRange: context.dateRange || null,
+                message: error?.message || String(error || "unknown error"),
+                code: error?.code || null,
+                status: error?.status || null,
+            });
             if (isTransientSupabaseFetchError(error)) {
                 const previousBackoffMs = Number(supabaseFetchBackoffRef.current[key]?.backoffMs || backoffMs);
                 const nextBackoffMs = Math.min(Math.max(backoffMs, previousBackoffMs * 2), 120000);
@@ -2082,7 +2120,7 @@ export default function GymApp() {
         openAiConversation,
         startNewAiConversation,
         deleteAiConversation,
-    } = useAI();
+    } = useAI({ loadConversationsOnMount: screen === "ai" });
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
@@ -3532,22 +3570,13 @@ export default function GymApp() {
                 const initialFetch = await runDedupeSupabaseFetch(
                     initialFetchKey,
                     async () => {
-                        const [workoutsRes, sessionsRes] = await Promise.all([
-                            supabase
-                                .from("workouts")
-                                .select("date, data")
-                                .eq("user_id", user.id)
-                                .gte("date", sessionRangeStart)
-                                .order("date", { ascending: true })
-                                .limit(initialHistoryLimit),
-                            supabase
-                                .from("workout_sessions")
-                                .select("workout_date, duration_sec, total_volume, exercise_count, summary_json")
-                                .eq("user_id", user.id)
-                                .gte("workout_date", sessionRangeStart)
-                                .order("workout_date", { ascending: true })
-                                .limit(initialHistoryLimit),
-                        ]);
+                        const workoutsRes = await supabase
+                            .from("workouts")
+                            .select("date, data")
+                            .eq("user_id", user.id)
+                            .gte("date", sessionRangeStart)
+                            .order("date", { ascending: true })
+                            .limit(initialHistoryLimit);
                         if (workoutsRes.error) {
                             const context = logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
                                 userId: user.id,
@@ -3557,7 +3586,15 @@ export default function GymApp() {
                             });
                             throw attachRecordFetchContext(workoutsRes.error, context);
                         }
-                        return { workoutsRes, sessionsRes };
+                        return {
+                            workoutsRes,
+                            sessionsRes: {
+                                data: [],
+                                error: null,
+                                skipped: true,
+                                skippedReason: "home initial load uses workouts.data only",
+                            },
+                        };
                     },
                     {
                         minIntervalMs: 20000,
@@ -3567,7 +3604,7 @@ export default function GymApp() {
                             fetchName: "history_initial_load",
                             user_id: user.id,
                             dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
-                            tables: ["workouts", "workout_sessions"],
+                            tables: ["workouts"],
                         },
                     }
                 );
@@ -3614,7 +3651,9 @@ export default function GymApp() {
                     workouts: getWorkoutRowsDebugSummary(workoutsRes.data || []),
                     workout_sessions: sessionsRes.error
                         ? { rowCount: 0, error: sessionsRes.error?.message || String(sessionsRes.error) }
-                        : getWorkoutSessionRowsDebugSummary(sessionsRes.data || []),
+                        : sessionsRes.skipped
+                            ? { rowCount: 0, skipped: true, reason: sessionsRes.skippedReason }
+                            : getWorkoutSessionRowsDebugSummary(sessionsRes.data || []),
                     error: {
                         workouts: workoutsRes.error?.message || null,
                         workout_sessions: sessionsRes.error?.message || null,
