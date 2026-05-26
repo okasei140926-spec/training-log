@@ -106,6 +106,46 @@ Object.entries(SUGGESTIONS).forEach(([label, names]) => {
 const getExerciseRecordBodyPart = (exercise, fallbackLabel) =>
     exercise?.bodyPart || exercise?.label || fallbackLabel || EX_TO_LABEL[exercise?.name] || null;
 
+const TRACKED_WORKOUT_DEBUG_EXERCISES = [
+    "シーテッドレッグカール",
+    "ルーマニアンデッドリフト",
+    "ハイパーエクステンション",
+    "アダクター",
+    "懸垂",
+];
+
+const mergeDraftExercisesWithLogData = (exercises = [], logData = {}, labels = []) => {
+    const merged = [];
+    const seenNames = new Set();
+
+    (exercises || []).forEach((exercise) => {
+        const exerciseName = String(exercise?.name || "").trim();
+        if (!exerciseName) return;
+        const normalizedName = normalizeExerciseName(exerciseName);
+        if (seenNames.has(normalizedName)) return;
+        seenNames.add(normalizedName);
+        merged.push(exercise);
+    });
+
+    Object.keys(logData || {}).forEach((exerciseName) => {
+        const trimmedName = String(exerciseName || "").trim();
+        if (!trimmedName) return;
+        const normalizedName = normalizeExerciseName(trimmedName);
+        if (seenNames.has(normalizedName)) return;
+        seenNames.add(normalizedName);
+
+        const label = EX_TO_LABEL[trimmedName] || labels[0] || "その他";
+        merged.push({
+            id: trimmedName,
+            name: trimmedName,
+            label,
+            bodyPart: label,
+        });
+    });
+
+    return merged;
+};
+
 const normalizeSetWeightMode = (value) => {
     const unit = String(value || "kg").toLowerCase();
     if (unit === "lbs" || unit === "lb" || unit === "pound" || unit === "pounds") return "lbs";
@@ -320,6 +360,11 @@ const describeHistoryRecordsForDate = (historyMap, targetDate) => {
                     date: sanitized.date,
                     bodyPart: sanitized.bodyPart || "",
                     setCount: sanitized.sets?.length || 0,
+                    sets: (sanitized.sets || []).map((set) => ({
+                        weight: set?.weight,
+                        reps: set?.reps,
+                        unit: set?.unit || set?.displayUnit || set?.weightUnit || set?.weight_unit || null,
+                    })),
                     rawDate: record?.date ?? record?.workoutDate ?? record?.workout_date ?? "",
                 };
             })
@@ -411,7 +456,7 @@ const getWorkoutPayloadMetrics = (payload, { updatedAt = null } = {}) =>
 
 const getDraftMetricsForDate = ({ exercises = [], logData = {}, getExUnit, workoutDate }) => {
     const payload = buildWorkoutSessionPayloadFromDraft({
-        exercises,
+        exercises: mergeDraftExercisesWithLogData(exercises, logData),
         logData,
         getExUnit,
         workoutDate,
@@ -612,7 +657,7 @@ const buildDraftHistoryForDate = ({
     const durationMinutes = duration > 0 ? Math.max(1, Math.round(duration / 60)) : 0;
     const draftRecords = {};
 
-    (exercises || []).forEach((exercise, index) => {
+    mergeDraftExercisesWithLogData(exercises, logData, labels).forEach((exercise, index) => {
         const exerciseName = String(exercise?.name || "").trim();
         if (!exerciseName) return;
 
@@ -684,8 +729,70 @@ const getHistoryDebugSummaryForDate = (historyMap, targetDate) => {
             acc[record.exerciseName] = (acc[record.exerciseName] || 0) + (record.setCount || 0);
             return acc;
         }, {}),
+        setsByExercise: records.reduce((acc, record) => {
+            acc[record.exerciseName] = record.sets || [];
+            return acc;
+        }, {}),
+        trackedExercises: TRACKED_WORKOUT_DEBUG_EXERCISES.reduce((acc, exerciseName) => {
+            acc[exerciseName] = {
+                included: metrics.exerciseNames.includes(exerciseName),
+                sets: records.find((record) => record.exerciseName === exerciseName)?.sets || [],
+            };
+            return acc;
+        }, {}),
         totalSetCount: metrics.setCount,
         totalVolume: metrics.volume,
+    };
+};
+
+const getHistoryDebugDiffForDate = (beforeHistory, afterHistory, targetDate) => {
+    const before = getHistoryDebugSummaryForDate(beforeHistory, targetDate);
+    const after = getHistoryDebugSummaryForDate(afterHistory, targetDate);
+    const beforeNames = new Set(before.exerciseNames || []);
+    const afterNames = new Set(after.exerciseNames || []);
+
+    return {
+        missingExerciseNames: [...beforeNames].filter((name) => !afterNames.has(name)),
+        addedExerciseNames: [...afterNames].filter((name) => !beforeNames.has(name)),
+        changedExerciseNames: [...afterNames].filter((name) => {
+            const beforeSets = JSON.stringify(before.setsByExercise?.[name] || []);
+            const afterSets = JSON.stringify(after.setsByExercise?.[name] || []);
+            return beforeSets !== afterSets;
+        }),
+        before,
+        after,
+    };
+};
+
+const getDraftInputDebugSummary = ({ exercises = [], logData = {}, labels = [] } = {}) => {
+    const mergedExercises = mergeDraftExercisesWithLogData(exercises, logData, labels);
+    const exerciseNames = mergedExercises.map((exercise) => exercise.name);
+    const bodyPartByExercise = mergedExercises.reduce((acc, exercise) => {
+        acc[exercise.name] = getExerciseRecordBodyPart(exercise, labels[0] || null) || "";
+        return acc;
+    }, {});
+    const setsByExercise = exerciseNames.reduce((acc, exerciseName) => {
+        acc[exerciseName] = (logData[exerciseName] || []).map((set) => ({
+            weight: set?.weight,
+            reps: set?.reps,
+            unit: set?.unit || set?.displayUnit || set?.weightMode || set?.weightUnit || set?.weight_unit || null,
+            done: Boolean(set?.done),
+        }));
+        return acc;
+    }, {});
+
+    return {
+        exerciseNames,
+        bodyPartByExercise,
+        setsByExercise,
+        trackedExercises: TRACKED_WORKOUT_DEBUG_EXERCISES.reduce((acc, exerciseName) => {
+            acc[exerciseName] = {
+                included: exerciseNames.includes(exerciseName),
+                bodyPart: bodyPartByExercise[exerciseName] || "",
+                sets: setsByExercise[exerciseName] || [],
+            };
+            return acc;
+        }, {}),
     };
 };
 
@@ -734,21 +841,27 @@ export default function GymApp() {
                 : countDraftSets(datedLogData) < countDraftSets(legacyLogData)
                     ? legacyLogData
                     : datedLogData;
+        const todayLabels = load(
+            getDraftKey("draft_todayLabels", dateStr),
+            useLegacyFallback ? load("draft_todayLabels", []) : []
+        );
+        const rawSessionEx = load(
+            getDraftKey("draft_sessionEx", dateStr),
+            useLegacyFallback ? load("draft_sessionEx", null) : null
+        );
+        const sessionEx = rawSessionEx === null && !Object.keys(logData || {}).length
+            ? null
+            : mergeDraftExercisesWithLogData(rawSessionEx || [], logData, todayLabels);
 
         return {
-            todayLabels: load(
-                getDraftKey("draft_todayLabels", dateStr),
-                useLegacyFallback ? load("draft_todayLabels", []) : []
-            ),
+            todayLabels,
             logData,
-            sessionEx: load(
-                getDraftKey("draft_sessionEx", dateStr),
-                useLegacyFallback ? load("draft_sessionEx", null) : null
-            ),
+            sessionEx,
             exerciseUnits: load(
                 getDraftKey("draft_exerciseUnits", dateStr),
                 useLegacyFallback ? load("draft_exerciseUnits", {}) : {}
             ),
+            meta: load(getDraftKey("draft_meta", dateStr), null),
         };
     }, [getDraftKey]);
 
@@ -767,15 +880,26 @@ export default function GymApp() {
 
     const saveDraftForDate = useCallback((dateStr, draft) => {
         if (!dateStr) return;
+        const logData = draft.logData || {};
+        const todayLabels = draft.todayLabels || [];
+        const sessionEx = draft.sessionEx === null && !Object.keys(logData).length
+            ? null
+            : mergeDraftExercisesWithLogData(draft.sessionEx || [], logData, todayLabels);
+        const meta = {
+            updatedAt: new Date().toISOString(),
+            exerciseNames: (sessionEx || []).map((exercise) => exercise.name),
+            logDataNames: Object.keys(logData),
+        };
 
-        save(getDraftKey("draft_todayLabels", dateStr), draft.todayLabels || []);
-        save(getDraftKey("draft_logData", dateStr), draft.logData || {});
-        save(getDraftKey("draft_sessionEx", dateStr), draft.sessionEx ?? null);
+        save(getDraftKey("draft_todayLabels", dateStr), todayLabels);
+        save(getDraftKey("draft_logData", dateStr), logData);
+        save(getDraftKey("draft_sessionEx", dateStr), sessionEx);
         save(getDraftKey("draft_exerciseUnits", dateStr), draft.exerciseUnits || {});
+        save(getDraftKey("draft_meta", dateStr), meta);
 
-        save("draft_todayLabels", draft.todayLabels || []);
-        save("draft_logData", draft.logData || {});
-        save("draft_sessionEx", draft.sessionEx ?? null);
+        save("draft_todayLabels", todayLabels);
+        save("draft_logData", logData);
+        save("draft_sessionEx", sessionEx);
         save("draft_exerciseUnits", draft.exerciseUnits || {});
         save("draft_logDate", dateStr);
     }, [getDraftKey]);
@@ -789,6 +913,7 @@ export default function GymApp() {
             getDraftKey("draft_sessionEx", dateStr),
             getDraftKey("draft_exerciseUnits", dateStr),
             getDraftKey("draft_exercises", dateStr),
+            getDraftKey("draft_meta", dateStr),
         ].forEach((key) => {
             try {
                 localStorage.removeItem(key);
@@ -2169,6 +2294,7 @@ export default function GymApp() {
                         remote: existingWorkoutRow
                             ? getHistoryDebugSummaryForDate(existingWorkoutRow.data || {}, workoutDate)
                             : getHistoryDebugSummaryForDate({}, workoutDate),
+                        diffFromRemote: getHistoryDebugDiffForDate(existingWorkoutRow?.data || {}, normalizedHistoryMap, workoutDate),
                     });
 
                     if (wouldDestructivelyOverwrite && !allowDestructiveSave) {
@@ -2243,6 +2369,7 @@ export default function GymApp() {
                         workoutsDataAfterSave: verifyWorkoutRow
                             ? getHistoryDebugSummaryForDate(verifyWorkoutRow.data || {}, workoutDate)
                             : getHistoryDebugSummaryForDate({}, workoutDate),
+                        diffSavedVsVerified: getHistoryDebugDiffForDate(normalizedHistoryMap, verifyWorkoutRow?.data || {}, workoutDate),
                     });
 
                     clearSyncFailure(workoutDate);
@@ -2661,6 +2788,11 @@ export default function GymApp() {
                 return acc;
             }, {}),
             summaryJsonAfterSaveMetrics: verifiedMetrics,
+            diffHistoryVsSummaryJson: getHistoryDebugDiffForDate(
+                historyMap,
+                buildHistoryFromWorkoutSessionRows(verifiedSession ? [verifiedSession] : []),
+                normalizedDate
+            ),
         });
 
         return { synced: true };
@@ -3670,7 +3802,11 @@ export default function GymApp() {
         routineOrder,
     });
 
-    const exercises = sessionEx !== null ? sessionEx : baseExercises;
+    const sourceExercises = sessionEx !== null ? sessionEx : baseExercises;
+    const exercises = useMemo(
+        () => mergeDraftExercisesWithLogData(sourceExercises, logData, todayLabels),
+        [sourceExercises, logData, todayLabels]
+    );
 
     const displayHistory = useMemo(() => {
         if (!logDate) return history;
@@ -3851,8 +3987,10 @@ export default function GymApp() {
                 date: logDate,
                 reason: pendingChange.reason,
                 explicitDelete: Boolean(pendingChange.explicitDelete),
+                draftInput: getDraftInputDebugSummary({ exercises, logData, labels: todayLabels }),
                 saving: getHistoryDebugSummaryForDate(nextHistory, logDate),
                 previous: getHistoryDebugSummaryForDate(prev, logDate),
+                diffPreviousToSaving: getHistoryDebugDiffForDate(prev, nextHistory, logDate),
             });
 
             if (serializeHistoryMap(nextHistory) === serializeHistoryMap(prev)) return prev;
@@ -4573,7 +4711,9 @@ export default function GymApp() {
     const buildSavedWorkoutDraftForDate = useCallback((dateStr, sourceHistory = history) => {
         const dayExercises = Object.entries(sourceHistory || {})
             .map(([name, recs]) => {
-                const rec = (recs || []).find(r => r.date === dateStr);
+                const rec = (recs || []).find((record) => (
+                    String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) === dateStr
+                ));
                 const sanitizedRecord = sanitizeHistoryRecord(rec, { allowBodyweight: true });
                 if (!sanitizedRecord) return null;
                 const recordBodyPart = String(sanitizedRecord.bodyPart || sanitizedRecord.body_part || "").trim();
@@ -4810,6 +4950,20 @@ export default function GymApp() {
                     return;
                 }
 
+                if (isDestructiveWorkoutRegression(remoteMetrics, localMetrics)) {
+                    console.warn("[restore] skipped smaller Supabase date refresh; keeping local draft", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        date: normalizedDate,
+                        supabase: remoteMetrics,
+                        localStorage: localMetrics,
+                        localExerciseNames: localMetrics.exerciseNames,
+                        remoteExerciseNames: remoteMetrics.exerciseNames,
+                    });
+                    markWorkoutContentChanged(normalizedDate, "local_draft_richer_restore");
+                    return;
+                }
+
                 const nextHistory = applyLocalHistoryDates(latestHistoryRef.current || history || {}, remoteHistory, [normalizedDate]);
                 const savedDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, nextHistory);
 
@@ -4856,6 +5010,7 @@ export default function GymApp() {
         historySyncReady,
         loadDraftForDate,
         logDate,
+        markWorkoutContentChanged,
         saveDraftForDate,
         screen,
         user?.id,
@@ -4896,7 +5051,25 @@ export default function GymApp() {
             workoutStartedForDate === dateStr &&
             hasDraftContent(currentDraft);
         const localDraftIsRicher = isDestructiveWorkoutRegression(savedMetrics, localMetrics);
-        const shouldUseSavedWorkout = hasSavedWorkout && !isActiveLocalRecording;
+        const shouldUseLocalDraft = hasDraftContent(draftForDate) && (localDraftIsRicher || isActiveLocalRecording);
+        const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft;
+
+        if (shouldUseLocalDraft) {
+            markWorkoutContentChanged(dateStr, localDraftIsRicher ? "local_draft_richer_restore" : "active_local_recording_restore");
+            setTodayLabels(draftForDate.todayLabels);
+            setSessionEx(draftForDate.sessionEx);
+            setLogData(draftForDate.logData);
+            setExerciseUnits(draftForDate.exerciseUnits);
+            logRestoreDecision(
+                dateStr,
+                savedDraftForDate,
+                draftForDate,
+                draftForDate,
+                localDraftIsRicher ? "local_draft_richer_than_saved" : "active_local_recording"
+            );
+            setScreen("log");
+            return;
+        }
 
         if (shouldUseSavedWorkout) {
             saveDraftForDate(dateStr, savedDraftForDate);
