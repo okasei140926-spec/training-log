@@ -796,6 +796,68 @@ const getDraftInputDebugSummary = ({ exercises = [], logData = {}, labels = [] }
     };
 };
 
+const getCurrentWeekRangeForHomeSummary = () => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const startDate = new Date(now);
+    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(now.getDate() + diff);
+
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+
+    return {
+        start: formatDateKey(startDate),
+        end: formatDateKey(endDate),
+        key: `${formatDateKey(startDate)}:${formatDateKey(endDate)}`,
+    };
+};
+
+const normalizeHomeSummaryBodyPart = (label) => {
+    const raw = String(label || "").trim();
+    if (raw === "ハムストリングス" || raw === "ハムストリング" || raw === "大腿二頭筋") return "ハム";
+    if (raw === "腹") return "腹筋";
+    return raw || "その他";
+};
+
+const getHomeWeeklySummaryDebug = (historyMap, { start, end } = getCurrentWeekRangeForHomeSummary()) => {
+    const exerciseNames = [];
+    const bodyPartCounts = {};
+    const setCountByExercise = {};
+    let totalSetCount = 0;
+
+    Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+        (records || []).forEach((record) => {
+            const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+            if (!sanitized?.date || sanitized.date < start || sanitized.date > end) return;
+
+            const setCount = sanitized.sets?.length || 0;
+            if (setCount <= 0) return;
+
+            const bodyPart = normalizeHomeSummaryBodyPart(
+                sanitized.bodyPart || EX_TO_LABEL[exerciseName] || ""
+            );
+            if (bodyPart !== "その他") {
+                bodyPartCounts[bodyPart] = (bodyPartCounts[bodyPart] || 0) + setCount;
+            }
+
+            exerciseNames.push(exerciseName);
+            setCountByExercise[exerciseName] = (setCountByExercise[exerciseName] || 0) + setCount;
+            totalSetCount += setCount;
+        });
+    });
+
+    return {
+        week: { start, end },
+        exerciseNames: [...new Set(exerciseNames)],
+        bodyPartCounts,
+        hamSetCount: bodyPartCounts["ハム"] || 0,
+        totalSetCount,
+        setCountByExercise,
+    };
+};
+
 const attachWorkoutDurationToHistoryDate = (historyMap, targetDate, durationSecValue) => {
     const normalizedDate = String(targetDate || "").slice(0, 10);
     const durationSec = Math.floor(Number(durationSecValue) || 0);
@@ -1213,6 +1275,7 @@ export default function GymApp() {
 
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState(() => mergeHistoryMaps(load("history", {})));
+    const [workoutsDataHistory, setWorkoutsDataHistory] = useState(() => mergeHistoryMaps(load("history", {})));
     const [manualBests, setManualBests] = useState([]);
     const [historySyncReady, setHistorySyncReady] = useState(false);
     const [historyLoadError, setHistoryLoadError] = useState("");
@@ -1544,6 +1607,9 @@ export default function GymApp() {
     const dismissedSyncFailureSignaturesRef = useRef(new Set());
     const pendingDeleteUndoRef = useRef(null);
     const historyRemoteLoadFailedRef = useRef(false);
+    const workoutsDataHistoryRef = useRef(workoutsDataHistory);
+    const displayHistoryRefreshRequestIdRef = useRef(0);
+    const homeWeeklySummaryRequestIdRef = useRef(0);
     const previousWorkoutActivitySignatureRef = useRef("");
     const previousWorkoutActivityDateRef = useRef("");
     const workoutTimerStateRef = useRef(initialWorkoutTimerState);
@@ -1802,6 +1868,10 @@ export default function GymApp() {
         latestHistoryRef.current = history;
         historyRevisionRef.current += 1;
     }, [history]);
+
+    useEffect(() => {
+        workoutsDataHistoryRef.current = workoutsDataHistory;
+    }, [workoutsDataHistory]);
 
     const applyWorkoutTimerState = useCallback((nextState) => {
         const normalizedState = normalizeWorkoutTimerState(nextState);
@@ -3182,9 +3252,16 @@ export default function GymApp() {
                     ),
                     effectiveDeleteMarkers
                 );
+                const workoutsOnlyHistory = applyHistoryDeleteMarkers(
+                    buildHistoryFromWorkoutRows(workoutsRes.data || []),
+                    effectiveDeleteMarkers
+                );
                 const hasRemoteWorkout = getValidWorkoutDatesFromHistory(remoteHistory).length > 0;
                 const mergedHistory = hasRemoteWorkout
                     ? remoteHistory
+                    : applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
+                const appliedWorkoutsDataHistory = getValidWorkoutDatesFromHistory(workoutsOnlyHistory).length > 0
+                    ? workoutsOnlyHistory
                     : applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
 
                 console.log("[restore] Supabase priority load", {
@@ -3197,12 +3274,23 @@ export default function GymApp() {
                     localStorageDates: getValidWorkoutDatesFromHistory(localMergeCandidate),
                     appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
                 });
+                console.log("[home weekly summary] apply", {
+                    source: getValidWorkoutDatesFromHistory(workoutsOnlyHistory).length > 0 ? "workouts.data" : "localStorage",
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    requestId: "initial-load",
+                    applied: true,
+                    reason: "history_initial_load",
+                    ...getHomeWeeklySummaryDebug(appliedWorkoutsDataHistory),
+                });
 
                 if (!isActive) return;
 
                 historyRemoteLoadFailedRef.current = false;
                 setHistoryLoadError("");
                 setHistory(mergedHistory);
+                workoutsDataHistoryRef.current = appliedWorkoutsDataHistory;
+                setWorkoutsDataHistory(appliedWorkoutsDataHistory);
                 persistHistoryForUser(user.id, mergedHistory);
             } catch (error) {
                 console.error("history sync load failed", {
@@ -3372,6 +3460,25 @@ export default function GymApp() {
                         ? prev
                         : reconciledHistory;
                 });
+                const nextWorkoutsDataHistory = applyHistoryDeleteMarkers(
+                    applyLocalHistoryDates(
+                        workoutsDataHistoryRef.current || latestHistoryRef.current || {},
+                        mergedHistory,
+                        syncDates
+                    ),
+                    effectiveDeleteMarkers
+                );
+                workoutsDataHistoryRef.current = nextWorkoutsDataHistory;
+                setWorkoutsDataHistory(nextWorkoutsDataHistory);
+                console.log("[home weekly summary] apply", {
+                    source: "workouts.data",
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: currentUserId,
+                    requestId: "save-sync",
+                    applied: true,
+                    reason: "workouts.data save sync",
+                    ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
+                });
 
                 const sessionSyncDates = syncDates.filter(
                     (date) => !workoutSyncResults.skippedDates.includes(date)
@@ -3503,8 +3610,11 @@ export default function GymApp() {
         let cancelled = false;
 
         const refreshDisplayHistoryFromSupabase = async () => {
+            const requestId = displayHistoryRefreshRequestIdRef.current + 1;
+            displayHistoryRefreshRequestIdRef.current = requestId;
             const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
             const queryLabel = "display_history_refresh";
+            const weekRange = getCurrentWeekRangeForHomeSummary();
 
             try {
                 const [workoutsRes, sessionsRes] = await Promise.all([
@@ -3553,9 +3663,25 @@ export default function GymApp() {
                     });
                 }
 
-                if (cancelled) return;
+                if (cancelled || displayHistoryRefreshRequestIdRef.current !== requestId) {
+                    console.log("[home weekly summary] ignore stale", {
+                        source: sessionsRes.error ? "workouts.data" : "workouts.data + workout_sessions.summary_json",
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        requestId,
+                        latestRequestId: displayHistoryRefreshRequestIdRef.current,
+                        applied: false,
+                        reason: cancelled ? "cancelled" : "stale display history request",
+                        ...getHomeWeeklySummaryDebug(buildHistoryFromWorkoutRows(workoutsRes.data || []), weekRange),
+                    });
+                    return;
+                }
 
                 const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
+                const workoutsOnlyHistory = applyHistoryDeleteMarkers(
+                    buildHistoryFromWorkoutRows(workoutsRes.data || []),
+                    effectiveDeleteMarkers
+                );
                 const remoteHistory = applyHistoryDeleteMarkers(
                     buildRemoteHistoryWithWorkoutRowsPriority(
                         workoutsRes.data || [],
@@ -3566,11 +3692,21 @@ export default function GymApp() {
                 const pendingLocalDates = new Set(Array.from(pendingWorkoutContentChangeDatesRef.current.keys()));
                 const remoteDates = getValidWorkoutDatesFromHistory(remoteHistory)
                     .filter((date) => !pendingLocalDates.has(date));
-                if (!remoteDates.length) return;
+                const workoutsDates = getValidWorkoutDatesFromHistory(workoutsOnlyHistory)
+                    .filter((date) => !pendingLocalDates.has(date));
+                if (!remoteDates.length && !workoutsDates.length) return;
 
                 const currentHistory = latestHistoryRef.current || {};
                 const nextHistory = applyHistoryDeleteMarkers(
                     applyLocalHistoryDates(currentHistory, remoteHistory, remoteDates),
+                    effectiveDeleteMarkers
+                );
+                const nextWorkoutsDataHistory = applyHistoryDeleteMarkers(
+                    applyLocalHistoryDates(
+                        workoutsDataHistoryRef.current || currentHistory,
+                        workoutsOnlyHistory,
+                        workoutsDates
+                    ),
                     effectiveDeleteMarkers
                 );
 
@@ -3592,6 +3728,19 @@ export default function GymApp() {
                     setHistory(nextHistory);
                     persistHistoryForUser(user.id, nextHistory);
                 }
+                if (serializeHistoryMap(nextWorkoutsDataHistory) !== serializeHistoryMap(workoutsDataHistoryRef.current || {})) {
+                    workoutsDataHistoryRef.current = nextWorkoutsDataHistory;
+                    setWorkoutsDataHistory(nextWorkoutsDataHistory);
+                }
+                console.log("[home weekly summary] apply", {
+                    source: "workouts.data",
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    requestId,
+                    applied: true,
+                    reason: "display refresh workouts.data canonical",
+                    ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory, weekRange),
+                });
                 setHistoryLoadError("");
             } catch (error) {
                 if (cancelled) return;
@@ -3612,6 +3761,108 @@ export default function GymApp() {
         };
 
         refreshDisplayHistoryFromSupabase();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        applyLocalHistoryDates,
+        getCurrentHistoryDeleteMarkers,
+        historyReloadNonce,
+        historySyncReady,
+        screen,
+        sessionSyncVersion,
+        user?.id,
+    ]);
+
+    useEffect(() => {
+        if (!user?.id || !historySyncReady || screen !== "history") return;
+
+        let cancelled = false;
+        const requestId = homeWeeklySummaryRequestIdRef.current + 1;
+        homeWeeklySummaryRequestIdRef.current = requestId;
+        const weekRange = getCurrentWeekRangeForHomeSummary();
+
+        const refreshHomeWeeklySummaryFromWorkouts = async () => {
+            const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
+
+            try {
+                const { data, error } = await supabase
+                    .from("workouts")
+                    .select("date, data")
+                    .eq("user_id", user.id)
+                    .gte("date", sessionRangeStart)
+                    .order("date", { ascending: true })
+                    .limit(REMOTE_HISTORY_SESSION_LIMIT);
+
+                if (error) {
+                    logRecordFetchError("home_weekly_summary_refresh", "workouts", error, {
+                        userId: user.id,
+                        dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
+                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                        responseData: data,
+                    });
+                    throw error;
+                }
+
+                const remoteWorkoutsHistory = applyHistoryDeleteMarkers(
+                    buildHistoryFromWorkoutRows(data || []),
+                    getCurrentHistoryDeleteMarkers()
+                );
+                const pendingLocalDates = new Set(Array.from(pendingWorkoutContentChangeDatesRef.current.keys()));
+                const remoteDates = getValidWorkoutDatesFromHistory(remoteWorkoutsHistory)
+                    .filter((date) => !pendingLocalDates.has(date));
+
+                const nextWorkoutsDataHistory = applyLocalHistoryDates(
+                    workoutsDataHistoryRef.current || latestHistoryRef.current || {},
+                    remoteWorkoutsHistory,
+                    remoteDates
+                );
+
+                if (cancelled || homeWeeklySummaryRequestIdRef.current !== requestId) {
+                    console.log("[home weekly summary] ignore stale", {
+                        source: "workouts.data",
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        requestId,
+                        latestRequestId: homeWeeklySummaryRequestIdRef.current,
+                        applied: false,
+                        reason: cancelled ? "cancelled" : "stale home weekly request",
+                        ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory, weekRange),
+                    });
+                    return;
+                }
+
+                workoutsDataHistoryRef.current = nextWorkoutsDataHistory;
+                setWorkoutsDataHistory(nextWorkoutsDataHistory);
+
+                console.log("[home weekly summary] apply", {
+                    source: "workouts.data",
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    requestId,
+                    applied: true,
+                    reason: "home screen workouts.data refresh",
+                    ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory, weekRange),
+                });
+            } catch (error) {
+                if (cancelled) return;
+                console.error("[home weekly summary] refresh failed", {
+                    source: "workouts.data",
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    requestId,
+                    applied: false,
+                    reason: "workouts.data fetch failed",
+                    code: error?.code || null,
+                    message: error?.message || String(error || "unknown error"),
+                    details: error?.details || null,
+                    hint: error?.hint || null,
+                });
+            }
+        };
+
+        refreshHomeWeeklySummaryFromWorkouts();
 
         return () => {
             cancelled = true;
@@ -3846,6 +4097,11 @@ export default function GymApp() {
         workoutStartedForDate,
     ]);
 
+    const canonicalDisplayHistory = useMemo(
+        () => mergeHistoryMaps(workoutsDataHistory, displayHistory),
+        [displayHistory, workoutsDataHistory]
+    );
+
     useEffect(() => {
         if (screen !== "log") return;
 
@@ -3996,7 +4252,18 @@ export default function GymApp() {
             if (serializeHistoryMap(nextHistory) === serializeHistoryMap(prev)) return prev;
             latestHistoryRef.current = nextHistory;
             historyRevisionRef.current += 1;
+            workoutsDataHistoryRef.current = nextHistory;
+            setWorkoutsDataHistory(nextHistory);
             persistHistoryForUser(user?.id, nextHistory);
+            console.log("[home weekly summary] apply", {
+                source: "workouts.data",
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                requestId: "local-draft-flush",
+                applied: true,
+                reason: "local draft flush to workouts.data canonical",
+                ...getHomeWeeklySummaryDebug(nextHistory),
+            });
             return nextHistory;
         });
     }, [exercises, getExUnit, history, logData, logDate, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate]); // ← 依存配列
@@ -4965,6 +5232,12 @@ export default function GymApp() {
                 }
 
                 const nextHistory = applyLocalHistoryDates(latestHistoryRef.current || history || {}, remoteHistory, [normalizedDate]);
+                const remoteWorkoutsHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
+                const nextWorkoutsDataHistory = applyLocalHistoryDates(
+                    workoutsDataHistoryRef.current || latestHistoryRef.current || history || {},
+                    remoteWorkoutsHistory,
+                    [normalizedDate]
+                );
                 const savedDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, nextHistory);
 
                 console.log("[restore] Supabase date refresh applied", {
@@ -4979,6 +5252,19 @@ export default function GymApp() {
                 if (serializeHistoryMap(nextHistory) !== serializeHistoryMap(latestHistoryRef.current || history || {})) {
                     setHistory(nextHistory);
                     persistHistoryForUser(user.id, nextHistory);
+                }
+                if (serializeHistoryMap(nextWorkoutsDataHistory) !== serializeHistoryMap(workoutsDataHistoryRef.current || {})) {
+                    workoutsDataHistoryRef.current = nextWorkoutsDataHistory;
+                    setWorkoutsDataHistory(nextWorkoutsDataHistory);
+                    console.log("[home weekly summary] apply", {
+                        source: "workouts.data",
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        requestId: "log-date-refresh",
+                        applied: true,
+                        reason: "log date workouts.data refresh",
+                        ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
+                    });
                 }
                 saveDraftForDate(normalizedDate, savedDraftForDate);
                 setTodayLabels(savedDraftForDate.todayLabels);
@@ -5992,7 +6278,7 @@ export default function GymApp() {
 
                 {screen === "analytics" && (
                     <AnalyticsScreen
-                        history={displayHistory}
+                        history={canonicalDisplayHistory}
                         manualBests={manualBests}
                         muscleEx={muscleEx}
                         hiddenBodyParts={hiddenBodyParts}
@@ -6065,7 +6351,7 @@ export default function GymApp() {
 
                 {screen === "history" && (
                     <HomeScreen
-                        history={displayHistory}
+                        history={canonicalDisplayHistory}
                         muscleEx={muscleEx}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                         hiddenBodyParts={hiddenBodyParts}
@@ -6079,7 +6365,7 @@ export default function GymApp() {
 
                 {screen === "calendar" && (
                     <HistoryScreen
-                        history={displayHistory}
+                        history={canonicalDisplayHistory}
                         todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
                         muscleEx={muscleEx}
                         exerciseBodyPartOverrides={exerciseBodyPartOverrides}
@@ -6125,7 +6411,7 @@ export default function GymApp() {
                         sendAI={sendAI}
                         aiLoad={aiLoad}
                         aiEnd={aiEnd}
-                        history={displayHistory}
+                        history={canonicalDisplayHistory}
                         isPro={isPro}
                         onStartPro={activatePumpPro}
                         onDeactivateProDev={deactivatePumpProDev}
