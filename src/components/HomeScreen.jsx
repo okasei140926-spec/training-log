@@ -590,7 +590,18 @@ function RecoveryCard({ part, pct, status, onClick }) {
     );
 }
 
-export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverrides, hiddenBodyParts, onStartLog, user, workoutDurationSecByDate = {}, recordsLoading = false }) {
+export default function HomeScreen({
+    history,
+    muscleEx,
+    exerciseBodyPartOverrides,
+    hiddenBodyParts,
+    onStartLog,
+    user,
+    workoutDurationSecByDate = {},
+    recordsLoading = false,
+    historyRemoteReady = false,
+    remoteLoadFailed = false,
+}) {
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
     const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
@@ -645,6 +656,45 @@ export default function HomeScreen({ history, muscleEx, exerciseBodyPartOverride
         : recordsLoading
             ? []
             : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }));
+
+    useEffect(() => {
+        const historyDatesCount = Object.keys(history || {}).length;
+        const historySetCount = Object.values(history || {}).reduce((dateTotal, record) => {
+            const safeRecord = sanitizeHistoryRecord(record);
+            return dateTotal + Object.values(safeRecord || {}).reduce((exerciseTotal, sets) => (
+                exerciseTotal + (Array.isArray(sets) ? sets.length : 0)
+            ), 0);
+        }, 0);
+        const weeklyLoading = Boolean(recordsLoading);
+        const recentLoading = Boolean(recordsLoading);
+        const loadingReason = recordsLoading
+            ? !historyRemoteReady
+                ? remoteLoadFailed
+                    ? "remote load failed"
+                    : "waiting for trusted remote history"
+                : "recordsLoading prop is still true"
+            : "ready";
+
+        console.log("[home render state]", {
+            historyRemoteReady,
+            remoteLoadFailed,
+            homeWeeklyLoading: weeklyLoading,
+            recentRecordsLoading: recentLoading,
+            historyLoading: recordsLoading,
+            weeklySummaryExists: weeklyDisplay.length > 0,
+            recentRecordsCount: recentSessions.length,
+            workoutsDataHistoryCount: historyDatesCount,
+            workoutsDataHistorySetCount: historySetCount,
+            reason: loadingReason,
+        });
+    }, [
+        history,
+        historyRemoteReady,
+        recordsLoading,
+        recentSessions.length,
+        remoteLoadFailed,
+        weeklyDisplay.length,
+    ]);
 
     return (
         <div className="fade-in" style={{

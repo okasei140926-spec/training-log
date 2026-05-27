@@ -1782,7 +1782,7 @@ export default function GymApp() {
     const displayHistoryRefreshRequestIdRef = useRef(0);
     const homeWeeklySummaryRequestIdRef = useRef(0);
     const historyHasTrustedRemoteSnapshotRef = useRef(false);
-    const supabaseFetchInFlightRef = useRef(new Set());
+    const supabaseFetchInFlightRef = useRef(new Map());
     const supabaseFetchBackoffRef = useRef({});
     const supabaseFetchFreshUntilRef = useRef({});
 
@@ -1809,15 +1809,21 @@ export default function GymApp() {
         const now = Date.now();
         const nextAllowedAt = Number(supabaseFetchBackoffRef.current[key]?.nextAllowedAt || 0);
 
-        if (supabaseFetchInFlightRef.current.has(key)) {
-            console.warn("[supabase fetch] dedupe in-flight", {
+        const inFlightRequest = supabaseFetchInFlightRef.current.get(key);
+        if (inFlightRequest) {
+            console.warn("[supabase fetch] dedupe in-flight attach", {
                 env: getRuntimeEnvironmentLabel(),
                 key,
                 applied: false,
-                reason: "same request already in flight",
+                reason: "same request already in flight; waiting for shared result",
                 ...context,
             });
-            return { skipped: true, reason: "in-flight" };
+            const sharedResult = await inFlightRequest;
+            return {
+                ...sharedResult,
+                deduped: true,
+                reason: sharedResult?.reason || "shared-in-flight",
+            };
         }
 
         if (nextAllowedAt > now) {
@@ -1843,18 +1849,17 @@ export default function GymApp() {
             return { skipped: true, reason: "fresh" };
         }
 
-        supabaseFetchInFlightRef.current.add(key);
         const fetchName = context.fetchName || key;
         const startedAt = Date.now();
-        console.log(`[home fetch] ${fetchName} start`, {
-            env: getRuntimeEnvironmentLabel(),
-            key,
-            user_id: context.user_id || context.userId || null,
-            dateRange: context.dateRange || null,
-            table: context.table || null,
-            tables: context.tables || null,
-        });
-        try {
+        const fetchPromise = (async () => {
+            console.log(`[home fetch] ${fetchName} start`, {
+                env: getRuntimeEnvironmentLabel(),
+                key,
+                user_id: context.user_id || context.userId || null,
+                dateRange: context.dateRange || null,
+                table: context.table || null,
+                tables: context.tables || null,
+            });
             const value = await fetcher();
             markSupabaseFetchFresh(key, freshTtlMs || minIntervalMs);
             delete supabaseFetchBackoffRef.current[key];
@@ -1876,7 +1881,13 @@ export default function GymApp() {
                 user_id: context.user_id || context.userId || null,
                 dateRange: context.dateRange || null,
             });
-            return { skipped: false, value };
+            return { skipped: false, value, reason: "success" };
+        })();
+
+        supabaseFetchInFlightRef.current.set(key, fetchPromise);
+
+        try {
+            return await fetchPromise;
         } catch (error) {
             console.warn(`[home fetch] ${fetchName} failed`, {
                 env: getRuntimeEnvironmentLabel(),
@@ -1907,7 +1918,9 @@ export default function GymApp() {
             }
             throw error;
         } finally {
-            supabaseFetchInFlightRef.current.delete(key);
+            if (supabaseFetchInFlightRef.current.get(key) === fetchPromise) {
+                supabaseFetchInFlightRef.current.delete(key);
+            }
         }
     }, [isSupabaseFetchFresh, markSupabaseFetchFresh]);
     const previousWorkoutActivitySignatureRef = useRef("");
@@ -7113,6 +7126,8 @@ export default function GymApp() {
                         user={user}
                         workoutDurationSecByDate={savedWorkoutDurationSecByDate}
                         recordsLoading={Boolean(!authReady || (user?.id && !historyRemoteReady && !historyLoadError))}
+                        historyRemoteReady={historyRemoteReady}
+                        remoteLoadFailed={historyRemoteLoadFailedRef.current}
                     />
                 )}
 
