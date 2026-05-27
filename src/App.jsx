@@ -5643,13 +5643,14 @@ export default function GymApp() {
             const normalizedTargetUnit = normalizePlanUnit(targetUnit);
             const normalizedSourceUnit = normalizePlanUnit(set?.unit || sourceUnit);
             const reps = Number(set?.reps);
-            const repsValue = Number.isFinite(reps) && reps > 0 ? String(Math.floor(reps)) : "";
+            const targetReps = Number.isFinite(reps) && reps > 0 ? String(Math.floor(reps)) : "";
 
             if (normalizedTargetUnit === "BW" || String(set?.weight || "").toUpperCase() === "BW") {
                 return {
                     weight: "BW",
-                    reps: repsValue,
-                    done: Boolean(repsValue),
+                    reps: "",
+                    targetReps,
+                    done: false,
                     weightMode: "BW",
                     weightType: "BW",
                     unit: "BW",
@@ -5662,8 +5663,9 @@ export default function GymApp() {
             const weightValue = convertPlanWeight(set?.weight, normalizedSourceUnit, normalizedTargetUnit);
             return {
                 weight: weightValue,
-                reps: repsValue,
-                done: Boolean(weightValue && repsValue),
+                reps: "",
+                targetReps,
+                done: false,
                 weightMode: normalizedTargetUnit,
                 weightType: normalizedTargetUnit,
                 unit: normalizedTargetUnit,

@@ -20,6 +20,14 @@ const formatWeightValue = (value) => {
     return Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10);
 };
 
+const formatTargetRepsValue = (value) => {
+    const text = String(value ?? "").trim();
+    if (!text) return "";
+    const num = Number(text);
+    if (!Number.isFinite(num) || num <= 0) return text;
+    return formatWeightValue(num);
+};
+
 const KG_TO_LB = 2.20462;
 
 const getSourceUnit = (set, fallbackUnit) =>
@@ -78,6 +86,7 @@ export default function SetRow({
     const previousLabel = formatPreviousSet(previousSet, previousUnit, unit);
     const isBodyweight = normalizeUnitKey(unit) === "BW" || String(set.weight || "").toUpperCase() === "BW";
     const currentUnitKey = normalizeUnitKey(unit);
+    const targetRepsLabel = formatTargetRepsValue(set?.targetReps ?? set?.target_reps ?? set?.goalReps);
 
     useEffect(() => {
         if (!showUnitMenu) return undefined;
@@ -326,6 +335,18 @@ export default function SetRow({
                     style={{ ...inputStyle, paddingRight: 28, boxShadow: "var(--shadow-soft)" }}
                 />
                 <span style={repsSuffixStyle}>回</span>
+                {targetRepsLabel && (
+                    <div style={{
+                        marginTop: 4,
+                        color: "var(--text3)",
+                        fontSize: 10,
+                        fontWeight: 850,
+                        textAlign: "center",
+                        lineHeight: 1.15,
+                    }}>
+                        目標 {targetRepsLabel}回
+                    </div>
+                )}
             </div>
 
             {showUnitMenu && (
