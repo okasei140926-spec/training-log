@@ -4226,6 +4226,21 @@ export default function GymApp() {
     useEffect(() => {
         if (!user?.id || !historySyncReady) return;
         if (!["calendar", "analytics"].includes(screen)) return;
+        const trustedDisplayHistory = mergeHistoryMaps(workoutsDataHistory || {}, history || {});
+        const trustedHistoryMetrics = getHistoryOverallMetrics(trustedDisplayHistory);
+        if (trustedHistoryMetrics.setCount > 0) {
+            console.log("[home fetch] display_history skipped; trustedHistory already available", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user.id,
+                screen,
+                source: "trustedHistory",
+                applied: false,
+                skipped: true,
+                reason: "screen uses existing trusted history immediately",
+                trustedHistory: trustedHistoryMetrics,
+            });
+            return;
+        }
 
         let cancelled = false;
 
@@ -4234,13 +4249,13 @@ export default function GymApp() {
             displayHistoryRefreshRequestIdRef.current = requestId;
             const queryLabel = "display_history_refresh";
             const weekRange = getCurrentWeekRangeForHomeSummary();
-            const sessionRangeStart = screen === "history"
-                ? weekRange.start
-                : getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
-            const sessionRangeEnd = screen === "history" ? weekRange.end : null;
-            const displayHistoryLimit = screen === "history"
-                ? INITIAL_HOME_HISTORY_LIMIT
-                : REMOTE_HISTORY_SESSION_LIMIT;
+            const sessionRangeStart = screen === "calendar"
+                ? `${formatDateKey(new Date()).slice(0, 7)}-01`
+                : getDateDaysAgoKey(35);
+            const sessionRangeEnd = screen === "calendar"
+                ? `${getNextMonthPrefix(formatDateKey(new Date()).slice(0, 7))}-01`
+                : null;
+            const displayHistoryLimit = screen === "calendar" ? 80 : 120;
 
             try {
                 let workoutsQuery = supabase
@@ -4255,8 +4270,8 @@ export default function GymApp() {
                         .gte("workout_date", sessionRangeStart);
 
                 if (sessionRangeEnd) {
-                    workoutsQuery = workoutsQuery.lte("date", sessionRangeEnd);
-                    sessionsQuery = sessionsQuery.lte("workout_date", sessionRangeEnd);
+                    workoutsQuery = workoutsQuery.lt("date", sessionRangeEnd);
+                    sessionsQuery = sessionsQuery.lt("workout_date", sessionRangeEnd);
                 }
 
                 workoutsQuery = workoutsQuery
@@ -4451,12 +4466,14 @@ export default function GymApp() {
     }, [
         applyLocalHistoryDates,
         getCurrentHistoryDeleteMarkers,
+        history,
         historyReloadNonce,
         historySyncReady,
         runDedupeSupabaseFetch,
         screen,
         sessionSyncVersion,
         user?.id,
+        workoutsDataHistory,
     ]);
 
     useEffect(() => {
