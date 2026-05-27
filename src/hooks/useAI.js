@@ -8,6 +8,14 @@ import {
 import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
 import { extractWorkoutPlanFromText, normalizeWorkoutPlan } from "../utils/aiWorkoutPlan";
+import {
+  buildRevenueCatPlan,
+  configureRevenueCatForUser,
+  getRevenueCatAvailability,
+  purchaseRevenueCatPro,
+  refreshRevenueCatCustomerInfo,
+  restoreRevenueCatPurchases,
+} from "../lib/revenueCat";
 
 const AI_DAILY_LIMIT = 5;
 const AI_USAGE_STORAGE_KEY = "ai_usage_state";
@@ -778,8 +786,10 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
   const aiUsageDateRef = useRef(initialAiUsageDate);
   const aiUsageCountRef = useRef(0);
   const isProRef = useRef(getIsPro());
+  const revenueCatPlanRef = useRef(null);
   const activeConversationIdRef = useRef(null);
   const [isPro, setIsPro] = useState(() => getIsPro());
+  const [proPlan, setProPlan] = useState(null);
   const [aiConversations, setAiConversations] = useState([]);
   const [aiConversationLoading, setAiConversationLoading] = useState(false);
   const [aiConversationError, setAiConversationError] = useState("");
@@ -795,6 +805,37 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
   const setActiveConversationId = useCallback((conversationId) => {
     activeConversationIdRef.current = conversationId || null;
     setActiveConversationIdState(conversationId || null);
+  }, []);
+
+  const applyRevenueCatCustomerInfo = useCallback((customerInfo) => {
+    const plan = buildRevenueCatPlan(customerInfo);
+    revenueCatPlanRef.current = plan;
+    setProPlan(plan);
+    isProRef.current = Boolean(plan.isPro);
+    setIsPro(Boolean(plan.isPro));
+    try {
+      localStorage.setItem(AI_PRO_STORAGE_KEY, plan.isPro ? "true" : "false");
+    } catch {}
+    console.log("[RevenueCat] customer info applied", {
+      source: "revenuecat",
+      entitlementId: plan.entitlementId,
+      isPro: plan.isPro,
+      status: plan.status,
+      expiresAt: plan.expiresAt,
+      managementURL: plan.managementURL,
+      productIdentifier: plan.productIdentifier,
+      isSandbox: plan.isSandbox,
+      appHistoryStateUpdated: false,
+    });
+    return plan;
+  }, []);
+
+  const getEffectiveProStatus = useCallback(() => {
+    const availability = getRevenueCatAvailability();
+    if (availability.native && availability.configured) {
+      return Boolean(revenueCatPlanRef.current?.isPro);
+    }
+    return Boolean(revenueCatPlanRef.current?.isPro || isProRef.current || getIsPro());
   }, []);
 
   const loadAiConversations = useCallback(async () => {
@@ -1010,6 +1051,52 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+
+    const configureForSession = async (session) => {
+      const user = session?.user;
+      if (!user?.id) return;
+      const result = await configureRevenueCatForUser(user, (customerInfo) => {
+        if (!isActive) return;
+        applyRevenueCatCustomerInfo(customerInfo);
+      });
+      if (!isActive) return;
+      if (result?.plan) {
+        revenueCatPlanRef.current = result.plan;
+        setProPlan(result.plan);
+      }
+      console.log("[RevenueCat] session sync", {
+        user_id: user.id,
+        availability: getRevenueCatAvailability(),
+        configured: Boolean(result?.configured),
+        reason: result?.reason || null,
+        isPro: Boolean(result?.plan?.isPro),
+      });
+    };
+
+    supabase.auth.getSession()
+      .then(({ data }) => configureForSession(data?.session))
+      .catch((error) => {
+        console.warn("[RevenueCat] initial session sync failed", {
+          message: error?.message || String(error),
+        });
+      });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      configureForSession(session).catch((error) => {
+        console.warn("[RevenueCat] auth session sync failed", {
+          message: error?.message || String(error),
+        });
+      });
+    });
+
+    return () => {
+      isActive = false;
+      subscription?.unsubscribe?.();
+    };
+  }, [applyRevenueCatCustomerInfo]);
+
+  useEffect(() => {
     const refreshUsageDate = () => {
       const todayKey = getTodayKey();
       if (aiUsageDateRef.current === todayKey) return;
@@ -1039,18 +1126,20 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
     if (!serverUsage || typeof serverUsage !== "object") return false;
 
     const serverIsPro = Boolean(serverUsage.isPro);
+    const revenueCatIsPro = Boolean(revenueCatPlanRef.current?.isPro);
+    const effectiveIsPro = Boolean(revenueCatIsPro || serverIsPro);
     const serverDateKey = serverUsage.usageDate || getTodayKey();
     const serverCount = normalizeAiUsageCount(serverUsage.usageCount);
 
-    isProRef.current = serverIsPro;
-    setIsPro(serverIsPro);
+    isProRef.current = effectiveIsPro;
+    setIsPro(effectiveIsPro);
     aiUsageDateRef.current = serverDateKey;
     aiUsageCountRef.current = serverCount;
     setAiUsageDate(serverDateKey);
     setAiUsageCount(serverCount);
 
     try {
-      localStorage.setItem(AI_PRO_STORAGE_KEY, serverIsPro ? "true" : "false");
+      localStorage.setItem(AI_PRO_STORAGE_KEY, effectiveIsPro ? "true" : "false");
       saveAiUsage({ dateKey: serverDateKey, count: serverCount });
     } catch {}
 
@@ -1063,8 +1152,18 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         data: { session },
       } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
+      const user = session?.user;
+
+      if (user?.id) {
+        const purchaseResult = await purchaseRevenueCatPro(user, applyRevenueCatCustomerInfo);
+        if (purchaseResult?.success) return true;
+        if (purchaseResult?.available && purchaseResult?.reason !== "not-native") {
+          return false;
+        }
+      }
 
       if (!accessToken) return false;
+      if (process.env.NODE_ENV === "production") return false;
 
       const apiUrl = getApiUrl("/api/activate-pro-dev");
       const res = await fetch(apiUrl, {
@@ -1094,6 +1193,39 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         message: error?.message,
       });
       return false;
+    }
+  };
+
+  const restorePumpPro = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user?.id) return null;
+
+      const restoreResult = await restoreRevenueCatPurchases(user, applyRevenueCatCustomerInfo);
+      if (restoreResult?.plan) {
+        const usage = resetAiUsageIfNewDay();
+        return {
+          success: restoreResult.success,
+          plan: restoreResult.plan,
+          aiUsage: {
+            usageDate: usage.dateKey,
+            isPro: restoreResult.plan.isPro,
+            usageCount: usage.count,
+            remaining: restoreResult.plan.isPro ? null : Math.max(0, AI_DAILY_LIMIT - usage.count),
+            dailyLimit: AI_DAILY_LIMIT,
+          },
+        };
+      }
+      return restoreResult;
+    } catch (error) {
+      logAiApiError("restore RevenueCat purchases failed", {
+        error,
+        message: error?.message,
+      });
+      return null;
     }
   };
 
@@ -1145,6 +1277,25 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         data: { session },
       } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
+      const user = session?.user;
+
+      if (user?.id) {
+        const revenueCatResult = await refreshRevenueCatCustomerInfo(user, applyRevenueCatCustomerInfo);
+        if (revenueCatResult?.plan) {
+          const usage = resetAiUsageIfNewDay();
+          return {
+            success: true,
+            plan: revenueCatResult.plan,
+            aiUsage: {
+              usageDate: usage.dateKey,
+              isPro: revenueCatResult.plan.isPro,
+              usageCount: usage.count,
+              remaining: revenueCatResult.plan.isPro ? null : Math.max(0, AI_DAILY_LIMIT - usage.count),
+              dailyLimit: AI_DAILY_LIMIT,
+            },
+          };
+        }
+      }
 
       if (!accessToken) return null;
 
@@ -1181,7 +1332,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
   const sendAI = async (overrideMsg) => {
     const userMsg = (typeof overrideMsg === "string" ? overrideMsg : aiInput).trim();
-    const currentIsPro = Boolean(isProRef.current || isPro || getIsPro());
+    const currentIsPro = Boolean(getEffectiveProStatus() || isPro);
     const currentUsage = currentIsPro
       ? {
           dateKey: aiUsageDateRef.current || getTodayKey(),
@@ -1434,7 +1585,9 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
     aiEnd,
     sendAI,
     isPro,
+    proPlan,
     activatePumpPro,
+    restorePumpPro,
     deactivatePumpProDev,
     refreshPumpProStatus,
     dailyFreeAiLimit: AI_DAILY_LIMIT,

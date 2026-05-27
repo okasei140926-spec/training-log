@@ -32,7 +32,9 @@ export default function SettingsModal({
   onDeleteAccount,
   accountActionBusy = false,
   isPro = false,
+  proPlan = null,
   onStartPro,
+  onRestorePro,
   onDeactivateProDev,
   onRefreshProStatus,
   dailyFreeAiLimit = 5,
@@ -44,7 +46,7 @@ export default function SettingsModal({
   const [proActionBusy, setProActionBusy] = useState(false);
   const [proMessage, setProMessage] = useState("");
 
-  const plan = proStatusData?.plan || {
+  const plan = proStatusData?.plan || proPlan || {
     isPro,
     status: isPro ? "pro" : "free",
     label: isPro ? "Pro" : "Free",
@@ -84,6 +86,25 @@ export default function SettingsModal({
       if (!silent) setProActionBusy(false);
     }
   }, [onRefreshProStatus]);
+
+  const restoreProStatus = useCallback(async () => {
+    const handler = onRestorePro || onRefreshProStatus;
+    if (!handler) return null;
+    setProActionBusy(true);
+    setProMessage("");
+    try {
+      const data = await handler();
+      if (data?.plan) {
+        setProStatusData(data);
+        setProMessage(data.plan.isPro ? "購入を復元しました。" : "復元できるPro購入は見つかりませんでした。");
+      } else {
+        setProMessage("購入を復元できませんでした。");
+      }
+      return data;
+    } finally {
+      setProActionBusy(false);
+    }
+  }, [onRefreshProStatus, onRestorePro]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -156,11 +177,34 @@ export default function SettingsModal({
   };
 
   const handleUpgrade = async () => {
-    if (isDevelopmentBuild) {
-      await handleDevTogglePro(true);
+    setProActionBusy(true);
+    setProMessage("");
+    try {
+      const ok = await onStartPro?.();
+      const data = await onRefreshProStatus?.();
+      if (data?.plan) setProStatusData(data);
+      if (ok) {
+        setProMessage("Pump Proを有効化しました。");
+        return;
+      }
+      if (isDevelopmentBuild) {
+        setProMessage("RevenueCat購入を開始できませんでした。開発用切り替えも利用できます。");
+      } else {
+        setProMessage("購入を完了できませんでした。キャンセルされた場合、課金は発生していません。");
+      }
+    } finally {
+      setProActionBusy(false);
+    }
+  };
+
+  const handleManageSubscription = () => {
+    const managementURL = plan.managementURL || plan.managementUrl;
+    if (managementURL) {
+      const opened = window.open(managementURL, "_blank", "noopener,noreferrer");
+      if (!opened) window.location.assign(managementURL);
       return;
     }
-    setProMessage("アプリ内課金は準備中です。購入を復元、またはストアのサブスクリプション管理をご確認ください。");
+    openNativeSubscriptionSettings();
   };
 
   const proPlanManager = (
@@ -279,7 +323,7 @@ export default function SettingsModal({
           {plan.isPro && (
             <button
               type="button"
-              onClick={openNativeSubscriptionSettings}
+              onClick={handleManageSubscription}
               style={{
                 width: "100%",
                 padding: "14px 16px",
@@ -297,7 +341,7 @@ export default function SettingsModal({
 
           <button
             type="button"
-            onClick={() => refreshProStatus()}
+            onClick={restoreProStatus}
             disabled={proActionBusy}
             style={{
               width: "100%",

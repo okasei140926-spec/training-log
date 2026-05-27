@@ -77,6 +77,9 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 - `REACT_APP_SUPABASE_ANON_KEY`
 - `REACT_APP_VAPID_PUBLIC_KEY`
 - `REACT_APP_ENABLE_APPLE_OAUTH`
+- `REACT_APP_REVENUECAT_IOS_API_KEY`
+- `REACT_APP_REVENUECAT_ANDROID_API_KEY`
+- `REACT_APP_REVENUECAT_ENTITLEMENT_ID` (`pro`)
 
 `REACT_APP_VAPID_PUBLIC_KEY` is required at build time. Make sure it is set in Vercel Production before deploying.
 
@@ -180,6 +183,8 @@ Then set these values in `.env.local`:
 - `REACT_APP_SUPABASE_URL`
 - `REACT_APP_SUPABASE_ANON_KEY`
 - `REACT_APP_VAPID_PUBLIC_KEY`
+- `REACT_APP_REVENUECAT_IOS_API_KEY`
+- `REACT_APP_REVENUECAT_ENTITLEMENT_ID=pro`
 
 Important:
 

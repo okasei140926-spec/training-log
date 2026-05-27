@@ -2119,7 +2119,9 @@ export default function GymApp() {
         aiEnd,
         sendAI,
         isPro,
+        proPlan,
         activatePumpPro,
+        restorePumpPro,
         deactivatePumpProDev,
         refreshPumpProStatus,
         dailyFreeAiLimit,
@@ -7301,7 +7303,9 @@ export default function GymApp() {
                     onDeleteAccount={handleDeleteAccount}
                     accountActionBusy={accountActionBusy}
                     isPro={isPro}
+                    proPlan={proPlan}
                     onStartPro={activatePumpPro}
+                    onRestorePro={restorePumpPro}
                     onDeactivateProDev={deactivatePumpProDev}
                     onRefreshProStatus={refreshPumpProStatus}
                     dailyFreeAiLimit={dailyFreeAiLimit}
