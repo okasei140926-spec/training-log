@@ -432,13 +432,84 @@ const getPriorityBodyPartsForMessage = (message) => {
 const getPriorityExerciseNameHints = (message) => {
   const text = String(message || "").toLowerCase();
   const hints = [];
+  const wantsBig3 = text.includes("big3") || text.includes("big 3") || text.includes("ビッグ3") || text.includes("big３");
+  if (wantsBig3) hints.push("ベンチプレス", "スクワット", "デッドリフト", "ルーマニアンデッドリフト");
   if (text.includes("ベンチ") || text.includes("bench")) hints.push("ベンチプレス");
+  if (text.includes("スクワット") || text.includes("squat")) hints.push("スクワット");
+  if (text.includes("デッド") || text.includes("deadlift") || text.includes("dead lift")) hints.push("デッドリフト");
+  if (text.includes("rdl") || text.includes("ルーマニアン") || text.includes("romanian")) hints.push("ルーマニアンデッドリフト");
   if (text.includes("インクライン")) hints.push("インクライン");
   if (text.includes("フライ")) hints.push("フライ");
-  if (text.includes("ルーマニアン")) hints.push("ルーマニアンデッドリフト");
   if (text.includes("ハイパー")) hints.push("ハイパーエクステンション");
   if (text.includes("レッグカール")) hints.push("レッグカール");
   return hints;
+};
+
+const getBig3QueryTargets = (message) => {
+  const text = String(message || "").toLowerCase();
+  const wantsBig3 = text.includes("big3") || text.includes("big 3") || text.includes("ビッグ3") || text.includes("big３");
+  return {
+    bench: wantsBig3 || text.includes("ベンチ") || text.includes("bench"),
+    squat: wantsBig3 || text.includes("スクワット") || text.includes("squat"),
+    deadlift: wantsBig3 || text.includes("デッド") || text.includes("deadlift") || text.includes("dead lift") || text.includes("rdl") || text.includes("ルーマニアン"),
+    any: wantsBig3,
+  };
+};
+
+const classifyBig3ExerciseName = (exerciseName) => {
+  const normalizedName = normalizeExerciseName(exerciseName);
+  const compactName = normalizedName.replace(/[\s　_\-・]/g, "").toLowerCase();
+  const rawCompactName = String(exerciseName || "").replace(/[\s　_\-・]/g, "").toLowerCase();
+  const combined = `${compactName} ${rawCompactName}`;
+
+  const isRdl = (
+    combined.includes("ルーマニアン") ||
+    combined.includes("romanian") ||
+    combined.includes("rdl")
+  );
+  if (isRdl) {
+    return {
+      group: "deadlift",
+      category: "variation",
+      strictBig3: false,
+      matchType: "alias",
+      aliasMatched: "RDL / Romanian Deadlift",
+    };
+  }
+
+  if (combined.includes("デッドリフト") || combined.includes("deadlift") || combined.includes("deadlift") || compactName === "dl") {
+    return {
+      group: "deadlift",
+      category: "deadlift",
+      strictBig3: true,
+      matchType: normalizedName === "デッドリフト" ? "exact" : "alias",
+      aliasMatched: "Deadlift",
+    };
+  }
+
+  if (combined.includes("ベンチプレス") || combined.includes("benchpress")) {
+    const isVariation = combined.includes("インクライン") || combined.includes("incline") || combined.includes("ダンベル") || combined.includes("dumbbell");
+    return {
+      group: "bench",
+      category: isVariation ? "variation" : "bench",
+      strictBig3: !isVariation,
+      matchType: normalizedName === "ベンチプレス" ? "exact" : "alias",
+      aliasMatched: "Bench Press",
+    };
+  }
+
+  if (combined.includes("スクワット") || combined.includes("squat")) {
+    const isVariation = combined.includes("ハック") || combined.includes("hack") || combined.includes("スミス") || combined.includes("smith");
+    return {
+      group: "squat",
+      category: isVariation ? "variation" : "squat",
+      strictBig3: !isVariation,
+      matchType: normalizedName === "スクワット" ? "exact" : "alias",
+      aliasMatched: "Squat",
+    };
+  }
+
+  return null;
 };
 
 const getExercisePriorityScore = (exerciseName, bodyPart, message) => {
@@ -452,6 +523,14 @@ const getExercisePriorityScore = (exerciseName, bodyPart, message) => {
   if (text && (text.includes(lowerName) || lowerName.includes(text))) score += 20;
   if (bodyParts.includes(normalizeAiBodyPart(bodyPart))) score += 12;
   if (hints.some((hint) => normalizedName.includes(hint) || hint.includes(normalizedName))) score += 16;
+
+  const big3Targets = getBig3QueryTargets(message);
+  const big3Match = classifyBig3ExerciseName(exerciseName);
+  if (big3Match && big3Targets[big3Match.group]) {
+    score += 34;
+    if (big3Match.strictBig3) score += 4;
+  }
+  if (big3Match && big3Targets.any) score += 18;
 
   if (bodyParts.includes("胸")) {
     if (normalizedName.includes("ベンチプレス")) score += 10;
@@ -567,11 +646,102 @@ const buildExerciseHistoryStats = (history, message) => {
   ));
 };
 
-const buildExerciseHistoryContextText = (history, message) => {
-  const stats = buildExerciseHistoryStats(history, message);
-  if (!stats.length) return "種目別の過去記録はありません。";
+const summarizeBig3Matches = (stats, message) => {
+  const targets = getBig3QueryTargets(message);
+  const shouldInclude = targets.any || targets.bench || targets.squat || targets.deadlift;
+  const empty = {
+    targets,
+    bench: [],
+    squat: [],
+    deadlift: [],
+    deadliftVariations: [],
+    all: [],
+  };
+  if (!shouldInclude) return empty;
 
-  return stats.slice(0, 18).map((item) => {
+  const matched = (stats || [])
+    .map((item) => {
+      const classification = classifyBig3ExerciseName(item.exerciseName);
+      if (!classification || !targets[classification.group]) return null;
+      return {
+        exerciseName: item.exerciseName,
+        normalizedExerciseName: item.normalizedExerciseName,
+        bodyPart: item.bodyPart,
+        category: classification.category,
+        group: classification.group,
+        strictBig3: classification.strictBig3,
+        matchType: classification.matchType,
+        aliasMatched: classification.aliasMatched,
+        latestDate: item.latestDate,
+        latestSetCount: item.latestSetCount,
+        latestSets: item.latestSets,
+        recentRecords: item.recentRecords,
+        pr: item.pr,
+        recentMaxWeight: item.recentMaxWeight,
+        estimated1RM: item.estimated1RM,
+        recommendedWorkingSets: item.recommendedWorkingSets,
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    targets,
+    bench: matched.filter((item) => item.group === "bench"),
+    squat: matched.filter((item) => item.group === "squat"),
+    deadlift: matched.filter((item) => item.group === "deadlift" && item.strictBig3),
+    deadliftVariations: matched.filter((item) => item.group === "deadlift" && !item.strictBig3),
+    all: matched,
+  };
+};
+
+const formatBig3MatchedExercise = (item) => {
+  const latestSets = (item.latestSets || []).map((set) => set.label).join(" / ");
+  const prText = item.pr
+    ? `PR ${item.pr.weight}kg×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
+    : "PRなし";
+  const rec = item.recommendedWorkingSets;
+  const recommendationText = rec
+    ? `推奨目安 筋肥大${rec.hypertrophy.weight}kg×${rec.hypertrophy.reps}回×${rec.hypertrophy.sets}セット / 軽め${rec.light.weight}kg×${rec.light.reps}回×${rec.light.sets}セット / 高強度${rec.highIntensity.weight}kg×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
+    : "推奨目安なし";
+
+  return `${item.exerciseName} [${item.category}, ${item.matchType}:${item.aliasMatched}] 最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets} | ${prText} | 直近最高重量 ${item.recentMaxWeight || 0}kg | ${recommendationText}`;
+};
+
+const buildBig3HistoryContextText = (big3Summary) => {
+  if (!big3Summary?.all?.length) return "";
+
+  const benchText = big3Summary.bench.length
+    ? big3Summary.bench.map(formatBig3MatchedExercise).join("\n")
+    : "ベンチ系: 記録なし";
+  const squatText = big3Summary.squat.length
+    ? big3Summary.squat.map(formatBig3MatchedExercise).join("\n")
+    : "スクワット系: 記録なし";
+  const strictDeadliftText = big3Summary.deadlift.length
+    ? big3Summary.deadlift.map(formatBig3MatchedExercise).join("\n")
+    : "通常デッドリフト: 記録なし";
+  const deadliftVariationText = big3Summary.deadliftVariations.length
+    ? big3Summary.deadliftVariations.map(formatBig3MatchedExercise).join("\n")
+    : "デッドリフト系バリエーション: 記録なし";
+
+  const rdlNote = !big3Summary.deadlift.length && big3Summary.deadliftVariations.length
+    ? "注意: 通常デッドリフトの記録は見当たりませんが、RDL/ルーマニアンデッドリフトなどのデッドリフト系バリエーション記録があります。通常デッドリフトとRDLは区別して答えてください。"
+    : "注意: 通常デッドリフトとRDL/ルーマニアンデッドリフトは区別して答えてください。";
+
+  return [
+    "BIG3/主要種目の過去記録（workouts.data正本、summary_jsonではない）:",
+    benchText,
+    squatText,
+    strictDeadliftText,
+    deadliftVariationText,
+    rdlNote,
+  ].join("\n");
+};
+
+const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = summarizeBig3Matches(stats, message)) => {
+  const big3Context = buildBig3HistoryContextText(big3Summary);
+  if (!stats.length) return big3Context || "種目別の過去記録はありません。";
+
+  const exerciseContext = stats.slice(0, 18).map((item) => {
     const latestSets = item.latestSets.map((set) => set.label).join(" / ");
     const recentRecords = item.recentRecords
       .map((record) => `${record.date} ${record.setCount}セット ${record.sets.map((set) => set.label).join(" / ")}`)
@@ -593,6 +763,8 @@ const buildExerciseHistoryContextText = (history, message) => {
       `最近: ${recentRecords}`,
     ].join(" | ");
   }).join("\n");
+
+  return [big3Context, exerciseContext].filter(Boolean).join("\n");
 };
 
 export function useAI({ loadConversationsOnMount = false } = {}) {
@@ -1066,6 +1238,15 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
             rowCount: latestWorkoutFetch.rows?.length ?? 0,
             blockedReason: "workouts.data fetch failed; stale local history was not used",
             targetDate: targetDateKey || null,
+            aiQuery: userMsg,
+            totalWorkoutsCount: latestWorkoutFetch.rows?.length ?? 0,
+            exerciseNamesIncluded: [],
+            benchMatchedRecords: [],
+            squatMatchedRecords: [],
+            deadliftMatchedRecords: [],
+            deadliftVariationMatchedRecords: [],
+            matchedByExactOrAlias: [],
+            recordContextSource: AI_CONTEXT_CANONICAL_SOURCE,
             coachMode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
           },
         });
@@ -1079,7 +1260,10 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       const targetWorkoutSummary = targetDateKey ? summarizeWorkoutDay(requestGroupedHistory, targetDateKey) : null;
       const latestDateKey = Array.from(requestGroupedHistory.keys()).sort().slice(-1)[0] || "";
       const latestWorkoutSummary = latestDateKey ? summarizeWorkoutDay(requestGroupedHistory, latestDateKey) : null;
-      const exerciseHistoryContext = buildExerciseHistoryContextText(aiHistory, userMsg);
+      const exerciseHistoryStats = buildExerciseHistoryStats(aiHistory, userMsg);
+      const big3MatchSummary = summarizeBig3Matches(exerciseHistoryStats, userMsg);
+      const exerciseHistoryContext = buildExerciseHistoryContextTextFromStats(exerciseHistoryStats, userMsg, big3MatchSummary);
+      const allExerciseNames = Object.keys(aiHistory || {}).sort((a, b) => a.localeCompare(b, "ja"));
 
       logAiContextSnapshot({
         source: contextSource,
@@ -1094,8 +1278,25 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
           fallbackUsed: Boolean(latestWorkoutFetch.error),
           targetDate: targetDateKey || null,
           latestDate: latestDateKey || null,
+          aiQuery: userMsg,
+          totalWorkoutsCount: latestWorkoutFetch.rows?.length ?? 0,
+          totalWorkoutDatesCount: requestGroupedHistory.size,
+          exerciseNamesIncluded: allExerciseNames,
+          benchMatchedRecords: big3MatchSummary.bench,
+          squatMatchedRecords: big3MatchSummary.squat,
+          deadliftMatchedRecords: big3MatchSummary.deadlift,
+          deadliftVariationMatchedRecords: big3MatchSummary.deadliftVariations,
+          matchedByExactOrAlias: big3MatchSummary.all.map((item) => ({
+            exerciseName: item.exerciseName,
+            group: item.group,
+            category: item.category,
+            strictBig3: item.strictBig3,
+            matchType: item.matchType,
+            aliasMatched: item.aliasMatched,
+          })),
+          recordContextSource: AI_CONTEXT_CANONICAL_SOURCE,
           coachMode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
-          exerciseHistoryNames: buildExerciseHistoryStats(aiHistory, userMsg)
+          exerciseHistoryNames: exerciseHistoryStats
             .slice(0, 18)
             .map((item) => item.exerciseName),
         },
