@@ -12,6 +12,11 @@ const AI_SUGGESTIONS = [
     { label: "肩メニュー作成", prompt: "肩メニューを作成して" },
 ];
 
+const isNativePurchaseEnvironment = () => {
+    if (typeof window === "undefined") return false;
+    return window.location?.protocol === "capacitor:";
+};
+
 const CompactBubble = ({ children, role }) => (
     <div style={{ display: "flex", justifyContent: role === "user" ? "flex-end" : "flex-start" }}>
         <div
@@ -422,12 +427,16 @@ export default function AIScreen({
             }
 
             if (typeof window !== "undefined") {
-                window.alert?.("Pro機能は準備中です。設定のProプラン管理から確認できます。");
+                window.alert?.(
+                    isNativePurchaseEnvironment()
+                        ? "購入を完了できませんでした。キャンセルされた場合、課金は発生していません。"
+                        : "Pump ProはiOSアプリ版で購入できます。TestFlightまたはホーム画面に追加したアプリ版からお試しください。"
+                );
             }
         } catch (error) {
             console.error("Pump Pro start failed", error);
             if (typeof window !== "undefined") {
-                window.alert?.("Pro機能は準備中です。");
+                window.alert?.("購入を完了できませんでした。キャンセルされた場合、課金は発生していません。");
             }
         }
     };

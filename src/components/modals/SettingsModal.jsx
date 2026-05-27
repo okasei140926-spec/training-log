@@ -23,6 +23,11 @@ const openNativeSubscriptionSettings = () => {
   if (!opened) window.location.assign(url);
 };
 
+const isNativePurchaseEnvironment = () => {
+  if (typeof window === "undefined") return false;
+  return window.location?.protocol === "capacitor:";
+};
+
 export default function SettingsModal({
   isOpen,
   onClose,
@@ -187,6 +192,10 @@ export default function SettingsModal({
         setProMessage("Pump Proを有効化しました。");
         return;
       }
+      if (!isNativePurchaseEnvironment()) {
+        setProMessage("Pump ProはiOSアプリ版で購入できます。Web/PWAでは購入できない場合があります。");
+        return;
+      }
       if (isDevelopmentBuild) {
         setProMessage("RevenueCat購入を開始できませんでした。開発用切り替えも利用できます。");
       } else {
@@ -271,7 +280,7 @@ export default function SettingsModal({
             ? "Proは有効期限まで利用可能です。更新は停止されています。"
             : plan.isPro
               ? "Pump Proが有効です。AI Coachを回数制限なしで利用できます。"
-              : "FreeプランではAI Coachを無料枠内で利用できます。"}
+              : `FreeプランではAI Coachを1日${dailyFreeAiLimit}回まで利用できます。ProにするとAI Coachを無制限で使えます。`}
         </div>
 
         {plan.expiresAt && (
@@ -290,7 +299,7 @@ export default function SettingsModal({
             gap: 10,
           }}
         >
-          {["今日のメニュー提案", "重量設定の相談", "記録分析", "弱点部位の改善提案", "Proシェアカード"].map((item) => (
+          {["AI Coach無制限", "メニュー提案", "重量設定の相談", "記録分析", "弱点部位の改善提案"].map((item) => (
             <div key={item} style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text)", fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: "var(--accent)", fontWeight: 950 }}>✓</span>
               {item}
