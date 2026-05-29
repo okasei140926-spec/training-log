@@ -8,6 +8,7 @@ import {
     buildHistoryFromWorkoutRows,
     calc1RM,
     formatDateKey,
+    getRecordSourceSets,
     getValidWorkoutDatesFromHistory,
     hasMeaningfulPRIncrease,
     hasValidWorkoutOnDate,
@@ -471,6 +472,83 @@ const describeHistoryRecordsForDate = (historyMap, targetDate) => {
             })
         )
         .filter(Boolean);
+};
+
+const EXPLICIT_SET_EDIT_REASONS = new Set(["weight_change", "reps_change", "unit_change"]);
+
+const getSetEditUnit = (set, fallbackUnit = "kg") =>
+    normalizeSetWeightMode(
+        set?.weightMode
+        || set?.weightType
+        || set?.displayUnit
+        || set?.unit
+        || set?.weightUnit
+        || set?.weight_unit
+        || fallbackUnit
+    );
+
+const getSetEditDisplayWeight = (set) => {
+    const value = set?.displayWeight ?? set?.weight;
+    return String(value ?? "").trim();
+};
+
+const getSetEditSummary = (set, fallbackUnit = "kg") => ({
+    weight: getSetEditDisplayWeight(set),
+    unit: getSetEditUnit(set, fallbackUnit),
+    reps: String(set?.reps ?? "").trim(),
+});
+
+const normalizeEditCompareValue = (value) => {
+    const text = String(value ?? "").trim();
+    if (!text) return "";
+    if (text.toUpperCase() === "BW") return "BW";
+    const num = Number(text);
+    return Number.isFinite(num) ? String(Math.round(num * 1000) / 1000) : text;
+};
+
+const findEditedSetInHistory = (historyMap, targetDate, exerciseName, setIndex = 0) => {
+    const normalizedDate = String(targetDate || "").slice(0, 10);
+    const normalizedExercise = normalizeExerciseName(exerciseName);
+    const entry = Object.entries(historyMap || {}).find(([name]) =>
+        name === exerciseName || normalizeExerciseName(name) === normalizedExercise
+    );
+    if (!entry) return null;
+
+    const [, records] = entry;
+    const record = (records || []).find((item) => (
+        String(item?.date || item?.workoutDate || item?.workout_date || "").slice(0, 10) === normalizedDate
+    ));
+    if (!record) return null;
+
+    const sets = getRecordSourceSets(record);
+    return sets?.[Number(setIndex) || 0] || null;
+};
+
+const findEditedSetInSummaryJson = (summaryJson, exerciseName, setIndex = 0) => {
+    const normalizedExercise = normalizeExerciseName(exerciseName);
+    const item = (summaryJson?.items || []).find((entry) => {
+        const name = entry?.exercise_name || entry?.exerciseName || "";
+        return name === exerciseName || normalizeExerciseName(name) === normalizedExercise;
+    });
+    if (!item) return null;
+    return item?.sets?.[Number(setIndex) || 0] || null;
+};
+
+const isEditedSetPersisted = (expectedSet, actualSet) => {
+    if (!expectedSet || !actualSet) return false;
+
+    const expected = getSetEditSummary(expectedSet);
+    const actual = getSetEditSummary(actualSet, expected.unit);
+    const expectedWeight = normalizeEditCompareValue(expected.weight);
+    const actualWeight = normalizeEditCompareValue(actual.weight);
+    const expectedReps = normalizeEditCompareValue(expected.reps);
+    const actualReps = normalizeEditCompareValue(actual.reps);
+
+    return (
+        expected.unit === actual.unit &&
+        expectedWeight === actualWeight &&
+        expectedReps === actualReps
+    );
 };
 
 const getEmptyWorkoutMetrics = (updatedAt = null) => ({
@@ -1596,8 +1674,8 @@ export default function GymApp() {
         });
         pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
 
-        if (reason === "unit_change") {
-            console.log("[unit change] explicit workout edit", {
+        if (EXPLICIT_SET_EDIT_REASONS.has(reason)) {
+            console.log("[workout edit] explicit set edit", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user?.id || latestUserIdRef.current || null,
                 date: normalizedDate,
@@ -1605,7 +1683,7 @@ export default function GymApp() {
                 setIndex: details.setIndex ?? null,
                 before: details.beforeSet || null,
                 after: details.afterSet || null,
-                saveReason: "unit_change",
+                saveReason: reason,
                 explicitEdit: true,
             });
         }
@@ -2567,8 +2645,8 @@ export default function GymApp() {
             details: options.details || previous.details || null,
             updatedAt: new Date().toISOString(),
         });
-        if (reason === "unit_change") {
-            console.log("[unit change] explicit workout edit", {
+        if (EXPLICIT_SET_EDIT_REASONS.has(reason)) {
+            console.log("[workout edit] explicit set edit", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user?.id || latestUserIdRef.current || null,
                 date: normalizedDate,
@@ -2576,7 +2654,7 @@ export default function GymApp() {
                 setIndex: options.details?.setIndex ?? null,
                 before: options.details?.beforeSet || null,
                 after: options.details?.afterSet || null,
-                saveReason: "unit_change",
+                saveReason: reason,
                 explicitEdit: true,
             });
         }
@@ -2746,8 +2824,8 @@ export default function GymApp() {
                         results.skippedDates.push(workoutDate);
                         return;
                     }
-                    if (pendingChange.reason === "unit_change") {
-                        console.log("[unit change] workouts.data save decision", {
+                    if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
+                        console.log("[workout edit] workouts.data save decision", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
                             date: workoutDate,
@@ -2755,7 +2833,7 @@ export default function GymApp() {
                             setIndex: pendingChange.details?.setIndex ?? null,
                             before: pendingChange.details?.beforeSet || null,
                             after: pendingChange.details?.afterSet || null,
-                            saveReason: "unit_change",
+                            saveReason: pendingChange.reason,
                             explicitEdit: Boolean(pendingChange.explicitEdit),
                             allowed: true,
                             blockedReason: null,
@@ -2813,6 +2891,32 @@ export default function GymApp() {
                         });
                         throw new Error(`workouts.data verification failed for ${workoutDate}`);
                     }
+                    if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
+                        const expectedSet = pendingChange.details?.afterSet || null;
+                        const actualSet = findEditedSetInHistory(
+                            verifyWorkoutRow?.data || {},
+                            workoutDate,
+                            pendingChange.details?.exerciseName,
+                            pendingChange.details?.setIndex
+                        );
+                        const persisted = isEditedSetPersisted(expectedSet, actualSet);
+                        if (!persisted) {
+                            console.error("[save verify] workouts.data explicit set edit mismatch after save", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: userId,
+                                date: workoutDate,
+                                exerciseName: pendingChange.details?.exerciseName || null,
+                                setIndex: pendingChange.details?.setIndex ?? null,
+                                saveReason: pendingChange.reason,
+                                expected: getSetEditSummary(expectedSet),
+                                actual: actualSet ? getSetEditSummary(actualSet, getSetEditUnit(expectedSet)) : null,
+                                workoutsDataAfterSave: verifyWorkoutRow
+                                    ? getHistoryDebugSummaryForDate(verifyWorkoutRow.data || {}, workoutDate)
+                                    : getHistoryDebugSummaryForDate({}, workoutDate),
+                            });
+                            throw new Error(`workouts.data explicit set edit verification failed for ${workoutDate}`);
+                        }
+                    }
                     console.log("[save] workouts.data after save verified", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: userId,
@@ -2822,13 +2926,14 @@ export default function GymApp() {
                             : getHistoryDebugSummaryForDate({}, workoutDate),
                         diffSavedVsVerified: getHistoryDebugDiffForDate(normalizedHistoryMap, verifyWorkoutRow?.data || {}, workoutDate),
                     });
-                    if (pendingChange.reason === "unit_change") {
-                        console.log("[unit change] workouts.data after save", {
+                    if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
+                        console.log("[workout edit] workouts.data after save", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
                             date: workoutDate,
                             exerciseName: pendingChange.details?.exerciseName || null,
                             setIndex: pendingChange.details?.setIndex ?? null,
+                            saveReason: pendingChange.reason,
                             workoutsDataAfterSave: verifyWorkoutRow
                                 ? getHistoryDebugSummaryForDate(verifyWorkoutRow.data || {}, workoutDate)
                                 : getHistoryDebugSummaryForDate({}, workoutDate),
@@ -3128,8 +3233,8 @@ export default function GymApp() {
             });
             return { skipped: true };
         }
-        if (pendingChange.reason === "unit_change") {
-            console.log("[unit change] workout_sessions.summary_json save decision", {
+        if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
+            console.log("[workout edit] workout_sessions.summary_json save decision", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: userId,
                 date: normalizedDate,
@@ -3137,7 +3242,7 @@ export default function GymApp() {
                 setIndex: pendingChange.details?.setIndex ?? null,
                 before: pendingChange.details?.beforeSet || null,
                 after: pendingChange.details?.afterSet || null,
-                saveReason: "unit_change",
+                saveReason: pendingChange.reason,
                 explicitEdit: Boolean(pendingChange.explicitEdit),
                 allowed: true,
                 blockedReason: null,
@@ -3276,6 +3381,29 @@ export default function GymApp() {
             });
             throw new Error(`workout_sessions verification failed for ${normalizedDate}`);
         }
+        if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
+            const expectedSet = pendingChange.details?.afterSet || null;
+            const actualSet = findEditedSetInSummaryJson(
+                verifiedSession?.summary_json,
+                pendingChange.details?.exerciseName,
+                pendingChange.details?.setIndex
+            );
+            const persisted = isEditedSetPersisted(expectedSet, actualSet);
+            if (!persisted) {
+                console.error("[save verify] workout_sessions.summary_json explicit set edit mismatch after save", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: userId,
+                    date: normalizedDate,
+                    exerciseName: pendingChange.details?.exerciseName || null,
+                    setIndex: pendingChange.details?.setIndex ?? null,
+                    saveReason: pendingChange.reason,
+                    expected: getSetEditSummary(expectedSet),
+                    actual: actualSet ? getSetEditSummary(actualSet, getSetEditUnit(expectedSet)) : null,
+                    summaryJsonAfterSave: verifiedSession?.summary_json || null,
+                });
+                throw new Error(`workout_sessions explicit set edit verification failed for ${normalizedDate}`);
+            }
+        }
         console.log("[save] workout_sessions.summary_json after save verified", {
             env: getRuntimeEnvironmentLabel(),
             user_id: userId,
@@ -3293,13 +3421,14 @@ export default function GymApp() {
                 normalizedDate
             ),
         });
-        if (pendingChange.reason === "unit_change") {
-            console.log("[unit change] summary_json after save", {
+        if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
+            console.log("[workout edit] summary_json after save", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: userId,
                 date: normalizedDate,
                 exerciseName: pendingChange.details?.exerciseName || null,
                 setIndex: pendingChange.details?.setIndex ?? null,
+                saveReason: pendingChange.reason,
                 summaryJsonAfterSave: verifiedSession?.summary_json || null,
             });
         }
@@ -4191,12 +4320,12 @@ export default function GymApp() {
                 persistHistoryForUser(currentUserId, mergedHistory);
                 setHistory((prev) => {
                     const reconciledHistory = applyHistoryDeleteMarkers(
-                        mergeHistoryMaps(prev, mergedHistory),
+                        applyLocalHistoryDates(prev, mergedHistory, syncDates),
                         effectiveDeleteMarkers
                     );
-                    return serializeHistoryMap(reconciledHistory) === serializeHistoryMap(prev)
-                        ? prev
-                        : reconciledHistory;
+                    if (serializeHistoryMap(reconciledHistory) === serializeHistoryMap(prev)) return prev;
+                    latestHistoryRef.current = reconciledHistory;
+                    return reconciledHistory;
                 });
                 const nextWorkoutsDataHistory = applyHistoryDeleteMarkers(
                     applyLocalHistoryDates(
