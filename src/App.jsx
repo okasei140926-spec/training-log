@@ -1560,8 +1560,12 @@ export default function GymApp() {
             if (normalizedDate) {
                 const previousChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
                 pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
-                    reason: "set_update",
+                    ...previousChange,
+                    reason: previousChange.explicitEdit || previousChange.explicitDelete
+                        ? (previousChange.reason || "set_update")
+                        : "set_update",
                     explicitDelete: Boolean(previousChange.explicitDelete),
+                    explicitEdit: Boolean(previousChange.explicitEdit),
                     updatedAt: new Date().toISOString(),
                 });
             }
@@ -1576,6 +1580,36 @@ export default function GymApp() {
             return next;
         });
     }, [exerciseUnits, logDate, saveDraftForDate, sessionEx, todayLabels]);
+
+    const markLogWorkoutContentChanged = useCallback((reason = "set_update", details = {}) => {
+        const normalizedDate = String(logDate || "").slice(0, 10);
+        if (!normalizedDate) return;
+
+        const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
+        pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
+            ...previous,
+            reason,
+            explicitDelete: Boolean(previous.explicitDelete),
+            explicitEdit: Boolean(previous.explicitEdit || details.explicitEdit),
+            details,
+            updatedAt: new Date().toISOString(),
+        });
+        pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
+
+        if (reason === "unit_change") {
+            console.log("[unit change] explicit workout edit", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || latestUserIdRef.current || null,
+                date: normalizedDate,
+                exerciseName: details.exerciseName || null,
+                setIndex: details.setIndex ?? null,
+                before: details.beforeSet || null,
+                after: details.afterSet || null,
+                saveReason: "unit_change",
+                explicitEdit: true,
+            });
+        }
+    }, [logDate, user?.id]);
 
     const {
         addSet,
@@ -1594,6 +1628,7 @@ export default function GymApp() {
         getExSets,
         logDate,
         getExUnit,
+        onWorkoutContentChange: markLogWorkoutContentChanged,
     });
 
     const handleSaveLog = useCallback(() => {
@@ -2525,12 +2560,28 @@ export default function GymApp() {
 
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
+            ...previous,
             reason,
             explicitDelete: Boolean(previous.explicitDelete || options.explicitDelete),
+            explicitEdit: Boolean(previous.explicitEdit || options.explicitEdit),
+            details: options.details || previous.details || null,
             updatedAt: new Date().toISOString(),
         });
+        if (reason === "unit_change") {
+            console.log("[unit change] explicit workout edit", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || latestUserIdRef.current || null,
+                date: normalizedDate,
+                exerciseName: options.details?.exerciseName || null,
+                setIndex: options.details?.setIndex ?? null,
+                before: options.details?.beforeSet || null,
+                after: options.details?.afterSet || null,
+                saveReason: "unit_change",
+                explicitEdit: true,
+            });
+        }
         queueWorkoutSessionSync(normalizedDate);
-    }, [queueWorkoutSessionSync]);
+    }, [queueWorkoutSessionSync, user?.id]);
 
     const recordSyncFailure = useCallback((workoutDate, error, stage) => {
         const normalizedDate = String(workoutDate || "").slice(0, 10);
@@ -2654,7 +2705,7 @@ export default function GymApp() {
                         : getEmptyWorkoutMetrics();
                     const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
                     const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(workoutDate) || {};
-                    const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
+                    const allowDestructiveSave = Boolean(pendingChange.explicitDelete || pendingChange.explicitEdit);
 
                     logWorkoutPersistenceDecision({
                         action: "workouts_sync_check",
@@ -2664,7 +2715,7 @@ export default function GymApp() {
                         remoteMetrics,
                         reason: wouldDestructivelyOverwrite
                             ? allowDestructiveSave
-                                ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
+                                ? `allowed explicit edit: ${pendingChange.reason || "content_change"}`
                                 : "blocked: local workout is smaller than remote"
                             : hasWorkoutForDate
                                 ? `allowed content edit: ${pendingChange.reason || "unknown"}`
@@ -2694,6 +2745,21 @@ export default function GymApp() {
                         });
                         results.skippedDates.push(workoutDate);
                         return;
+                    }
+                    if (pendingChange.reason === "unit_change") {
+                        console.log("[unit change] workouts.data save decision", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            exerciseName: pendingChange.details?.exerciseName || null,
+                            setIndex: pendingChange.details?.setIndex ?? null,
+                            before: pendingChange.details?.beforeSet || null,
+                            after: pendingChange.details?.afterSet || null,
+                            saveReason: "unit_change",
+                            explicitEdit: Boolean(pendingChange.explicitEdit),
+                            allowed: true,
+                            blockedReason: null,
+                        });
                     }
 
                     const { error } = hasWorkoutForDate
@@ -2756,6 +2822,18 @@ export default function GymApp() {
                             : getHistoryDebugSummaryForDate({}, workoutDate),
                         diffSavedVsVerified: getHistoryDebugDiffForDate(normalizedHistoryMap, verifyWorkoutRow?.data || {}, workoutDate),
                     });
+                    if (pendingChange.reason === "unit_change") {
+                        console.log("[unit change] workouts.data after save", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            exerciseName: pendingChange.details?.exerciseName || null,
+                            setIndex: pendingChange.details?.setIndex ?? null,
+                            workoutsDataAfterSave: verifyWorkoutRow
+                                ? getHistoryDebugSummaryForDate(verifyWorkoutRow.data || {}, workoutDate)
+                                : getHistoryDebugSummaryForDate({}, workoutDate),
+                        });
+                    }
 
                     clearSyncFailure(workoutDate);
                     results.syncedDates.push(workoutDate);
@@ -3007,7 +3085,7 @@ export default function GymApp() {
             : getEmptyWorkoutMetrics();
         const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
         const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
-        const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
+        const allowDestructiveSave = Boolean(pendingChange.explicitDelete || pendingChange.explicitEdit);
 
         logWorkoutPersistenceDecision({
             action: "workout_sessions_sync_check",
@@ -3017,7 +3095,7 @@ export default function GymApp() {
             remoteMetrics,
             reason: wouldDestructivelyOverwrite
                 ? allowDestructiveSave
-                    ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
+                    ? `allowed explicit edit: ${pendingChange.reason || "content_change"}`
                     : "blocked: local session is smaller than remote"
                 : payload
                     ? `allowed content edit: ${pendingChange.reason || "unknown"}`
@@ -3049,6 +3127,21 @@ export default function GymApp() {
                 reason: pendingChange.reason || "unknown",
             });
             return { skipped: true };
+        }
+        if (pendingChange.reason === "unit_change") {
+            console.log("[unit change] workout_sessions.summary_json save decision", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: userId,
+                date: normalizedDate,
+                exerciseName: pendingChange.details?.exerciseName || null,
+                setIndex: pendingChange.details?.setIndex ?? null,
+                before: pendingChange.details?.beforeSet || null,
+                after: pendingChange.details?.afterSet || null,
+                saveReason: "unit_change",
+                explicitEdit: Boolean(pendingChange.explicitEdit),
+                allowed: true,
+                blockedReason: null,
+            });
         }
 
         if (!payload) {
@@ -3200,6 +3293,16 @@ export default function GymApp() {
                 normalizedDate
             ),
         });
+        if (pendingChange.reason === "unit_change") {
+            console.log("[unit change] summary_json after save", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: userId,
+                date: normalizedDate,
+                exerciseName: pendingChange.details?.exerciseName || null,
+                setIndex: pendingChange.details?.setIndex ?? null,
+                summaryJsonAfterSave: verifiedSession?.summary_json || null,
+            });
+        }
 
         return { synced: true };
     }, [getTodayKey]);
@@ -4794,10 +4897,17 @@ export default function GymApp() {
 
     // ─── Per-exercise default unit ────────────────────
     const toggleExUnit = (name) => {
-        markWorkoutContentChanged(logDate, "weight_mode_change");
         const currentUnit = getExUnit(name);
         const CYCLE = { kg: "lbs", lbs: "BW", BW: "kg" };
         const newUnit = CYCLE[currentUnit] || "kg";
+        markWorkoutContentChanged(logDate, "unit_change", {
+            explicitEdit: true,
+            details: {
+                exerciseName: name,
+                beforeSet: { unit: currentUnit },
+                afterSet: { unit: newUnit },
+            },
+        });
 
         setExerciseUnits((p) => {
             const next = { ...p, [name]: newUnit };

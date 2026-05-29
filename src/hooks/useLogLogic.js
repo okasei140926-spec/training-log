@@ -65,6 +65,7 @@ export function useLogLogic({
     getExSets,
     logDate,
     getExUnit,
+    onWorkoutContentChange,
 }) {
 
     const addSet = (ex) => {
@@ -102,6 +103,7 @@ export function useLogLogic({
                 : getExSets(ex);
 
             const fallbackUnit = typeof getExUnit === "function" ? getExUnit(key) : "kg";
+            const beforeSet = { ...(current[idx] || {}) };
             const updated = withWeightMode(
                 { ...current[idx], [field]: value },
                 getSetWeightMode(current[idx], fallbackUnit)
@@ -114,6 +116,15 @@ export function useLogLogic({
             }
 
             current[idx] = updated;
+            if (field === "weight" || field === "reps") {
+                onWorkoutContentChange?.(field === "weight" ? "weight_change" : "reps_change", {
+                    exerciseName: key,
+                    setIndex: idx,
+                    beforeSet,
+                    afterSet: updated,
+                    explicitEdit: true,
+                });
+            }
 
             const next = { ...p, [key]: current };
 
@@ -168,13 +179,13 @@ export function useLogLogic({
                     lastWeightedUnit: restoredWeight ? nextMode : target.lastWeightedUnit,
                 };
             } else {
-                const convertedWeight = convertWeightDisplay(target.weight, currentMode, nextMode);
+                const displayWeight = String(target.weight ?? "").trim();
 
                 nextSet = {
                     ...nextSet,
-                    weight: convertedWeight || "",
-                    lastWeightedValue: convertedWeight || target.lastWeightedValue,
-                    lastWeightedUnit: convertedWeight ? nextMode : target.lastWeightedUnit,
+                    weight: displayWeight || "",
+                    lastWeightedValue: displayWeight || target.lastWeightedValue,
+                    lastWeightedUnit: displayWeight ? nextMode : target.lastWeightedUnit,
                 };
             }
 
@@ -186,7 +197,15 @@ export function useLogLogic({
                 nextSet.done = Boolean(nextSet.weight && nextSet.reps);
             }
 
+            const beforeSet = { ...target };
             current[idx] = nextSet;
+            onWorkoutContentChange?.("unit_change", {
+                exerciseName: key,
+                setIndex: idx,
+                beforeSet,
+                afterSet: nextSet,
+                explicitEdit: true,
+            });
 
             const next = { ...p, [key]: current };
 
