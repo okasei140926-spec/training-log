@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { calc1RM, dispW, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
+import { calc1RM, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -132,6 +132,32 @@ const convertWeightToTargetUnit = (set, targetUnit, fallbackUnit = "kg") => {
     }
 
     return `${formatConvertedWeight(converted)}${formatWeightUnit(normalizedTargetUnit)}`;
+};
+
+const getExerciseDisplayUnit = (sets = [], fallbackUnit = "kg") => {
+    const fallback = normalizeWeightUnit(fallbackUnit);
+    const counts = { kg: 0, lb: 0, BW: 0 };
+
+    (Array.isArray(sets) ? sets : []).forEach((set) => {
+        const unit = getSetDisplayUnit(set, fallback);
+        const normalized = normalizeWeightUnit(unit);
+        if (counts[normalized] !== undefined) counts[normalized] += 1;
+    });
+
+    if (counts.lb > counts.kg && counts.lb >= counts.BW) return "lb";
+    if (counts.kg > 0) return "kg";
+    if (counts.lb > 0) return "lb";
+    if (counts.BW > 0) return "BW";
+    return fallback;
+};
+
+const convertKgValueForDisplayUnit = (valueKg, targetUnit) => {
+    const num = Number(valueKg);
+    if (!Number.isFinite(num) || num <= 0) return 0;
+    const normalizedTargetUnit = normalizeWeightUnit(targetUnit);
+    if (normalizedTargetUnit === "lb") return num * 2.20462;
+    if (normalizedTargetUnit === "kg") return num;
+    return 0;
 };
 
 const normalizeDurationSec = (value) => {
@@ -645,6 +671,7 @@ export default function LogScreen({
                         const previousUnit = prev?.displayUnit || prev?.unit || prev?.weightUnit || prev?.weight_unit || "kg";
                         const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
+                        const displayUnit = getExerciseDisplayUnit(sets, exUnit);
 
                         const doneSets = sets.filter(s => {
                             const w = Number(getSetStoredWeightKg(s, exUnit));
@@ -668,20 +695,23 @@ export default function LogScreen({
                         const prDiff = rawPrDiff > PR_UPDATE_TOLERANCE_KG
                             ? roundTo1Decimal(rawPrDiff)
                             : 0;
+                        const prDiffDisplay = prDiff > 0
+                            ? roundTo1Decimal(convertKgValueForDisplayUnit(prDiff, displayUnit))
+                            : 0;
 
                         const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG);
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: false });
                         const prTopSetLabel = prTopSet
-                            ? (normalizeWeightUnit(exUnit) === "BW"
+                            ? (normalizeWeightUnit(displayUnit) === "BW"
                                 ? "自重"
-                                : convertWeightToTargetUnit(prTopSet, exUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg"))
+                                : convertWeightToTargetUnit(prTopSet, displayUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg"))
                             : "";
                         const compactPrLabel = prTopSet
                             ? `PR ${prTopSetLabel} × ${prTopSet.reps}`
                             : pr
-                                ? `PR ${dispW(roundTo1Decimal(pr.rm), exUnit)}${formatWeightUnit(exUnit)}`
+                                ? `PR ${formatConvertedWeight(convertKgValueForDisplayUnit(roundTo1Decimal(pr.rm), displayUnit))}${formatWeightUnit(displayUnit)}`
                                 : "";
 
                         if (i !== activeExIdx) {
@@ -834,7 +864,7 @@ export default function LogScreen({
                                                                 )}
                                                                 {isPR && prDiff > 0 && (
                                                                     <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, lineHeight: 1.2 }}>
-                                                                        PR更新 +{prDiff.toFixed(1)}kg
+                                                                        PR更新 +{prDiffDisplay.toFixed(1)}{formatWeightUnit(displayUnit)}
                                                                     </span>
                                                                 )}
                                                             </div>
