@@ -1641,6 +1641,7 @@ export default function GymApp() {
                         : "set_update",
                     explicitDelete: Boolean(previousChange.explicitDelete),
                     explicitEdit: Boolean(previousChange.explicitEdit),
+                    details: previousChange.details || null,
                     updatedAt: new Date().toISOString(),
                 });
             }
