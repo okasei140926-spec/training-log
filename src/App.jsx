@@ -6408,24 +6408,38 @@ export default function GymApp() {
         handleLogForDate(dateStr);
     };
 
-    const handleEditHistory = (exName, updatedRecord, historyIdx) => {
-        markWorkoutContentChanged(updatedRecord?.date, "history_record_edit", { explicitEdit: true });
-        setHistory(prev => {
-            const recs = [...(prev[exName] || [])];
-            const idx = historyIdx !== undefined
-                ? historyIdx
-                : recs.findIndex(r => r.date === updatedRecord.date);
-            const sanitizedRecord = sanitizeHistoryRecord(updatedRecord, { allowBodyweight: true });
+    const handleEditHistory = async (exName, updatedRecord, historyIdx) => {
+        const editDate = String(updatedRecord?.date || "").slice(0, 10);
+        markWorkoutContentChanged(editDate, "history_record_edit", { explicitEdit: true });
 
-            if (!sanitizedRecord) return prev;
+        const currentHistory = mergeHistoryMaps(latestHistoryRef.current || {});
+        const recs = [...(currentHistory[exName] || [])];
+        const idx = historyIdx !== undefined
+            ? historyIdx
+            : recs.findIndex(r => r.date === updatedRecord.date);
+        const sanitizedRecord = sanitizeHistoryRecord(updatedRecord, { allowBodyweight: true });
 
-            if (idx >= 0 && idx < recs.length) {
-                recs[idx] = sanitizedRecord;
+        if (!sanitizedRecord) return;
+
+        if (idx >= 0 && idx < recs.length) {
+            recs[idx] = sanitizedRecord;
+        }
+
+        const nextHistory = { ...currentHistory, [exName]: recs };
+        latestHistoryRef.current = nextHistory;
+        setHistory(nextHistory);
+
+        if (user?.id && editDate) {
+            try {
+                await syncWorkoutRowsForDates(user.id, nextHistory, [editDate]);
+                clearSyncFailure(editDate);
+            } catch (e) {
+                recordSyncFailure(editDate, e, "history_edit");
+                console.error("[handleEditHistory] direct sync failed", e);
             }
+        }
 
-            return { ...prev, [exName]: recs };
-        });
-        queueWorkoutSessionSync(updatedRecord?.date);
+        queueWorkoutSessionSync(editDate);
     };
 
     const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
