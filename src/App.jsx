@@ -529,16 +529,23 @@ const isEditedSetPersisted = (expectedSet, actualSet) => {
 
     const expected = getSetEditSummary(expectedSet);
     const actual = getSetEditSummary(actualSet, expected.unit);
-    const expectedWeight = normalizeEditCompareValue(expected.weight);
-    const actualWeight = normalizeEditCompareValue(actual.weight);
     const expectedReps = normalizeEditCompareValue(expected.reps);
     const actualReps = normalizeEditCompareValue(actual.reps);
 
-    return (
-        expected.unit === actual.unit &&
-        expectedWeight === actualWeight &&
-        expectedReps === actualReps
-    );
+    // weightをkg基準で比較（単位が違っても数値が同じなら一致とみなす）
+    const toKg = (weight, unit) => {
+        const num = Number(weight);
+        if (!Number.isFinite(num)) return null;
+        if (unit === "lbs" || unit === "lb") return num / 2.20462;
+        return num;
+    };
+    const expectedKg = toKg(expected.weight, expected.unit);
+    const actualKg = toKg(actual.weight, actual.unit);
+    const weightMatch = expectedKg !== null && actualKg !== null
+        ? Math.abs(expectedKg - actualKg) < 0.1
+        : normalizeEditCompareValue(expected.weight) === normalizeEditCompareValue(actual.weight);
+
+    return weightMatch && expectedReps === actualReps;
 };
 
 const getEmptyWorkoutMetrics = (updatedAt = null) => ({
