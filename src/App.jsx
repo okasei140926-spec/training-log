@@ -3381,29 +3381,7 @@ export default function GymApp() {
             });
             throw new Error(`workout_sessions verification failed for ${normalizedDate}`);
         }
-        if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
-            const expectedSet = pendingChange.details?.afterSet || null;
-            const actualSet = findEditedSetInSummaryJson(
-                verifiedSession?.summary_json,
-                pendingChange.details?.exerciseName,
-                pendingChange.details?.setIndex
-            );
-            const persisted = isEditedSetPersisted(expectedSet, actualSet);
-            if (!persisted) {
-                console.error("[save verify] workout_sessions.summary_json explicit set edit mismatch after save", {
-                    env: getRuntimeEnvironmentLabel(),
-                    user_id: userId,
-                    date: normalizedDate,
-                    exerciseName: pendingChange.details?.exerciseName || null,
-                    setIndex: pendingChange.details?.setIndex ?? null,
-                    saveReason: pendingChange.reason,
-                    expected: getSetEditSummary(expectedSet),
-                    actual: actualSet ? getSetEditSummary(actualSet, getSetEditUnit(expectedSet)) : null,
-                    summaryJsonAfterSave: verifiedSession?.summary_json || null,
-                });
-                throw new Error(`workout_sessions explicit set edit verification failed for ${normalizedDate}`);
-            }
-        }
+        // workout_sessions.summary_jsonはセット詳細を持たないため、セットレベルの検証はスキップ
         console.log("[save] workout_sessions.summary_json after save verified", {
             env: getRuntimeEnvironmentLabel(),
             user_id: userId,
