@@ -135,15 +135,54 @@ const BodyPartChartTooltip = ({ active, payload, label, valueLabel, unit, format
 const formatDate = (date) => (date ? date.replace(/-/g, "/") : null);
 const getBodyPartDisplayLabel = (bodyPart) => normalizeBodyPartLabel(bodyPart);
 
+const normalizePrUnit = (unit) => {
+  const value = String(unit || "kg").toLowerCase();
+  if (value === "lbs" || value === "lb" || value === "pound" || value === "pounds") return "lb";
+  if (value === "bw" || value === "bodyweight" || value === "自重") return "BW";
+  return "kg";
+};
+
+const formatPrWeightValue = (value) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (text.toUpperCase() === "BW") return "自重";
+  const num = Number(text);
+  if (!Number.isFinite(num)) return text;
+  const rounded = Math.round(num * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+};
+
+const getSetDisplayUnit = (set, fallbackUnit = "kg") =>
+  normalizePrUnit(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit);
+
+const getSetDisplayWeight = (set) => {
+  const unit = getSetDisplayUnit(set);
+  if (unit === "BW" || String(set?.weight || "").toUpperCase() === "BW") return "自重";
+  return formatPrWeightValue(set?.displayWeight ?? set?.weight);
+};
+
+const formatPrSetLabel = (item) => {
+  if (!item) return "";
+  const unit = normalizePrUnit(item.displayUnit || item.unit || "kg");
+  const reps = formatPrWeightValue(item.reps);
+  if (unit === "BW" || item.displayWeight === "自重" || item.weight === "BW") {
+    return `自重 × ${reps}rep`;
+  }
+  const weight = formatPrWeightValue(item.displayWeight ?? item.weight);
+  return `${weight}${unit} × ${reps}rep`;
+};
+
 const buildValidSets = (record) =>
   sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
 
-const getBestSet = (validSets = []) =>
+const getBestSet = (validSets = [], fallbackUnit = "kg") =>
   validSets.reduce((best, set) => {
     const score = calc1RM([set]);
     if (!best || score > best.score) {
       return {
         weight: Number(set.weight),
+        displayWeight: getSetDisplayWeight(set),
+        displayUnit: getSetDisplayUnit(set, fallbackUnit),
         reps: Number(set.reps),
         score,
       };
@@ -151,8 +190,13 @@ const getBestSet = (validSets = []) =>
     return best;
   }, null);
 
-const formatSetsText = (sets = []) =>
-  sets.map((set) => `${Number(set.weight)}kg × ${Number(set.reps)}rep`).join(" / ");
+const formatSetsText = (sets = [], fallbackUnit = "kg") =>
+  sets.map((set) => formatPrSetLabel({
+    weight: Number(set.weight),
+    displayWeight: getSetDisplayWeight(set),
+    displayUnit: getSetDisplayUnit(set, fallbackUnit),
+    reps: Number(set.reps),
+  })).join(" / ");
 
 const sortByDateDesc = (a, b) => {
   const aDate = a?.date || "";
@@ -214,7 +258,7 @@ const buildHistoryBestMap = (history = {}, ctx) => {
 
       const validSets = buildValidSets(record);
       const rm = calc1RM(validSets);
-      const bestSet = getBestSet(validSets);
+      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg");
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
@@ -225,6 +269,8 @@ const buildHistoryBestMap = (history = {}, ctx) => {
           displayName: normalizedName,
           bodyPart,
           weight: bestSet.weight,
+          displayWeight: bestSet.displayWeight,
+          displayUnit: bestSet.displayUnit,
           reps: bestSet.reps,
           estimated1RM: Math.round(rm),
           date: record?.date || null,
@@ -259,6 +305,8 @@ const buildManualBestMap = (manualBests = [], ctx) => {
         displayName: normalizedName,
         bodyPart,
         weight: Number(entry.weight),
+        displayWeight: formatPrWeightValue(entry.weight),
+        displayUnit: "kg",
         reps: Number(entry.reps),
         estimated1RM: Math.round(rm),
         date: entry.best_date || null,
@@ -283,7 +331,7 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
 
       const validSets = buildValidSets(record);
       const rm = calc1RM(validSets);
-      const bestSet = getBestSet(validSets);
+      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg");
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
@@ -296,9 +344,11 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
         bodyPart,
         date: record?.date || null,
         weight: bestSet.weight,
+        displayWeight: bestSet.displayWeight,
+        displayUnit: bestSet.displayUnit,
         reps: bestSet.reps,
         estimated1RM: Math.round(rm),
-        setsText: formatSetsText(validSets),
+        setsText: formatSetsText(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg"),
         source: "history",
         sourceLabel: null,
       });
@@ -331,9 +381,16 @@ const buildManualRecordMap = (manualBests = [], ctx) => {
       bodyPart,
       date: entry.best_date || null,
       weight: Number(entry.weight),
+      displayWeight: formatPrWeightValue(entry.weight),
+      displayUnit: "kg",
       reps: Number(entry.reps),
       estimated1RM: Math.round(rm),
-      setsText: `${Number(entry.weight)}kg × ${Number(entry.reps)}rep`,
+      setsText: formatPrSetLabel({
+        weight: Number(entry.weight),
+        displayWeight: formatPrWeightValue(entry.weight),
+        displayUnit: "kg",
+        reps: Number(entry.reps),
+      }),
       source: "manual",
       sourceLabel: "移行記録",
     });
@@ -368,6 +425,7 @@ const buildChartData = (records = [], period) => {
     date: record.date.slice(5),
     weight: Number(record.estimated1RM || 0),
     setWeight: record.weight,
+    setLabel: formatPrSetLabel(record),
     reps: record.reps,
     isLatest: record.date === latestDate,
     isPeak: Number(record.estimated1RM || 0) === maxWeight,
@@ -983,7 +1041,7 @@ export default function AnalyticsScreen({
           )}
         </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, color: "var(--text2)" }}>
-          <span>{item.weight}kg × {item.reps}rep</span>
+          <span>{formatPrSetLabel(item)}</span>
           {item.date && <span>{formatDate(item.date)}</span>}
           {!compact && item.bodyPart && (
             <span style={{ padding: "0 6px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 9, fontWeight: 700, lineHeight: 1.5 }}>
@@ -1023,9 +1081,9 @@ export default function AnalyticsScreen({
           <div style={{ fontSize: 16, color: "var(--accent)", fontWeight: 900, lineHeight: 1.1 }}>
             {point.weight}kg
           </div>
-          {Number(point.setWeight || 0) > 0 && Number(point.reps || 0) > 0 && (
+          {point.setLabel && (
             <div style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700, marginTop: 4 }}>
-              {point.setWeight}kg × {point.reps}rep
+              {point.setLabel}
             </div>
           )}
         </div>
@@ -1066,7 +1124,7 @@ export default function AnalyticsScreen({
               <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 6 }}>現在PR</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: "var(--text)" }}>{selectedExercise.estimated1RM}kg</div>
               <div style={{ fontSize: 12, color: "var(--text2)", marginTop: 6 }}>
-                {selectedExercise.weight}kg × {selectedExercise.reps}rep
+                {formatPrSetLabel(selectedExercise)}
               </div>
             </div>
             <div style={{ background: "var(--card2)", borderRadius: 16, padding: 12, border: "1px solid var(--border2)" }}>
@@ -1177,7 +1235,7 @@ export default function AnalyticsScreen({
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 6 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>
-                    {record.weight}kg × {record.reps}rep
+                    {formatPrSetLabel(record)}
                   </div>
                   {record.bodyPart && (
                     <span style={{ padding: "2px 8px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 11, fontWeight: 700 }}>
