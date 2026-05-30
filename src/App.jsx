@@ -524,16 +524,6 @@ const findEditedSetInHistory = (historyMap, targetDate, exerciseName, setIndex =
     return sets?.[Number(setIndex) || 0] || null;
 };
 
-const findEditedSetInSummaryJson = (summaryJson, exerciseName, setIndex = 0) => {
-    const normalizedExercise = normalizeExerciseName(exerciseName);
-    const item = (summaryJson?.items || []).find((entry) => {
-        const name = entry?.exercise_name || entry?.exerciseName || "";
-        return name === exerciseName || normalizeExerciseName(name) === normalizedExercise;
-    });
-    if (!item) return null;
-    return item?.sets?.[Number(setIndex) || 0] || null;
-};
-
 const isEditedSetPersisted = (expectedSet, actualSet) => {
     if (!expectedSet || !actualSet) return false;
 
