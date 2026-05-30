@@ -1211,7 +1211,7 @@ export default function GymApp() {
         ].forEach((key) => {
             try {
                 localStorage.removeItem(key);
-            } catch {}
+            } catch { }
         });
 
         if (load("draft_logDate", "") === dateStr) {
@@ -4220,7 +4220,7 @@ export default function GymApp() {
         }
 
         historySaveQueueRef.current = historySaveQueueRef.current
-            .catch(() => {})
+            .catch(() => { })
             .then(async () => {
                 if (latestUserIdRef.current !== currentUserId) return;
                 const saveRevision = historyRevisionRef.current;
@@ -4506,15 +4506,15 @@ export default function GymApp() {
 
             try {
                 let workoutsQuery = supabase
-                        .from("workouts")
-                        .select("date, data")
-                        .eq("user_id", user.id)
-                        .gte("date", sessionRangeStart);
+                    .from("workouts")
+                    .select("date, data")
+                    .eq("user_id", user.id)
+                    .gte("date", sessionRangeStart);
                 let sessionsQuery = supabase
-                        .from("workout_sessions")
-                        .select("workout_date, duration_sec, summary_json")
-                        .eq("user_id", user.id)
-                        .gte("workout_date", sessionRangeStart);
+                    .from("workout_sessions")
+                    .select("workout_date, duration_sec, summary_json")
+                    .eq("user_id", user.id)
+                    .gte("workout_date", sessionRangeStart);
 
                 if (sessionRangeEnd) {
                     workoutsQuery = workoutsQuery.lt("date", sessionRangeEnd);
@@ -5157,16 +5157,16 @@ export default function GymApp() {
 
     useEffect(() => {
         const hasValidDraftWorkout = exercises.some((ex) => {
-                    const exUnit = getExUnit(ex.name);
-                    const validSets = sanitizeWorkoutSets(
-                        (logData[ex.name] || []).map((set) => ({
-                            ...set,
-                            weight: storeSetWeightForUnit(set, exUnit),
-                            displayWeight: set.weight,
-                            displayUnit: getSetDisplayUnit(set, exUnit),
-                        })),
-                        { allowBodyweight: true }
-                    );
+            const exUnit = getExUnit(ex.name);
+            const validSets = sanitizeWorkoutSets(
+                (logData[ex.name] || []).map((set) => ({
+                    ...set,
+                    weight: storeSetWeightForUnit(set, exUnit),
+                    displayWeight: set.weight,
+                    displayUnit: getSetDisplayUnit(set, exUnit),
+                })),
+                { allowBodyweight: true }
+            );
             return validSets.length > 0;
         });
 
@@ -5459,7 +5459,7 @@ export default function GymApp() {
                             duration_sec: durationSec,
                         },
                     },
-                  }
+                }
                 : null,
         });
     }, [exercises, getExUnit, getPR, getPreviousPR, logData, savedWorkoutDurationSecByDate, todayLabels, unit, user?.id]);
@@ -6409,7 +6409,7 @@ export default function GymApp() {
     };
 
     const handleEditHistory = (exName, updatedRecord, historyIdx) => {
-        markWorkoutContentChanged(updatedRecord?.date, "history_record_edit");
+        markWorkoutContentChanged(updatedRecord?.date, "history_record_edit", { explicitEdit: true });
         setHistory(prev => {
             const recs = [...(prev[exName] || [])];
             const idx = historyIdx !== undefined
@@ -6788,10 +6788,10 @@ export default function GymApp() {
         screen === "log" ? "記録"
             : screen === "analytics" ? "分析"
                 : screen === "photos" ? "写真比較"
-                : screen === "feed" ? "フィード"
-                : screen === "calendar" ? "カレンダー"
-                : screen === "ai" ? "AI"
-                    : "ホーム";
+                    : screen === "feed" ? "フィード"
+                        : screen === "calendar" ? "カレンダー"
+                            : screen === "ai" ? "AI"
+                                : "ホーム";
 
     const isRecording = false;
     const bottomTabs = [
@@ -7061,14 +7061,14 @@ export default function GymApp() {
                             if (dy > 32) dismissPendingDeleteUndo();
                         }}
                         style={{
-                        position: "fixed",
-                        left: 18,
-                        right: 18,
-                        bottom: "calc(92px + var(--safe-bottom, 0px))",
-                        zIndex: 250,
-                        display: "flex",
-                        justifyContent: "center",
-                    }}>
+                            position: "fixed",
+                            left: 18,
+                            right: 18,
+                            bottom: "calc(92px + var(--safe-bottom, 0px))",
+                            zIndex: 250,
+                            display: "flex",
+                            justifyContent: "center",
+                        }}>
                         <div style={{
                             width: "100%",
                             maxWidth: 430,
@@ -7106,455 +7106,455 @@ export default function GymApp() {
 
 
                 <Suspense fallback={null}>
-                {showTimerMenu && screen === "log" && (
-                    <div
-                        onClick={() => {
-                            setShowTimerMenu(false);
-                            setTimerMenuAnchor(null);
-                        }}
-                        style={{
-                            position: "fixed",
-                            inset: 0,
-                            zIndex: 90,
-                            background: "rgba(15, 23, 42, 0.03)",
-                        }}
-                    >
+                    {showTimerMenu && screen === "log" && (
                         <div
-                            onClick={(event) => event.stopPropagation()}
+                            onClick={() => {
+                                setShowTimerMenu(false);
+                                setTimerMenuAnchor(null);
+                            }}
                             style={{
                                 position: "fixed",
-                                top: timerMenuTop,
-                                right: timerMenuRight,
-                                width: timerMenuWidth,
-                                maxWidth: "calc(100vw - 36px)",
-                                background: "linear-gradient(180deg, var(--card-modal), var(--card2))",
-                                color: "var(--text)",
-                                border: "1px solid var(--border2)",
-                                borderRadius: 18,
-                                padding: 8,
-                                boxShadow: "0 16px 34px rgba(15, 23, 42, 0.18)",
-                                boxSizing: "border-box",
+                                inset: 0,
+                                zIndex: 90,
+                                background: "rgba(15, 23, 42, 0.03)",
                             }}
                         >
-                            <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-                                {[
-                                    { sec: 30, label: "30秒" },
-                                    { sec: 60, label: "1分" },
-                                    { sec: 90, label: "1分30秒" },
-                                    { sec: 120, label: "2分" },
-                                ].map(({ sec, label }) => {
-                                    const selected = intervalSec === sec;
-                                    return (
-                                        <button
-                                            key={sec}
-                                            type="button"
-                                            onClick={() => {
-                                                setIntervalSec(sec);
-                                                setShowTimerMenu(false);
-                                                setTimerMenuAnchor(null);
-                                                startTimer(sec);
-                                                void scheduleRestTimerNotification(sec);
-                                            }}
-                                            style={{
-                                                flex: 1,
-                                                minWidth: 0,
-                                                minHeight: 40,
-                                                padding: "9px 8px",
-                                                borderRadius: 13,
-                                                border: selected ? "1px solid transparent" : "1px solid var(--border2)",
-                                                background: selected
-                                                    ? "linear-gradient(135deg, var(--accent), var(--accent2))"
-                                                    : "var(--btn-secondary)",
-                                                color: selected ? "#ffffff" : "var(--text)",
-                                                fontSize: 12,
-                                                fontWeight: 900,
-                                                boxShadow: selected ? "var(--shadow-soft)" : "none",
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
-                                            {label}
-                                        </button>
-                                    );
-                                })}
+                            <div
+                                onClick={(event) => event.stopPropagation()}
+                                style={{
+                                    position: "fixed",
+                                    top: timerMenuTop,
+                                    right: timerMenuRight,
+                                    width: timerMenuWidth,
+                                    maxWidth: "calc(100vw - 36px)",
+                                    background: "linear-gradient(180deg, var(--card-modal), var(--card2))",
+                                    color: "var(--text)",
+                                    border: "1px solid var(--border2)",
+                                    borderRadius: 18,
+                                    padding: 8,
+                                    boxShadow: "0 16px 34px rgba(15, 23, 42, 0.18)",
+                                    boxSizing: "border-box",
+                                }}
+                            >
+                                <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+                                    {[
+                                        { sec: 30, label: "30秒" },
+                                        { sec: 60, label: "1分" },
+                                        { sec: 90, label: "1分30秒" },
+                                        { sec: 120, label: "2分" },
+                                    ].map(({ sec, label }) => {
+                                        const selected = intervalSec === sec;
+                                        return (
+                                            <button
+                                                key={sec}
+                                                type="button"
+                                                onClick={() => {
+                                                    setIntervalSec(sec);
+                                                    setShowTimerMenu(false);
+                                                    setTimerMenuAnchor(null);
+                                                    startTimer(sec);
+                                                    void scheduleRestTimerNotification(sec);
+                                                }}
+                                                style={{
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                    minHeight: 40,
+                                                    padding: "9px 8px",
+                                                    borderRadius: 13,
+                                                    border: selected ? "1px solid transparent" : "1px solid var(--border2)",
+                                                    background: selected
+                                                        ? "linear-gradient(135deg, var(--accent), var(--accent2))"
+                                                        : "var(--btn-secondary)",
+                                                    color: selected ? "#ffffff" : "var(--text)",
+                                                    fontSize: 12,
+                                                    fontWeight: 900,
+                                                    boxShadow: selected ? "var(--shadow-soft)" : "none",
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {screen === "log" && (
-                    <div
-                        onPointerDownCapture={handleLogScreenInputPointerDownCapture}
-                        onFocusCapture={handleLogScreenFocusCapture}
-                        onBlurCapture={handleLogScreenBlurCapture}
-                        onTouchStart={(e) => {
-                            touchStartX.current = e.touches[0].clientX;
-                            touchStartY.current = e.touches[0].clientY;
-                        }}
-                        onTouchEnd={(e) => {
-                            if (touchStartX.current == null || touchStartY.current == null) return;
+                    {screen === "log" && (
+                        <div
+                            onPointerDownCapture={handleLogScreenInputPointerDownCapture}
+                            onFocusCapture={handleLogScreenFocusCapture}
+                            onBlurCapture={handleLogScreenBlurCapture}
+                            onTouchStart={(e) => {
+                                touchStartX.current = e.touches[0].clientX;
+                                touchStartY.current = e.touches[0].clientY;
+                            }}
+                            onTouchEnd={(e) => {
+                                if (touchStartX.current == null || touchStartY.current == null) return;
 
-                            const endX = e.changedTouches[0].clientX;
-                            const endY = e.changedTouches[0].clientY;
+                                const endX = e.changedTouches[0].clientX;
+                                const endY = e.changedTouches[0].clientY;
 
-                            const dx = endX - touchStartX.current;
-                            const dy = Math.abs(endY - touchStartY.current);
+                                const dx = endX - touchStartX.current;
+                                const dy = Math.abs(endY - touchStartY.current);
 
-                            const startedFromLeftEdge = touchStartX.current <= 24;
-                            const isRightSwipe = dx >= 80;
-                            const isHorizontal = dy < 40;
+                                const startedFromLeftEdge = touchStartX.current <= 24;
+                                const isRightSwipe = dx >= 80;
+                                const isHorizontal = dy < 40;
 
-                            if (startedFromLeftEdge && isRightSwipe && isHorizontal) {
-                                setScreen("history");
-                            }
+                                if (startedFromLeftEdge && isRightSwipe && isHorizontal) {
+                                    setScreen("history");
+                                }
 
-                            touchStartX.current = null;
-                            touchStartY.current = null;
-                        }}
-                    >
-                        {(() => {
-                            const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate;
-                            const displayedWorkoutTimerStatus = showCurrentLogWorkoutTimer
-                                ? workoutTimerStatus
-                                : "idle";
-                            const displayedWorkoutElapsedSec = showCurrentLogWorkoutTimer
-                                ? workoutElapsedSec
-                                : (savedWorkoutDurationSecByDate[logDate] || 0);
+                                touchStartX.current = null;
+                                touchStartY.current = null;
+                            }}
+                        >
+                            {(() => {
+                                const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate;
+                                const displayedWorkoutTimerStatus = showCurrentLogWorkoutTimer
+                                    ? workoutTimerStatus
+                                    : "idle";
+                                const displayedWorkoutElapsedSec = showCurrentLogWorkoutTimer
+                                    ? workoutElapsedSec
+                                    : (savedWorkoutDurationSecByDate[logDate] || 0);
 
-                            return (
-                        <LogScreen
+                                return (
+                                    <LogScreen
+                                        user={user}
+                                        manualBests={manualBests}
+                                        customBodyParts={customBodyParts}
+                                        hiddenBodyParts={hiddenBodyParts}
+                                        onAddCustomBodyPart={(bodyPart) => {
+                                            setCustomBodyParts((prev) =>
+                                                prev.includes(bodyPart) ? prev : [...prev, bodyPart]
+                                            );
+                                        }}
+                                        onUpdateHiddenBodyParts={setHiddenBodyParts}
+                                        todayLabels={todayLabels}
+                                        dayColor={dayColor}
+                                        exercises={exercises}
+                                        logData={logData}
+                                        getExSets={getExSets}
+                                        setField={setField}
+                                        setWeightMode={setWeightMode}
+                                        addSet={addSet}
+                                        removeEx={removeEx}
+                                        timerLeft={timerLeft}
+                                        intervalSec={intervalSec}
+                                        setIntervalSec={setIntervalSec}
+                                        startTimer={startTimer}
+                                        stopTimer={stopTimer}
+                                        saveLog={handleSaveLog}
+                                        onAddEx={addExToSession}
+                                        onQuickAddEx={quickAddToSession}
+                                        onReorderEx={reorderEx}
+                                        onRenameEx={renameEx}
+                                        getPrev={getPrev}
+                                        getPR={getPR}
+                                        getPreviousPR={getPreviousPR}
+                                        onCopyDown={copySetDown}
+                                        onCopyDownReps={copyRepDown}
+                                        unit={unit}
+                                        getExUnit={getExUnit}
+                                        onToggleExUnit={toggleExUnit}
+                                        muscleEx={muscleEx}
+                                        setTodayLabels={updateTodayLabels}
+                                        history={history}
+                                        logDate={logDate}
+                                        workoutElapsedSec={displayedWorkoutElapsedSec}
+                                        workoutTimerStatus={displayedWorkoutTimerStatus}
+                                        onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
+                                        onSetInputFocusChange={handleLogSetInputFocusChange}
+                                        focusExerciseRequest={logExerciseFocusRequest}
+                                        onFocusExerciseHandled={(request) => {
+                                            setLogExerciseFocusRequest((current) =>
+                                                current?.nonce === request?.nonce ? null : current
+                                            );
+                                        }}
+                                        lastActiveExercise={lastActiveLogExerciseByDate?.[logDate] || null}
+                                        onActiveExerciseChange={handleLogExerciseActiveChange}
+                                        resetSession={() => {
+                                            deleteAllHistoryForDate(logDate);
+                                        }}
+                                    />
+                                );
+                            })()}
+                        </div>
+                    )}
+
+                    {screen === "analytics" && (
+                        <AnalyticsScreen
+                            history={canonicalDisplayHistory}
+                            manualBests={manualBests}
+                            muscleEx={muscleEx}
+                            hiddenBodyParts={hiddenBodyParts}
+                            exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                            onOpenPhotoCompare={() => setScreen("photos")}
+                        />
+
+                    )}
+
+                    {screen === "photos" && (
+                        <PhotoScreen user={user} />
+                    )}
+
+
+                    {screen === "feed" && !showOfflineOnlyCard && (
+                        <FriendsScreen
+                            mode="feed"
+                            history={history}
+                            historySyncDiagnostic={historySyncDiagnostic}
+                            manualBests={manualBests}
+                            sessionSyncVersion={sessionSyncVersion}
+                            deletedWorkoutDates={historyDeleteMarkersRef.current?.dates || []}
+                            user={user}
+                            onLogin={() => setShowAuth(true)}
+                            onOpenRecord={() => setScreen("history")}
+                            onLogout={handleLogout}
+
+                            onCopyMenu={(exs) => {
+                                setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
+                                setLogData(exs.reduce((acc, ex) => ({
+                                    ...acc,
+                                    [ex.name]: [
+                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                    ],
+                                }), {}));
+                                setLogMode("today");
+                                setScreen("log");
+                            }}
+                        />
+                    )}
+
+                    {screen === "ranking" && !showOfflineOnlyCard && (
+                        <FriendsScreen
+                            mode="ranking"
+                            history={history}
+                            historySyncDiagnostic={historySyncDiagnostic}
+                            manualBests={manualBests}
+                            sessionSyncVersion={sessionSyncVersion}
+                            user={user}
+                            onLogin={() => setShowAuth(true)}
+                            onOpenRecord={() => setScreen("history")}
+                            onLogout={handleLogout}
+                            onCopyMenu={(exs) => {
+                                setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
+                                setLogData(exs.reduce((acc, ex) => ({
+                                    ...acc,
+                                    [ex.name]: [
+                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
+                                    ],
+                                }), {}));
+                                setLogMode("today");
+                                setScreen("log");
+                            }}
+                        />
+                    )}
+
+                    {screen === "history" && (
+                        <HomeScreen
+                            history={canonicalDisplayHistory}
+                            muscleEx={muscleEx}
+                            exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                            hiddenBodyParts={hiddenBodyParts}
+                            onStartLog={() => {
+                                handleLogForDate(getTodayKey());
+                            }}
+                            user={user}
+                            workoutDurationSecByDate={savedWorkoutDurationSecByDate}
+                            recordsLoading={Boolean(!authReady || (user?.id && !historyRemoteReady && !historyLoadError))}
+                            historyRemoteReady={historyRemoteReady}
+                            remoteLoadFailed={historyRemoteLoadFailedRef.current}
+                        />
+                    )}
+
+                    {screen === "calendar" && (
+                        <HistoryScreen
+                            history={canonicalDisplayHistory}
+                            todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
+                            muscleEx={muscleEx}
+                            exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                            hiddenBodyParts={hiddenBodyParts}
+                            onEditHistory={handleEditHistory}
+                            onDeleteHistory={handleDeleteHistory}
+                            onDeleteDate={deleteAllHistoryForDate}
+                            workoutDurationSecByDate={savedWorkoutDurationSecByDate}
+                            unit={unit}
+                            getExUnit={getExUnit}
+                            onLogForDate={handleCalendarDayOpen}
                             user={user}
                             manualBests={manualBests}
                             customBodyParts={customBodyParts}
-                            hiddenBodyParts={hiddenBodyParts}
+                            onAddManualBest={(best) => {
+                                setManualBests((prev) => [best, ...prev]);
+                            }}
+                            onUpdateManualBest={(updatedBest) => {
+                                setManualBests((prev) =>
+                                    prev.map((item) => (item.id === updatedBest.id ? updatedBest : item))
+                                );
+                            }}
+                            onDeleteManualBest={(id) => {
+                                setManualBests((prev) => prev.filter((item) => item.id !== id));
+                            }}
                             onAddCustomBodyPart={(bodyPart) => {
                                 setCustomBodyParts((prev) =>
                                     prev.includes(bodyPart) ? prev : [...prev, bodyPart]
                                 );
                             }}
-                            onUpdateHiddenBodyParts={setHiddenBodyParts}
-                            todayLabels={todayLabels}
-                            dayColor={dayColor}
-                            exercises={exercises}
-                            logData={logData}
-                            getExSets={getExSets}
-                            setField={setField}
-                            setWeightMode={setWeightMode}
-                            addSet={addSet}
-                            removeEx={removeEx}
-                            timerLeft={timerLeft}
-                            intervalSec={intervalSec}
-                            setIntervalSec={setIntervalSec}
-                            startTimer={startTimer}
-                            stopTimer={stopTimer}
-                            saveLog={handleSaveLog}
-                            onAddEx={addExToSession}
-                            onQuickAddEx={quickAddToSession}
-                            onReorderEx={reorderEx}
-                            onRenameEx={renameEx}
-                            getPrev={getPrev}
-                            getPR={getPR}
-                            getPreviousPR={getPreviousPR}
-                            onCopyDown={copySetDown}
-                            onCopyDownReps={copyRepDown}
-                            unit={unit}
-                            getExUnit={getExUnit}
-                            onToggleExUnit={toggleExUnit}
-                            muscleEx={muscleEx}
-                            setTodayLabels={updateTodayLabels}
-                            history={history}
-                            logDate={logDate}
-                            workoutElapsedSec={displayedWorkoutElapsedSec}
-                            workoutTimerStatus={displayedWorkoutTimerStatus}
-                            onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
-                            onSetInputFocusChange={handleLogSetInputFocusChange}
-                            focusExerciseRequest={logExerciseFocusRequest}
-                            onFocusExerciseHandled={(request) => {
-                                setLogExerciseFocusRequest((current) =>
-                                    current?.nonce === request?.nonce ? null : current
-                                );
+                            onOpenWorkoutDaySummary={(nextSummary) => {
+                                setSummary(nextSummary);
                             }}
-                            lastActiveExercise={lastActiveLogExerciseByDate?.[logDate] || null}
-                            onActiveExerciseChange={handleLogExerciseActiveChange}
-                            resetSession={() => {
-                                deleteAllHistoryForDate(logDate);
-                            }}
+                            onOpenWorkoutDayShare={openWorkoutDayShareModal}
                         />
-                            );
-                        })()}
-                    </div>
-                )}
+                    )}
 
-                {screen === "analytics" && (
-                    <AnalyticsScreen
-                        history={canonicalDisplayHistory}
-                        manualBests={manualBests}
-                        muscleEx={muscleEx}
-                        hiddenBodyParts={hiddenBodyParts}
-                        exerciseBodyPartOverrides={exerciseBodyPartOverrides}
-                        onOpenPhotoCompare={() => setScreen("photos")}
-                    />
+                    {screen === "ai" && !showOfflineOnlyCard && (
+                        <AIScreen
+                            aiMsgs={aiMsgs}
+                            aiInput={aiInput}
+                            setAiInput={setAiInput}
+                            sendAI={sendAI}
+                            aiLoad={aiLoad}
+                            aiEnd={aiEnd}
+                            history={canonicalDisplayHistory}
+                            isPro={isPro}
+                            onStartPro={activatePumpPro}
+                            onDeactivateProDev={deactivatePumpProDev}
+                            dailyFreeAiLimit={dailyFreeAiLimit}
+                            aiUsageDate={aiUsageDate}
+                            aiUsageCount={aiUsageCount}
+                            aiRemaining={aiRemaining}
+                            aiConversations={aiConversations}
+                            aiConversationLoading={aiConversationLoading}
+                            aiConversationError={aiConversationError}
+                            activeConversationId={activeConversationId}
+                            onOpenConversation={openAiConversation}
+                            onStartNewConversation={startNewAiConversation}
+                            onDeleteConversation={deleteAiConversation}
+                            onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
+                            onInputFocusChange={handleAiInputFocusChange}
+                        />
+                    )}
 
-                )}
-
-                {screen === "photos" && (
-                    <PhotoScreen user={user} />
-                )}
-
-
-                {screen === "feed" && !showOfflineOnlyCard && (
-                    <FriendsScreen
-                        mode="feed"
-                        history={history}
-                        historySyncDiagnostic={historySyncDiagnostic}
-                        manualBests={manualBests}
-                        sessionSyncVersion={sessionSyncVersion}
-                        deletedWorkoutDates={historyDeleteMarkersRef.current?.dates || []}
-                        user={user}
-                        onLogin={() => setShowAuth(true)}
-                        onOpenRecord={() => setScreen("history")}
-                        onLogout={handleLogout}
-
-                        onCopyMenu={(exs) => {
-                            setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
-                            setLogData(exs.reduce((acc, ex) => ({
-                                ...acc,
-                                [ex.name]: [
-                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                ],
-                            }), {}));
-                            setLogMode("today");
-                            setScreen("log");
-                        }}
-                    />
-                )}
-
-                {screen === "ranking" && !showOfflineOnlyCard && (
-                    <FriendsScreen
-                        mode="ranking"
-                        history={history}
-                        historySyncDiagnostic={historySyncDiagnostic}
-                        manualBests={manualBests}
-                        sessionSyncVersion={sessionSyncVersion}
-                        user={user}
-                        onLogin={() => setShowAuth(true)}
-                        onOpenRecord={() => setScreen("history")}
-                        onLogout={handleLogout}
-                        onCopyMenu={(exs) => {
-                            setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
-                            setLogData(exs.reduce((acc, ex) => ({
-                                ...acc,
-                                [ex.name]: [
-                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                    { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                ],
-                            }), {}));
-                            setLogMode("today");
-                            setScreen("log");
-                        }}
-                    />
-                )}
-
-                {screen === "history" && (
-                    <HomeScreen
-                        history={canonicalDisplayHistory}
-                        muscleEx={muscleEx}
-                        exerciseBodyPartOverrides={exerciseBodyPartOverrides}
-                        hiddenBodyParts={hiddenBodyParts}
-                        onStartLog={() => {
-                            handleLogForDate(getTodayKey());
-                        }}
-                        user={user}
-                        workoutDurationSecByDate={savedWorkoutDurationSecByDate}
-                        recordsLoading={Boolean(!authReady || (user?.id && !historyRemoteReady && !historyLoadError))}
-                        historyRemoteReady={historyRemoteReady}
-                        remoteLoadFailed={historyRemoteLoadFailedRef.current}
-                    />
-                )}
-
-                {screen === "calendar" && (
-                    <HistoryScreen
-                        history={canonicalDisplayHistory}
-                        todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
-                        muscleEx={muscleEx}
-                        exerciseBodyPartOverrides={exerciseBodyPartOverrides}
-                        hiddenBodyParts={hiddenBodyParts}
-                        onEditHistory={handleEditHistory}
-                        onDeleteHistory={handleDeleteHistory}
-                        onDeleteDate={deleteAllHistoryForDate}
-                        workoutDurationSecByDate={savedWorkoutDurationSecByDate}
-                        unit={unit}
-                        getExUnit={getExUnit}
-                        onLogForDate={handleCalendarDayOpen}
-                        user={user}
-                        manualBests={manualBests}
-                        customBodyParts={customBodyParts}
-                        onAddManualBest={(best) => {
-                            setManualBests((prev) => [best, ...prev]);
-                        }}
-                        onUpdateManualBest={(updatedBest) => {
-                            setManualBests((prev) =>
-                                prev.map((item) => (item.id === updatedBest.id ? updatedBest : item))
-                            );
-                        }}
-                        onDeleteManualBest={(id) => {
-                            setManualBests((prev) => prev.filter((item) => item.id !== id));
-                        }}
-                        onAddCustomBodyPart={(bodyPart) => {
-                            setCustomBodyParts((prev) =>
-                                prev.includes(bodyPart) ? prev : [...prev, bodyPart]
-                            );
-                        }}
-                        onOpenWorkoutDaySummary={(nextSummary) => {
-                            setSummary(nextSummary);
-                        }}
-                        onOpenWorkoutDayShare={openWorkoutDayShareModal}
-                    />
-                )}
-
-                {screen === "ai" && !showOfflineOnlyCard && (
-                    <AIScreen
-                        aiMsgs={aiMsgs}
-                        aiInput={aiInput}
-                        setAiInput={setAiInput}
-                        sendAI={sendAI}
-                        aiLoad={aiLoad}
-                        aiEnd={aiEnd}
-                        history={canonicalDisplayHistory}
-                        isPro={isPro}
-                        onStartPro={activatePumpPro}
-                        onDeactivateProDev={deactivatePumpProDev}
-                        dailyFreeAiLimit={dailyFreeAiLimit}
-                        aiUsageDate={aiUsageDate}
-                        aiUsageCount={aiUsageCount}
-                        aiRemaining={aiRemaining}
-                        aiConversations={aiConversations}
-                        aiConversationLoading={aiConversationLoading}
-                        aiConversationError={aiConversationError}
-                        activeConversationId={activeConversationId}
-                        onOpenConversation={openAiConversation}
-                        onStartNewConversation={startNewAiConversation}
-                        onDeleteConversation={deleteAiConversation}
-                        onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
-                        onInputFocusChange={handleAiInputFocusChange}
-                    />
-                )}
-
-                {showOfflineOnlyCard && (
-                    <div style={{ padding: "18px 18px var(--bottom-nav-scroll-padding)" }}>
-                        <div style={{
-                            ...S.sectionCard,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 14,
-                        }}>
-                            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, color: "var(--text3)" }}>
-                                PUMP
-                            </div>
-                            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1 }}>
-                                オフラインです
-                            </div>
-                            <div style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.7 }}>
-                                {screen === "feed"
-                                    ? "フィードはオンライン時に表示できます。通信が戻ると最新の記録を取得します。"
-                                    : screen === "ranking"
-                                        ? "ランキングはオンライン時に表示できます。通信が戻ると最新順位を取得します。"
-                                        : "AI Coach はオンライン時に利用できます。"}
-                            </div>
+                    {showOfflineOnlyCard && (
+                        <div style={{ padding: "18px 18px var(--bottom-nav-scroll-padding)" }}>
                             <div style={{
-                                ...S.subtleCard,
-                                background: "var(--success-soft)",
-                                borderColor: "var(--success-border)",
-                                fontSize: 13,
-                                color: "var(--text2)",
-                                lineHeight: 1.7,
+                                ...S.sectionCard,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 14,
                             }}>
-                                記録、今日のワークアウト、カレンダーはオフラインでも確認できます。
+                                <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, color: "var(--text3)" }}>
+                                    PUMP
+                                </div>
+                                <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1 }}>
+                                    オフラインです
+                                </div>
+                                <div style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.7 }}>
+                                    {screen === "feed"
+                                        ? "フィードはオンライン時に表示できます。通信が戻ると最新の記録を取得します。"
+                                        : screen === "ranking"
+                                            ? "ランキングはオンライン時に表示できます。通信が戻ると最新順位を取得します。"
+                                            : "AI Coach はオンライン時に利用できます。"}
+                                </div>
+                                <div style={{
+                                    ...S.subtleCard,
+                                    background: "var(--success-soft)",
+                                    borderColor: "var(--success-border)",
+                                    fontSize: 13,
+                                    color: "var(--text2)",
+                                    lineHeight: 1.7,
+                                }}>
+                                    記録、今日のワークアウト、カレンダーはオフラインでも確認できます。
+                                </div>
+                                <button
+                                    onClick={() => setScreen("history")}
+                                    style={{
+                                        ...S.pillBtn,
+                                        alignSelf: "flex-start",
+                                        background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                                        color: "#fff",
+                                        padding: "12px 18px",
+                                    }}
+                                >
+                                    記録を見る
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setScreen("history")}
-                                style={{
-                                    ...S.pillBtn,
-                                    alignSelf: "flex-start",
-                                    background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                                    color: "#fff",
-                                    padding: "12px 18px",
-                                }}
-                            >
-                                記録を見る
-                            </button>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {!shouldHideBottomNav && (
-                    <BottomNav
-                        tabs={bottomTabs}
-                        activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
-                        onSelectTab={(nextScreen) => {
-                            if (nextScreen === "log") {
-                                handleLogForDate(getTodayKey());
-                                return;
-                            }
-                            if (screen === "log") {
-                                persistCurrentLog();
-                            }
-                            setScreen(nextScreen);
-                        }}
-                        isRecording={isRecording}
+                    {!shouldHideBottomNav && (
+                        <BottomNav
+                            tabs={bottomTabs}
+                            activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
+                            onSelectTab={(nextScreen) => {
+                                if (nextScreen === "log") {
+                                    handleLogForDate(getTodayKey());
+                                    return;
+                                }
+                                if (screen === "log") {
+                                    persistCurrentLog();
+                                }
+                                setScreen(nextScreen);
+                            }}
+                            isRecording={isRecording}
+                        />
+                    )}
+
+                    {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
+                    <WorkoutDaySummaryModal
+                        isOpen={Boolean(summary)}
+                        summary={summary}
+                        onClose={closeWorkoutDaySummary}
+                        onOpenWorkout={
+                            summary?.openWorkoutDate
+                                ? () => {
+                                    const targetDate = summary.openWorkoutDate;
+                                    setSummary(null);
+                                    handleCalendarDayOpen(targetDate);
+                                }
+                                : undefined
+                        }
+                        onShare={
+                            summary?.shareTarget && !summary?.isShared
+                                ? () => openWorkoutDayShareModal(summary.shareTarget)
+                                : undefined
+                        }
                     />
-                )}
-
-                {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
-                <WorkoutDaySummaryModal
-                    isOpen={Boolean(summary)}
-                    summary={summary}
-                    onClose={closeWorkoutDaySummary}
-                    onOpenWorkout={
-                        summary?.openWorkoutDate
-                            ? () => {
-                                const targetDate = summary.openWorkoutDate;
-                                setSummary(null);
-                                handleCalendarDayOpen(targetDate);
-                              }
-                            : undefined
-                    }
-                    onShare={
-                        summary?.shareTarget && !summary?.isShared
-                            ? () => openWorkoutDayShareModal(summary.shareTarget)
-                            : undefined
-                    }
-                />
-                <WorkoutSessionShareModal
-                    isOpen={Boolean(workoutDayShareTarget)}
-                    onClose={closeWorkoutDayShareModal}
-                    workoutDate={workoutDayShareTarget?.workoutDate}
-                    sessionPayload={workoutDayShareTarget?.sessionPayload || null}
-                />
-                <SettingsModal
-                    isOpen={showSettingsModal}
-                    onClose={() => setShowSettingsModal(false)}
-                    user={user}
-                    onLogout={handleLogout}
-                    onExportData={handleExportData}
-                    onDeleteAccount={handleDeleteAccount}
-                    accountActionBusy={accountActionBusy}
-                    isPro={isPro}
-                    proPlan={proPlan}
-                    onStartPro={activatePumpPro}
-                    onRestorePro={restorePumpPro}
-                    onDeactivateProDev={deactivatePumpProDev}
-                    onRefreshProStatus={refreshPumpProStatus}
-                    dailyFreeAiLimit={dailyFreeAiLimit}
-                    aiUsageCount={aiUsageCount}
-                />
-                {showAuth && (
-                    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
-                        <Auth onClose={() => setShowAuth(false)} isDark={isDark} />
-                    </div>
-                )}
+                    <WorkoutSessionShareModal
+                        isOpen={Boolean(workoutDayShareTarget)}
+                        onClose={closeWorkoutDayShareModal}
+                        workoutDate={workoutDayShareTarget?.workoutDate}
+                        sessionPayload={workoutDayShareTarget?.sessionPayload || null}
+                    />
+                    <SettingsModal
+                        isOpen={showSettingsModal}
+                        onClose={() => setShowSettingsModal(false)}
+                        user={user}
+                        onLogout={handleLogout}
+                        onExportData={handleExportData}
+                        onDeleteAccount={handleDeleteAccount}
+                        accountActionBusy={accountActionBusy}
+                        isPro={isPro}
+                        proPlan={proPlan}
+                        onStartPro={activatePumpPro}
+                        onRestorePro={restorePumpPro}
+                        onDeactivateProDev={deactivatePumpProDev}
+                        onRefreshProStatus={refreshPumpProStatus}
+                        dailyFreeAiLimit={dailyFreeAiLimit}
+                        aiUsageCount={aiUsageCount}
+                    />
+                    {showAuth && (
+                        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
+                            <Auth onClose={() => setShowAuth(false)} isDark={isDark} />
+                        </div>
+                    )}
                 </Suspense>
 
                 <PushPromptModal
