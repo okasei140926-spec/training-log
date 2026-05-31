@@ -475,6 +475,16 @@ const describeHistoryRecordsForDate = (historyMap, targetDate) => {
 };
 
 const EXPLICIT_SET_EDIT_REASONS = new Set(["weight_change", "reps_change", "unit_change"]);
+const EXPLICIT_WORKOUT_EDIT_REASONS = new Set([
+    ...EXPLICIT_SET_EDIT_REASONS,
+    "history_record_edit",
+    "exercise_add",
+    "set_add",
+    "exercise_reorder",
+]);
+
+const isExplicitWorkoutEditChange = (pendingChange = {}) =>
+    Boolean(pendingChange.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(pendingChange.reason));
 
 const getSetEditUnit = (set, fallbackUnit = "kg") =>
     normalizeSetWeightMode(
@@ -640,7 +650,7 @@ const getDraftMetricsForDate = ({ exercises = [], logData = {}, getExUnit, worko
     return getWorkoutPayloadMetrics(payload);
 };
 
-const isDestructiveWorkoutRegression = (incomingMetrics, existingMetrics) => {
+const isDestructiveWorkoutRegression = (incomingMetrics, existingMetrics, options = {}) => {
     if (!existingMetrics?.hasWorkout) return false;
     if (!incomingMetrics?.hasWorkout) return true;
 
@@ -649,11 +659,15 @@ const isDestructiveWorkoutRegression = (incomingMetrics, existingMetrics) => {
         .map((name) => normalizeExerciseName(name))
         .filter((name) => name && !incomingNames.has(name));
 
+    const shouldBlockVolumeRegression =
+        !options.allowVolumeDecrease &&
+        incomingMetrics.volume + 0.01 < existingMetrics.volume;
+
     return (
         missingExistingNames.length > 0 ||
         incomingMetrics.exerciseCount < existingMetrics.exerciseCount ||
         incomingMetrics.setCount < existingMetrics.setCount ||
-        incomingMetrics.volume + 0.01 < existingMetrics.volume
+        shouldBlockVolumeRegression
     );
 };
 
@@ -2779,9 +2793,12 @@ export default function GymApp() {
                             updatedAt: null,
                         })
                         : getEmptyWorkoutMetrics();
-                    const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
                     const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(workoutDate) || {};
-                    const allowDestructiveSave = Boolean(pendingChange.explicitDelete || pendingChange.explicitEdit);
+                    const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
+                    const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics, {
+                        allowVolumeDecrease: explicitEdit,
+                    });
+                    const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
 
                     logWorkoutPersistenceDecision({
                         action: "workouts_sync_check",
@@ -2791,8 +2808,10 @@ export default function GymApp() {
                         remoteMetrics,
                         reason: wouldDestructivelyOverwrite
                             ? allowDestructiveSave
-                                ? `allowed explicit edit: ${pendingChange.reason || "content_change"}`
+                                ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
                                 : "blocked: local workout is smaller than remote"
+                            : explicitEdit && incomingMetrics.volume + 0.01 < remoteMetrics.volume
+                                ? `allowed explicit edit volume decrease: ${pendingChange.reason || "content_change"}`
                             : hasWorkoutForDate
                                 ? `allowed content edit: ${pendingChange.reason || "unknown"}`
                                 : "allowed: no local workout for date",
@@ -3186,9 +3205,12 @@ export default function GymApp() {
                 updatedAt: null,
             })
             : getEmptyWorkoutMetrics();
-        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics);
         const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
-        const allowDestructiveSave = Boolean(pendingChange.explicitDelete || pendingChange.explicitEdit);
+        const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
+        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics, {
+            allowVolumeDecrease: explicitEdit,
+        });
+        const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
 
         logWorkoutPersistenceDecision({
             action: "workout_sessions_sync_check",
@@ -3198,8 +3220,10 @@ export default function GymApp() {
             remoteMetrics,
             reason: wouldDestructivelyOverwrite
                 ? allowDestructiveSave
-                    ? `allowed explicit edit: ${pendingChange.reason || "content_change"}`
+                    ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
                     : "blocked: local session is smaller than remote"
+                : explicitEdit && incomingMetrics.volume + 0.01 < remoteMetrics.volume
+                    ? `allowed explicit edit volume decrease: ${pendingChange.reason || "content_change"}`
                 : payload
                     ? `allowed content edit: ${pendingChange.reason || "unknown"}`
                     : "allowed: no local payload",
@@ -5187,7 +5211,10 @@ export default function GymApp() {
             workoutDate: logDate,
         });
         const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || history || {}, logDate);
-        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, existingMetrics);
+        const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
+        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, existingMetrics, {
+            allowVolumeDecrease: explicitEdit,
+        });
 
         logWorkoutPersistenceDecision({
             action: "local_auto_persist_check",
@@ -5197,6 +5224,8 @@ export default function GymApp() {
             remoteMetrics: existingMetrics,
             reason: wouldDestructivelyOverwrite
                 ? `pending guarded save: ${pendingChange.reason}`
+                : explicitEdit && incomingMetrics.volume + 0.01 < existingMetrics.volume
+                    ? `allowed explicit edit volume decrease: ${pendingChange.reason}`
                 : `allowed content edit: ${pendingChange.reason}`,
         });
 
@@ -6397,25 +6426,49 @@ export default function GymApp() {
 
         if (!sanitizedRecord) return;
 
-        if (idx >= 0 && idx < recs.length) {
-            recs[idx] = sanitizedRecord;
-        }
+        const recsWithoutSameDate = recs.filter((record, recordIndex) => {
+            if (idx >= 0 && recordIndex === idx) return false;
+            return String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) !== editDate;
+        });
 
-        const nextHistory = { ...currentHistory, [exName]: recs };
+        const nextHistory = {
+            ...currentHistory,
+            [exName]: [...recsWithoutSameDate, sanitizedRecord].sort((a, b) =>
+                String(a?.date || "").localeCompare(String(b?.date || ""))
+            ),
+        };
         latestHistoryRef.current = nextHistory;
         setHistory(nextHistory);
+        workoutsDataHistoryRef.current = applyLocalHistoryDates(
+            workoutsDataHistoryRef.current || currentHistory,
+            nextHistory,
+            [editDate]
+        );
+        setWorkoutsDataHistory(workoutsDataHistoryRef.current);
+        persistHistoryForUser(user?.id, nextHistory);
 
+        let directSyncSucceeded = false;
         if (user?.id && editDate) {
             try {
-                await syncWorkoutRowsForDates(user.id, nextHistory, [editDate]);
+                const rowResult = await syncWorkoutRowsForDates(user.id, nextHistory, [editDate]);
+                if (rowResult.failedDates.includes(editDate) || rowResult.skippedDates.includes(editDate)) {
+                    throw new Error(`workouts sync did not apply ${editDate}`);
+                }
+                const sessionResult = await syncWorkoutSessionSnapshot(user.id, nextHistory, editDate);
+                if (sessionResult?.skipped) {
+                    throw new Error(`workout_sessions sync skipped ${editDate}`);
+                }
+                pendingWorkoutContentChangeDatesRef.current.delete(editDate);
+                pendingWorkoutSessionSyncDatesRef.current.delete(editDate);
                 clearSyncFailure(editDate);
+                directSyncSucceeded = true;
             } catch (e) {
                 recordSyncFailure(editDate, e, "history_edit");
                 console.error("[handleEditHistory] direct sync failed", e);
             }
         }
 
-        queueWorkoutSessionSync(editDate);
+        if (!directSyncSucceeded) queueWorkoutSessionSync(editDate);
     };
 
     const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
