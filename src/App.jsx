@@ -1125,6 +1125,67 @@ const attachWorkoutDurationToHistoryDate = (historyMap, targetDate, durationSecV
     return next;
 };
 
+const buildWorkoutDraftForDateFromHistory = (dateStr, sourceHistory = {}) => {
+    const normalizedDate = String(dateStr || "").slice(0, 10);
+    if (!normalizedDate) {
+        return {
+            hasSavedWorkout: false,
+            todayLabels: [],
+            sessionEx: [],
+            logData: {},
+            exerciseUnits: {},
+        };
+    }
+
+    const dayExercises = Object.entries(sourceHistory || {})
+        .map(([name, recs]) => {
+            const rec = (recs || []).find((record) => (
+                String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) === normalizedDate
+            ));
+            const sanitizedRecord = sanitizeHistoryRecord(rec, { allowBodyweight: true });
+            if (!sanitizedRecord) return null;
+
+            const recordBodyPart = String(sanitizedRecord.bodyPart || sanitizedRecord.body_part || "").trim();
+            return {
+                id: name,
+                name,
+                label: recordBodyPart || EX_TO_LABEL[name] || null,
+                bodyPart: recordBodyPart || EX_TO_LABEL[name] || null,
+                order: typeof sanitizedRecord.order === "number" ? sanitizedRecord.order : 999,
+                rec: sanitizedRecord,
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.order - b.order);
+
+    const inferredLabels = [...new Set(
+        dayExercises
+            .map(({ bodyPart, name }) => bodyPart || EX_TO_LABEL[name])
+            .filter(Boolean)
+    )];
+
+    const dayLogData = {};
+    const exerciseUnitsForDate = {};
+    dayExercises.forEach(({ name, rec }) => {
+        if (!rec?.sets) return;
+
+        const fallbackUnit = rec?.displayUnit || rec?.unit || rec?.weightUnit || rec?.weight_unit || "kg";
+        dayLogData[name] = rec.sets.map((set) => {
+            const normalized = normalizeDraftSetFromRecord(set, fallbackUnit);
+            if (normalized.unit) exerciseUnitsForDate[name] = normalized.unit;
+            return normalized;
+        });
+    });
+
+    return {
+        hasSavedWorkout: dayExercises.length > 0,
+        todayLabels: inferredLabels,
+        sessionEx: dayExercises.map(({ id, name, label, bodyPart }) => ({ id, name, label, bodyPart })),
+        logData: dayLogData,
+        exerciseUnits: exerciseUnitsForDate,
+    };
+};
+
 export default function GymApp() {
     const getTodayKey = useCallback(() => {
         const d = new Date();
@@ -4414,6 +4475,31 @@ export default function GymApp() {
                     pendingWorkoutSessionSyncDatesRef.current.delete(date);
                 });
 
+                const savedDates = syncDates.filter((date) => (
+                    !workoutSyncResults.skippedDates.includes(date) &&
+                    !failedSessionSyncDates.has(date) &&
+                    !skippedSessionSyncDates.has(date)
+                ));
+                savedDates.forEach((date) => {
+                    const savedDraft = buildWorkoutDraftForDateFromHistory(date, mergedHistory);
+                    if (!savedDraft.hasSavedWorkout) return;
+                    saveDraftForDate(date, savedDraft);
+                    if (date === logDate) {
+                        setTodayLabels(savedDraft.todayLabels);
+                        setSessionEx(savedDraft.sessionEx);
+                        setLogData(savedDraft.logData);
+                        setExerciseUnits(savedDraft.exerciseUnits);
+                    }
+                    console.log("[save] draft refreshed from verified history", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: currentUserId,
+                        date,
+                        exerciseNames: savedDraft.sessionEx.map((exercise) => exercise.name),
+                        logDataNames: Object.keys(savedDraft.logData || {}),
+                        reason: "remote save verified",
+                    });
+                });
+
                 try {
                     await cleanupWorkoutSessionsForHistory(currentUserId, mergedHistory);
                     await refreshHistorySyncDiagnostic(currentUserId, mergedHistory, {
@@ -4483,6 +4569,7 @@ export default function GymApp() {
         workoutStartedAt,
         workoutStartedForDate,
         applyLocalHistoryDates,
+        saveDraftForDate,
     ]);
 
     useEffect(() => {
@@ -6501,6 +6588,16 @@ export default function GymApp() {
                 pendingWorkoutContentChangeDatesRef.current.delete(editDate);
                 pendingWorkoutSessionSyncDatesRef.current.delete(editDate);
                 clearSyncFailure(editDate);
+                const savedDraft = buildWorkoutDraftForDateFromHistory(editDate, nextHistory);
+                if (savedDraft.hasSavedWorkout) {
+                    saveDraftForDate(editDate, savedDraft);
+                    if (editDate === logDate) {
+                        setTodayLabels(savedDraft.todayLabels);
+                        setSessionEx(savedDraft.sessionEx);
+                        setLogData(savedDraft.logData);
+                        setExerciseUnits(savedDraft.exerciseUnits);
+                    }
+                }
                 directSyncSucceeded = true;
             } catch (e) {
                 recordSyncFailure(editDate, e, "history_edit");
