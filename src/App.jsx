@@ -1638,6 +1638,7 @@ export default function GymApp() {
     }, [exerciseUnits, unit]);
 
     const pendingWorkoutContentChangeDatesRef = useRef(new Map());
+    const explicitWorkoutEditDatesRef = useRef(new Map());
 
     const setLogDataAndSaveDraft = useCallback((nextOrUpdater) => {
         setLogData((prev) => {
@@ -1676,14 +1677,21 @@ export default function GymApp() {
         if (!normalizedDate) return;
 
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
+        const explicitEdit = Boolean(previous.explicitEdit || details.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(reason));
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
             explicitDelete: Boolean(previous.explicitDelete),
-            explicitEdit: Boolean(previous.explicitEdit || details.explicitEdit),
+            explicitEdit,
             details,
             updatedAt: new Date().toISOString(),
         });
+        if (explicitEdit) {
+            explicitWorkoutEditDatesRef.current.set(normalizedDate, {
+                reason,
+                updatedAt: Date.now(),
+            });
+        }
         pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
 
         if (EXPLICIT_SET_EDIT_REASONS.has(reason)) {
@@ -2649,14 +2657,21 @@ export default function GymApp() {
         if (!normalizedDate) return;
 
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
+        const explicitEdit = Boolean(previous.explicitEdit || options.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(reason));
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
             explicitDelete: Boolean(previous.explicitDelete || options.explicitDelete),
-            explicitEdit: Boolean(previous.explicitEdit || options.explicitEdit),
+            explicitEdit,
             details: options.details || previous.details || null,
             updatedAt: new Date().toISOString(),
         });
+        if (explicitEdit) {
+            explicitWorkoutEditDatesRef.current.set(normalizedDate, {
+                reason,
+                updatedAt: Date.now(),
+            });
+        }
         if (EXPLICIT_SET_EDIT_REASONS.has(reason)) {
             console.log("[workout edit] explicit set edit", {
                 env: getRuntimeEnvironmentLabel(),
@@ -6218,6 +6233,7 @@ export default function GymApp() {
                     getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
                     workoutDate: normalizedDate,
                 });
+                const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(normalizedDate));
 
                 if (!remoteMetrics.hasWorkout) {
                     console.log("[restore] Supabase date refresh skipped empty remote", {
@@ -6227,6 +6243,19 @@ export default function GymApp() {
                         supabase: remoteMetrics,
                         localStorage: localMetrics,
                     });
+                    return;
+                }
+
+                if (explicitLocalEdit && localMetrics.hasWorkout) {
+                    console.warn("[restore] skipped Supabase date refresh during explicit local edit; keeping local draft", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        date: normalizedDate,
+                        supabase: remoteMetrics,
+                        localStorage: localMetrics,
+                        explicitEdit: explicitWorkoutEditDatesRef.current.get(normalizedDate) || null,
+                    });
+                    markWorkoutContentChanged(normalizedDate, "local_draft_richer_restore", { explicitEdit: true });
                     return;
                 }
 
@@ -6349,12 +6378,23 @@ export default function GymApp() {
             dateStr === logDate &&
             workoutStartedForDate === dateStr &&
             hasDraftContent(currentDraft);
-        const localDraftIsRicher = isDestructiveWorkoutRegression(savedMetrics, localMetrics);
-        const shouldUseLocalDraft = hasDraftContent(draftForDate) && (localDraftIsRicher || isActiveLocalRecording);
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(String(dateStr || "").slice(0, 10)) || {};
+        const explicitLocalEdit = Boolean(
+            isExplicitWorkoutEditChange(pendingChange) ||
+            explicitWorkoutEditDatesRef.current.has(String(dateStr || "").slice(0, 10))
+        );
+        const localDraftIsRicher = isDestructiveWorkoutRegression(savedMetrics, localMetrics, {
+            allowVolumeDecrease: explicitLocalEdit,
+        });
+        const shouldUseLocalDraft = hasDraftContent(draftForDate) && (explicitLocalEdit || localDraftIsRicher || isActiveLocalRecording);
         const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft;
 
         if (shouldUseLocalDraft) {
-            markWorkoutContentChanged(dateStr, localDraftIsRicher ? "local_draft_richer_restore" : "active_local_recording_restore");
+            markWorkoutContentChanged(
+                dateStr,
+                localDraftIsRicher || explicitLocalEdit ? "local_draft_richer_restore" : "active_local_recording_restore",
+                { explicitEdit: explicitLocalEdit }
+            );
             setTodayLabels(draftForDate.todayLabels);
             setSessionEx(draftForDate.sessionEx);
             setLogData(draftForDate.logData);
