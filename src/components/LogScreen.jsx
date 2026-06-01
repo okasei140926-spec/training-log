@@ -559,11 +559,11 @@ export default function LogScreen({
         setAddName("");
     };
 
-    const handleQuickAdd = (name, remove, labelOverride) => {
+    const handleQuickAdd = (name, remove, labelOverride, options) => {
         if (!remove && name && !firstAddedDuringAddModalRef.current) {
             firstAddedDuringAddModalRef.current = name;
         }
-        onQuickAddEx(name, remove, labelOverride);
+        onQuickAddEx(name, remove, labelOverride, options);
     };
 
     return (

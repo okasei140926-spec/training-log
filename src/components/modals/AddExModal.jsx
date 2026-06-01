@@ -242,16 +242,26 @@ export default function AddExModal({
         }
 
         if (hasAddedExercise(exerciseName)) {
-            console.log("[add-exercise] duplicate ignored", {
+            onQuickAdd(exerciseName, true, activeTab, { action: "exercise_remove" });
+            setAdded((prev) => {
+                const next = new Set(prev);
+                Array.from(next).forEach((addedName) => {
+                    if (normalizeExerciseName(addedName) === normalizeExerciseName(exerciseName)) {
+                        next.delete(addedName);
+                    }
+                });
+                return next;
+            });
+            console.log("[add-exercise] modal selection removed", {
                 name: exerciseName,
                 activeTab,
-                existingNames: Array.from(added),
+                before: Array.from(added),
             });
             return;
         }
 
         try {
-            onQuickAdd(exerciseName, false, activeTab);
+            onQuickAdd(exerciseName, false, activeTab, { action: "exercise_add" });
             setAdded((prev) => new Set([...prev, exerciseName]));
             console.log("[add-exercise] modal selection added", {
                 name: exerciseName,
@@ -271,7 +281,7 @@ export default function AddExModal({
     const handleManual = () => {
         if (!name.trim()) return;
         const trimmed = name.trim();
-        onQuickAdd(trimmed, false, activeTab);
+        onQuickAdd(trimmed, false, activeTab, { action: "manual_exercise_add" });
         setAdded(p => new Set([...p, trimmed]));
         setName("");
     };
