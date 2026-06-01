@@ -2772,6 +2772,7 @@ export default function GymApp() {
                 code: error?.code || null,
                 details: error?.details || null,
                 hint: error?.hint || null,
+                createdAt: syncFailuresByDateRef.current[normalizedDate]?.createdAt || new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
             },
         };
@@ -2813,6 +2814,29 @@ export default function GymApp() {
         const rows = await fetchRemoteWorkoutRowsForDates(userId, [normalizedDate]);
         return rows.some((row) => String(row?.date || "").slice(0, 10) === normalizedDate);
     }, [fetchRemoteWorkoutRowsForDates]);
+
+    const buildLatestLocalHistoryForRetryDate = useCallback((baseHistory, date) => {
+        const normalizedDate = String(date || "").slice(0, 10);
+        if (!normalizedDate) return mergeHistoryMaps(baseHistory || {});
+
+        const draftForDate = loadDraftForDate(normalizedDate);
+        if (!hasDraftContent(draftForDate)) {
+            return mergeHistoryMaps(baseHistory || {});
+        }
+
+        const draftHistory = buildDraftHistoryForDate({
+            baseHistory: baseHistory || {},
+            workoutDate: normalizedDate,
+            exercises: draftForDate.sessionEx || [],
+            logData: draftForDate.logData || {},
+            getExUnit: (name) => draftForDate.exerciseUnits?.[name] || getExUnit(name),
+            labels: draftForDate.todayLabels || [],
+            durationSec: Math.floor(Number(savedWorkoutDurationSecByDate[normalizedDate]) || 0),
+            replaceDate: false,
+        });
+
+        return applyPreferredHistoryDates(baseHistory || {}, draftHistory, [normalizedDate]);
+    }, [getExUnit, hasDraftContent, loadDraftForDate, savedWorkoutDurationSecByDate]);
 
     const dismissPendingDeleteUndo = useCallback(() => {
         const pending = pendingDeleteUndoRef.current;
@@ -3551,16 +3575,50 @@ export default function GymApp() {
 
         setSyncRetrying(true);
         try {
-            const currentHistory = mergeHistoryMaps(latestHistoryRef.current || history || {});
-            await Promise.all(failedDates.map(async (date) => {
-                const hasWorkoutForDate = hasValidWorkoutOnDate(currentHistory, date);
+            let currentHistory = mergeHistoryMaps(latestHistoryRef.current || history || {});
+            for (const date of failedDates) {
+                const retryHistory = buildLatestLocalHistoryForRetryDate(currentHistory, date);
+                const hasWorkoutForDate = hasValidWorkoutOnDate(retryHistory, date);
                 const previousFailure = syncFailuresByDateRef.current[date] || {};
                 const isDeleteRetry = String(previousFailure.stage || "").startsWith("delete_");
                 try {
                     if (hasWorkoutForDate) {
+                        const remoteRows = await fetchRemoteWorkoutRowsForDates(user.id, [date]);
+                        const remoteRow = remoteRows.find((row) => String(row?.date || "").slice(0, 10) === date);
+                        const localMetrics = getHistoryMetricsForDate(retryHistory, date);
+                        const remoteMetrics = remoteRow
+                            ? getHistoryMetricsForDate(remoteRow.data || {}, date)
+                            : getEmptyWorkoutMetrics();
+                        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(date) || {};
+                        const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
+                        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(localMetrics, remoteMetrics, {
+                            allowVolumeDecrease: explicitEdit,
+                        });
+                        const retryAllowed = !wouldDestructivelyOverwrite || Boolean(pendingChange.explicitDelete);
+
+                        console.log("[sync retry] preflight", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: user.id,
+                            unsyncedDate: date,
+                            queueCreatedAt: previousFailure.createdAt || null,
+                            queueUpdatedAt: previousFailure.updatedAt || null,
+                            localExerciseCount: localMetrics.exerciseCount,
+                            localSetCount: localMetrics.setCount,
+                            remoteExerciseCount: remoteMetrics.exerciseCount,
+                            remoteSetCount: remoteMetrics.setCount,
+                            localVolume: localMetrics.volume,
+                            remoteVolume: remoteMetrics.volume,
+                            retryAllowed,
+                            blockedReason: retryAllowed ? null : "local workout is smaller than remote",
+                        });
+
+                        if (!retryAllowed) {
+                            throw new Error("[sync retry] blocked destructive overwrite");
+                        }
+
                         const rowSyncResults = await syncWorkoutRowsForDates(
                             user.id,
-                            currentHistory,
+                            retryHistory,
                             [date],
                             savedWorkoutDurationSecByDate
                         );
@@ -3571,13 +3629,13 @@ export default function GymApp() {
                             }
                         }
                         try {
-                            await syncWorkoutSessionSnapshot(user.id, currentHistory, date);
+                            await syncWorkoutSessionSnapshot(user.id, retryHistory, date);
                         } catch (sessionError) {
                             const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, date);
                             console.error("[sync] workout session retry failed after workout row sync", {
                                 date,
                                 userId: user.id,
-                                records: describeHistoryRecordsForDate(currentHistory, date),
+                                records: describeHistoryRecordsForDate(retryHistory, date),
                                 error: sessionError,
                                 message: sessionError?.message,
                                 code: sessionError?.code,
@@ -3586,6 +3644,18 @@ export default function GymApp() {
                             });
                             if (!remoteAlreadyHasWorkout) throw sessionError;
                         }
+                        currentHistory = applyPreferredHistoryDates(currentHistory, retryHistory, [date]);
+                        latestHistoryRef.current = currentHistory;
+                        setHistory(currentHistory);
+                        workoutsDataHistoryRef.current = applyPreferredHistoryDates(
+                            workoutsDataHistoryRef.current || {},
+                            retryHistory,
+                            [date]
+                        );
+                        setWorkoutsDataHistory(workoutsDataHistoryRef.current);
+                        persistHistoryForUser(user.id, currentHistory);
+                        const savedDraft = buildWorkoutDraftForDateFromHistory(date, currentHistory);
+                        if (savedDraft.hasSavedWorkout) saveDraftForDate(date, savedDraft);
                     } else if (!isDeleteRetry) {
                         const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, date);
                         if (!remoteAlreadyHasWorkout) {
@@ -3596,7 +3666,7 @@ export default function GymApp() {
                             });
                         }
                     } else {
-                        await deleteRemoteWorkoutArtifactsForDate(user.id, date, currentHistory);
+                        await deleteRemoteWorkoutArtifactsForDate(user.id, date, retryHistory);
                     }
                     pendingWorkoutSessionSyncDatesRef.current.delete(date);
                     clearSyncFailure(date);
@@ -3618,7 +3688,7 @@ export default function GymApp() {
                         hasWorkoutForDate,
                         isDeleteRetry,
                         previousFailure,
-                        records: describeHistoryRecordsForDate(currentHistory, date),
+                        records: describeHistoryRecordsForDate(retryHistory, date),
                         error,
                         message: error?.message,
                         code: error?.code,
@@ -3626,7 +3696,7 @@ export default function GymApp() {
                         hint: error?.hint,
                     });
                 }
-            }));
+            }
 
             await refreshHistorySyncDiagnostic(user.id, currentHistory, {
                 prefix: failedDates[0]?.slice(0, 7) || "",
@@ -3639,12 +3709,15 @@ export default function GymApp() {
             setSyncRetrying(false);
         }
     }, [
+        buildLatestLocalHistoryForRetryDate,
         clearSyncFailure,
         deleteRemoteWorkoutArtifactsForDate,
+        fetchRemoteWorkoutRowsForDates,
         hasRemoteWorkoutForDate,
         history,
         recordSyncFailure,
         refreshHistorySyncDiagnostic,
+        saveDraftForDate,
         savedWorkoutDurationSecByDate,
         syncRetrying,
         syncWorkoutRowsForDates,
@@ -6986,10 +7059,18 @@ export default function GymApp() {
         (screen === "ai" && (focusedAiChatInput || isAiKeyboardOpen));
     const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
     const syncFailureDates = Object.keys(syncFailuresByDate);
+    const activeLogDate = String(logDate || "").slice(0, 10);
+    const visibleSyncFailureDates = syncFailureDates.filter((date) => {
+        const isActiveRecordingDate =
+            screen === "log" &&
+            date === activeLogDate &&
+            (workoutStartedForDate === date || pendingWorkoutContentChangeDatesRef.current.has(date));
+        return !isActiveRecordingDate;
+    });
     const syncFailureSignature = getSyncFailureSignature(syncFailuresByDate);
     const shouldShowSyncFailureBanner =
         isOnline &&
-        syncFailureDates.length > 0 &&
+        visibleSyncFailureDates.length > 0 &&
         Boolean(syncFailureSignature) &&
         !dismissedSyncFailureSignaturesRef.current.has(syncFailureSignature);
     const showSplashScreen =
@@ -7184,8 +7265,8 @@ export default function GymApp() {
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: 900 }}>同期できていない記録があります</div>
                                 <div style={{ color: "var(--text2)", fontSize: 12 }}>
-                                    {syncFailureDates.slice(0, 3).join(" / ")}
-                                    {syncFailureDates.length > 3 ? ` ほか${syncFailureDates.length - 3}件` : ""}
+                                    {visibleSyncFailureDates.slice(0, 3).join(" / ")}
+                                    {visibleSyncFailureDates.length > 3 ? ` ほか${visibleSyncFailureDates.length - 3}件` : ""}
                                 </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
