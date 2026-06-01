@@ -1003,6 +1003,37 @@ const getRawDraftSetMetrics = ({ exercises = [], logData = {}, labels = [] } = {
     };
 };
 
+const getRemovedRawDraftExerciseNames = (beforeDraft = {}, afterDraft = {}) => {
+    const beforeMetrics = getRawDraftSetMetrics(beforeDraft);
+    const afterMetrics = getRawDraftSetMetrics(afterDraft);
+    const afterNames = new Set(
+        (afterMetrics.exerciseNames || [])
+            .map((name) => normalizeExerciseName(name))
+            .filter(Boolean)
+    );
+
+    return (beforeMetrics.exerciseNames || []).filter((name) => {
+        const normalizedName = normalizeExerciseName(name);
+        return normalizedName && !afterNames.has(normalizedName);
+    });
+};
+
+const shouldPreserveRawDraftOverIncoming = (localDraft = {}, incomingDraft = {}) => {
+    const localRawMetrics = getRawDraftSetMetrics(localDraft);
+    const incomingRawMetrics = getRawDraftSetMetrics(incomingDraft);
+    const removedExerciseNames = getRemovedRawDraftExerciseNames(localDraft, incomingDraft);
+
+    return {
+        preserve:
+            removedExerciseNames.length > 0 ||
+            localRawMetrics.exerciseCount > incomingRawMetrics.exerciseCount ||
+            localRawMetrics.setCount > incomingRawMetrics.setCount,
+        localRawMetrics,
+        incomingRawMetrics,
+        removedExerciseNames,
+    };
+};
+
 const getCurrentWeekRangeForHomeSummary = () => {
     const now = new Date();
     const day = now.getDay();
@@ -1745,16 +1776,71 @@ export default function GymApp() {
                 });
             }
 
-            saveDraftForDate(logDate, {
+            const beforeDraft = latestLogDraftRef.current || {
                 todayLabels,
-                logData: next || {},
+                logData: prev || {},
                 sessionEx,
                 exerciseUnits,
-            });
+            };
+            const nextSessionEx = mergeDraftExercisesWithLogData(
+                [
+                    ...(beforeDraft.sessionEx || []),
+                    ...(sessionEx || []),
+                ],
+                next || {},
+                todayLabels
+            );
+            const nextDraft = {
+                todayLabels,
+                logData: next || {},
+                sessionEx: nextSessionEx,
+                exerciseUnits,
+            };
+            const pendingChangeAfterUpdate = normalizedDate
+                ? pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {}
+                : {};
+            const beforeRawMetrics = getRawDraftSetMetrics(beforeDraft);
+            const afterRawMetrics = getRawDraftSetMetrics(nextDraft);
+            const removedExerciseNames = getRemovedRawDraftExerciseNames(beforeDraft, nextDraft);
+            const isSetInputChange = EXPLICIT_SET_EDIT_REASONS.has(pendingChangeAfterUpdate.reason);
+            const blockedReason = isSetInputChange && removedExerciseNames.length
+                ? "set_input_change would remove exercises"
+                : isSetInputChange && afterRawMetrics.setCount < beforeRawMetrics.setCount
+                    ? "set_input_change would reduce total set count"
+                    : null;
+
+            if (isSetInputChange) {
+                console[blockedReason ? "warn" : "log"]("[set mutation]", {
+                    action: "set_input_change",
+                    date: normalizedDate,
+                    user_id: user?.id || null,
+                    exerciseName: pendingChangeAfterUpdate.details?.exerciseName || null,
+                    setIndex: pendingChangeAfterUpdate.details?.setIndex ?? null,
+                    beforeExerciseNames: beforeRawMetrics.exerciseNames,
+                    afterExerciseNames: afterRawMetrics.exerciseNames,
+                    removedExerciseNames,
+                    beforeSetCountTotal: beforeRawMetrics.setCount,
+                    afterSetCountTotal: afterRawMetrics.setCount,
+                    beforeTargetSet: pendingChangeAfterUpdate.details?.beforeSet || null,
+                    afterTargetSet: pendingChangeAfterUpdate.details?.afterSet || null,
+                    source: "user_input",
+                    dirty: true,
+                    explicitEdit: Boolean(pendingChangeAfterUpdate.explicitEdit),
+                    allowed: !blockedReason,
+                    blockedReason,
+                    restoreApplied: false,
+                    overwrittenByRestore: false,
+                });
+            }
+
+            if (blockedReason) return prev;
+
+            saveDraftForDate(logDate, nextDraft);
+            latestLogDraftRef.current = nextDraft;
 
             return next;
         });
-    }, [exerciseUnits, logDate, saveDraftForDate, sessionEx, todayLabels]);
+    }, [exerciseUnits, logDate, saveDraftForDate, sessionEx, todayLabels, user?.id]);
 
     const markLogWorkoutContentChanged = useCallback((reason = "set_update", details = {}) => {
         const normalizedDate = String(logDate || "").slice(0, 10);
@@ -4592,11 +4678,12 @@ export default function GymApp() {
                     const localDraftForDate = date === logDate
                         ? latestLogDraftRef.current
                         : loadDraftForDate(date);
-                    const savedRawMetrics = getRawDraftSetMetrics(savedDraft);
-                    const localRawMetrics = getRawDraftSetMetrics(localDraftForDate);
-                    const preserveDirtyDraft =
-                        localRawMetrics.setCount > savedRawMetrics.setCount ||
-                        localRawMetrics.exerciseCount > savedRawMetrics.exerciseCount;
+                    const {
+                        preserve: preserveDirtyDraft,
+                        localRawMetrics,
+                        incomingRawMetrics: savedRawMetrics,
+                        removedExerciseNames,
+                    } = shouldPreserveRawDraftOverIncoming(localDraftForDate, savedDraft);
 
                     if (preserveDirtyDraft) {
                         console.warn("[restore] preserve dirty draft after save verification", {
@@ -4608,6 +4695,7 @@ export default function GymApp() {
                             dirty: true,
                             savedRawMetrics,
                             localRawMetrics,
+                            removedExerciseNames,
                             overwrittenByRestore: false,
                             blockedReason: "verified history would drop local draft sets",
                         });
@@ -6462,14 +6550,28 @@ export default function GymApp() {
             getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
             workoutDate: logDate,
         });
+        const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(String(logDate || "").slice(0, 10)));
+        const {
+            preserve: preserveRawLocalDraft,
+            localRawMetrics,
+            incomingRawMetrics: savedRawMetrics,
+            removedExerciseNames,
+        } = shouldPreserveRawDraftOverIncoming(localDraft, savedDraftForDate);
 
-        if (isDestructiveWorkoutRegression(savedMetrics, localMetrics)) {
+        if (isDestructiveWorkoutRegression(savedMetrics, localMetrics) || (explicitLocalEdit && preserveRawLocalDraft)) {
             console.warn("[restore] kept richer local draft instead of smaller saved workout", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user?.id || null,
                 date: logDate,
                 local: localMetrics,
                 saved: savedMetrics,
+                localRawMetrics,
+                savedRawMetrics,
+                removedExerciseNames,
+                explicitLocalEdit,
+                source: "draft_restore",
+                restoreApplied: false,
+                overwrittenByRestore: false,
             });
             setTodayLabels(localDraft.todayLabels);
             setSessionEx(localDraft.sessionEx);
@@ -6573,8 +6675,12 @@ export default function GymApp() {
                     workoutDate: normalizedDate,
                 });
                 const remoteDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, remoteHistory);
-                const localRawMetrics = getRawDraftSetMetrics(localDraft);
-                const remoteRawMetrics = getRawDraftSetMetrics(remoteDraftForDate);
+                const {
+                    preserve: preserveRawLocalDraft,
+                    localRawMetrics,
+                    incomingRawMetrics: remoteRawMetrics,
+                    removedExerciseNames,
+                } = shouldPreserveRawDraftOverIncoming(localDraft, remoteDraftForDate);
                 const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(normalizedDate));
 
                 if (!remoteMetrics.hasWorkout) {
@@ -6588,10 +6694,7 @@ export default function GymApp() {
                     return;
                 }
 
-                if (
-                    localRawMetrics.setCount > remoteRawMetrics.setCount ||
-                    localRawMetrics.exerciseCount > remoteRawMetrics.exerciseCount
-                ) {
+                if (preserveRawLocalDraft && explicitLocalEdit) {
                     console.warn("[restore] skipped Supabase date refresh during dirty draft; keeping local draft", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
@@ -6602,6 +6705,7 @@ export default function GymApp() {
                         localStorage: localMetrics,
                         remoteRawMetrics,
                         localRawMetrics,
+                        removedExerciseNames,
                         overwrittenByRestore: false,
                         blockedReason: "remote refresh would drop local draft sets",
                     });
@@ -6609,7 +6713,7 @@ export default function GymApp() {
                     return;
                 }
 
-                if (explicitLocalEdit && localMetrics.hasWorkout) {
+                if (explicitLocalEdit && (localMetrics.hasWorkout || localRawMetrics.exerciseCount > 0 || localRawMetrics.setCount > 0)) {
                     console.warn("[restore] skipped Supabase date refresh during explicit local edit; keeping local draft", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
@@ -6749,10 +6853,37 @@ export default function GymApp() {
         const localDraftIsRicher = isDestructiveWorkoutRegression(savedMetrics, localMetrics, {
             allowVolumeDecrease: explicitLocalEdit,
         });
-        const shouldUseLocalDraft = hasDraftContent(draftForDate) && (explicitLocalEdit || localDraftIsRicher || isActiveLocalRecording);
+        const {
+            preserve: preserveRawLocalDraft,
+            localRawMetrics,
+            incomingRawMetrics: savedRawMetrics,
+            removedExerciseNames,
+        } = shouldPreserveRawDraftOverIncoming(draftForDate, savedDraftForDate);
+        const shouldUseLocalDraft = hasDraftContent(draftForDate) && (
+            explicitLocalEdit ||
+            localDraftIsRicher ||
+            isActiveLocalRecording ||
+            (preserveRawLocalDraft && (explicitLocalEdit || isActiveLocalRecording))
+        );
         const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft;
 
         if (shouldUseLocalDraft) {
+            console.warn("[restore] local draft selected for log date", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                date: dateStr,
+                action: "restore_apply",
+                source: "draft_restore",
+                dirty: Boolean(explicitLocalEdit || isActiveLocalRecording),
+                explicitEdit: explicitLocalEdit,
+                localDraftIsRicher,
+                preserveRawLocalDraft,
+                localRawMetrics,
+                savedRawMetrics,
+                removedExerciseNames,
+                restoreApplied: true,
+                overwrittenByRestore: false,
+            });
             markWorkoutContentChanged(
                 dateStr,
                 localDraftIsRicher || explicitLocalEdit ? "local_draft_richer_restore" : "active_local_recording_restore",
