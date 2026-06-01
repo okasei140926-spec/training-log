@@ -66,6 +66,7 @@ export function useLogLogic({
     logDate,
     getExUnit,
     onWorkoutContentChange,
+    userId,
 }) {
 
     const addSet = (ex) => {
@@ -75,18 +76,43 @@ export function useLogLogic({
             const current = p[key]
                 ? p[key].map((s) => ({ ...s }))
                 : getExSets(ex);
+            const nextSet = withWeightMode({
+                weight: defaultUnit === "BW" ? "BW" : "",
+                reps: "",
+                done: false,
+            }, defaultUnit);
 
             const next = {
                 ...p,
                 [key]: [
                     ...current,
-                    withWeightMode({
-                        weight: defaultUnit === "BW" ? "BW" : "",
-                        reps: "",
-                        done: false,
-                    }, defaultUnit),
+                    nextSet,
                 ],
             };
+
+            onWorkoutContentChange?.("set_add", {
+                exerciseName: key,
+                setIndex: current.length,
+                beforeSet: null,
+                afterSet: nextSet,
+                explicitEdit: true,
+            });
+
+            console.log("[set mutation]", {
+                action: "set_add",
+                date: logDate,
+                user_id: userId || null,
+                exerciseName: key,
+                beforeSetCount: current.length,
+                afterSetCount: next[key].length,
+                beforeSets: current,
+                afterSets: next[key],
+                dirty: true,
+                source: "user_input",
+                allowed: next[key].length >= current.length,
+                blockedReason: next[key].length < current.length ? "set_add would reduce set count" : null,
+                overwrittenByRestore: false,
+            });
 
             save("draft_logData", next);
             save("draft_logDate", logDate);
@@ -127,6 +153,22 @@ export function useLogLogic({
             }
 
             const next = { ...p, [key]: current };
+
+            console.log("[set mutation]", {
+                action: "set_input_change",
+                date: logDate,
+                user_id: userId || null,
+                exerciseName: key,
+                beforeSetCount: (p[key] || []).length,
+                afterSetCount: current.length,
+                beforeSets: p[key] || [],
+                afterSets: current,
+                dirty: true,
+                source: "user_input",
+                allowed: current.length >= (p[key] || []).length,
+                blockedReason: current.length < (p[key] || []).length ? "set_input_change would reduce set count" : null,
+                overwrittenByRestore: false,
+            });
 
             save("draft_logData", next);
             return next;

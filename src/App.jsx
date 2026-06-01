@@ -986,6 +986,23 @@ const getDraftInputDebugSummary = ({ exercises = [], logData = {}, labels = [] }
     };
 };
 
+const getRawDraftSetMetrics = ({ exercises = [], logData = {}, labels = [] } = {}) => {
+    const mergedExercises = mergeDraftExercisesWithLogData(exercises, logData, labels);
+    const exerciseNames = mergedExercises.map((exercise) => exercise.name);
+    const setCountByExercise = exerciseNames.reduce((acc, exerciseName) => {
+        acc[exerciseName] = Array.isArray(logData?.[exerciseName]) ? logData[exerciseName].length : 0;
+        return acc;
+    }, {});
+    const setCount = Object.values(setCountByExercise).reduce((sum, count) => sum + count, 0);
+
+    return {
+        exerciseNames,
+        exerciseCount: exerciseNames.length,
+        setCount,
+        setCountByExercise,
+    };
+};
+
 const getCurrentWeekRangeForHomeSummary = () => {
     const now = new Date();
     const day = now.getDay();
@@ -1674,6 +1691,12 @@ export default function GymApp() {
     const [logData, setLogData] = useState(() => loadDraftForDate(getTodayKey()).logData);
     const [sessionHistory, setSessionHistory] = useState(null);
     const [sessionEx, setSessionEx] = useState(() => loadDraftForDate(getTodayKey()).sessionEx);
+    const latestLogDraftRef = useRef({
+        todayLabels: [],
+        logData: {},
+        sessionEx: null,
+        exerciseUnits: {},
+    });
 
     const [routineOrder, setRoutineOrder] = useState(() => load("routineOrder", {}));
 
@@ -1758,7 +1781,7 @@ export default function GymApp() {
         if (EXPLICIT_SET_EDIT_REASONS.has(reason)) {
             console.log("[workout edit] explicit set edit", {
                 env: getRuntimeEnvironmentLabel(),
-                user_id: user?.id || latestUserIdRef.current || null,
+                user_id: user?.id || null,
                 date: normalizedDate,
                 exerciseName: details.exerciseName || null,
                 setIndex: details.setIndex ?? null,
@@ -1788,6 +1811,7 @@ export default function GymApp() {
         logDate,
         getExUnit,
         onWorkoutContentChange: markLogWorkoutContentChanged,
+        userId: user?.id || null,
     });
 
     const handleSaveLog = useCallback(() => {
@@ -2334,6 +2358,15 @@ export default function GymApp() {
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
     }, [user?.id]);
+
+    useEffect(() => {
+        latestLogDraftRef.current = {
+            todayLabels,
+            logData,
+            sessionEx,
+            exerciseUnits,
+        };
+    }, [exerciseUnits, logData, sessionEx, todayLabels]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -4556,6 +4589,32 @@ export default function GymApp() {
                 savedDates.forEach((date) => {
                     const savedDraft = buildWorkoutDraftForDateFromHistory(date, mergedHistory);
                     if (!savedDraft.hasSavedWorkout) return;
+                    const localDraftForDate = date === logDate
+                        ? latestLogDraftRef.current
+                        : loadDraftForDate(date);
+                    const savedRawMetrics = getRawDraftSetMetrics(savedDraft);
+                    const localRawMetrics = getRawDraftSetMetrics(localDraftForDate);
+                    const preserveDirtyDraft =
+                        localRawMetrics.setCount > savedRawMetrics.setCount ||
+                        localRawMetrics.exerciseCount > savedRawMetrics.exerciseCount;
+
+                    if (preserveDirtyDraft) {
+                        console.warn("[restore] preserve dirty draft after save verification", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: currentUserId,
+                            date,
+                            action: "workout_autosave",
+                            source: "autosave",
+                            dirty: true,
+                            savedRawMetrics,
+                            localRawMetrics,
+                            overwrittenByRestore: false,
+                            blockedReason: "verified history would drop local draft sets",
+                        });
+                        saveDraftForDate(date, localDraftForDate);
+                        return;
+                    }
+
                     saveDraftForDate(date, savedDraft);
                     if (date === logDate) {
                         setTodayLabels(savedDraft.todayLabels);
@@ -4642,6 +4701,7 @@ export default function GymApp() {
         workoutStartedAt,
         workoutStartedForDate,
         applyLocalHistoryDates,
+        loadDraftForDate,
         saveDraftForDate,
     ]);
 
@@ -5402,6 +5462,25 @@ export default function GymApp() {
                 : explicitEdit && incomingMetrics.volume + 0.01 < existingMetrics.volume
                     ? `allowed explicit edit volume decrease: ${pendingChange.reason}`
                 : `allowed content edit: ${pendingChange.reason}`,
+        });
+
+        console[wouldDestructivelyOverwrite && !pendingChange.explicitDelete ? "warn" : "log"]("[set mutation]", {
+            action: "workout_autosave",
+            env: getRuntimeEnvironmentLabel(),
+            date: logDate,
+            user_id: user?.id || null,
+            exerciseName: pendingChange.details?.exerciseName || null,
+            beforeSetCount: existingMetrics.setCount,
+            afterSetCount: incomingMetrics.setCount,
+            beforeSets: null,
+            afterSets: getDraftInputDebugSummary({ exercises, logData, labels: todayLabels }).setsByExercise,
+            dirty: true,
+            source: "autosave",
+            allowed: !(wouldDestructivelyOverwrite && !pendingChange.explicitDelete),
+            blockedReason: wouldDestructivelyOverwrite && !pendingChange.explicitDelete
+                ? `pending guarded save: ${pendingChange.reason}`
+                : null,
+            overwrittenByRestore: false,
         });
 
         if (wouldDestructivelyOverwrite && !pendingChange.explicitDelete) {
@@ -6493,6 +6572,9 @@ export default function GymApp() {
                     getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
                     workoutDate: normalizedDate,
                 });
+                const remoteDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, remoteHistory);
+                const localRawMetrics = getRawDraftSetMetrics(localDraft);
+                const remoteRawMetrics = getRawDraftSetMetrics(remoteDraftForDate);
                 const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(normalizedDate));
 
                 if (!remoteMetrics.hasWorkout) {
@@ -6503,6 +6585,27 @@ export default function GymApp() {
                         supabase: remoteMetrics,
                         localStorage: localMetrics,
                     });
+                    return;
+                }
+
+                if (
+                    localRawMetrics.setCount > remoteRawMetrics.setCount ||
+                    localRawMetrics.exerciseCount > remoteRawMetrics.exerciseCount
+                ) {
+                    console.warn("[restore] skipped Supabase date refresh during dirty draft; keeping local draft", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        date: normalizedDate,
+                        source: "supabase",
+                        dirty: true,
+                        supabase: remoteMetrics,
+                        localStorage: localMetrics,
+                        remoteRawMetrics,
+                        localRawMetrics,
+                        overwrittenByRestore: false,
+                        blockedReason: "remote refresh would drop local draft sets",
+                    });
+                    markWorkoutContentChanged(normalizedDate, "local_draft_richer_restore", { explicitEdit: true });
                     return;
                 }
 
