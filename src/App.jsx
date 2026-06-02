@@ -1816,25 +1816,23 @@ export default function GymApp() {
                 });
             }
 
-            const beforeDraft = latestLogDraftRef.current || {
-                todayLabels,
-                logData: prev || {},
-                sessionEx,
-                exerciseUnits,
-            };
+            const beforeDraft = getCurrentLogDraftSnapshot();
+            const beforeSessionSource = beforeDraft.sessionEx !== null
+                ? beforeDraft.sessionEx
+                : sessionEx;
             const nextSessionEx = mergeDraftExercisesWithLogData(
                 [
-                    ...(beforeDraft.sessionEx || []),
+                    ...(beforeSessionSource || []),
                     ...(sessionEx || []),
                 ],
                 next || {},
-                todayLabels
+                beforeDraft.todayLabels?.length ? beforeDraft.todayLabels : todayLabels
             );
             const nextDraft = {
-                todayLabels,
+                todayLabels: beforeDraft.todayLabels?.length ? beforeDraft.todayLabels : todayLabels,
                 logData: next || {},
                 sessionEx: nextSessionEx,
-                exerciseUnits,
+                exerciseUnits: beforeDraft.exerciseUnits || exerciseUnits,
             };
             const pendingChangeAfterUpdate = normalizedDate
                 ? pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {}
@@ -1880,7 +1878,7 @@ export default function GymApp() {
 
             return next;
         });
-    }, [exerciseUnits, logDate, saveDraftForDate, sessionEx, todayLabels, user?.id]);
+    }, [exerciseUnits, getCurrentLogDraftSnapshot, logDate, saveDraftForDate, sessionEx, todayLabels, user?.id]);
 
     const markLogWorkoutContentChanged = useCallback((reason = "set_update", details = {}) => {
         const normalizedDate = String(logDate || "").slice(0, 10);
@@ -4826,6 +4824,7 @@ export default function GymApp() {
         workoutStartedAt,
         workoutStartedForDate,
         applyLocalHistoryDates,
+        applyLogDraftState,
         loadDraftForDate,
         saveDraftForDate,
     ]);
@@ -5352,20 +5351,14 @@ export default function GymApp() {
         setLogMode("today");
         setLogDate(today);
         if (hasDraftContent(todayDraft)) {
-            setTodayLabels(todayDraft.todayLabels);
-            setSessionEx(todayDraft.sessionEx);
-            setLogData(todayDraft.logData);
-            setExerciseUnits(todayDraft.exerciseUnits);
+            applyLogDraftState(todayDraft);
         } else {
-            setTodayLabels([]);
-            setSessionEx(null);
-            setLogData({});
-            setExerciseUnits({});
+            applyLogDraftState({ todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {} });
         }
         if (!new URLSearchParams(window.location.search).get("ref")) {
             setScreen("history");
         }
-    }, [getTodayKey, hasDraftContent, loadDraftForDate]);
+    }, [applyLogDraftState, getTodayKey, hasDraftContent, loadDraftForDate]);
 
     useEffect(() => {
         if (screen !== "log") {
@@ -5386,7 +5379,9 @@ export default function GymApp() {
 
     // ─── Per-exercise default unit ────────────────────
     const toggleExUnit = (name) => {
-        const currentUnit = getExUnit(name);
+        const currentDraft = getCurrentLogDraftSnapshot();
+        const currentUnits = currentDraft.exerciseUnits || exerciseUnits;
+        const currentUnit = currentUnits[name] ?? unit;
         const CYCLE = { kg: "lbs", lbs: "BW", BW: "kg" };
         const newUnit = CYCLE[currentUnit] || "kg";
         markWorkoutContentChanged(logDate, "unit_change", {
@@ -5398,15 +5393,11 @@ export default function GymApp() {
             },
         });
 
-        setExerciseUnits((p) => {
-            const next = { ...p, [name]: newUnit };
-            saveDraftForDate(logDate, {
-                todayLabels,
-                logData,
-                sessionEx,
-                exerciseUnits: next,
-            });
-            return next;
+        const nextUnits = { ...currentUnits, [name]: newUnit };
+        applyCurrentLogDraft({
+            ...currentDraft,
+            todayLabels: currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels,
+            exerciseUnits: nextUnits,
         });
     };
 
@@ -6158,25 +6149,46 @@ export default function GymApp() {
         const oldEx = exercises.find((e) => e.id === id);
         if (!oldEx || oldEx.name === trimmed) return;
 
-        setSessionEx((p) =>
-            (p !== null ? p : [...baseExercises]).map((e) =>
-                e.id === id ? { ...e, name: trimmed } : e
-            )
-        );
-
-        setLogData((p) => {
-            // logData は id ベースで持つ
-            if (!p[id]) return p;
-            return { ...p, [id]: p[id] };
+        markWorkoutContentChanged(logDate, "exercise_rename", {
+            explicitEdit: true,
+            details: {
+                beforeName: oldEx.name,
+                afterName: trimmed,
+            },
         });
 
-        setExerciseUnits((p) => {
-            // ここはまだ name ベースなので移し替える
-            if (!p[oldEx.name]) return p;
-            const n = { ...p };
-            n[trimmed] = n[oldEx.name];
-            delete n[oldEx.name];
-            return n;
+        const currentDraft = getCurrentLogDraftSnapshot();
+        const currentLabels = currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels;
+        const currentExercises = mergeDraftExercisesWithLogData(
+            currentDraft.sessionEx !== null ? currentDraft.sessionEx : exercises,
+            currentDraft.logData || {},
+            currentLabels
+        );
+        const nextSessionEx = currentExercises.map((e) =>
+            e.id === id || normalizeExerciseName(e.name) === normalizeExerciseName(oldEx.name)
+                ? { ...e, name: trimmed }
+                : e
+        );
+        const nextLogData = { ...(currentDraft.logData || {}) };
+        const oldDataKey = Object.prototype.hasOwnProperty.call(nextLogData, oldEx.name)
+            ? oldEx.name
+            : Object.prototype.hasOwnProperty.call(nextLogData, id)
+                ? id
+                : null;
+        if (oldDataKey && oldDataKey !== trimmed) {
+            nextLogData[trimmed] = nextLogData[oldDataKey];
+            delete nextLogData[oldDataKey];
+        }
+        const nextUnits = { ...(currentDraft.exerciseUnits || exerciseUnits) };
+        if (Object.prototype.hasOwnProperty.call(nextUnits, oldEx.name)) {
+            nextUnits[trimmed] = nextUnits[oldEx.name];
+            delete nextUnits[oldEx.name];
+        }
+        applyCurrentLogDraft({
+            todayLabels: currentLabels,
+            logData: nextLogData,
+            sessionEx: nextSessionEx,
+            exerciseUnits: nextUnits,
         });
 
         // muscleExも更新
@@ -6245,6 +6257,7 @@ export default function GymApp() {
             delete nextLogData[name];
             const nextExerciseUnits = { ...currentExerciseUnits };
             delete nextExerciseUnits[name];
+            tgts.forEach((label) => clearExerciseOverrideForLabel(name, label));
             const afterNames = nextSession.map((exercise) => exercise.name);
             const removedExerciseNames = beforeNames.filter((beforeName) => {
                 const normalizedBefore = normalizeExerciseName(beforeName);
@@ -6585,6 +6598,7 @@ export default function GymApp() {
         logRestoreDecision(logDate, savedDraftForDate, localDraft, savedDraftForDate, "supabase_saved_workout_refresh");
     }, [
         buildSavedWorkoutDraftForDate,
+        applyCurrentLogDraft,
         exerciseUnits,
         history,
         historySyncReady,
@@ -6791,6 +6805,7 @@ export default function GymApp() {
         };
     }, [
         applyLocalHistoryDates,
+        applyCurrentLogDraft,
         buildSavedWorkoutDraftForDate,
         getExUnit,
         history,
@@ -7149,9 +7164,12 @@ export default function GymApp() {
 
         // 今まさにその日を編集中なら画面状態にも反映
         if (logDate === recordDate) {
-            setLogData(nextDraftLog);
-            setSessionEx(nextDraftSession);
-            setExerciseUnits(nextDraftUnits);
+            applyLogDraftState({
+                todayLabels: dateDraft.todayLabels,
+                logData: nextDraftLog,
+                sessionEx: nextDraftSession,
+                exerciseUnits: nextDraftUnits,
+            });
         }
     };
 
@@ -7188,10 +7206,7 @@ export default function GymApp() {
 
         // その日が今の編集中なら画面上の状態も消す
         if (logDate === normalizedTargetDate) {
-            setTodayLabels([]);
-            setLogData({});
-            setSessionEx(null);
-            setExerciseUnits({});
+            applyLogDraftState({ todayLabels: [], logData: {}, sessionEx: null, exerciseUnits: {} });
         }
 
         // その日のdraftも消す
@@ -7264,10 +7279,12 @@ export default function GymApp() {
 
         saveDraftForDate(pending.date, pending.previousDraft || {});
         if (logDate === pending.date) {
-            setTodayLabels(pending.previousDraft?.todayLabels || []);
-            setLogData(pending.previousDraft?.logData || {});
-            setSessionEx(pending.previousDraft?.sessionEx ?? null);
-            setExerciseUnits(pending.previousDraft?.exerciseUnits || {});
+            applyLogDraftState(pending.previousDraft || {
+                todayLabels: [],
+                logData: {},
+                sessionEx: null,
+                exerciseUnits: {},
+            });
         }
 
         if (pending.previousDurationSec > 0) {
@@ -7289,6 +7306,7 @@ export default function GymApp() {
                 });
         }
     }, [
+        applyLogDraftState,
         clearSyncFailure,
         commitHistoryDeleteMarkers,
         logDate,
