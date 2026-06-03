@@ -293,24 +293,117 @@ export function mergeHistoryMaps(...sources) {
   return mergedHistory;
 }
 
-export function buildHistoryFromWorkoutRows(rows) {
+const getWorkoutRowHistoryData = (row) => {
+  if (isPlainObject(row?.data?.history)) return row.data.history;
+  if (isPlainObject(row?.data?.records)) return row.data.records;
+  return row?.data;
+};
+
+const addWorkoutRowRecordToHistory = (historyMap, exerciseName, record, fallbackDate) => {
+  if (!exerciseName || !isPlainObject(record)) return;
+  const recordDate = String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10);
+  const nextRecord = recordDate || !fallbackDate
+    ? record
+    : {
+        ...record,
+        date: fallbackDate,
+        workoutDate: fallbackDate,
+        workout_date: fallbackDate,
+      };
+
+  if (!historyMap[exerciseName]) historyMap[exerciseName] = [];
+  historyMap[exerciseName].push(nextRecord);
+};
+
+const removeHistoryDateFromMap = (historyMap, targetDate) => {
+  const normalizedDate = String(targetDate || "").slice(0, 10);
+  if (!normalizedDate) return historyMap || {};
+
+  const next = {};
+  Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+    const keptRecords = (records || []).filter((record) => (
+      String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) !== normalizedDate
+    ));
+    if (keptRecords.length > 0) next[exerciseName] = keptRecords;
+  });
+  return next;
+};
+
+const applyPreferredHistoryDates = (baseHistory, preferredHistory, dates = []) => {
+  const normalizedDates = [...new Set(
+    (dates || []).map((date) => String(date || "").slice(0, 10)).filter(Boolean)
+  )];
+  let nextHistory = mergeHistoryMaps(baseHistory || {});
+
+  normalizedDates.forEach((date) => {
+    nextHistory = removeHistoryDateFromMap(nextHistory, date);
+    const dateRecords = {};
+    Object.entries(preferredHistory || {}).forEach(([exerciseName, records]) => {
+      const filtered = (records || []).filter((record) => (
+        String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) === date
+      ));
+      if (filtered.length > 0) dateRecords[exerciseName] = filtered;
+    });
+    nextHistory = mergeHistoryMaps(nextHistory, dateRecords);
+  });
+
+  return nextHistory;
+};
+
+export function buildHistoryFromWorkoutRowsWithScopes(rows) {
   const sortedRows = [...(rows || [])]
     .filter((row) => isPlainObject(row?.data))
     .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
 
-  return mergeHistoryMaps(...sortedRows.map((row) => {
-    const rowDate = String(row?.date || row?.workout_date || row?.workoutDate || "").slice(0, 10);
-    if (!rowDate) return row.data;
+  const exactRowHistories = [];
+  const legacyEmbeddedHistories = [];
 
-    const dateScopedHistory = {};
-    Object.entries(row.data || {}).forEach(([exerciseName, records]) => {
-      const dateRecords = (records || []).filter((record) => (
-        String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) === rowDate
-      ));
-      if (dateRecords.length > 0) dateScopedHistory[exerciseName] = dateRecords;
+  sortedRows.forEach((row) => {
+    const rowDate = String(row?.date || row?.workout_date || row?.workoutDate || "").slice(0, 10);
+    const rowHistoryData = getWorkoutRowHistoryData(row);
+    const exactHistory = {};
+    const legacyHistory = {};
+
+    Object.entries(rowHistoryData || {}).forEach(([exerciseName, rawRecords]) => {
+      const records = Array.isArray(rawRecords)
+        ? rawRecords
+        : isPlainObject(rawRecords)
+          ? [rawRecords]
+          : [];
+
+      records.forEach((record) => {
+        const recordDate = String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10);
+        const effectiveDate = recordDate || rowDate;
+        if (!effectiveDate) return;
+
+        if (rowDate && effectiveDate !== rowDate) {
+          addWorkoutRowRecordToHistory(legacyHistory, exerciseName, record, effectiveDate);
+        } else {
+          addWorkoutRowRecordToHistory(exactHistory, exerciseName, record, rowDate || effectiveDate);
+        }
+      });
     });
-    return dateScopedHistory;
-  }));
+
+    exactRowHistories.push(exactHistory);
+    legacyEmbeddedHistories.push(legacyHistory);
+  });
+
+  const exactHistory = mergeHistoryMaps(...exactRowHistories);
+  const legacyHistory = mergeHistoryMaps(...legacyEmbeddedHistories);
+  const exactDates = getValidWorkoutDatesFromHistory(exactHistory);
+  const history = applyPreferredHistoryDates(legacyHistory, exactHistory, exactDates);
+
+  return {
+    history,
+    exactHistory,
+    legacyHistory,
+    exactDates,
+    legacyDates: getValidWorkoutDatesFromHistory(legacyHistory),
+  };
+}
+
+export function buildHistoryFromWorkoutRows(rows) {
+  return buildHistoryFromWorkoutRowsWithScopes(rows).history;
 }
 
 export const PR_UPDATE_TOLERANCE_KG = 0.15;

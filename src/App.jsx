@@ -6,6 +6,7 @@ import {
     storeW,
     KG_TO_LBS,
     buildHistoryFromWorkoutRows,
+    buildHistoryFromWorkoutRowsWithScopes,
     calc1RM,
     formatDateKey,
     getRecordSourceSets,
@@ -823,11 +824,15 @@ const removeExerciseRecordOnDate = (historyMap, exerciseName, targetDate) => {
 };
 
 const buildRemoteHistoryWithWorkoutRowsPriority = (workoutRows = [], sessionRows = []) => {
-    const workoutHistory = buildHistoryFromWorkoutRows(workoutRows || []);
+    const workoutHistoryScopes = buildHistoryFromWorkoutRowsWithScopes(workoutRows || []);
     const sessionHistory = buildHistoryFromWorkoutSessionRows(sessionRows || []);
-    const workoutDates = getValidWorkoutDatesFromHistory(workoutHistory);
+    const fallbackHistory = mergeHistoryMaps(sessionHistory, workoutHistoryScopes.legacyHistory);
 
-    return applyPreferredHistoryDates(sessionHistory, workoutHistory, workoutDates);
+    return applyPreferredHistoryDates(
+        fallbackHistory,
+        workoutHistoryScopes.exactHistory,
+        workoutHistoryScopes.exactDates
+    );
 };
 
 const buildDraftHistoryForDate = ({
@@ -1096,13 +1101,27 @@ const getHistoryOverallMetrics = (historyMap) => {
     };
 };
 
-const getWorkoutRowsDebugSummary = (rows = []) => ({
-    rowCount: rows.length,
-    dates: rows.map((row) => String(row?.date || "").slice(0, 10)).filter(Boolean),
-    "2026-05-25": rows
-        .filter((row) => String(row?.date || "").slice(0, 10) === "2026-05-25")
-        .map((row) => getHistoryMetricsForDate(row?.data || {}, "2026-05-25")),
-});
+const getWorkoutRowsDebugSummary = (rows = []) => {
+    const scopedHistory = buildHistoryFromWorkoutRowsWithScopes(rows);
+    const recoveredDates = [...new Set([
+        ...scopedHistory.exactDates,
+        ...scopedHistory.legacyDates,
+    ])].sort();
+
+    return {
+        rowCount: rows.length,
+        dates: rows.map((row) => String(row?.date || "").slice(0, 10)).filter(Boolean),
+        exactDates: scopedHistory.exactDates,
+        legacyEmbeddedDates: scopedHistory.legacyDates,
+        preMay15RowDates: rows
+            .map((row) => String(row?.date || "").slice(0, 10))
+            .filter((date) => date && date < "2026-05-15"),
+        preMay15RecoveredDates: recoveredDates.filter((date) => date < "2026-05-15"),
+        "2026-05-25": rows
+            .filter((row) => String(row?.date || "").slice(0, 10) === "2026-05-25")
+            .map((row) => getHistoryMetricsForDate(row?.data || {}, "2026-05-25")),
+    };
+};
 
 const getWorkoutSessionRowsDebugSummary = (rows = []) => ({
     rowCount: rows.length,
@@ -3141,6 +3160,20 @@ export default function GymApp() {
                         : getEmptyWorkoutMetrics();
                     const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(workoutDate) || {};
                     const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
+                    if (!hasWorkoutForDate && !pendingChange.explicitDelete) {
+                        console.warn("[save guard] skip empty workout delete without explicit delete intent", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            localMetrics: incomingMetrics,
+                            remoteMetrics,
+                            reason: pendingChange.reason || "missing local workout data",
+                            explicitDelete: false,
+                            safety: "avoid deleting Supabase data when history failed to load",
+                        });
+                        results.skippedDates.push(workoutDate);
+                        return;
+                    }
                     const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics, {
                         allowVolumeDecrease: explicitEdit,
                     });
