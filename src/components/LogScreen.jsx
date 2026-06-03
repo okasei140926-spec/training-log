@@ -673,14 +673,30 @@ export default function LogScreen({
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
                         const displayUnit = getExerciseDisplayUnit(sets, exUnit);
 
-                        const doneSets = sets.filter(s => {
+                        const completedSetEntries = sets.map((s) => {
                             const w = Number(getSetStoredWeightKg(s, exUnit));
                             const r = Number(s.reps);
-                            return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
-                        }).map(s => ({
-                            ...s,
-                            weight: getSetStoredWeightKg(s, exUnit)
-                        }));
+                            if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) return null;
+                            const normalizedSet = {
+                                ...s,
+                                weight: w,
+                                displayWeight: s.displayWeight ?? s.weight,
+                                displayUnit: getSetDisplayUnit(s, exUnit),
+                            };
+                            return {
+                                sourceSet: s,
+                                normalizedSet,
+                                rm: calc1RM([normalizedSet]),
+                            };
+                        }).filter(Boolean);
+                        const doneSets = completedSetEntries.map((entry) => entry.normalizedSet);
+                        const currentTopSetEntry = completedSetEntries.reduce((best, entry) => {
+                            if (!best || entry.rm > best.rm) return entry;
+                            return best;
+                        }, null);
+                        const currentTopDisplayUnit = currentTopSetEntry
+                            ? getSetDisplayUnit(currentTopSetEntry.sourceSet, displayUnit)
+                            : displayUnit;
 
                         const cur1RM = calc1RM(doneSets);
 
@@ -696,7 +712,7 @@ export default function LogScreen({
                             ? roundTo1Decimal(rawPrDiff)
                             : 0;
                         const prDiffDisplay = prDiff > 0
-                            ? roundTo1Decimal(convertKgValueForDisplayUnit(prDiff, displayUnit))
+                            ? roundTo1Decimal(convertKgValueForDisplayUnit(prDiff, currentTopDisplayUnit))
                             : 0;
 
                         const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG);
@@ -864,7 +880,7 @@ export default function LogScreen({
                                                                 )}
                                                                 {isPR && prDiff > 0 && (
                                                                     <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, lineHeight: 1.2 }}>
-                                                                        PR更新 +{prDiffDisplay.toFixed(1)}{formatWeightUnit(displayUnit)}
+                                                                        PR更新 +{prDiffDisplay.toFixed(1)}{formatWeightUnit(currentTopDisplayUnit)}
                                                                     </span>
                                                                 )}
                                                             </div>

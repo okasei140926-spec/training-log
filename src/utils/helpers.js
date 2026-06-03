@@ -168,7 +168,11 @@ export function buildHistoryRecordSignature(record) {
   if (!sanitizedRecord?.date) return "";
 
   const setsSignature = sanitizedRecord.sets
-    .map((set) => `${set.weight === "BW" ? "BW" : Number(set.weight)}|${Number(set.reps)}|${set.done ? 1 : 0}`)
+    .map((set) => {
+      const unit = String(set.displayUnit || set.unit || set.weightUnit || set.weight_unit || "").trim();
+      const displayWeight = String(set.displayWeight ?? "").trim();
+      return `${set.weight === "BW" ? "BW" : Number(set.weight)}|${displayWeight}|${unit}|${Number(set.reps)}|${set.done ? 1 : 0}`;
+    })
     .join(";");
 
   return `${sanitizedRecord.date}::${sanitizedRecord.bodyPart || ""}::${setsSignature}`;
@@ -294,7 +298,19 @@ export function buildHistoryFromWorkoutRows(rows) {
     .filter((row) => isPlainObject(row?.data))
     .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
 
-  return mergeHistoryMaps(...sortedRows.map((row) => row.data));
+  return mergeHistoryMaps(...sortedRows.map((row) => {
+    const rowDate = String(row?.date || row?.workout_date || row?.workoutDate || "").slice(0, 10);
+    if (!rowDate) return row.data;
+
+    const dateScopedHistory = {};
+    Object.entries(row.data || {}).forEach(([exerciseName, records]) => {
+      const dateRecords = (records || []).filter((record) => (
+        String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) === rowDate
+      ));
+      if (dateRecords.length > 0) dateScopedHistory[exerciseName] = dateRecords;
+    });
+    return dateScopedHistory;
+  }));
 }
 
 export const PR_UPDATE_TOLERANCE_KG = 0.15;

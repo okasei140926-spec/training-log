@@ -1797,9 +1797,11 @@ export default function GymApp() {
 
     const setLogDataAndSaveDraft = useCallback((nextOrUpdater) => {
         setLogData((prev) => {
+            const beforeDraft = getCurrentLogDraftSnapshot();
+            const sourceLogData = beforeDraft.logData || prev || {};
             const next =
                 typeof nextOrUpdater === "function"
-                    ? nextOrUpdater(prev)
+                    ? nextOrUpdater(sourceLogData)
                     : nextOrUpdater;
             const normalizedDate = String(logDate || "").slice(0, 10);
             if (normalizedDate) {
@@ -1816,7 +1818,6 @@ export default function GymApp() {
                 });
             }
 
-            const beforeDraft = getCurrentLogDraftSnapshot();
             const beforeSessionSource = beforeDraft.sessionEx !== null
                 ? beforeDraft.sessionEx
                 : sessionEx;
@@ -1848,8 +1849,9 @@ export default function GymApp() {
                     : null;
 
             if (isSetInputChange) {
+                const isUnitChange = pendingChangeAfterUpdate.reason === "unit_change";
                 console[blockedReason ? "warn" : "log"]("[set mutation]", {
-                    action: "set_input_change",
+                    action: isUnitChange ? "unit_change" : "set_input_change",
                     date: normalizedDate,
                     user_id: user?.id || null,
                     exerciseName: pendingChangeAfterUpdate.details?.exerciseName || null,
@@ -1868,6 +1870,12 @@ export default function GymApp() {
                     blockedReason,
                     restoreApplied: false,
                     overwrittenByRestore: false,
+                    saveReason: pendingChangeAfterUpdate.reason,
+                    latestLogDraftRefUpdated: !blockedReason,
+                    logDataUpdated: !blockedReason,
+                    sessionExUpdated: !blockedReason,
+                    workoutsDataUpdated: false,
+                    summaryJsonUpdated: false,
                 });
             }
 
@@ -3074,15 +3082,17 @@ export default function GymApp() {
                                 : "allowed: no local workout for date",
                         level: wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log",
                     });
+                    const dateScopedHistoryForSave = applyPreferredHistoryDates({}, normalizedHistoryMap, [workoutDate]);
+
                     console.log("[save] workouts.data before save", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: userId,
                         date: workoutDate,
-                        saving: getHistoryDebugSummaryForDate(normalizedHistoryMap, workoutDate),
+                        saving: getHistoryDebugSummaryForDate(dateScopedHistoryForSave, workoutDate),
                         remote: existingWorkoutRow
                             ? getHistoryDebugSummaryForDate(existingWorkoutRow.data || {}, workoutDate)
                             : getHistoryDebugSummaryForDate({}, workoutDate),
-                        diffFromRemote: getHistoryDebugDiffForDate(existingWorkoutRow?.data || {}, normalizedHistoryMap, workoutDate),
+                        diffFromRemote: getHistoryDebugDiffForDate(existingWorkoutRow?.data || {}, dateScopedHistoryForSave, workoutDate),
                     });
 
                     if (wouldDestructivelyOverwrite && !allowDestructiveSave) {
@@ -3111,6 +3121,8 @@ export default function GymApp() {
                             explicitEdit: Boolean(pendingChange.explicitEdit),
                             allowed: true,
                             blockedReason: null,
+                            workoutsDataUpdated: false,
+                            summaryJsonUpdated: false,
                         });
                     }
 
@@ -3120,7 +3132,7 @@ export default function GymApp() {
                             .upsert({
                                 user_id: userId,
                                 date: workoutDate,
-                                data: normalizedHistoryMap,
+                                data: dateScopedHistoryForSave,
                             }, {
                                 onConflict: "user_id,date",
                             })
@@ -3208,6 +3220,8 @@ export default function GymApp() {
                             exerciseName: pendingChange.details?.exerciseName || null,
                             setIndex: pendingChange.details?.setIndex ?? null,
                             saveReason: pendingChange.reason,
+                            workoutsDataUpdated: true,
+                            summaryJsonUpdated: false,
                             workoutsDataAfterSave: verifyWorkoutRow
                                 ? getHistoryDebugSummaryForDate(verifyWorkoutRow.data || {}, workoutDate)
                                 : getHistoryDebugSummaryForDate({}, workoutDate),
@@ -3525,6 +3539,8 @@ export default function GymApp() {
                 explicitEdit: Boolean(pendingChange.explicitEdit),
                 allowed: true,
                 blockedReason: null,
+                workoutsDataUpdated: null,
+                summaryJsonUpdated: false,
             });
         }
 
@@ -3686,6 +3702,8 @@ export default function GymApp() {
                 exerciseName: pendingChange.details?.exerciseName || null,
                 setIndex: pendingChange.details?.setIndex ?? null,
                 saveReason: pendingChange.reason,
+                workoutsDataUpdated: null,
+                summaryJsonUpdated: true,
                 summaryJsonAfterSave: verifiedSession?.summary_json || null,
             });
         }
