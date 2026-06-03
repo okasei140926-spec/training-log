@@ -3,6 +3,7 @@ import { normalizeBodyPartLabel, resolveRecordedBodyPartLabel, resolveVisibleBod
 import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
 
 const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
+const WEEKLY_DEBUG_DATE = "2026-06-03";
 
 const FALLBACK_PART_MAP = {
     "ベンチ": "胸",
@@ -321,6 +322,11 @@ function collectWeeklyAggregationDebug(history, muscleEx, overrides) {
     const exerciseNames = [];
     const bodyPartCounts = {};
     const setCountByExercise = {};
+    const loadedDates = new Set();
+    const debugDateExerciseNames = [];
+    const debugDateShoulderExercises = [];
+    const debugDateSetCountByExercise = {};
+    let debugDateShoulderSetCount = 0;
 
     Object.entries(history || {}).forEach(([exName, records]) => {
         (records || []).forEach(record => {
@@ -329,10 +335,19 @@ function collectWeeklyAggregationDebug(history, muscleEx, overrides) {
             if (setCount <= 0) return;
 
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
+            loadedDates.add(record.date);
             exerciseNames.push(exName);
             setCountByExercise[exName] = (setCountByExercise[exName] || 0) + setCount;
             if (bp !== "その他") {
                 bodyPartCounts[bp] = (bodyPartCounts[bp] || 0) + setCount;
+            }
+            if (record.date === WEEKLY_DEBUG_DATE) {
+                debugDateExerciseNames.push(exName);
+                debugDateSetCountByExercise[exName] = (debugDateSetCountByExercise[exName] || 0) + setCount;
+                if (bp === "肩") {
+                    debugDateShoulderExercises.push(exName);
+                    debugDateShoulderSetCount += setCount;
+                }
             }
         });
     });
@@ -340,9 +355,16 @@ function collectWeeklyAggregationDebug(history, muscleEx, overrides) {
     return {
         source: "App history (workouts.data priority)",
         week: { start, end },
+        loadedDates: [...loadedDates].sort(),
+        debugDate: WEEKLY_DEBUG_DATE,
+        debugDateExerciseNames: [...new Set(debugDateExerciseNames)],
+        debugDateShoulderExercises: [...new Set(debugDateShoulderExercises)],
+        debugDateShoulderSetCount,
+        debugDateSetCountByExercise,
         exerciseNames: [...new Set(exerciseNames)],
         setCountByExercise,
         bodyPartCounts,
+        finalShoulderSetCount: bodyPartCounts["肩"] || 0,
     };
 }
 
