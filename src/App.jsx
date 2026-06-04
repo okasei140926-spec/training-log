@@ -475,7 +475,7 @@ const describeHistoryRecordsForDate = (historyMap, targetDate) => {
         .filter(Boolean);
 };
 
-const EXPLICIT_SET_EDIT_REASONS = new Set(["weight_change", "reps_change", "unit_change"]);
+const EXPLICIT_SET_EDIT_REASONS = new Set(["weight_change", "reps_change", "unit_change", "set_input_change", "explicit_set_edit"]);
 const EXPLICIT_WORKOUT_EDIT_REASONS = new Set([
     ...EXPLICIT_SET_EDIT_REASONS,
     "history_record_edit",
@@ -670,6 +670,105 @@ const isDestructiveWorkoutRegression = (incomingMetrics, existingMetrics, option
         incomingMetrics.setCount < existingMetrics.setCount ||
         shouldBlockVolumeRegression
     );
+};
+
+const getWorkoutRegressionDetails = (incomingMetrics = {}, existingMetrics = {}) => {
+    const incomingNames = new Set((incomingMetrics.exerciseNames || []).map((name) => normalizeExerciseName(name)).filter(Boolean));
+    const removedExerciseNames = (existingMetrics.exerciseNames || [])
+        .filter((name) => {
+            const normalizedName = normalizeExerciseName(name);
+            return normalizedName && !incomingNames.has(normalizedName);
+        });
+    const exerciseCountReduced = Number(incomingMetrics.exerciseCount || 0) < Number(existingMetrics.exerciseCount || 0);
+    const setCountReduced = Number(incomingMetrics.setCount || 0) < Number(existingMetrics.setCount || 0);
+    const volumeReduced = Number(incomingMetrics.volume || 0) + 0.01 < Number(existingMetrics.volume || 0);
+
+    return {
+        removedExerciseNames,
+        exerciseCountReduced,
+        setCountReduced,
+        volumeReduced,
+    };
+};
+
+const getWorkoutSaveGuardDecision = ({
+    incomingMetrics,
+    remoteMetrics,
+    reason,
+    explicitEdit = false,
+    explicitDelete = false,
+}) => {
+    const details = getWorkoutRegressionDetails(incomingMetrics, remoteMetrics);
+    const remoteHasWorkout = Boolean(remoteMetrics?.hasWorkout);
+    const localHasWorkout = Boolean(incomingMetrics?.hasWorkout);
+
+    if (explicitDelete) {
+        return {
+            blocked: false,
+            allowedReason: `explicit delete allowed: ${reason || "delete"}`,
+            blockedReason: null,
+            details,
+        };
+    }
+
+    if (remoteHasWorkout && !localHasWorkout) {
+        return {
+            blocked: true,
+            allowedReason: null,
+            blockedReason: "local workout has no valid sets while remote has workout",
+            details,
+        };
+    }
+
+    const hasStructuralRegression =
+        details.removedExerciseNames.length > 0 ||
+        details.exerciseCountReduced ||
+        details.setCountReduced;
+
+    if (explicitEdit) {
+        if (hasStructuralRegression) {
+            return {
+                blocked: true,
+                allowedReason: null,
+                blockedReason: [
+                    details.removedExerciseNames.length ? `removed exercises: ${details.removedExerciseNames.join(", ")}` : "",
+                    details.exerciseCountReduced ? "exercise count reduced" : "",
+                    details.setCountReduced ? "set count reduced" : "",
+                ].filter(Boolean).join("; "),
+                details,
+            };
+        }
+
+        return {
+            blocked: false,
+            allowedReason: details.volumeReduced
+                ? `explicit edit allowed despite volume decrease: ${reason || "content_change"}`
+                : `explicit edit allowed: ${reason || "content_change"}`,
+            blockedReason: null,
+            details,
+        };
+    }
+
+    if (remoteHasWorkout && (hasStructuralRegression || details.volumeReduced)) {
+        return {
+            blocked: true,
+            allowedReason: null,
+            blockedReason: [
+                details.removedExerciseNames.length ? `removed exercises: ${details.removedExerciseNames.join(", ")}` : "",
+                details.exerciseCountReduced ? "exercise count reduced" : "",
+                details.setCountReduced ? "set count reduced" : "",
+                details.volumeReduced ? "volume reduced" : "",
+            ].filter(Boolean).join("; "),
+            details,
+        };
+    }
+
+    return {
+        blocked: false,
+        allowedReason: localHasWorkout ? `content edit allowed: ${reason || "unknown"}` : "no local workout for date",
+        blockedReason: null,
+        details,
+    };
 };
 
 const isMetricPersistenceMismatch = (expectedMetrics, actualMetrics) => {
@@ -3219,9 +3318,14 @@ export default function GymApp() {
                         results.skippedDates.push(workoutDate);
                         return;
                     }
-                    const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics, {
-                        allowVolumeDecrease: explicitEdit,
+                    const saveGuardDecision = getWorkoutSaveGuardDecision({
+                        incomingMetrics,
+                        remoteMetrics,
+                        reason: pendingChange.reason,
+                        explicitEdit,
+                        explicitDelete: Boolean(pendingChange.explicitDelete),
                     });
+                    const wouldDestructivelyOverwrite = saveGuardDecision.blocked;
                     const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
 
                     logWorkoutPersistenceDecision({
@@ -3231,16 +3335,44 @@ export default function GymApp() {
                         localMetrics: incomingMetrics,
                         remoteMetrics,
                         reason: wouldDestructivelyOverwrite
-                            ? allowDestructiveSave
-                                ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
-                                : "blocked: local workout is smaller than remote"
-                            : explicitEdit && incomingMetrics.volume + 0.01 < remoteMetrics.volume
-                                ? `allowed explicit edit volume decrease: ${pendingChange.reason || "content_change"}`
-                            : hasWorkoutForDate
-                                ? `allowed content edit: ${pendingChange.reason || "unknown"}`
-                                : "allowed: no local workout for date",
+                            ? `blocked: ${saveGuardDecision.blockedReason || "local workout is smaller than remote"}`
+                            : saveGuardDecision.allowedReason,
                         level: wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log",
                     });
+                    console[wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log"]("[workout-save-guard] explicit guard detail", {
+                        env: getRuntimeEnvironmentLabel(),
+                        action: "workout_save_guard",
+                        user_id: userId,
+                        date: workoutDate,
+                        reason: pendingChange.reason || null,
+                        explicitEdit,
+                        explicitDelete: Boolean(pendingChange.explicitDelete),
+                        localExerciseNames: incomingMetrics.exerciseNames,
+                        remoteExerciseNames: remoteMetrics.exerciseNames,
+                        removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                        localSetCount: incomingMetrics.setCount,
+                        remoteSetCount: remoteMetrics.setCount,
+                        localVolume: incomingMetrics.volume,
+                        remoteVolume: remoteMetrics.volume,
+                        blockedReason: wouldDestructivelyOverwrite && !allowDestructiveSave ? saveGuardDecision.blockedReason : null,
+                        allowedReason: wouldDestructivelyOverwrite && !allowDestructiveSave ? null : saveGuardDecision.allowedReason,
+                    });
+                    if (explicitEdit && !wouldDestructivelyOverwrite && saveGuardDecision.details.volumeReduced) {
+                        console.log("[workout-save-guard] explicit edit allowed despite metric difference", {
+                            env: getRuntimeEnvironmentLabel(),
+                            action: "workout_save_guard",
+                            user_id: userId,
+                            date: workoutDate,
+                            reason: pendingChange.reason || null,
+                            explicitEdit,
+                            localVolume: incomingMetrics.volume,
+                            remoteVolume: remoteMetrics.volume,
+                            localSetCount: incomingMetrics.setCount,
+                            remoteSetCount: remoteMetrics.setCount,
+                            removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                            allowedReason: saveGuardDecision.allowedReason,
+                        });
+                    }
                     const dateScopedHistoryForSave = applyPreferredHistoryDates({}, normalizedHistoryMap, [workoutDate]);
 
                     console.log("[save] workouts.data before save", {
@@ -3263,6 +3395,14 @@ export default function GymApp() {
                             localStorage: incomingMetrics,
                             savingExerciseNames: incomingMetrics.exerciseNames,
                             reason: pendingChange.reason || "unknown",
+                            explicitEdit,
+                            explicitDelete: Boolean(pendingChange.explicitDelete),
+                            removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                            localSetCount: incomingMetrics.setCount,
+                            remoteSetCount: remoteMetrics.setCount,
+                            localVolume: incomingMetrics.volume,
+                            remoteVolume: remoteMetrics.volume,
+                            blockedReason: saveGuardDecision.blockedReason,
                         });
                         results.skippedDates.push(workoutDate);
                         return;
@@ -3640,9 +3780,14 @@ export default function GymApp() {
             : getEmptyWorkoutMetrics();
         const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
         const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
-        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, remoteMetrics, {
-            allowVolumeDecrease: explicitEdit,
+        const saveGuardDecision = getWorkoutSaveGuardDecision({
+            incomingMetrics,
+            remoteMetrics,
+            reason: pendingChange.reason,
+            explicitEdit,
+            explicitDelete: Boolean(pendingChange.explicitDelete),
         });
+        const wouldDestructivelyOverwrite = saveGuardDecision.blocked;
         const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
 
         logWorkoutPersistenceDecision({
@@ -3652,16 +3797,46 @@ export default function GymApp() {
             localMetrics: incomingMetrics,
             remoteMetrics,
             reason: wouldDestructivelyOverwrite
-                ? allowDestructiveSave
-                    ? `allowed explicit delete: ${pendingChange.reason || "delete"}`
-                    : "blocked: local session is smaller than remote"
-                : explicitEdit && incomingMetrics.volume + 0.01 < remoteMetrics.volume
-                    ? `allowed explicit edit volume decrease: ${pendingChange.reason || "content_change"}`
-                : payload
-                    ? `allowed content edit: ${pendingChange.reason || "unknown"}`
-                    : "allowed: no local payload",
+                ? `blocked: ${saveGuardDecision.blockedReason || "local session is smaller than remote"}`
+                : saveGuardDecision.allowedReason,
             level: wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log",
         });
+        console[wouldDestructivelyOverwrite && !allowDestructiveSave ? "warn" : "log"]("[workout-save-guard] explicit guard detail", {
+            env: getRuntimeEnvironmentLabel(),
+            action: "workout_save_guard",
+            user_id: userId,
+            date: normalizedDate,
+            reason: pendingChange.reason || null,
+            explicitEdit,
+            explicitDelete: Boolean(pendingChange.explicitDelete),
+            localExerciseNames: incomingMetrics.exerciseNames,
+            remoteExerciseNames: remoteMetrics.exerciseNames,
+            removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+            localSetCount: incomingMetrics.setCount,
+            remoteSetCount: remoteMetrics.setCount,
+            localVolume: incomingMetrics.volume,
+            remoteVolume: remoteMetrics.volume,
+            blockedReason: wouldDestructivelyOverwrite && !allowDestructiveSave ? saveGuardDecision.blockedReason : null,
+            allowedReason: wouldDestructivelyOverwrite && !allowDestructiveSave ? null : saveGuardDecision.allowedReason,
+            table: "workout_sessions",
+        });
+        if (explicitEdit && !wouldDestructivelyOverwrite && saveGuardDecision.details.volumeReduced) {
+            console.log("[workout-save-guard] explicit edit allowed despite metric difference", {
+                env: getRuntimeEnvironmentLabel(),
+                action: "workout_save_guard",
+                user_id: userId,
+                date: normalizedDate,
+                reason: pendingChange.reason || null,
+                explicitEdit,
+                localVolume: incomingMetrics.volume,
+                remoteVolume: remoteMetrics.volume,
+                localSetCount: incomingMetrics.setCount,
+                remoteSetCount: remoteMetrics.setCount,
+                removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                allowedReason: saveGuardDecision.allowedReason,
+                table: "workout_sessions",
+            });
+        }
         console.log("[save] workout_sessions.summary_json before save", {
             env: getRuntimeEnvironmentLabel(),
             user_id: userId,
@@ -3685,6 +3860,14 @@ export default function GymApp() {
                 localStorage: incomingMetrics,
                 savingExerciseNames: incomingMetrics.exerciseNames,
                 reason: pendingChange.reason || "unknown",
+                explicitEdit,
+                explicitDelete: Boolean(pendingChange.explicitDelete),
+                removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                localSetCount: incomingMetrics.setCount,
+                remoteSetCount: remoteMetrics.setCount,
+                localVolume: incomingMetrics.volume,
+                remoteVolume: remoteMetrics.volume,
+                blockedReason: saveGuardDecision.blockedReason,
             });
             return { skipped: true };
         }
@@ -3928,9 +4111,14 @@ export default function GymApp() {
                             : getEmptyWorkoutMetrics();
                         const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(date) || {};
                         const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
-                        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(localMetrics, remoteMetrics, {
-                            allowVolumeDecrease: explicitEdit,
+                        const saveGuardDecision = getWorkoutSaveGuardDecision({
+                            incomingMetrics: localMetrics,
+                            remoteMetrics,
+                            reason: pendingChange.reason,
+                            explicitEdit,
+                            explicitDelete: Boolean(pendingChange.explicitDelete),
                         });
+                        const wouldDestructivelyOverwrite = saveGuardDecision.blocked;
                         const retryAllowed = !wouldDestructivelyOverwrite || Boolean(pendingChange.explicitDelete);
 
                         console.log("[sync retry] preflight", {
@@ -3946,7 +4134,12 @@ export default function GymApp() {
                             localVolume: localMetrics.volume,
                             remoteVolume: remoteMetrics.volume,
                             retryAllowed,
-                            blockedReason: retryAllowed ? null : "local workout is smaller than remote",
+                            removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                            reason: pendingChange.reason || null,
+                            explicitEdit,
+                            explicitDelete: Boolean(pendingChange.explicitDelete),
+                            blockedReason: retryAllowed ? null : saveGuardDecision.blockedReason,
+                            allowedReason: retryAllowed ? saveGuardDecision.allowedReason : null,
                         });
 
                         if (!retryAllowed) {
@@ -5899,9 +6092,14 @@ export default function GymApp() {
         });
         const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || history || {}, logDate);
         const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
-        const wouldDestructivelyOverwrite = isDestructiveWorkoutRegression(incomingMetrics, existingMetrics, {
-            allowVolumeDecrease: explicitEdit,
+        const saveGuardDecision = getWorkoutSaveGuardDecision({
+            incomingMetrics,
+            remoteMetrics: existingMetrics,
+            reason: pendingChange.reason,
+            explicitEdit,
+            explicitDelete: Boolean(pendingChange.explicitDelete),
         });
+        const wouldDestructivelyOverwrite = saveGuardDecision.blocked;
 
         logWorkoutPersistenceDecision({
             action: "local_auto_persist_check",
@@ -5910,11 +6108,45 @@ export default function GymApp() {
             localMetrics: incomingMetrics,
             remoteMetrics: existingMetrics,
             reason: wouldDestructivelyOverwrite
-                ? `pending guarded save: ${pendingChange.reason}`
-                : explicitEdit && incomingMetrics.volume + 0.01 < existingMetrics.volume
-                    ? `allowed explicit edit volume decrease: ${pendingChange.reason}`
-                : `allowed content edit: ${pendingChange.reason}`,
+                ? `blocked: ${saveGuardDecision.blockedReason || `pending guarded save: ${pendingChange.reason}`}`
+                : saveGuardDecision.allowedReason,
         });
+        console[wouldDestructivelyOverwrite && !pendingChange.explicitDelete ? "warn" : "log"]("[workout-save-guard] explicit guard detail", {
+            env: getRuntimeEnvironmentLabel(),
+            action: "workout_save_guard",
+            user_id: user?.id || null,
+            date: logDate,
+            reason: pendingChange.reason || null,
+            explicitEdit,
+            explicitDelete: Boolean(pendingChange.explicitDelete),
+            localExerciseNames: incomingMetrics.exerciseNames,
+            remoteExerciseNames: existingMetrics.exerciseNames,
+            removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+            localSetCount: incomingMetrics.setCount,
+            remoteSetCount: existingMetrics.setCount,
+            localVolume: incomingMetrics.volume,
+            remoteVolume: existingMetrics.volume,
+            blockedReason: wouldDestructivelyOverwrite && !pendingChange.explicitDelete ? saveGuardDecision.blockedReason : null,
+            allowedReason: wouldDestructivelyOverwrite && !pendingChange.explicitDelete ? null : saveGuardDecision.allowedReason,
+            source: "local_auto_persist",
+        });
+        if (explicitEdit && !wouldDestructivelyOverwrite && saveGuardDecision.details.volumeReduced) {
+            console.log("[workout-save-guard] explicit edit allowed despite metric difference", {
+                env: getRuntimeEnvironmentLabel(),
+                action: "workout_save_guard",
+                user_id: user?.id || null,
+                date: logDate,
+                reason: pendingChange.reason || null,
+                explicitEdit,
+                localVolume: incomingMetrics.volume,
+                remoteVolume: existingMetrics.volume,
+                localSetCount: incomingMetrics.setCount,
+                remoteSetCount: existingMetrics.setCount,
+                removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                allowedReason: saveGuardDecision.allowedReason,
+                source: "local_auto_persist",
+            });
+        }
 
         console[wouldDestructivelyOverwrite && !pendingChange.explicitDelete ? "warn" : "log"]("[set mutation]", {
             action: "workout_autosave",
@@ -5930,7 +6162,7 @@ export default function GymApp() {
             source: "autosave",
             allowed: !(wouldDestructivelyOverwrite && !pendingChange.explicitDelete),
             blockedReason: wouldDestructivelyOverwrite && !pendingChange.explicitDelete
-                ? `pending guarded save: ${pendingChange.reason}`
+                ? saveGuardDecision.blockedReason || `pending guarded save: ${pendingChange.reason}`
                 : null,
             overwrittenByRestore: false,
         });
@@ -5943,6 +6175,14 @@ export default function GymApp() {
                 reason: pendingChange.reason || "unknown",
                 localMetrics: incomingMetrics,
                 remoteMetrics: existingMetrics,
+                explicitEdit,
+                explicitDelete: Boolean(pendingChange.explicitDelete),
+                removedExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                localSetCount: incomingMetrics.setCount,
+                remoteSetCount: existingMetrics.setCount,
+                localVolume: incomingMetrics.volume,
+                remoteVolume: existingMetrics.volume,
+                blockedReason: saveGuardDecision.blockedReason,
             });
             return;
         }
