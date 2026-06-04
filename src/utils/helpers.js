@@ -42,30 +42,93 @@ export function formatDateKey(dateInput = new Date()) {
 const isPlainObject = (value) =>
   !!value && typeof value === "object" && !Array.isArray(value);
 
+const LB_TO_KG = 0.453592;
+
+const normalizeWorkoutWeightUnit = (unit) => {
+  const value = String(unit || "kg").trim().toLowerCase();
+  if (value === "lbs" || value === "lb" || value === "pound" || value === "pounds") return "lbs";
+  if (value === "bw" || value === "bodyweight" || value === "自重") return "BW";
+  return "kg";
+};
+
+const getWorkoutSetUnit = (set, fallbackUnit = "kg") =>
+  normalizeWorkoutWeightUnit(
+    set?.weightMode
+    || set?.weightType
+    || set?.displayUnit
+    || set?.unit
+    || set?.weightUnit
+    || set?.weight_unit
+    || fallbackUnit
+  );
+
+const getWorkoutSetDisplayUnit = (unit) => {
+  const normalized = normalizeWorkoutWeightUnit(unit);
+  return normalized === "lbs" ? "lb" : normalized;
+};
+
+const hasDisplayWeightValue = (set) => {
+  const value = set?.displayWeight ?? set?.originalWeight ?? set?.inputWeight;
+  return value !== undefined && value !== null && String(value).trim() !== "";
+};
+
+const getWorkoutSetDisplayWeight = (set, unit) => {
+  const value = set?.displayWeight ?? set?.originalWeight ?? set?.inputWeight ?? set?.weight;
+  if (normalizeWorkoutWeightUnit(unit) === "BW" || String(value || "").toUpperCase() === "BW") {
+    return "BW";
+  }
+  return value;
+};
+
 export function sanitizeWorkoutSet(set, { allowBodyweight = true } = {}) {
   if (!set || typeof set !== "object") return null;
 
   const reps = Number(set.reps ?? set.rep);
   if (!Number.isFinite(reps) || reps <= 0) return null;
 
-  const rawWeight = set.weight ?? set.weightKg ?? set.weight_kg ?? set.kg ?? set.displayWeight;
+  const unit = getWorkoutSetUnit(set);
+  const displayWeight = getWorkoutSetDisplayWeight(set, unit);
+  const rawWeight = unit === "lbs" && hasDisplayWeightValue(set)
+    ? displayWeight
+    : set.weight ?? set.weightKg ?? set.weight_kg ?? set.kg ?? displayWeight;
 
-  if (String(rawWeight).toUpperCase() === "BW") {
+  if (unit === "BW" || String(rawWeight).toUpperCase() === "BW") {
     if (!allowBodyweight) return null;
     return {
       ...set,
       weight: "BW",
+      displayWeight: "BW",
+      originalWeight: set.originalWeight ?? displayWeight ?? "BW",
+      displayUnit: "BW",
+      unit: "BW",
+      weightMode: set.weightMode || "BW",
+      weightType: set.weightType || "BW",
+      weightUnit: set.weightUnit || "BW",
+      weight_unit: set.weight_unit || "BW",
       reps,
       done: Boolean(set.done),
     };
   }
 
-  const weight = Number(rawWeight);
-  if (!Number.isFinite(weight) || weight <= 0) return null;
+  const displayWeightNumber = Number(rawWeight);
+  if (!Number.isFinite(displayWeightNumber) || displayWeightNumber <= 0) return null;
+
+  const weightKg = unit === "lbs" ? displayWeightNumber * LB_TO_KG : displayWeightNumber;
+  const displayUnit = getWorkoutSetDisplayUnit(unit);
 
   return {
     ...set,
-    weight,
+    weight: weightKg,
+    weightKg,
+    normalizedWeightKg: weightKg,
+    displayWeight: displayWeight ?? rawWeight,
+    originalWeight: set.originalWeight ?? displayWeight ?? rawWeight,
+    displayUnit,
+    unit,
+    weightMode: set.weightMode || unit,
+    weightType: set.weightType || unit,
+    weightUnit: set.weightUnit || unit,
+    weight_unit: set.weight_unit || unit,
     reps,
     done: Boolean(set.done),
   };
@@ -100,6 +163,14 @@ export function getRecordSourceSets(record) {
 
   return [{
     weight: record.weight ?? record.weightKg ?? record.weight_kg ?? record.kg ?? record.displayWeight,
+    displayWeight: record.displayWeight ?? record.originalWeight ?? record.inputWeight ?? record.weight,
+    originalWeight: record.originalWeight ?? record.displayWeight ?? record.weight,
+    displayUnit: record.displayUnit ?? record.unit ?? record.weightUnit ?? record.weight_unit,
+    unit: record.unit ?? record.weightMode ?? record.weightType ?? record.displayUnit ?? record.weightUnit ?? record.weight_unit,
+    weightMode: record.weightMode ?? record.unit ?? record.displayUnit ?? record.weightUnit ?? record.weight_unit,
+    weightType: record.weightType ?? record.unit ?? record.displayUnit ?? record.weightUnit ?? record.weight_unit,
+    weightUnit: record.weightUnit ?? record.unit ?? record.displayUnit,
+    weight_unit: record.weight_unit ?? record.unit ?? record.displayUnit,
     reps: record.reps ?? record.rep,
     done: record.done,
   }];

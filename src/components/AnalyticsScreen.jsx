@@ -175,14 +175,42 @@ const formatPrSetLabel = (item) => {
 const buildValidSets = (record) =>
   sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
 
+const getRecordScopeFlags = (record) => {
+  const sourceText = String(
+    record?.historyScope
+    || record?.sourceScope
+    || record?.source
+    || record?.sourceTable
+    || record?.recordSource
+    || ""
+  ).toLowerCase();
+
+  return {
+    exactHistoryUsed: record?.exactHistory === true || sourceText.includes("exact") || sourceText.includes("workouts.data"),
+    legacyHistoryUsed: record?.legacyHistory === true || sourceText.includes("legacy") || sourceText.includes("summary_json") || sourceText.includes("cache"),
+  };
+};
+
+const logAnalyticsPrCalculation = (payload) => {
+  console.log("[analytics pr]", {
+    action: "analytics_pr_calculation",
+    ...payload,
+  });
+};
+
 const getBestSet = (validSets = [], fallbackUnit = "kg") =>
   validSets.reduce((best, set) => {
     const score = calc1RM([set]);
     if (!best || score > best.score) {
+      const displayUnit = getSetDisplayUnit(set, fallbackUnit);
+      const displayWeight = getSetDisplayWeight(set);
       return {
         weight: Number(set.weight),
-        displayWeight: getSetDisplayWeight(set),
-        displayUnit: getSetDisplayUnit(set, fallbackUnit),
+        normalizedKgValue: Number(set.weight),
+        originalWeight: set.originalWeight ?? set.displayWeight ?? set.weight,
+        originalUnit: displayUnit,
+        displayWeight,
+        displayUnit,
         reps: Number(set.reps),
         score,
       };
@@ -263,6 +291,27 @@ const buildHistoryBestMap = (history = {}, ctx) => {
 
       const key = getCompositeKey(bodyPart, normalizedName);
       if (!bestMap[key] || rm > bestMap[key].estimated1RM) {
+        const scopeFlags = getRecordScopeFlags(record);
+        logAnalyticsPrCalculation({
+          exerciseName: normalizedName,
+          source: ctx.historySource || "canonicalDisplayHistory",
+          date: record?.date || null,
+          originalWeight: bestSet.originalWeight,
+          originalUnit: bestSet.originalUnit,
+          normalizedKgValue: bestSet.normalizedKgValue,
+          displayWeight: bestSet.displayWeight,
+          displayUnit: bestSet.displayUnit,
+          estimated1RM: Math.round(rm),
+          chosenPRDate: record?.date || null,
+          chosenPROriginalSet: {
+            weight: bestSet.originalWeight,
+            unit: bestSet.originalUnit,
+            reps: bestSet.reps,
+          },
+          exactHistoryUsed: scopeFlags.exactHistoryUsed,
+          legacyHistoryUsed: scopeFlags.legacyHistoryUsed,
+          ignoredStalePRSource: false,
+        });
         bestMap[key] = {
           key,
           name: normalizedName,
@@ -274,7 +323,7 @@ const buildHistoryBestMap = (history = {}, ctx) => {
           reps: bestSet.reps,
           estimated1RM: Math.round(rm),
           date: record?.date || null,
-          source: "history",
+          source: "workouts.data",
           sourceLabel: null,
         };
       }
@@ -349,7 +398,7 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
         reps: bestSet.reps,
         estimated1RM: Math.round(rm),
         setsText: formatSetsText(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg"),
-        source: "history",
+        source: "workouts.data",
         sourceLabel: null,
       });
     });
@@ -514,6 +563,7 @@ export default function AnalyticsScreen({
       muscleEx,
       exerciseBodyPartOverrides,
       hiddenSet: new Set(hiddenBodyParts || []),
+      historySource: "canonicalDisplayHistory",
     }),
     [muscleEx, exerciseBodyPartOverrides, hiddenBodyParts]
   );
@@ -537,13 +587,26 @@ export default function AnalyticsScreen({
   const combinedRecordMap = useMemo(() => {
     const allKeys = [...new Set([...Object.keys(historyRecordMap), ...Object.keys(manualRecordMap)])];
     return Object.fromEntries(
-      allKeys.map((key) => [
-        key,
-        [
-          ...(historyRecordMap[key] || []),
-          ...(manualRecordMap[key] || []),
-        ].sort(sortByDateDesc),
-      ])
+      allKeys.map((key) => {
+        const historyRecords = historyRecordMap[key] || [];
+        const manualRecords = historyRecords.length > 0 ? [] : (manualRecordMap[key] || []);
+        if (historyRecords.length > 0 && (manualRecordMap[key] || []).length > 0) {
+          console.log("[analytics pr]", {
+            action: "analytics_pr_calculation",
+            source: "manual_bests",
+            exerciseKey: key,
+            ignoredStalePRSource: true,
+            reason: "workouts.data history exists; manual_bests used only as fallback",
+          });
+        }
+        return [
+          key,
+          [
+            ...historyRecords,
+            ...manualRecords,
+          ].sort(sortByDateDesc),
+        ];
+      })
     );
   }, [historyRecordMap, manualRecordMap]);
 
@@ -555,7 +618,29 @@ export default function AnalyticsScreen({
       const manualBest = manualBestMap[key];
       if (!historyBest) return manualBest;
       if (!manualBest) return historyBest;
-      return manualBest.estimated1RM > historyBest.estimated1RM ? manualBest : historyBest;
+      console.log("[analytics pr]", {
+        action: "analytics_pr_calculation",
+        source: "manual_bests",
+        exerciseName: historyBest.displayName || historyBest.name,
+        date: manualBest.date || null,
+        originalWeight: manualBest.displayWeight,
+        originalUnit: manualBest.displayUnit,
+        normalizedKgValue: manualBest.weight,
+        displayWeight: manualBest.displayWeight,
+        displayUnit: manualBest.displayUnit,
+        estimated1RM: manualBest.estimated1RM,
+        chosenPRDate: historyBest.date || null,
+        chosenPROriginalSet: {
+          weight: historyBest.displayWeight,
+          unit: historyBest.displayUnit,
+          reps: historyBest.reps,
+        },
+        exactHistoryUsed: true,
+        legacyHistoryUsed: false,
+        ignoredStalePRSource: true,
+        reason: "workouts.data history takes precedence over manual_bests",
+      });
+      return historyBest;
     }).filter(Boolean).map((item) => {
       const records = combinedRecordMap[item.key] || [];
       return {
