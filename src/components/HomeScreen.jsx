@@ -4,6 +4,7 @@ import { formatDateKey, sanitizeHistoryRecord } from "../utils/helpers";
 
 const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
 const WEEKLY_DEBUG_DATE = "2026-06-03";
+const WEEKLY_CONSISTENCY_DATES = ["2026-06-01", "2026-06-02", "2026-06-03"];
 
 const FALLBACK_PART_MAP = {
     "ベンチ": "胸",
@@ -425,13 +426,97 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
 
     return Object.values(sessions)
         .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 4)
         .map(s => ({
             ...s,
             parts: [...s.parts].slice(0, 3),
             volume: Number.isFinite(s.volume) ? Math.round(s.volume) : 0,
             exercises: (s.exercises || []).sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999)),
         }));
+}
+
+function collectWeeklySetsFromSessions(sessions = []) {
+    return (sessions || []).reduce((acc, session) => {
+        (session.exercises || []).forEach((exercise) => {
+            const bp = normalizeHomeBodyPart(exercise.bodyPart);
+            const setCount = Number(exercise.setCount || 0);
+            if (!bp || bp === "その他" || setCount <= 0) return;
+            acc[bp] = (acc[bp] || 0) + setCount;
+        });
+        return acc;
+    }, {});
+}
+
+function collectWeeklyPartDetailFromSessions(sessions = [], targetPart) {
+    const exerciseMap = {};
+    let totalSets = 0;
+    let totalVolume = 0;
+    let lastDate = null;
+
+    (sessions || []).forEach((session) => {
+        (session.exercises || []).forEach((exercise) => {
+            const bp = normalizeHomeBodyPart(exercise.bodyPart);
+            if (bp !== targetPart) return;
+
+            const sets = Number(exercise.setCount || 0);
+            if (sets <= 0) return;
+
+            const volume = Number(exercise.volume || 0);
+            if (!exerciseMap[exercise.name]) {
+                exerciseMap[exercise.name] = {
+                    name: exercise.name,
+                    sets: 0,
+                    volume: 0,
+                    dates: new Set(),
+                };
+            }
+
+            exerciseMap[exercise.name].sets += sets;
+            exerciseMap[exercise.name].volume += volume;
+            exerciseMap[exercise.name].dates.add(session.date);
+            totalSets += sets;
+            totalVolume += volume;
+
+            if (!lastDate || session.date > lastDate) {
+                lastDate = session.date;
+            }
+        });
+    });
+
+    return {
+        part: targetPart,
+        totalSets,
+        totalVolume: Math.round(totalVolume),
+        lastDate,
+        exercises: Object.values(exerciseMap)
+            .map(item => ({
+                ...item,
+                dates: [...item.dates].sort((a, b) => b.localeCompare(a)),
+            }))
+            .sort((a, b) => {
+                if (b.sets !== a.sets) return b.sets - a.sets;
+                return String(a.name).localeCompare(String(b.name), "ja");
+            }),
+    };
+}
+
+function summarizeSessionsByDate(sessions = []) {
+    return (sessions || []).reduce((acc, session) => {
+        acc[session.date] = Number(session.sets || 0);
+        return acc;
+    }, {});
+}
+
+function summarizeExercisesForDates(sessions = [], targetDates = []) {
+    const dateSet = new Set(targetDates);
+    return (sessions || []).reduce((acc, session) => {
+        if (!dateSet.has(session.date)) return acc;
+        acc[session.date] = (session.exercises || []).map((exercise) => ({
+            name: exercise.name,
+            bodyPart: exercise.bodyPart,
+            setCount: exercise.setCount,
+        }));
+        return acc;
+    }, {});
 }
 
 function formatDate(dateStr) {
@@ -493,61 +578,6 @@ function collectPartDetail(history, muscleEx, overrides, targetPart) {
         lastExercise,
         lastHours,
         recent: recent.slice(0, 5),
-    };
-}
-
-function collectWeeklyPartDetail(history, muscleEx, overrides, targetPart) {
-    const { start, end } = getWeekRange();
-    const exerciseMap = {};
-    let totalSets = 0;
-    let totalVolume = 0;
-    let lastDate = null;
-
-    Object.entries(history || {}).forEach(([exName, records]) => {
-        (records || []).forEach(record => {
-            if (!record.date || record.date < start || record.date > end) return;
-            const sets = getRecordSetCount(record);
-            if (sets <= 0) return;
-
-            const bp = resolveBodyPart(exName, muscleEx, overrides, record);
-            if (bp !== targetPart) return;
-
-            const volume = getRecordVolume(record);
-
-            if (!exerciseMap[exName]) {
-                exerciseMap[exName] = {
-                    name: exName,
-                    sets: 0,
-                    volume: 0,
-                    dates: new Set(),
-                };
-            }
-
-            exerciseMap[exName].sets += sets;
-            exerciseMap[exName].volume += volume;
-            exerciseMap[exName].dates.add(record.date);
-
-            totalSets += sets;
-            totalVolume += volume;
-
-            if (!lastDate || record.date > lastDate) lastDate = record.date;
-        });
-    });
-
-    const exercises = Object.values(exerciseMap)
-        .map(x => ({
-            ...x,
-            volume: Math.round(x.volume),
-            dates: [...x.dates].sort().reverse(),
-        }))
-        .sort((a, b) => b.sets - a.sets || b.volume - a.volume);
-
-    return {
-        part: targetPart,
-        totalSets,
-        totalVolume: Math.round(totalVolume),
-        lastDate,
-        exercises,
     };
 }
 
@@ -635,15 +665,70 @@ export default function HomeScreen({
         return () => window.clearTimeout(timeoutId);
     }, []);
 
+    const allSessions = useMemo(() => (
+        homeMetricsReady && !recordsLoading
+            ? collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
+            : []
+    ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
+
+    const weeklySessions = useMemo(() => (
+        allSessions.filter((session) => session.date >= week.start && session.date <= week.end)
+    ), [allSessions, week.end, week.start]);
+
+    const recentSessions = useMemo(() => (
+        allSessions.slice(0, 4)
+    ), [allSessions]);
+
     const weeklySets = useMemo(() => {
         if (!homeMetricsReady || recordsLoading) return {};
-        const nextWeeklySets = collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides);
+        const nextWeeklySets = collectWeeklySetsFromSessions(weeklySessions);
+        const directHistoryWeeklySets = collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides);
+        const directDebug = collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides);
+        const directSignature = JSON.stringify(directHistoryWeeklySets);
+        const sessionSignature = JSON.stringify(nextWeeklySets);
+        const mismatchDetected = directSignature !== sessionSignature;
         console.log("[home weekly aggregation]", {
-            ...collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides),
+            ...directDebug,
             bodyPartCounts: nextWeeklySets,
+            directHistoryBodyPartCounts: directHistoryWeeklySets,
+            source: "trusted history sessions",
+            appliedSource: "recentRecords/trustedHistory sessions",
+            ignoredStaleSource: mismatchDetected ? "direct weekly history aggregation" : null,
+        });
+        console.log("[home weekly consistency]", {
+            action: "home_weekly_consistency_check",
+            weekRange: { start: week.start, end: week.end },
+            recentRecordsSource: "trustedHistory sessions",
+            weeklySummarySource: "trustedHistory sessions",
+            trustedHistoryLength: Object.values(history || {}).reduce((sum, records) => sum + (Array.isArray(records) ? records.length : 0), 0),
+            recentRecordsDates: recentSessions.map((session) => session.date),
+            weeklyAggregationDates: weeklySessions.map((session) => session.date).sort(),
+            exercisesByDate: summarizeExercisesForDates(weeklySessions, WEEKLY_CONSISTENCY_DATES),
+            bodyPartCounts: nextWeeklySets,
+            directHistoryBodyPartCounts: directHistoryWeeklySets,
+            recentRecordsTotalSetsByDate: summarizeSessionsByDate(recentSessions),
+            shoulderSetCount: nextWeeklySets["肩"] || 0,
+            tricepsSetCount: nextWeeklySets["三頭"] || 0,
+            bicepsSetCount: nextWeeklySets["二頭"] || 0,
+            mismatchDetected,
+            mismatchReason: mismatchDetected
+                ? "direct weekly aggregation differed from recentRecords/trustedHistory session aggregation"
+                : null,
+            appliedSource: "recentRecords/trustedHistory sessions",
+            ignoredStaleSource: mismatchDetected ? "history_cache/summary_json/stale weekly summary" : null,
         });
         return nextWeeklySets;
-    }, [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides]);
+    }, [
+        exerciseBodyPartOverrides,
+        history,
+        homeMetricsReady,
+        muscleEx,
+        recentSessions,
+        recordsLoading,
+        week.end,
+        week.start,
+        weeklySessions,
+    ]);
 
     const partsToShow = useMemo(() => {
         const base = DEFAULT_PARTS.filter(p => !(hiddenBodyParts || []).includes(p));
@@ -663,12 +748,6 @@ export default function HomeScreen({
                 status: "excellent",
             }))
     ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
-
-    const recentSessions = useMemo(() => (
-        homeMetricsReady && !recordsLoading
-            ? collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
-            : []
-    ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
 
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))
@@ -804,7 +883,7 @@ export default function HomeScreen({
                         <button
                             key={x.part}
                             onClick={() => {
-                                const detail = collectWeeklyPartDetail(history, muscleEx, exerciseBodyPartOverrides, x.part);
+                                const detail = collectWeeklyPartDetailFromSessions(weeklySessions, x.part);
                                 setSelectedWeeklyPart(detail);
                             }}
                             style={{
