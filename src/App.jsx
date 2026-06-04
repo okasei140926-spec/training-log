@@ -1039,6 +1039,40 @@ const shouldPreserveRawDraftOverIncoming = (localDraft = {}, incomingDraft = {})
     };
 };
 
+const makeDraftMeta = (meta = {}, overrides = {}) => {
+    const now = new Date().toISOString();
+    const source = overrides.source ?? meta?.source ?? "local_draft";
+    return {
+        ...meta,
+        ...overrides,
+        source,
+        updatedAt: overrides.updatedAt ?? now,
+        remoteVerifiedAt: overrides.remoteVerifiedAt ?? meta?.remoteVerifiedAt ?? null,
+        hasUnsavedChanges: overrides.hasUnsavedChanges ?? meta?.hasUnsavedChanges ?? true,
+    };
+};
+
+const withDraftMeta = (draft = {}, overrides = {}) => ({
+    ...draft,
+    meta: makeDraftMeta(draft?.meta || {}, overrides),
+});
+
+const isCleanPersistedDraft = (draft = {}) => (
+    draft?.meta?.hasUnsavedChanges === false &&
+    ["save_verified", "remote_supabase"].includes(draft?.meta?.source)
+);
+
+const getTimestampMs = (value) => {
+    const ms = Date.parse(value || "");
+    return Number.isFinite(ms) ? ms : 0;
+};
+
+const isDraftNewerThan = (draft = {}, timestamp) => {
+    const draftMs = getTimestampMs(draft?.meta?.updatedAt);
+    const targetMs = getTimestampMs(timestamp);
+    return draftMs > 0 && targetMs > 0 && draftMs > targetMs;
+};
+
 const normalizeLogDraftState = (draft = {}) => {
     const todayLabels = Array.isArray(draft.todayLabels) ? draft.todayLabels : [];
     const logData = draft.logData || {};
@@ -1051,6 +1085,7 @@ const normalizeLogDraftState = (draft = {}) => {
         logData,
         sessionEx,
         exerciseUnits: draft.exerciseUnits || {},
+        meta: draft.meta || null,
     };
 };
 
@@ -1414,11 +1449,10 @@ export default function GymApp() {
         const sessionEx = draft.sessionEx === null && !Object.keys(logData).length
             ? null
             : mergeDraftExercisesWithLogData(draft.sessionEx || [], logData, todayLabels);
-        const meta = {
-            updatedAt: new Date().toISOString(),
+        const meta = makeDraftMeta(draft.meta || {}, {
             exerciseNames: (sessionEx || []).map((exercise) => exercise.name),
             logDataNames: Object.keys(logData),
-        };
+        });
 
         save(getDraftKey("draft_todayLabels", dateStr), todayLabels);
         save(getDraftKey("draft_logData", dateStr), logData);
@@ -1830,6 +1864,10 @@ export default function GymApp() {
                 logData,
                 sessionEx,
                 exerciseUnits,
+                meta: makeDraftMeta(latestLogDraftRef.current?.meta || {}, {
+                    source: "user_edit",
+                    hasUnsavedChanges: true,
+                }),
             });
             return next;
         });
@@ -1934,6 +1972,10 @@ export default function GymApp() {
                 logData: next || {},
                 sessionEx: nextSessionEx,
                 exerciseUnits: beforeDraft.exerciseUnits || exerciseUnits,
+                meta: makeDraftMeta(beforeDraft.meta || {}, {
+                    source: "user_edit",
+                    hasUnsavedChanges: true,
+                }),
             };
             const pendingChangeAfterUpdate = normalizedDate
                 ? pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {}
@@ -2592,11 +2634,13 @@ export default function GymApp() {
     }, [user?.id]);
 
     useEffect(() => {
+        const previousMeta = latestLogDraftRef.current?.meta || null;
         latestLogDraftRef.current = {
             todayLabels,
             logData,
             sessionEx,
             exerciseUnits,
+            meta: previousMeta,
         };
     }, [exerciseUnits, logData, sessionEx, todayLabels]);
 
@@ -3135,6 +3179,7 @@ export default function GymApp() {
             syncedDates: [],
             failedDates: [],
             skippedDates: [],
+            verifiedHistoryByDate: {},
         };
 
         if (!userId || !normalizedDates.length) return results;
@@ -3326,6 +3371,9 @@ export default function GymApp() {
                             : getHistoryDebugSummaryForDate({}, workoutDate),
                         diffSavedVsVerified: getHistoryDebugDiffForDate(normalizedHistoryMap, verifyWorkoutRow?.data || {}, workoutDate),
                     });
+                    results.verifiedHistoryByDate[workoutDate] = verifyWorkoutRow?.data
+                        ? applyPreferredHistoryDates({}, verifyWorkoutRow.data, [workoutDate])
+                        : {};
                     if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
                         console.log("[workout edit] workouts.data after save", {
                             env: getRuntimeEnvironmentLabel(),
@@ -3943,8 +3991,15 @@ export default function GymApp() {
                         );
                         setWorkoutsDataHistory(workoutsDataHistoryRef.current);
                         persistHistoryForUser(user.id, currentHistory);
-                        const savedDraft = buildWorkoutDraftForDateFromHistory(date, currentHistory);
+                        const retryVerifiedAt = new Date().toISOString();
+                        const savedDraft = withDraftMeta(buildWorkoutDraftForDateFromHistory(date, currentHistory), {
+                            source: "save_verified",
+                            remoteVerifiedAt: retryVerifiedAt,
+                            hasUnsavedChanges: false,
+                        });
                         if (savedDraft.hasSavedWorkout) saveDraftForDate(date, savedDraft);
+                        explicitWorkoutEditDatesRef.current.delete(date);
+                        pendingWorkoutContentChangeDatesRef.current.delete(date);
                     } else if (!isDeleteRetry) {
                         const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, date);
                         if (!remoteAlreadyHasWorkout) {
@@ -4714,6 +4769,7 @@ export default function GymApp() {
             .catch(() => { })
             .then(async () => {
                 if (latestUserIdRef.current !== currentUserId) return;
+                const saveStartedAt = new Date().toISOString();
                 const saveRevision = historyRevisionRef.current;
                 const baseLocalHistory = mergeHistoryMaps(latestHistoryRef.current);
                 const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
@@ -4886,7 +4942,10 @@ export default function GymApp() {
                     ) {
                         return;
                     }
-                    pendingWorkoutContentChangeDatesRef.current.delete(date);
+                    const pendingAfterSave = pendingWorkoutContentChangeDatesRef.current.get(date);
+                    if (!pendingAfterSave?.updatedAt || getTimestampMs(pendingAfterSave.updatedAt) <= getTimestampMs(saveStartedAt)) {
+                        pendingWorkoutContentChangeDatesRef.current.delete(date);
+                    }
                     pendingWorkoutSessionSyncDatesRef.current.delete(date);
                 });
 
@@ -4896,11 +4955,26 @@ export default function GymApp() {
                     !skippedSessionSyncDates.has(date)
                 ));
                 savedDates.forEach((date) => {
-                    const savedDraft = buildWorkoutDraftForDateFromHistory(date, mergedHistory);
+                    const remoteVerifiedAt = new Date().toISOString();
+                    const verifiedHistoryForDate = workoutSyncResults.verifiedHistoryByDate?.[date] || applyPreferredHistoryDates({}, mergedHistory, [date]);
+                    const verifiedHistorySnapshot = applyLocalHistoryDates(mergedHistory, verifiedHistoryForDate, [date]);
+                    const savedDraft = withDraftMeta(
+                        buildWorkoutDraftForDateFromHistory(date, verifiedHistoryForDate),
+                        {
+                            source: "save_verified",
+                            remoteVerifiedAt,
+                            hasUnsavedChanges: false,
+                        }
+                    );
                     if (!savedDraft.hasSavedWorkout) return;
                     const localDraftForDate = date === logDate
                         ? latestLogDraftRef.current
                         : loadDraftForDate(date);
+                    const pendingAfterSave = pendingWorkoutContentChangeDatesRef.current.get(date);
+                    const hasNewerUnsavedEdit = Boolean(
+                        pendingAfterSave?.updatedAt &&
+                        getTimestampMs(pendingAfterSave.updatedAt) > getTimestampMs(saveStartedAt)
+                    );
                     const {
                         preserve: preserveDirtyDraft,
                         localRawMetrics,
@@ -4908,7 +4982,7 @@ export default function GymApp() {
                         removedExerciseNames,
                     } = shouldPreserveRawDraftOverIncoming(localDraftForDate, savedDraft);
 
-                    if (preserveDirtyDraft) {
+                    if (hasNewerUnsavedEdit) {
                         console.warn("[restore] preserve dirty draft after save verification", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: currentUserId,
@@ -4920,7 +4994,9 @@ export default function GymApp() {
                             localRawMetrics,
                             removedExerciseNames,
                             overwrittenByRestore: false,
-                            blockedReason: "verified history would drop local draft sets",
+                            blockedReason: preserveDirtyDraft
+                                ? "verified history would drop local draft sets"
+                                : "newer unsaved edit happened after this save started",
                         });
                         saveDraftForDate(date, localDraftForDate);
                         return;
@@ -4930,6 +5006,20 @@ export default function GymApp() {
                     if (date === logDate) {
                         applyLogDraftState(savedDraft);
                     }
+                    latestHistoryRef.current = verifiedHistorySnapshot;
+                    setHistory(verifiedHistorySnapshot);
+                    persistHistoryForUser(currentUserId, verifiedHistorySnapshot);
+                    const verifiedWorkoutsDataHistory = applyLocalHistoryDates(
+                        workoutsDataHistoryRef.current || {},
+                        verifiedHistoryForDate,
+                        [date]
+                    );
+                    workoutsDataHistoryRef.current = verifiedWorkoutsDataHistory;
+                    setWorkoutsDataHistory(verifiedWorkoutsDataHistory);
+                    explicitWorkoutEditDatesRef.current.delete(date);
+                    pendingWorkoutContentChangeDatesRef.current.delete(date);
+                    pendingWorkoutSessionSyncDatesRef.current.delete(date);
+                    clearSyncFailure(date);
                     console.log("[save] draft refreshed from verified history", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: currentUserId,
@@ -4937,6 +5027,22 @@ export default function GymApp() {
                         exerciseNames: savedDraft.sessionEx.map((exercise) => exercise.name),
                         logDataNames: Object.keys(savedDraft.logData || {}),
                         reason: "remote save verified",
+                    });
+                    console.log("[save] save_success_update_local_draft", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: currentUserId,
+                        action: "save_success_update_local_draft",
+                        date,
+                        savedExerciseNames: savedDraft.sessionEx.map((exercise) => exercise.name),
+                        savedSetCount: getRawDraftSetMetrics(savedDraft).setCount,
+                        saveDraftForDateUpdated: true,
+                        latestLogDraftRefUpdated: date === logDate,
+                        logDataSessionExUpdated: date === logDate,
+                        historyWorkoutsDataHistoryUpdated: true,
+                        explicitWorkoutEditDatesRefCleared: !explicitWorkoutEditDatesRef.current.has(date),
+                        pendingSyncCleared: !pendingWorkoutContentChangeDatesRef.current.has(date) && !pendingWorkoutSessionSyncDatesRef.current.has(date),
+                        remoteVerifiedAt,
+                        hasUnsavedChanges: false,
                     });
                 });
 
@@ -5540,11 +5646,23 @@ export default function GymApp() {
     useEffect(() => {
         if (screen !== "log") return;
 
+        const normalizedDate = String(logDate || "").slice(0, 10);
+        const pendingChange = normalizedDate
+            ? pendingWorkoutContentChangeDatesRef.current.get(normalizedDate)
+            : null;
+        const draftMeta = pendingChange
+            ? makeDraftMeta(latestLogDraftRef.current?.meta || {}, {
+                source: pendingChange.reason || "user_edit",
+                hasUnsavedChanges: true,
+                updatedAt: pendingChange.updatedAt || new Date().toISOString(),
+            })
+            : latestLogDraftRef.current?.meta || null;
         const draft = {
             todayLabels,
             logData,
             sessionEx,
             exerciseUnits,
+            meta: draftMeta,
         };
 
         if (!hasDraftContent(draft)) return;
@@ -5608,6 +5726,10 @@ export default function GymApp() {
             ...currentDraft,
             todayLabels: currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels,
             exerciseUnits: nextUnits,
+            meta: makeDraftMeta(currentDraft.meta || {}, {
+                source: "unit_change",
+                hasUnsavedChanges: true,
+            }),
         });
     };
 
@@ -6781,6 +6903,13 @@ export default function GymApp() {
             workoutDate: logDate,
         });
         const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(String(logDate || "").slice(0, 10)));
+        const localDraftIsCleanPersisted = isCleanPersistedDraft(localDraft);
+        const localDraftHasUnsavedChanges = Boolean(localDraft?.meta?.hasUnsavedChanges === true || explicitLocalEdit);
+        const localDraftCanOverrideSaved = Boolean(
+            hasDraftContent(localDraft) &&
+            !localDraftIsCleanPersisted &&
+            localDraftHasUnsavedChanges
+        );
         const {
             preserve: preserveRawLocalDraft,
             localRawMetrics,
@@ -6788,7 +6917,33 @@ export default function GymApp() {
             removedExerciseNames,
         } = shouldPreserveRawDraftOverIncoming(localDraft, savedDraftForDate);
 
-        if (isDestructiveWorkoutRegression(savedMetrics, localMetrics) || (explicitLocalEdit && preserveRawLocalDraft)) {
+        console.log("[restore] restore_decision", {
+            env: getRuntimeEnvironmentLabel(),
+            user_id: user?.id || null,
+            action: "restore_decision",
+            date: logDate,
+            localDraftSource: localDraft?.meta?.source || null,
+            localDraftUpdatedAt: localDraft?.meta?.updatedAt || null,
+            localDraftRemoteVerifiedAt: localDraft?.meta?.remoteVerifiedAt || null,
+            localDraftHasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? null,
+            remoteUpdatedAt: null,
+            localSetCount: localMetrics.setCount,
+            remoteSetCount: savedMetrics.setCount,
+            localIsNewerUnsavedDraft: localDraftCanOverrideSaved,
+            appliedSource: localDraftCanOverrideSaved && (isDestructiveWorkoutRegression(savedMetrics, localMetrics) || preserveRawLocalDraft)
+                ? "localDraft"
+                : "remoteSupabase",
+            rejectedSource: localDraftCanOverrideSaved && (isDestructiveWorkoutRegression(savedMetrics, localMetrics) || preserveRawLocalDraft)
+                ? "remoteSupabase"
+                : "localDraft",
+            reason: localDraftIsCleanPersisted
+                ? "local draft is already clean persisted data"
+                : localDraftCanOverrideSaved
+                    ? "local draft has unsaved changes"
+                    : "local draft is not unsaved; remote can refresh",
+        });
+
+        if (localDraftCanOverrideSaved && (isDestructiveWorkoutRegression(savedMetrics, localMetrics) || preserveRawLocalDraft)) {
             console.warn("[restore] kept richer local draft instead of smaller saved workout", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user?.id || null,
@@ -6808,8 +6963,13 @@ export default function GymApp() {
             return;
         }
 
-        applyCurrentLogDraft(savedDraftForDate);
-        logRestoreDecision(logDate, savedDraftForDate, localDraft, savedDraftForDate, "supabase_saved_workout_refresh");
+        const cleanSavedDraft = withDraftMeta(savedDraftForDate, {
+            source: "remote_supabase",
+            remoteVerifiedAt: new Date().toISOString(),
+            hasUnsavedChanges: false,
+        });
+        applyCurrentLogDraft(cleanSavedDraft);
+        logRestoreDecision(logDate, cleanSavedDraft, localDraft, cleanSavedDraft, "supabase_saved_workout_refresh");
     }, [
         buildSavedWorkoutDraftForDate,
         applyCurrentLogDraft,
@@ -6906,6 +7066,50 @@ export default function GymApp() {
                     removedExerciseNames,
                 } = shouldPreserveRawDraftOverIncoming(localDraft, remoteDraftForDate);
                 const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(normalizedDate));
+                const remoteVerifiedAt = new Date().toISOString();
+                const localDraftIsCleanPersisted = isCleanPersistedDraft(localDraft);
+                const pendingLocalEdit = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || null;
+                const localDraftHasUnsavedChanges = Boolean(
+                    localDraft?.meta?.hasUnsavedChanges === true ||
+                    explicitLocalEdit ||
+                    pendingLocalEdit
+                );
+                const localDraftIsNewerUnsaved = Boolean(
+                    localDraftHasUnsavedChanges &&
+                    !localDraftIsCleanPersisted &&
+                    (
+                        !localDraft?.meta?.remoteVerifiedAt ||
+                        isDraftNewerThan(localDraft, localDraft.meta.remoteVerifiedAt) ||
+                        explicitLocalEdit ||
+                        pendingLocalEdit
+                    )
+                );
+
+                console.log("[restore] restore_decision", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    action: "restore_decision",
+                    date: normalizedDate,
+                    localDraftSource: localDraft?.meta?.source || null,
+                    localDraftUpdatedAt: localDraft?.meta?.updatedAt || null,
+                    localDraftRemoteVerifiedAt: localDraft?.meta?.remoteVerifiedAt || null,
+                    localDraftHasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? null,
+                    remoteUpdatedAt: remoteVerifiedAt,
+                    localSetCount: localMetrics.setCount,
+                    remoteSetCount: remoteMetrics.setCount,
+                    localIsNewerUnsavedDraft: localDraftIsNewerUnsaved,
+                    appliedSource: localDraftIsNewerUnsaved && (preserveRawLocalDraft || isDestructiveWorkoutRegression(remoteMetrics, localMetrics))
+                        ? "localDraft"
+                        : "remoteSupabase",
+                    rejectedSource: localDraftIsNewerUnsaved && (preserveRawLocalDraft || isDestructiveWorkoutRegression(remoteMetrics, localMetrics))
+                        ? "remoteSupabase"
+                        : "localDraft",
+                    reason: localDraftIsCleanPersisted
+                        ? "local draft is save verified/remote persisted"
+                        : localDraftIsNewerUnsaved
+                            ? "local draft has newer unsaved edits"
+                            : "remote is allowed to refresh local draft",
+                });
 
                 if (!remoteMetrics.hasWorkout) {
                     console.log("[restore] Supabase date refresh skipped empty remote", {
@@ -6918,7 +7122,7 @@ export default function GymApp() {
                     return;
                 }
 
-                if (preserveRawLocalDraft && explicitLocalEdit) {
+                if (localDraftIsNewerUnsaved && preserveRawLocalDraft && explicitLocalEdit) {
                     console.warn("[restore] skipped Supabase date refresh during dirty draft; keeping local draft", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
@@ -6937,7 +7141,7 @@ export default function GymApp() {
                     return;
                 }
 
-                if (explicitLocalEdit && (localMetrics.hasWorkout || localRawMetrics.exerciseCount > 0 || localRawMetrics.setCount > 0)) {
+                if (localDraftIsNewerUnsaved && explicitLocalEdit && (localMetrics.hasWorkout || localRawMetrics.exerciseCount > 0 || localRawMetrics.setCount > 0)) {
                     console.warn("[restore] skipped Supabase date refresh during explicit local edit; keeping local draft", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
@@ -6950,7 +7154,7 @@ export default function GymApp() {
                     return;
                 }
 
-                if (isDestructiveWorkoutRegression(remoteMetrics, localMetrics)) {
+                if (localDraftIsNewerUnsaved && isDestructiveWorkoutRegression(remoteMetrics, localMetrics)) {
                     console.warn("[restore] skipped smaller Supabase date refresh; keeping local draft", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
@@ -6972,6 +7176,11 @@ export default function GymApp() {
                     [normalizedDate]
                 );
                 const savedDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, nextHistory);
+                const cleanSavedDraftForDate = withDraftMeta(savedDraftForDate, {
+                    source: "remote_supabase",
+                    remoteVerifiedAt,
+                    hasUnsavedChanges: false,
+                });
 
                 console.log("[restore] Supabase date refresh applied", {
                     env: getRuntimeEnvironmentLabel(),
@@ -6979,7 +7188,7 @@ export default function GymApp() {
                     date: normalizedDate,
                     supabase: remoteMetrics,
                     localStorage: localMetrics,
-                    appliedExerciseNames: savedDraftForDate.sessionEx.map((ex) => ex.name),
+                    appliedExerciseNames: cleanSavedDraftForDate.sessionEx.map((ex) => ex.name),
                 });
 
                 if (serializeHistoryMap(nextHistory) !== serializeHistoryMap(latestHistoryRef.current || history || {})) {
@@ -6999,7 +7208,7 @@ export default function GymApp() {
                         ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
                     });
                 }
-                applyCurrentLogDraft(savedDraftForDate);
+                applyCurrentLogDraft(cleanSavedDraftForDate);
                 setHistoryLoadError("");
             } catch (error) {
                 console.warn("[restore] Supabase date refresh failed", {
@@ -7071,6 +7280,12 @@ export default function GymApp() {
             isExplicitWorkoutEditChange(pendingChange) ||
             explicitWorkoutEditDatesRef.current.has(String(dateStr || "").slice(0, 10))
         );
+        const localDraftIsCleanPersisted = isCleanPersistedDraft(draftForDate);
+        const localDraftHasUnsavedChanges = Boolean(
+            draftForDate?.meta?.hasUnsavedChanges === true ||
+            explicitLocalEdit ||
+            isActiveLocalRecording
+        );
         const localDraftIsRicher = isDestructiveWorkoutRegression(savedMetrics, localMetrics, {
             allowVolumeDecrease: explicitLocalEdit,
         });
@@ -7080,13 +7295,38 @@ export default function GymApp() {
             incomingRawMetrics: savedRawMetrics,
             removedExerciseNames,
         } = shouldPreserveRawDraftOverIncoming(draftForDate, savedDraftForDate);
-        const shouldUseLocalDraft = hasDraftContent(draftForDate) && (
+        const localDraftCanOverrideSaved = hasDraftContent(draftForDate) &&
+            !localDraftIsCleanPersisted &&
+            localDraftHasUnsavedChanges;
+        const shouldUseLocalDraft = localDraftCanOverrideSaved && (
             explicitLocalEdit ||
-            localDraftIsRicher ||
             isActiveLocalRecording ||
-            (preserveRawLocalDraft && (explicitLocalEdit || isActiveLocalRecording))
+            localDraftIsRicher ||
+            preserveRawLocalDraft
         );
         const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft;
+
+        console.log("[restore] restore_decision", {
+            env: getRuntimeEnvironmentLabel(),
+            user_id: user?.id || null,
+            action: "restore_decision",
+            date: dateStr,
+            localDraftSource: draftForDate?.meta?.source || null,
+            localDraftUpdatedAt: draftForDate?.meta?.updatedAt || null,
+            localDraftRemoteVerifiedAt: draftForDate?.meta?.remoteVerifiedAt || null,
+            localDraftHasUnsavedChanges: draftForDate?.meta?.hasUnsavedChanges ?? null,
+            remoteUpdatedAt: null,
+            localSetCount: localMetrics.setCount,
+            remoteSetCount: savedMetrics.setCount,
+            localIsNewerUnsavedDraft: localDraftCanOverrideSaved,
+            appliedSource: shouldUseLocalDraft ? "localDraft" : shouldUseSavedWorkout ? "remoteSupabase" : "emptyDraft",
+            rejectedSource: shouldUseLocalDraft ? "remoteSupabase" : "localDraft",
+            reason: localDraftIsCleanPersisted
+                ? "local draft is clean persisted data"
+                : localDraftCanOverrideSaved
+                    ? "local draft has unsaved changes"
+                    : "local draft is not unsaved; saved workout can be used",
+        });
 
         if (shouldUseLocalDraft) {
             console.warn("[restore] local draft selected for log date", {
@@ -7123,9 +7363,14 @@ export default function GymApp() {
         }
 
         if (shouldUseSavedWorkout) {
-            saveDraftForDate(dateStr, savedDraftForDate);
-            applyLogDraftState(savedDraftForDate);
-            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, savedDraftForDate, "supabase_saved_workout");
+            const cleanSavedDraft = withDraftMeta(savedDraftForDate, {
+                source: "remote_supabase",
+                remoteVerifiedAt: new Date().toISOString(),
+                hasUnsavedChanges: false,
+            });
+            saveDraftForDate(dateStr, cleanSavedDraft);
+            applyLogDraftState(cleanSavedDraft);
+            logRestoreDecision(dateStr, cleanSavedDraft, draftForDate, cleanSavedDraft, "supabase_saved_workout");
             setScreen("log");
             return;
         }
@@ -7203,8 +7448,13 @@ export default function GymApp() {
                 }
                 pendingWorkoutContentChangeDatesRef.current.delete(editDate);
                 pendingWorkoutSessionSyncDatesRef.current.delete(editDate);
+                explicitWorkoutEditDatesRef.current.delete(editDate);
                 clearSyncFailure(editDate);
-                const savedDraft = buildWorkoutDraftForDateFromHistory(editDate, nextHistory);
+                const savedDraft = withDraftMeta(buildWorkoutDraftForDateFromHistory(editDate, nextHistory), {
+                    source: "save_verified",
+                    remoteVerifiedAt: new Date().toISOString(),
+                    hasUnsavedChanges: false,
+                });
                 if (savedDraft.hasSavedWorkout) {
                     saveDraftForDate(editDate, savedDraft);
                     if (editDate === logDate) {
