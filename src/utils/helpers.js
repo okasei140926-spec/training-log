@@ -307,10 +307,6 @@ const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
     return incomingMetrics.setCount > existingMetrics.setCount ? incomingRecord : existingRecord;
   }
 
-  if (incomingMetrics.volume !== existingMetrics.volume) {
-    return incomingMetrics.volume > existingMetrics.volume ? incomingRecord : existingRecord;
-  }
-
   return incomingRecord;
 };
 
@@ -370,9 +366,10 @@ const getWorkoutRowHistoryData = (row) => {
   return row?.data;
 };
 
-const addWorkoutRowRecordToHistory = (historyMap, exerciseName, record, fallbackDate) => {
+const addWorkoutRowRecordToHistory = (historyMap, exerciseName, record, fallbackDate, scope = "") => {
   if (!exerciseName || !isPlainObject(record)) return;
   const recordDate = String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10);
+  const resolvedDate = recordDate || fallbackDate;
   const nextRecord = recordDate || !fallbackDate
     ? record
     : {
@@ -381,9 +378,29 @@ const addWorkoutRowRecordToHistory = (historyMap, exerciseName, record, fallback
         workoutDate: fallbackDate,
         workout_date: fallbackDate,
       };
+  const historyScope = scope || "";
+  const scopedRecord = {
+    ...nextRecord,
+    ...(resolvedDate
+      ? {
+          date: resolvedDate,
+          workoutDate: resolvedDate,
+          workout_date: resolvedDate,
+        }
+      : {}),
+    ...(historyScope
+      ? {
+          historyScope,
+          sourceScope: historyScope,
+          sourceTable: "workouts",
+          exactHistory: historyScope === "exact",
+          legacyHistory: historyScope === "legacy",
+        }
+      : {}),
+  };
 
   if (!historyMap[exerciseName]) historyMap[exerciseName] = [];
-  historyMap[exerciseName].push(nextRecord);
+  historyMap[exerciseName].push(scopedRecord);
 };
 
 const removeHistoryDateFromMap = (historyMap, targetDate) => {
@@ -448,9 +465,9 @@ export function buildHistoryFromWorkoutRowsWithScopes(rows) {
         if (!effectiveDate) return;
 
         if (rowDate && effectiveDate !== rowDate) {
-          addWorkoutRowRecordToHistory(legacyHistory, exerciseName, record, effectiveDate);
+          addWorkoutRowRecordToHistory(legacyHistory, exerciseName, record, effectiveDate, "legacy");
         } else {
-          addWorkoutRowRecordToHistory(exactHistory, exerciseName, record, rowDate || effectiveDate);
+          addWorkoutRowRecordToHistory(exactHistory, exerciseName, record, rowDate || effectiveDate, "exact");
         }
       });
     });

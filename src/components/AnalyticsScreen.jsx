@@ -187,7 +187,9 @@ const getRecordScopeFlags = (record) => {
 
   return {
     exactHistoryUsed: record?.exactHistory === true || sourceText.includes("exact") || sourceText.includes("workouts.data"),
-    legacyHistoryUsed: record?.legacyHistory === true || sourceText.includes("legacy") || sourceText.includes("summary_json") || sourceText.includes("cache"),
+    legacyHistoryUsed: record?.legacyHistory === true || sourceText.includes("legacy"),
+    summaryJsonUsed: sourceText.includes("summary_json") || sourceText.includes("workout_session"),
+    cacheUsed: sourceText.includes("cache") || sourceText.includes("localstorage"),
   };
 };
 
@@ -207,6 +209,7 @@ const getBestSet = (validSets = [], fallbackUnit = "kg") =>
       return {
         weight: Number(set.weight),
         normalizedKgValue: Number(set.weight),
+        normalizedKg: Number(set.weight),
         originalWeight: set.originalWeight ?? set.displayWeight ?? set.weight,
         originalUnit: displayUnit,
         displayWeight,
@@ -298,7 +301,9 @@ const buildHistoryBestMap = (history = {}, ctx) => {
           date: record?.date || null,
           originalWeight: bestSet.originalWeight,
           originalUnit: bestSet.originalUnit,
+          reps: bestSet.reps,
           normalizedKgValue: bestSet.normalizedKgValue,
+          normalizedKg: bestSet.normalizedKg,
           displayWeight: bestSet.displayWeight,
           displayUnit: bestSet.displayUnit,
           estimated1RM: Math.round(rm),
@@ -310,6 +315,11 @@ const buildHistoryBestMap = (history = {}, ctx) => {
           },
           exactHistoryUsed: scopeFlags.exactHistoryUsed,
           legacyHistoryUsed: scopeFlags.legacyHistoryUsed,
+          usedTrustedHistory: true,
+          usedSummaryJson: scopeFlags.summaryJsonUsed,
+          usedLegacyHistory: scopeFlags.legacyHistoryUsed,
+          usedManualBest: false,
+          rejectedStalePR: false,
           ignoredStalePRSource: false,
         });
         bestMap[key] = {
@@ -563,7 +573,7 @@ export default function AnalyticsScreen({
       muscleEx,
       exerciseBodyPartOverrides,
       hiddenSet: new Set(hiddenBodyParts || []),
-      historySource: "canonicalDisplayHistory",
+      historySource: "canonicalDisplayHistory/buildTrustedHistory",
     }),
     [muscleEx, exerciseBodyPartOverrides, hiddenBodyParts]
   );
@@ -595,6 +605,11 @@ export default function AnalyticsScreen({
             action: "analytics_pr_calculation",
             source: "manual_bests",
             exerciseKey: key,
+            usedTrustedHistory: true,
+            usedSummaryJson: false,
+            usedLegacyHistory: false,
+            usedManualBest: true,
+            rejectedStalePR: true,
             ignoredStalePRSource: true,
             reason: "workouts.data history exists; manual_bests used only as fallback",
           });
@@ -626,8 +641,10 @@ export default function AnalyticsScreen({
         originalWeight: manualBest.displayWeight,
         originalUnit: manualBest.displayUnit,
         normalizedKgValue: manualBest.weight,
+        normalizedKg: manualBest.weight,
         displayWeight: manualBest.displayWeight,
         displayUnit: manualBest.displayUnit,
+        reps: manualBest.reps,
         estimated1RM: manualBest.estimated1RM,
         chosenPRDate: historyBest.date || null,
         chosenPROriginalSet: {
@@ -637,6 +654,11 @@ export default function AnalyticsScreen({
         },
         exactHistoryUsed: true,
         legacyHistoryUsed: false,
+        usedTrustedHistory: true,
+        usedSummaryJson: false,
+        usedLegacyHistory: false,
+        usedManualBest: true,
+        rejectedStalePR: true,
         ignoredStalePRSource: true,
         reason: "workouts.data history takes precedence over manual_bests",
       });
