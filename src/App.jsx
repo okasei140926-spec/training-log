@@ -1190,6 +1190,58 @@ const withDraftMeta = (draft = {}, overrides = {}) => ({
     meta: makeDraftMeta(draft?.meta || {}, overrides),
 });
 
+const normalizeDraftDateKey = (value) => String(value || "").slice(0, 10);
+
+const getDraftDateCandidates = (draft = {}) => {
+    const meta = draft?.meta || {};
+    return {
+        metaDate: normalizeDraftDateKey(meta.date),
+        metaKeyDate: normalizeDraftDateKey(meta.keyDate),
+        metaDraftDate: normalizeDraftDateKey(meta.draftDate),
+        metaWorkoutDate: normalizeDraftDateKey(meta.workoutDate || meta.workout_date),
+        draftDate: normalizeDraftDateKey(draft.date),
+        draftLogDate: normalizeDraftDateKey(draft.logDate),
+        draftWorkoutDate: normalizeDraftDateKey(draft.workoutDate || draft.workout_date),
+    };
+};
+
+const getDraftPayloadDate = (draft = {}) => {
+    const candidates = getDraftDateCandidates(draft);
+    return Object.values(candidates).find(Boolean) || "";
+};
+
+const getDraftDateValidation = (keyDate, draft = {}, selectedDate = keyDate) => {
+    const normalizedKeyDate = normalizeDraftDateKey(keyDate);
+    const normalizedSelectedDate = normalizeDraftDateKey(selectedDate) || normalizedKeyDate;
+    const candidates = getDraftDateCandidates(draft);
+    const mismatches = Object.entries(candidates)
+        .filter(([, date]) => date && date !== normalizedKeyDate)
+        .map(([field, date]) => ({ field, date }));
+    const payloadDate = Object.values(candidates).find(Boolean) || "";
+
+    return {
+        keyDate: normalizedKeyDate,
+        selectedDate: normalizedSelectedDate,
+        payloadDate,
+        accepted: mismatches.length === 0,
+        mismatches,
+        rejectedReason: mismatches.length
+            ? `draft payload date mismatch: ${mismatches.map(({ field, date }) => `${field}=${date}`).join(", ")}`
+            : "",
+    };
+};
+
+const withDraftDateMeta = (dateStr, draft = {}, overrides = {}) => {
+    const normalizedDate = normalizeDraftDateKey(dateStr);
+    return withDraftMeta(draft, {
+        ...overrides,
+        date: normalizedDate,
+        keyDate: normalizedDate,
+        draftDate: normalizedDate,
+        workoutDate: normalizedDate,
+    });
+};
+
 const isCleanPersistedDraft = (draft = {}) => (
     draft?.meta?.hasUnsavedChanges === false &&
     ["save_verified", "remote_supabase"].includes(draft?.meta?.source)
@@ -1588,6 +1640,14 @@ const buildWorkoutDraftForDateFromHistory = (dateStr, sourceHistory = {}) => {
         sessionEx: dayExercises.map(({ id, name, label, bodyPart }) => ({ id, name, label, bodyPart })),
         logData: dayLogData,
         exerciseUnits: exerciseUnitsForDate,
+        meta: {
+            date: normalizedDate,
+            keyDate: normalizedDate,
+            draftDate: normalizedDate,
+            workoutDate: normalizedDate,
+            source: "history",
+            hasUnsavedChanges: false,
+        },
     };
 };
 
@@ -1600,40 +1660,102 @@ export default function GymApp() {
     const getDraftKey = useCallback((baseKey, dateStr) => `${baseKey}_${dateStr}`, []);
 
     const loadDraftForDate = useCallback((dateStr) => {
-        const legacyDraftDate = load("draft_logDate", "");
-        const useLegacyFallback = legacyDraftDate === dateStr;
-        const legacyLogData = useLegacyFallback ? load("draft_logData", {}) : {};
-        const datedLogData = load(getDraftKey("draft_logData", dateStr), null);
-        const countDraftSets = (draftLogData) => Object.values(draftLogData || {})
-            .reduce((count, sets) => count + (Array.isArray(sets) ? sets.length : 0), 0);
-        const logData =
-            datedLogData === null
-                ? legacyLogData
-                : countDraftSets(datedLogData) < countDraftSets(legacyLogData)
-                    ? legacyLogData
-                    : datedLogData;
-        const todayLabels = load(
-            getDraftKey("draft_todayLabels", dateStr),
-            useLegacyFallback ? load("draft_todayLabels", []) : []
-        );
-        const rawSessionEx = load(
-            getDraftKey("draft_sessionEx", dateStr),
-            useLegacyFallback ? load("draft_sessionEx", null) : null
-        );
-        const sessionEx = rawSessionEx === null && !Object.keys(logData || {}).length
-            ? null
-            : mergeDraftExercisesWithLogData(rawSessionEx || [], logData, todayLabels);
+        const normalizedDate = normalizeDraftDateKey(dateStr);
+        const emptyDraft = withDraftDateMeta(normalizedDate, {
+            todayLabels: [],
+            logData: {},
+            sessionEx: null,
+            exerciseUnits: {},
+        }, {
+            source: "empty_draft",
+            hasUnsavedChanges: false,
+        });
+        if (!normalizedDate) return emptyDraft;
 
-        return {
-            todayLabels,
-            logData,
-            sessionEx,
-            exerciseUnits: load(
-                getDraftKey("draft_exerciseUnits", dateStr),
-                useLegacyFallback ? load("draft_exerciseUnits", {}) : {}
-            ),
-            meta: load(getDraftKey("draft_meta", dateStr), null),
+        const hasDraftPayloadContent = (draft) => (
+            draft.sessionEx !== null ||
+            Object.keys(draft.logData || {}).length > 0 ||
+            Object.keys(draft.exerciseUnits || {}).length > 0 ||
+            (draft.todayLabels || []).length > 0
+        );
+
+        const normalizeDraftForLoad = (draft, source) => {
+            const validation = getDraftDateValidation(normalizedDate, draft, normalizedDate);
+            const accepted = validation.accepted;
+            const logPayload = {
+                action: "draft_restore_date_check",
+                source,
+                keyDate: validation.keyDate,
+                payloadDate: validation.payloadDate || null,
+                selectedDate: validation.selectedDate,
+                accepted,
+                rejectedReason: validation.rejectedReason || null,
+            };
+            if (!accepted) {
+                console.warn("[restore] draft restore date check", logPayload);
+                return null;
+            }
+            console.log("[restore] draft restore date check", logPayload);
+            return withDraftDateMeta(normalizedDate, draft, {
+                source: draft?.meta?.source || source,
+                hasUnsavedChanges: draft?.meta?.hasUnsavedChanges ?? true,
+                remoteVerifiedAt: draft?.meta?.remoteVerifiedAt ?? null,
+            });
         };
+
+        const datedLogData = load(getDraftKey("draft_logData", normalizedDate), null);
+        const datedTodayLabels = load(getDraftKey("draft_todayLabels", normalizedDate), []);
+        const datedRawSessionEx = load(getDraftKey("draft_sessionEx", normalizedDate), null);
+        const datedExerciseUnits = load(getDraftKey("draft_exerciseUnits", normalizedDate), {});
+        const datedMeta = load(getDraftKey("draft_meta", normalizedDate), null);
+        const datedSessionEx = datedRawSessionEx === null && !Object.keys(datedLogData || {}).length
+            ? null
+            : mergeDraftExercisesWithLogData(datedRawSessionEx || [], datedLogData || {}, datedTodayLabels);
+        const datedDraft = {
+            todayLabels: datedTodayLabels,
+            logData: datedLogData || {},
+            sessionEx: datedSessionEx,
+            exerciseUnits: datedExerciseUnits,
+            meta: datedMeta,
+        };
+        const datedDraftHasPayload = datedLogData !== null ||
+            datedRawSessionEx !== null ||
+            Object.keys(datedExerciseUnits || {}).length > 0 ||
+            datedTodayLabels.length > 0 ||
+            Boolean(datedMeta);
+        const acceptedDatedDraft = datedDraftHasPayload
+            ? normalizeDraftForLoad(datedDraft, "date_scoped_draft")
+            : null;
+        if (acceptedDatedDraft && hasDraftPayloadContent(acceptedDatedDraft)) {
+            return acceptedDatedDraft;
+        }
+
+        const legacyDraftDate = normalizeDraftDateKey(load("draft_logDate", ""));
+        const useLegacyFallback = legacyDraftDate === normalizedDate;
+        const legacyMeta = useLegacyFallback
+            ? (load("draft_meta", null) || { date: legacyDraftDate, keyDate: legacyDraftDate })
+            : null;
+        const legacyLogData = useLegacyFallback ? load("draft_logData", {}) : {};
+        const legacyTodayLabels = useLegacyFallback ? load("draft_todayLabels", []) : [];
+        const legacyRawSessionEx = useLegacyFallback ? load("draft_sessionEx", null) : null;
+        const legacyExerciseUnits = useLegacyFallback ? load("draft_exerciseUnits", {}) : {};
+        const legacySessionEx = legacyRawSessionEx === null && !Object.keys(legacyLogData || {}).length
+            ? null
+            : mergeDraftExercisesWithLogData(legacyRawSessionEx || [], legacyLogData || {}, legacyTodayLabels);
+        const legacyDraft = {
+            todayLabels: legacyTodayLabels,
+            logData: legacyLogData || {},
+            sessionEx: legacySessionEx,
+            exerciseUnits: legacyExerciseUnits,
+            meta: legacyMeta,
+        };
+        const acceptedLegacyDraft = useLegacyFallback
+            ? normalizeDraftForLoad(legacyDraft, "legacy_draft")
+            : null;
+
+        return acceptedLegacyDraft && hasDraftPayloadContent(acceptedLegacyDraft)
+            ? acceptedLegacyDraft
+            : emptyDraft;
     }, [getDraftKey]);
 
     const hasDraftContent = useCallback((draft) => (
@@ -1650,28 +1772,47 @@ export default function GymApp() {
     ]), []);
 
     const saveDraftForDate = useCallback((dateStr, draft) => {
-        if (!dateStr) return;
+        const normalizedDate = normalizeDraftDateKey(dateStr);
+        if (!normalizedDate) return false;
+        const validation = getDraftDateValidation(normalizedDate, draft, normalizedDate);
+        if (!validation.accepted) {
+            console.warn("[save] blocked date-mismatched draft persistence", {
+                action: "draft_restore_date_check",
+                keyDate: validation.keyDate,
+                payloadDate: validation.payloadDate || null,
+                selectedDate: validation.selectedDate,
+                accepted: false,
+                rejectedReason: validation.rejectedReason,
+            });
+            return false;
+        }
         const logData = draft.logData || {};
         const todayLabels = draft.todayLabels || [];
         const sessionEx = draft.sessionEx === null && !Object.keys(logData).length
             ? null
             : mergeDraftExercisesWithLogData(draft.sessionEx || [], logData, todayLabels);
         const meta = makeDraftMeta(draft.meta || {}, {
+            date: normalizedDate,
+            keyDate: normalizedDate,
+            draftDate: normalizedDate,
+            workoutDate: normalizedDate,
             exerciseNames: (sessionEx || []).map((exercise) => exercise.name),
             logDataNames: Object.keys(logData),
         });
 
-        save(getDraftKey("draft_todayLabels", dateStr), todayLabels);
-        save(getDraftKey("draft_logData", dateStr), logData);
-        save(getDraftKey("draft_sessionEx", dateStr), sessionEx);
-        save(getDraftKey("draft_exerciseUnits", dateStr), draft.exerciseUnits || {});
-        save(getDraftKey("draft_meta", dateStr), meta);
+        save(getDraftKey("draft_todayLabels", normalizedDate), todayLabels);
+        save(getDraftKey("draft_logData", normalizedDate), logData);
+        save(getDraftKey("draft_sessionEx", normalizedDate), sessionEx);
+        save(getDraftKey("draft_exerciseUnits", normalizedDate), draft.exerciseUnits || {});
+        save(getDraftKey("draft_meta", normalizedDate), meta);
 
         save("draft_todayLabels", todayLabels);
         save("draft_logData", logData);
         save("draft_sessionEx", sessionEx);
         save("draft_exerciseUnits", draft.exerciseUnits || {});
-        save("draft_logDate", dateStr);
+        save("draft_meta", meta);
+        save("draft_logDate", normalizedDate);
+        return true;
     }, [getDraftKey]);
 
     const clearDraftForDate = useCallback((dateStr) => {
@@ -1695,6 +1836,7 @@ export default function GymApp() {
             save("draft_logData", {});
             save("draft_sessionEx", null);
             save("draft_exerciseUnits", {});
+            save("draft_meta", null);
             save("draft_logDate", "");
         }
     }, [getDraftKey]);
@@ -2066,7 +2208,7 @@ export default function GymApp() {
                     ? nextOrUpdater(prev)
                     : nextOrUpdater;
 
-            saveDraftForDate(logDate, {
+            saveDraftForDate(logDate, withDraftDateMeta(logDate, {
                 todayLabels: next,
                 logData,
                 sessionEx,
@@ -2075,7 +2217,7 @@ export default function GymApp() {
                     source: "user_edit",
                     hasUnsavedChanges: true,
                 }),
-            });
+            }));
             return next;
         });
     };
@@ -2135,7 +2277,12 @@ export default function GymApp() {
     }, []);
 
     const applyCurrentLogDraft = useCallback((draft, { persist = true } = {}) => {
-        const normalizedDraft = applyLogDraftState(draft);
+        const datedDraft = withDraftDateMeta(logDate, draft, {
+            source: draft?.meta?.source || "current_log_draft",
+            hasUnsavedChanges: draft?.meta?.hasUnsavedChanges ?? true,
+            remoteVerifiedAt: draft?.meta?.remoteVerifiedAt ?? null,
+        });
+        const normalizedDraft = applyLogDraftState(datedDraft);
         if (persist) saveDraftForDate(logDate, normalizedDraft);
         return normalizedDraft;
     }, [applyLogDraftState, logDate, saveDraftForDate]);
@@ -2230,8 +2377,12 @@ export default function GymApp() {
 
             if (blockedReason) return prev;
 
-            saveDraftForDate(logDate, nextDraft);
-            latestLogDraftRef.current = nextDraft;
+            const datedNextDraft = withDraftDateMeta(logDate, nextDraft, {
+                source: nextDraft?.meta?.source || "user_input",
+                hasUnsavedChanges: nextDraft?.meta?.hasUnsavedChanges ?? true,
+            });
+            saveDraftForDate(logDate, datedNextDraft);
+            latestLogDraftRef.current = datedNextDraft;
 
             return next;
         });
@@ -2895,8 +3046,40 @@ export default function GymApp() {
     }, [history]);
 
     useEffect(() => {
-        workoutsDataHistoryRef.current = workoutsDataHistory;
-    }, [workoutsDataHistory]);
+        const incomingStateHistory = workoutsDataHistory || {};
+        const trustedRefHistory = workoutsDataHistoryRef.current || {};
+        if (serializeHistoryMap(incomingStateHistory) === serializeHistoryMap(trustedRefHistory)) return;
+
+        const decision = getHomeWeeklyStaleRegressionDecision(
+            trustedRefHistory,
+            incomingStateHistory,
+            getCurrentWeekRangeForHomeSummary()
+        );
+        if (decision.blocked) {
+            console.warn("[home weekly summary] stale state commit blocked", {
+                action: "home_weekly_stale_overwrite_blocked",
+                source: "workoutsDataHistory state commit",
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                applied: false,
+                staleBodyPartCounts: decision.incomingSummary.bodyPartCounts,
+                trustedBodyPartCounts: decision.trustedSummary.bodyPartCounts,
+                staleShoulderCount: decision.incomingSummary.bodyPartCounts["肩"] || 0,
+                staleTricepsCount: decision.incomingSummary.bodyPartCounts["三頭"] || 0,
+                staleBicepsCount: decision.incomingSummary.bodyPartCounts["二頭"] || 0,
+                trustedShoulderCount: decision.trustedSummary.bodyPartCounts["肩"] || 0,
+                trustedTricepsCount: decision.trustedSummary.bodyPartCounts["三頭"] || 0,
+                trustedBicepsCount: decision.trustedSummary.bodyPartCounts["二頭"] || 0,
+                regressedBodyParts: decision.regressedBodyParts,
+                reason: "older workoutsDataHistory state attempted to replace richer ref",
+                timestamp: new Date().toISOString(),
+            });
+            setWorkoutsDataHistory(trustedRefHistory);
+            return;
+        }
+
+        workoutsDataHistoryRef.current = incomingStateHistory;
+    }, [user?.id, workoutsDataHistory]);
 
     const applyWorkoutsDataHistorySnapshot = useCallback((nextHistory, {
         allowRegression = false,
@@ -6090,17 +6273,22 @@ export default function GymApp() {
                 updatedAt: pendingChange.updatedAt || new Date().toISOString(),
             })
             : latestLogDraftRef.current?.meta || null;
-        const draft = {
+        const draft = withDraftDateMeta(normalizedDate, {
             todayLabels,
             logData,
             sessionEx,
             exerciseUnits,
             meta: draftMeta,
-        };
+        }, {
+            source: draftMeta?.source || "autosave_draft",
+            hasUnsavedChanges: draftMeta?.hasUnsavedChanges ?? true,
+            updatedAt: draftMeta?.updatedAt,
+            remoteVerifiedAt: draftMeta?.remoteVerifiedAt,
+        });
 
         if (!hasDraftContent(draft)) return;
 
-        saveDraftForDate(logDate, draft);
+        saveDraftForDate(normalizedDate, draft);
     }, [screen, todayLabels, logData, sessionEx, exerciseUnits, logDate, logMode, hasDraftContent, saveDraftForDate]);
 
     useEffect(() => { save("routineOrder", routineOrder); }, [routineOrder]);
@@ -7154,12 +7342,10 @@ export default function GymApp() {
 
         const todayKey = getTodayKey();
         markWorkoutContentChanged(todayKey, "ai_workout_plan_add");
-        const currentDraft = {
-            todayLabels,
-            logData,
-            sessionEx,
-            exerciseUnits,
-        };
+        const currentDraft = withDraftDateMeta(logDate, getCurrentLogDraftSnapshot(), {
+            source: latestLogDraftRef.current?.meta?.source || "current_log_snapshot",
+            hasUnsavedChanges: latestLogDraftRef.current?.meta?.hasUnsavedChanges ?? true,
+        });
 
         if (hasDraftContent(currentDraft)) {
             saveDraftForDate(logDate, currentDraft);
@@ -7297,10 +7483,11 @@ export default function GymApp() {
     };
 
     const buildSavedWorkoutDraftForDate = useCallback((dateStr, sourceHistory = history) => {
+        const normalizedDate = normalizeDraftDateKey(dateStr);
         const dayExercises = Object.entries(sourceHistory || {})
             .map(([name, recs]) => {
                 const rec = (recs || []).find((record) => (
-                    String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) === dateStr
+                    String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10) === normalizedDate
                 ));
                 const sanitizedRecord = sanitizeHistoryRecord(rec, { allowBodyweight: true });
                 if (!sanitizedRecord) return null;
@@ -7337,6 +7524,14 @@ export default function GymApp() {
             sessionEx: dayExercises.map(({ id, name, label, bodyPart }) => ({ id, name, label, bodyPart })),
             logData: dayLogData,
             exerciseUnits: {},
+            meta: {
+                date: normalizedDate,
+                keyDate: normalizedDate,
+                draftDate: normalizedDate,
+                workoutDate: normalizedDate,
+                source: "history",
+                hasUnsavedChanges: false,
+            },
         };
     }, [getExUnit, history]);
 
@@ -7381,22 +7576,28 @@ export default function GymApp() {
         if (screen !== "log" || !historySyncReady || !logDate) return;
         if (pendingWorkoutContentChangeDatesRef.current.has(String(logDate || "").slice(0, 10))) return;
 
-        const savedDraftForDate = buildSavedWorkoutDraftForDate(logDate, history);
+        const normalizedLogDate = normalizeDraftDateKey(logDate);
+        const savedDraftForDate = withDraftDateMeta(
+            normalizedLogDate,
+            buildSavedWorkoutDraftForDate(normalizedLogDate, canonicalDisplayHistory),
+            {
+                source: "canonical_display_history",
+                hasUnsavedChanges: false,
+            }
+        );
         if (!savedDraftForDate.hasSavedWorkout) return;
 
-        const currentDraft = {
-            todayLabels,
-            logData,
-            sessionEx,
-            exerciseUnits,
-        };
+        const currentDraft = withDraftDateMeta(normalizedLogDate, getCurrentLogDraftSnapshot(), {
+            source: latestLogDraftRef.current?.meta?.source || "current_log_snapshot",
+            hasUnsavedChanges: latestLogDraftRef.current?.meta?.hasUnsavedChanges ?? true,
+        });
         const currentDraftSignature = getWorkoutDraftSignature(currentDraft);
         const savedDraftSignature = getWorkoutDraftSignature(savedDraftForDate);
         if (currentDraftSignature === savedDraftSignature) {
             return;
         }
 
-        const localDraft = loadDraftForDate(logDate);
+        const localDraft = loadDraftForDate(normalizedLogDate);
         if (
             hasDraftContent(currentDraft) &&
             currentDraftSignature === getWorkoutDraftSignature(localDraft)
@@ -7408,15 +7609,15 @@ export default function GymApp() {
             exercises: savedDraftForDate.sessionEx,
             logData: savedDraftForDate.logData,
             getExUnit,
-            workoutDate: logDate,
+            workoutDate: normalizedLogDate,
         });
         const localMetrics = getDraftMetricsForDate({
             exercises: localDraft.sessionEx || [],
             logData: localDraft.logData || {},
             getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
-            workoutDate: logDate,
+            workoutDate: normalizedLogDate,
         });
-        const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(String(logDate || "").slice(0, 10)));
+        const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(normalizedLogDate));
         const localDraftIsCleanPersisted = isCleanPersistedDraft(localDraft);
         const localDraftHasUnsavedChanges = Boolean(localDraft?.meta?.hasUnsavedChanges === true || explicitLocalEdit);
         const localDraftCanOverrideSaved = Boolean(
@@ -7435,7 +7636,7 @@ export default function GymApp() {
             env: getRuntimeEnvironmentLabel(),
             user_id: user?.id || null,
             action: "restore_decision",
-            date: logDate,
+            date: normalizedLogDate,
             localDraftSource: localDraft?.meta?.source || null,
             localDraftUpdatedAt: localDraft?.meta?.updatedAt || null,
             localDraftRemoteVerifiedAt: localDraft?.meta?.remoteVerifiedAt || null,
@@ -7461,7 +7662,7 @@ export default function GymApp() {
             console.warn("[restore] kept richer local draft instead of smaller saved workout", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user?.id || null,
-                date: logDate,
+                date: normalizedLogDate,
                 local: localMetrics,
                 saved: savedMetrics,
                 localRawMetrics,
@@ -7472,25 +7673,30 @@ export default function GymApp() {
                 restoreApplied: false,
                 overwrittenByRestore: false,
             });
-            applyCurrentLogDraft(localDraft);
-            logRestoreDecision(logDate, savedDraftForDate, localDraft, localDraft, "local_draft_richer_than_saved");
+            const datedLocalDraft = withDraftDateMeta(normalizedLogDate, localDraft, {
+                source: localDraft?.meta?.source || "draft_restore",
+                hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
+            });
+            applyCurrentLogDraft(datedLocalDraft);
+            logRestoreDecision(normalizedLogDate, savedDraftForDate, datedLocalDraft, datedLocalDraft, "local_draft_richer_than_saved");
             return;
         }
 
-        const cleanSavedDraft = withDraftMeta(savedDraftForDate, {
+        const cleanSavedDraft = withDraftDateMeta(normalizedLogDate, savedDraftForDate, {
             source: "remote_supabase",
             remoteVerifiedAt: new Date().toISOString(),
             hasUnsavedChanges: false,
         });
         applyCurrentLogDraft(cleanSavedDraft);
-        logRestoreDecision(logDate, cleanSavedDraft, localDraft, cleanSavedDraft, "supabase_saved_workout_refresh");
+        logRestoreDecision(normalizedLogDate, cleanSavedDraft, localDraft, cleanSavedDraft, "supabase_saved_workout_refresh");
     }, [
         buildSavedWorkoutDraftForDate,
         applyCurrentLogDraft,
+        canonicalDisplayHistory,
         exerciseUnits,
-        history,
         historySyncReady,
         hasDraftContent,
+        getCurrentLogDraftSnapshot,
         loadDraftForDate,
         logData,
         logDate,
@@ -7558,9 +7764,44 @@ export default function GymApp() {
                 if (cancelled) return;
                 if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
 
-                const remoteHistory = buildRemoteHistoryWithWorkoutRowsPriority(
-                    workoutsRes.data || [],
-                    sessionRes.error ? [] : (sessionRes.data ? [sessionRes.data] : [])
+                const workoutRowsForDate = (workoutsRes.data || []).filter((row) => {
+                    const rowDate = normalizeDraftDateKey(row?.date);
+                    const accepted = rowDate === normalizedDate;
+                    if (!accepted) {
+                        console.warn("[restore] rejected date-mismatched workouts row", {
+                            action: "refresh_log_date_result",
+                            requestedDate: normalizedDate,
+                            remoteRowDate: rowDate || null,
+                            accepted: false,
+                            rejectedReason: "workouts.row.date mismatch",
+                        });
+                    }
+                    return accepted;
+                });
+                const sessionRowsForDate = sessionRes.error
+                    ? []
+                    : (sessionRes.data ? [sessionRes.data] : []).filter((row) => {
+                        const rowDate = normalizeDraftDateKey(row?.workout_date || row?.date);
+                        const accepted = rowDate === normalizedDate;
+                        if (!accepted) {
+                            console.warn("[restore] rejected date-mismatched workout_sessions row", {
+                                action: "refresh_log_date_result",
+                                requestedDate: normalizedDate,
+                                remoteSessionDate: rowDate || null,
+                                accepted: false,
+                                rejectedReason: "workout_sessions.workout_date mismatch",
+                            });
+                        }
+                        return accepted;
+                    });
+                const rawRemoteHistory = buildRemoteHistoryWithWorkoutRowsPriority(
+                    workoutRowsForDate,
+                    sessionRowsForDate
+                );
+                const remoteHistory = applyPreferredHistoryDates(
+                    {},
+                    rawRemoteHistory,
+                    [normalizedDate]
                 );
                 const remoteMetrics = getHistoryMetricsForDate(remoteHistory, normalizedDate, {
                     updatedAt: null,
@@ -7573,6 +7814,21 @@ export default function GymApp() {
                     workoutDate: normalizedDate,
                 });
                 const remoteDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, remoteHistory);
+                const remoteDraftValidation = getDraftDateValidation(normalizedDate, remoteDraftForDate, normalizedDate);
+                console.log("[restore] refresh log date result", {
+                    action: "refresh_log_date_result",
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    requestedDate: normalizedDate,
+                    remoteRowDates: (workoutsRes.data || []).map((row) => normalizeDraftDateKey(row?.date)).filter(Boolean),
+                    remoteDataDates: getValidWorkoutDatesFromHistory(rawRemoteHistory),
+                    remoteSessionDates: sessionRowsForDate.map((row) => normalizeDraftDateKey(row?.workout_date || row?.date)).filter(Boolean),
+                    restoredHistoryDates: getValidWorkoutDatesFromHistory(remoteHistory),
+                    appliedLogDataDate: getDraftPayloadDate(remoteDraftForDate) || normalizedDate,
+                    appliedSessionExDate: getDraftPayloadDate(remoteDraftForDate) || normalizedDate,
+                    dateMismatch: !remoteDraftValidation.accepted,
+                    rejectedReason: remoteDraftValidation.rejectedReason || null,
+                });
                 const {
                     preserve: preserveRawLocalDraft,
                     localRawMetrics,
@@ -7683,14 +7939,25 @@ export default function GymApp() {
                 }
 
                 const nextHistory = applyLocalHistoryDates(latestHistoryRef.current || history || {}, remoteHistory, [normalizedDate]);
-                const remoteWorkoutsHistory = buildHistoryFromWorkoutRows(workoutsRes.data || []);
+                const remoteWorkoutsHistory = applyPreferredHistoryDates(
+                    {},
+                    buildHistoryFromWorkoutRows(workoutRowsForDate),
+                    [normalizedDate]
+                );
                 const nextWorkoutsDataHistory = applyLocalHistoryDates(
                     workoutsDataHistoryRef.current || latestHistoryRef.current || history || {},
                     remoteWorkoutsHistory,
                     [normalizedDate]
                 );
-                const savedDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, nextHistory);
-                const cleanSavedDraftForDate = withDraftMeta(savedDraftForDate, {
+                const savedDraftForDate = withDraftDateMeta(
+                    normalizedDate,
+                    buildSavedWorkoutDraftForDate(normalizedDate, nextHistory),
+                    {
+                        source: "remote_supabase",
+                        hasUnsavedChanges: false,
+                    }
+                );
+                const cleanSavedDraftForDate = withDraftDateMeta(normalizedDate, savedDraftForDate, {
                     source: "remote_supabase",
                     remoteVerifiedAt,
                     hasUnsavedChanges: false,
@@ -7761,43 +8028,50 @@ export default function GymApp() {
     ]);
 
     const handleLogForDate = (dateStr) => {
-        const currentDraft = {
-            todayLabels,
-            logData,
-            sessionEx,
-            exerciseUnits,
-        };
+        const requestedDate = normalizeDraftDateKey(dateStr);
+        const currentLogDate = normalizeDraftDateKey(logDate);
+        const currentDraft = withDraftDateMeta(currentLogDate, getCurrentLogDraftSnapshot(), {
+            source: latestLogDraftRef.current?.meta?.source || "current_log_snapshot",
+            hasUnsavedChanges: latestLogDraftRef.current?.meta?.hasUnsavedChanges ?? true,
+        });
 
         if (hasDraftContent(currentDraft)) {
-            saveDraftForDate(logDate, currentDraft);
+            saveDraftForDate(currentLogDate, currentDraft);
         }
 
-        setLogMode(dateStr === getTodayKey() ? "today" : "past");
-        setLogDate(dateStr);
+        setLogMode(requestedDate === getTodayKey() ? "today" : "past");
+        setLogDate(requestedDate);
 
-        const draftForDate = loadDraftForDate(dateStr);
-        const savedDraftForDate = buildSavedWorkoutDraftForDate(dateStr, history);
+        const draftForDate = loadDraftForDate(requestedDate);
+        const savedDraftForDate = withDraftDateMeta(
+            requestedDate,
+            buildSavedWorkoutDraftForDate(requestedDate, canonicalDisplayHistory),
+            {
+                source: "canonical_display_history",
+                hasUnsavedChanges: false,
+            }
+        );
         const hasSavedWorkout = savedDraftForDate.hasSavedWorkout;
         const savedMetrics = getDraftMetricsForDate({
             exercises: savedDraftForDate.sessionEx,
             logData: savedDraftForDate.logData,
             getExUnit,
-            workoutDate: dateStr,
+            workoutDate: requestedDate,
         });
         const localMetrics = getDraftMetricsForDate({
             exercises: draftForDate.sessionEx || [],
             logData: draftForDate.logData || {},
             getExUnit: (name) => draftForDate.exerciseUnits?.[name] || getExUnit(name),
-            workoutDate: dateStr,
+            workoutDate: requestedDate,
         });
         const isActiveLocalRecording =
-            dateStr === logDate &&
-            workoutStartedForDate === dateStr &&
+            requestedDate === currentLogDate &&
+            workoutStartedForDate === requestedDate &&
             hasDraftContent(currentDraft);
-        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(String(dateStr || "").slice(0, 10)) || {};
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(requestedDate) || {};
         const explicitLocalEdit = Boolean(
             isExplicitWorkoutEditChange(pendingChange) ||
-            explicitWorkoutEditDatesRef.current.has(String(dateStr || "").slice(0, 10))
+            explicitWorkoutEditDatesRef.current.has(requestedDate)
         );
         const localDraftIsCleanPersisted = isCleanPersistedDraft(draftForDate);
         const localDraftHasUnsavedChanges = Boolean(
@@ -7824,12 +8098,33 @@ export default function GymApp() {
             preserveRawLocalDraft
         );
         const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft;
+        const logCalendarOpen = (appliedSource, loadedDraft) => {
+            const loadedHistoryDates = getValidWorkoutDatesFromHistory(canonicalDisplayHistory)
+                .filter((date) => date === requestedDate);
+            const appliedValidation = getDraftDateValidation(requestedDate, loadedDraft || {}, requestedDate);
+            console.log("[restore] calendar open log", {
+                action: "calendar_open_log",
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                selectedDate: requestedDate,
+                requestedDate,
+                previousLogDate: currentLogDate,
+                draftKey: getDraftKey("draft_logData", requestedDate),
+                draftPayloadDate: getDraftPayloadDate(draftForDate) || null,
+                loadedHistoryDates,
+                loadedLogDataDate: getDraftPayloadDate(loadedDraft) || requestedDate,
+                loadedSessionExDate: getDraftPayloadDate(loadedDraft) || requestedDate,
+                appliedSource,
+                dateMismatch: !appliedValidation.accepted,
+                rejectedReason: appliedValidation.rejectedReason || null,
+            });
+        };
 
         console.log("[restore] restore_decision", {
             env: getRuntimeEnvironmentLabel(),
             user_id: user?.id || null,
             action: "restore_decision",
-            date: dateStr,
+            date: requestedDate,
             localDraftSource: draftForDate?.meta?.source || null,
             localDraftUpdatedAt: draftForDate?.meta?.updatedAt || null,
             localDraftRemoteVerifiedAt: draftForDate?.meta?.remoteVerifiedAt || null,
@@ -7848,10 +8143,14 @@ export default function GymApp() {
         });
 
         if (shouldUseLocalDraft) {
+            const datedDraftForDate = withDraftDateMeta(requestedDate, draftForDate, {
+                source: draftForDate?.meta?.source || "draft_restore",
+                hasUnsavedChanges: draftForDate?.meta?.hasUnsavedChanges ?? true,
+            });
             console.warn("[restore] local draft selected for log date", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user?.id || null,
-                date: dateStr,
+                date: requestedDate,
                 action: "restore_apply",
                 source: "draft_restore",
                 dirty: Boolean(explicitLocalEdit || isActiveLocalRecording),
@@ -7865,16 +8164,17 @@ export default function GymApp() {
                 overwrittenByRestore: false,
             });
             markWorkoutContentChanged(
-                dateStr,
+                requestedDate,
                 localDraftIsRicher || explicitLocalEdit ? "local_draft_richer_restore" : "active_local_recording_restore",
                 { explicitEdit: explicitLocalEdit }
             );
-            applyLogDraftState(draftForDate);
+            logCalendarOpen("localDraft", datedDraftForDate);
+            applyLogDraftState(datedDraftForDate);
             logRestoreDecision(
-                dateStr,
+                requestedDate,
                 savedDraftForDate,
-                draftForDate,
-                draftForDate,
+                datedDraftForDate,
+                datedDraftForDate,
                 localDraftIsRicher ? "local_draft_richer_than_saved" : "active_local_recording"
             );
             setScreen("log");
@@ -7882,14 +8182,15 @@ export default function GymApp() {
         }
 
         if (shouldUseSavedWorkout) {
-            const cleanSavedDraft = withDraftMeta(savedDraftForDate, {
+            const cleanSavedDraft = withDraftDateMeta(requestedDate, savedDraftForDate, {
                 source: "remote_supabase",
                 remoteVerifiedAt: new Date().toISOString(),
                 hasUnsavedChanges: false,
             });
-            saveDraftForDate(dateStr, cleanSavedDraft);
+            saveDraftForDate(requestedDate, cleanSavedDraft);
+            logCalendarOpen("remoteSupabase", cleanSavedDraft);
             applyLogDraftState(cleanSavedDraft);
-            logRestoreDecision(dateStr, cleanSavedDraft, draftForDate, cleanSavedDraft, "supabase_saved_workout");
+            logRestoreDecision(requestedDate, cleanSavedDraft, draftForDate, cleanSavedDraft, "supabase_saved_workout");
             setScreen("log");
             return;
         }
@@ -7899,16 +8200,26 @@ export default function GymApp() {
                 console.warn("[restore] using richer local draft for date", {
                     env: getRuntimeEnvironmentLabel(),
                     user_id: user?.id || null,
-                    date: dateStr,
+                    date: requestedDate,
                     local: localMetrics,
                     saved: savedMetrics,
                 });
             }
-            applyLogDraftState(draftForDate);
-            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, draftForDate, localDraftIsRicher && !hasSavedWorkout ? "local_draft_richer_than_saved" : "local_draft");
+            const datedDraftForDate = withDraftDateMeta(requestedDate, draftForDate, {
+                source: draftForDate?.meta?.source || "local_draft",
+                hasUnsavedChanges: draftForDate?.meta?.hasUnsavedChanges ?? true,
+            });
+            logCalendarOpen("localDraft", datedDraftForDate);
+            applyLogDraftState(datedDraftForDate);
+            logRestoreDecision(requestedDate, savedDraftForDate, datedDraftForDate, datedDraftForDate, localDraftIsRicher && !hasSavedWorkout ? "local_draft_richer_than_saved" : "local_draft");
         } else {
-            applyLogDraftState({ todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {} });
-            logRestoreDecision(dateStr, savedDraftForDate, draftForDate, { sessionEx: [] }, "empty");
+            const emptyDraft = withDraftDateMeta(requestedDate, { todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {} }, {
+                source: "empty_draft",
+                hasUnsavedChanges: false,
+            });
+            logCalendarOpen("emptyDraft", emptyDraft);
+            applyLogDraftState(emptyDraft);
+            logRestoreDecision(requestedDate, savedDraftForDate, draftForDate, { sessionEx: [] }, "empty");
         }
 
         setScreen("log");
