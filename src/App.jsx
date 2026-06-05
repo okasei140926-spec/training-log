@@ -905,40 +905,6 @@ const applyPreferredHistoryDates = (baseHistory, preferredHistory, dates = []) =
     return nextHistory;
 };
 
-const shouldPreferHistoryForDate = (baseHistory, preferredHistory, date) => {
-    const baseMetrics = getHistoryMetricsForDate(baseHistory, date);
-    const preferredMetrics = getHistoryMetricsForDate(preferredHistory, date);
-    if (!preferredMetrics.hasWorkout) return false;
-    if (!baseMetrics.hasWorkout) return true;
-
-    const preferredNames = new Set(
-        (preferredMetrics.exerciseNames || []).map((name) => normalizeExerciseName(name)).filter(Boolean)
-    );
-    const removedExerciseNames = (baseMetrics.exerciseNames || [])
-        .map((name) => normalizeExerciseName(name))
-        .filter((name) => name && !preferredNames.has(name));
-
-    if (removedExerciseNames.length > 0) return false;
-    if (preferredMetrics.exerciseCount < baseMetrics.exerciseCount) return false;
-    if (preferredMetrics.setCount < baseMetrics.setCount) return false;
-
-    return true;
-};
-
-const applyRicherPreferredHistoryDates = (baseHistory, preferredHistory, dates = []) => {
-    const normalizedDates = [...new Set(
-        (dates || []).map((date) => String(date || "").slice(0, 10)).filter(Boolean)
-    )];
-    let nextHistory = mergeHistoryMaps(baseHistory || {});
-
-    normalizedDates.forEach((date) => {
-        if (!shouldPreferHistoryForDate(nextHistory, preferredHistory, date)) return;
-        nextHistory = applyPreferredHistoryDates(nextHistory, preferredHistory, [date]);
-    });
-
-    return nextHistory;
-};
-
 const removeExerciseRecordOnDate = (historyMap, exerciseName, targetDate) => {
     const normalizedDate = String(targetDate || "").slice(0, 10);
     if (!normalizedDate || !exerciseName) return historyMap || {};

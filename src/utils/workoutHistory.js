@@ -34,7 +34,7 @@ export const getHistoryMetricsForDate = (historyMap, targetDate) => {
   Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
     (records || []).forEach((record) => {
       const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
-      if (sanitizeHistoryRecord && sanitized?.date !== normalizedDate) return;
+      if (!sanitized || sanitized.date !== normalizedDate) return;
 
       const sets = sanitized?.sets || [];
       if (!sets.length) return;
