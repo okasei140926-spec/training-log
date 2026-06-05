@@ -18,6 +18,7 @@ import {
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
 } from "./utils/helpers";
+import { buildTrustedHistory } from "./utils/workoutHistory";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
@@ -957,15 +958,11 @@ const removeExerciseRecordOnDate = (historyMap, exerciseName, targetDate) => {
 };
 
 const buildRemoteHistoryWithWorkoutRowsPriority = (workoutRows = [], sessionRows = []) => {
-    const workoutHistoryScopes = buildHistoryFromWorkoutRowsWithScopes(workoutRows || []);
-    const sessionHistory = buildHistoryFromWorkoutSessionRows(sessionRows || []);
-    const fallbackHistory = mergeHistoryMaps(sessionHistory, workoutHistoryScopes.legacyHistory);
-
-    return applyPreferredHistoryDates(
-        fallbackHistory,
-        workoutHistoryScopes.exactHistory,
-        workoutHistoryScopes.exactDates
-    );
+    return buildTrustedHistory({
+        workoutRows,
+        sessionRows,
+        source: "remote_workouts_priority",
+    }).history;
 };
 
 const buildDraftHistoryForDate = ({
@@ -6407,13 +6404,13 @@ export default function GymApp() {
         workoutStartedForDate,
     ]);
 
-    const canonicalDisplayHistory = useMemo(() => {
-        const candidateDates = [
-            ...getValidWorkoutDatesFromHistory(displayHistory),
-            ...getValidWorkoutDatesFromHistory(workoutsDataHistory),
-        ];
-        return applyRicherPreferredHistoryDates(displayHistory, workoutsDataHistory, candidateDates);
-    }, [displayHistory, workoutsDataHistory]);
+    const trustedDisplayHistoryResult = useMemo(() => buildTrustedHistory({
+        existingHistory: displayHistory,
+        workoutsDataHistory,
+        source: "canonicalDisplayHistory",
+    }), [displayHistory, workoutsDataHistory]);
+
+    const canonicalDisplayHistory = trustedDisplayHistoryResult.history;
 
     useEffect(() => {
         if (screen !== "history") return;
@@ -6423,7 +6420,7 @@ export default function GymApp() {
 
         console.log("[home props]", {
             action: "home_props_before_render",
-            sourceOfHistoryProp: "canonicalDisplayHistory (richer displayHistory/workoutsDataHistory by date)",
+            sourceOfHistoryProp: "trustedHistory (buildTrustedHistory displayHistory/workoutsDataHistory by date)",
             user_id: user?.id || null,
             historyLength: getHistoryOverallMetrics(history),
             workoutsDataHistoryLength: getHistoryOverallMetrics(workoutsDataHistory),
@@ -6443,7 +6440,7 @@ export default function GymApp() {
             bicepsCount: summary.bodyPartCounts["二頭"] || 0,
             backCount: summary.bodyPartCounts["背中"] || 0,
         });
-    }, [canonicalDisplayHistory, displayHistory, history, screen, user?.id, workoutsDataHistory]);
+    }, [canonicalDisplayHistory, displayHistory, history, screen, trustedDisplayHistoryResult, user?.id, workoutsDataHistory]);
 
     useEffect(() => {
         if (screen !== "log") return;
