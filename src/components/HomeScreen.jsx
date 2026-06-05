@@ -734,7 +734,7 @@ export default function HomeScreen({
             sameWeek &&
             previousTotal > 0 &&
             nextTotal > 0 &&
-            nextTotal < previousTotal &&
+            nextTotal <= previousTotal &&
             regressedBodyParts.length > 0
         );
 
@@ -839,8 +839,21 @@ export default function HomeScreen({
             appliedSource: activeHomeSnapshot.source,
             ignoredStaleSource: mismatchDetected ? "history_cache/summary_json/stale weekly summary" : null,
         });
+        console.log("[home weekly consistency]", {
+            action: "home_screen_received_sessions",
+            receivedSessionsLength: allSessions.length,
+            receivedDates: allSessions.map((session) => session.date),
+            recentSessionsDatesAndCounts: summarizeSessionsByDate(recentSessions),
+            weeklySetsInputDatesAndCounts: summarizeSessionsByDate(weeklySessions),
+            finalBodyPartCounts: nextWeeklySets,
+            shoulderCount: nextWeeklySets["肩"] || 0,
+            tricepsCount: nextWeeklySets["三頭"] || 0,
+            bicepsCount: nextWeeklySets["二頭"] || 0,
+            backCount: nextWeeklySets["背中"] || 0,
+        });
     }, [
         activeHomeSnapshot.source,
+        allSessions,
         exerciseBodyPartOverrides,
         history,
         homeMetricsReady,

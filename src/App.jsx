@@ -904,6 +904,40 @@ const applyPreferredHistoryDates = (baseHistory, preferredHistory, dates = []) =
     return nextHistory;
 };
 
+const shouldPreferHistoryForDate = (baseHistory, preferredHistory, date) => {
+    const baseMetrics = getHistoryMetricsForDate(baseHistory, date);
+    const preferredMetrics = getHistoryMetricsForDate(preferredHistory, date);
+    if (!preferredMetrics.hasWorkout) return false;
+    if (!baseMetrics.hasWorkout) return true;
+
+    const preferredNames = new Set(
+        (preferredMetrics.exerciseNames || []).map((name) => normalizeExerciseName(name)).filter(Boolean)
+    );
+    const removedExerciseNames = (baseMetrics.exerciseNames || [])
+        .map((name) => normalizeExerciseName(name))
+        .filter((name) => name && !preferredNames.has(name));
+
+    if (removedExerciseNames.length > 0) return false;
+    if (preferredMetrics.exerciseCount < baseMetrics.exerciseCount) return false;
+    if (preferredMetrics.setCount < baseMetrics.setCount) return false;
+
+    return true;
+};
+
+const applyRicherPreferredHistoryDates = (baseHistory, preferredHistory, dates = []) => {
+    const normalizedDates = [...new Set(
+        (dates || []).map((date) => String(date || "").slice(0, 10)).filter(Boolean)
+    )];
+    let nextHistory = mergeHistoryMaps(baseHistory || {});
+
+    normalizedDates.forEach((date) => {
+        if (!shouldPreferHistoryForDate(nextHistory, preferredHistory, date)) return;
+        nextHistory = applyPreferredHistoryDates(nextHistory, preferredHistory, [date]);
+    });
+
+    return nextHistory;
+};
+
 const removeExerciseRecordOnDate = (historyMap, exerciseName, targetDate) => {
     const normalizedDate = String(targetDate || "").slice(0, 10);
     if (!normalizedDate || !exerciseName) return historyMap || {};
@@ -1366,6 +1400,48 @@ const getHomeWeeklyDateDebug = (historyMap, targetDate = HOME_WEEKLY_DEBUG_DATE)
     };
 };
 
+const getHomePropsDateDebug = (historyMap, targetDates = []) => {
+    const dateSet = new Set((targetDates || []).map((date) => String(date || "").slice(0, 10)).filter(Boolean));
+    const result = {};
+
+    dateSet.forEach((date) => {
+        result[date] = {
+            exercises: [],
+            bodyPartCounts: {},
+            totalSetCount: 0,
+        };
+    });
+
+    Object.entries(historyMap || {}).forEach(([exerciseName, records]) => {
+        (records || []).forEach((record) => {
+            const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: true });
+            const date = String(sanitized?.date || "").slice(0, 10);
+            if (!dateSet.has(date)) return;
+
+            const setCount = sanitized.sets?.length || 0;
+            if (setCount <= 0) return;
+
+            const bodyPart = normalizeHomeSummaryBodyPart(
+                sanitized.bodyPart || EX_TO_LABEL[exerciseName] || ""
+            );
+
+            result[date].exercises.push({
+                name: exerciseName,
+                bodyPart,
+                setCount,
+            });
+            result[date].bodyPartCounts[bodyPart] = (result[date].bodyPartCounts[bodyPart] || 0) + setCount;
+            result[date].totalSetCount += setCount;
+        });
+    });
+
+    Object.values(result).forEach((day) => {
+        day.exercises.sort((a, b) => String(a.name).localeCompare(String(b.name), "ja"));
+    });
+
+    return result;
+};
+
 const getHomeWeeklySourceDebug = ({
     workoutsHistory = {},
     summaryHistory = {},
@@ -1413,14 +1489,17 @@ const getHomeWeeklyStaleRegressionDecision = (
         Number(incomingSummary.bodyPartCounts?.[part] || 0) < Number(trustedSummary.bodyPartCounts?.[part] || 0)
     ));
     const totalRegression = Number(incomingSummary.totalSetCount || 0) < Number(trustedSummary.totalSetCount || 0);
+    const nonIncreasingTotal = Number(incomingSummary.totalSetCount || 0) <= Number(trustedSummary.totalSetCount || 0);
 
     return {
         blocked: Boolean(
             Number(trustedSummary.totalSetCount || 0) > 0 &&
             Number(incomingSummary.totalSetCount || 0) > 0 &&
-            totalRegression &&
-            regressedBodyParts.length > 0
+            regressedBodyParts.length > 0 &&
+            nonIncreasingTotal
         ),
+        totalRegression,
+        nonIncreasingTotal,
         trustedSummary,
         incomingSummary,
         regressedBodyParts,
@@ -6140,14 +6219,43 @@ export default function GymApp() {
         workoutStartedForDate,
     ]);
 
-    const canonicalDisplayHistory = useMemo(
-        () => applyPreferredHistoryDates(
-            displayHistory,
-            workoutsDataHistory,
-            getValidWorkoutDatesFromHistory(workoutsDataHistory)
-        ),
-        [displayHistory, workoutsDataHistory]
-    );
+    const canonicalDisplayHistory = useMemo(() => {
+        const candidateDates = [
+            ...getValidWorkoutDatesFromHistory(displayHistory),
+            ...getValidWorkoutDatesFromHistory(workoutsDataHistory),
+        ];
+        return applyRicherPreferredHistoryDates(displayHistory, workoutsDataHistory, candidateDates);
+    }, [displayHistory, workoutsDataHistory]);
+
+    useEffect(() => {
+        if (screen !== "history") return;
+        const weekRange = getCurrentWeekRangeForHomeSummary();
+        const debugDates = ["2026-06-01", "2026-06-02", "2026-06-03"];
+        const summary = getHomeWeeklySummaryDebug(canonicalDisplayHistory, weekRange);
+
+        console.log("[home props]", {
+            action: "home_props_before_render",
+            sourceOfHistoryProp: "canonicalDisplayHistory (richer displayHistory/workoutsDataHistory by date)",
+            user_id: user?.id || null,
+            historyLength: getHistoryOverallMetrics(history),
+            workoutsDataHistoryLength: getHistoryOverallMetrics(workoutsDataHistory),
+            canonicalDisplayHistoryLength: getHistoryOverallMetrics(canonicalDisplayHistory),
+            displayHistoryLength: getHistoryOverallMetrics(displayHistory),
+            datesIncluded: getHistoryDatesInRange(canonicalDisplayHistory, weekRange),
+            historyDatesIncluded: getHistoryDatesInRange(history, weekRange),
+            workoutsDataHistoryDatesIncluded: getHistoryDatesInRange(workoutsDataHistory, weekRange),
+            displayHistoryDatesIncluded: getHistoryDatesInRange(displayHistory, weekRange),
+            sessionsByDate: getHomePropsDateDebug(canonicalDisplayHistory, debugDates),
+            historySessionsByDate: getHomePropsDateDebug(history, debugDates),
+            workoutsDataHistorySessionsByDate: getHomePropsDateDebug(workoutsDataHistory, debugDates),
+            displayHistorySessionsByDate: getHomePropsDateDebug(displayHistory, debugDates),
+            calculatedCountsBeforePassing: summary.bodyPartCounts,
+            shoulderCount: summary.bodyPartCounts["肩"] || 0,
+            tricepsCount: summary.bodyPartCounts["三頭"] || 0,
+            bicepsCount: summary.bodyPartCounts["二頭"] || 0,
+            backCount: summary.bodyPartCounts["背中"] || 0,
+        });
+    }, [canonicalDisplayHistory, displayHistory, history, screen, user?.id, workoutsDataHistory]);
 
     useEffect(() => {
         if (screen !== "log") return;
