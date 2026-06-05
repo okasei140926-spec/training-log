@@ -5682,7 +5682,7 @@ export default function GymApp() {
         if (!["calendar", "analytics"].includes(screen)) return;
         const trustedDisplayHistory = mergeHistoryMaps(workoutsDataHistory || {}, history || {});
         const trustedHistoryMetrics = getHistoryOverallMetrics(trustedDisplayHistory);
-        if (trustedHistoryMetrics.setCount > 0) {
+        if (trustedHistoryMetrics.setCount > 0 && screen !== "analytics") {
             console.log("[home fetch] display_history skipped; trustedHistory already available", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user.id,
@@ -5695,6 +5695,18 @@ export default function GymApp() {
             });
             return;
         }
+        if (trustedHistoryMetrics.setCount > 0 && screen === "analytics") {
+            console.log("[home fetch] display_history background refresh for analytics PR", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user.id,
+                screen,
+                source: "trustedHistory",
+                applied: false,
+                skipped: false,
+                reason: "analytics PR refreshes workouts.data so stale PR/cache/manual data cannot remain authoritative",
+                trustedHistory: trustedHistoryMetrics,
+            });
+        }
 
         let cancelled = false;
 
@@ -5705,11 +5717,11 @@ export default function GymApp() {
             const weekRange = getCurrentWeekRangeForHomeSummary();
             const sessionRangeStart = screen === "calendar"
                 ? `${formatDateKey(new Date()).slice(0, 7)}-01`
-                : getDateDaysAgoKey(35);
+                : getDateDaysAgoKey(120);
             const sessionRangeEnd = screen === "calendar"
                 ? `${getNextMonthPrefix(formatDateKey(new Date()).slice(0, 7))}-01`
                 : null;
-            const displayHistoryLimit = screen === "calendar" ? 80 : 120;
+            const displayHistoryLimit = screen === "calendar" ? 80 : 180;
 
             try {
                 let workoutsQuery = supabase

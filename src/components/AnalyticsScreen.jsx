@@ -200,6 +200,50 @@ const logAnalyticsPrCalculation = (payload) => {
   });
 };
 
+const isStalePrCandidate = (candidate) => (
+  Boolean(candidate?.scopeFlags?.legacyHistoryUsed)
+  || Boolean(candidate?.scopeFlags?.summaryJsonUsed)
+  || Boolean(candidate?.scopeFlags?.cacheUsed)
+);
+
+const filterAnalyticsPrCandidates = (candidates = [], key = "") => {
+  const exactDates = new Set(
+    candidates
+      .filter((candidate) => candidate?.scopeFlags?.exactHistoryUsed)
+      .map((candidate) => candidate?.date)
+      .filter(Boolean)
+  );
+  const hasTrustedCandidate = candidates.some((candidate) => !isStalePrCandidate(candidate));
+
+  return candidates.filter((candidate) => {
+    const rejectedByExactSameDate = Boolean(
+      candidate?.date
+      && exactDates.has(candidate.date)
+      && !candidate?.scopeFlags?.exactHistoryUsed
+    );
+    const rejectedByTrustedHistory = hasTrustedCandidate && isStalePrCandidate(candidate);
+    const rejected = rejectedByExactSameDate || rejectedByTrustedHistory;
+
+    if (rejected) {
+      logAnalyticsPrCalculation({
+        ...candidate.logPayload,
+        exerciseKey: key,
+        usedTrustedHistory: !isStalePrCandidate(candidate),
+        usedSummaryJson: Boolean(candidate?.scopeFlags?.summaryJsonUsed),
+        usedLegacyHistory: Boolean(candidate?.scopeFlags?.legacyHistoryUsed),
+        usedManualBest: false,
+        rejectedStalePR: true,
+        ignoredStalePRSource: true,
+        reason: rejectedByExactSameDate
+          ? "exactHistory exists for same date; stale PR candidate ignored"
+          : "trusted history exists; summary/legacy/cache PR candidate ignored",
+      });
+    }
+
+    return !rejected;
+  });
+};
+
 const getBestSet = (validSets = [], fallbackUnit = "kg") =>
   validSets.reduce((best, set) => {
     const score = calc1RM([set]);
@@ -278,12 +322,12 @@ const resolveAnalyticsBodyPart = (record, exerciseName, ctx) => {
 };
 
 const buildHistoryBestMap = (history = {}, ctx) => {
-  const bestMap = {};
+  const candidateMap = {};
 
   Object.entries(history || {}).forEach(([exerciseName, records]) => {
     const normalizedName = normalizeExerciseName(exerciseName);
 
-    (records || []).forEach((record) => {
+    (records || []).forEach((record, index) => {
       const bodyPart = resolveAnalyticsBodyPart(record, exerciseName, ctx);
       if (!bodyPart) return;
 
@@ -293,51 +337,77 @@ const buildHistoryBestMap = (history = {}, ctx) => {
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
-      if (!bestMap[key] || rm > bestMap[key].estimated1RM) {
-        const scopeFlags = getRecordScopeFlags(record);
-        logAnalyticsPrCalculation({
-          exerciseName: normalizedName,
-          source: ctx.historySource || "canonicalDisplayHistory",
-          date: record?.date || null,
-          originalWeight: bestSet.originalWeight,
-          originalUnit: bestSet.originalUnit,
+      const scopeFlags = getRecordScopeFlags(record);
+      const logPayload = {
+        exerciseName: normalizedName,
+        source: ctx.historySource || "canonicalDisplayHistory",
+        date: record?.date || null,
+        originalWeight: bestSet.originalWeight,
+        originalUnit: bestSet.originalUnit,
+        reps: bestSet.reps,
+        normalizedKgValue: bestSet.normalizedKgValue,
+        normalizedKg: bestSet.normalizedKg,
+        displayWeight: bestSet.displayWeight,
+        displayUnit: bestSet.displayUnit,
+        estimated1RM: Math.round(rm),
+        chosenPRDate: record?.date || null,
+        chosenPRSet: {
+          weight: bestSet.originalWeight,
+          unit: bestSet.originalUnit,
           reps: bestSet.reps,
-          normalizedKgValue: bestSet.normalizedKgValue,
-          normalizedKg: bestSet.normalizedKg,
-          displayWeight: bestSet.displayWeight,
-          displayUnit: bestSet.displayUnit,
-          estimated1RM: Math.round(rm),
-          chosenPRDate: record?.date || null,
-          chosenPROriginalSet: {
-            weight: bestSet.originalWeight,
-            unit: bestSet.originalUnit,
-            reps: bestSet.reps,
-          },
-          exactHistoryUsed: scopeFlags.exactHistoryUsed,
-          legacyHistoryUsed: scopeFlags.legacyHistoryUsed,
-          usedTrustedHistory: true,
-          usedSummaryJson: scopeFlags.summaryJsonUsed,
-          usedLegacyHistory: scopeFlags.legacyHistoryUsed,
-          usedManualBest: false,
-          rejectedStalePR: false,
-          ignoredStalePRSource: false,
-        });
-        bestMap[key] = {
-          key,
-          name: normalizedName,
-          displayName: normalizedName,
-          bodyPart,
-          weight: bestSet.weight,
-          displayWeight: bestSet.displayWeight,
-          displayUnit: bestSet.displayUnit,
+        },
+        chosenPROriginalSet: {
+          weight: bestSet.originalWeight,
+          unit: bestSet.originalUnit,
           reps: bestSet.reps,
-          estimated1RM: Math.round(rm),
-          date: record?.date || null,
-          source: "workouts.data",
-          sourceLabel: null,
-        };
-      }
+        },
+        exactHistoryUsed: scopeFlags.exactHistoryUsed,
+        legacyHistoryUsed: scopeFlags.legacyHistoryUsed,
+      };
+      if (!candidateMap[key]) candidateMap[key] = [];
+      candidateMap[key].push({
+        key,
+        name: normalizedName,
+        displayName: normalizedName,
+        bodyPart,
+        weight: bestSet.weight,
+        displayWeight: bestSet.displayWeight,
+        displayUnit: bestSet.displayUnit,
+        reps: bestSet.reps,
+        estimated1RM: Math.round(rm),
+        score: rm,
+        date: record?.date || null,
+        source: "workouts.data",
+        sourceLabel: null,
+        sourceIndex: index,
+        scopeFlags,
+        logPayload,
+      });
     });
+  });
+
+  const bestMap = {};
+  Object.entries(candidateMap).forEach(([key, candidates]) => {
+    const filteredCandidates = filterAnalyticsPrCandidates(candidates, key);
+    const best = filteredCandidates.reduce((currentBest, candidate) => (
+      !currentBest || Number(candidate.score || 0) > Number(currentBest.score || 0)
+        ? candidate
+        : currentBest
+    ), null);
+    if (!best) return;
+
+    logAnalyticsPrCalculation({
+      ...best.logPayload,
+      usedTrustedHistory: true,
+      usedSummaryJson: Boolean(best.scopeFlags.summaryJsonUsed),
+      usedLegacyHistory: Boolean(best.scopeFlags.legacyHistoryUsed),
+      usedManualBest: false,
+      rejectedStalePR: false,
+      ignoredStalePRSource: false,
+    });
+
+    const { score, scopeFlags, logPayload, sourceIndex, ...entry } = best;
+    bestMap[key] = entry;
   });
 
   return bestMap;
@@ -379,7 +449,7 @@ const buildManualBestMap = (manualBests = [], ctx) => {
 };
 
 const buildHistoryRecordMap = (history = {}, ctx) => {
-  const recordMap = {};
+  const candidateMap = {};
 
   Object.entries(history || {}).forEach(([exerciseName, records]) => {
     const normalizedName = normalizeExerciseName(exerciseName);
@@ -394,8 +464,8 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
-      if (!recordMap[key]) recordMap[key] = [];
-      recordMap[key].push({
+      const scopeFlags = getRecordScopeFlags(record);
+      const displayRecord = {
         id: `history-${key}-${record?.date || "nodate"}-${index}`,
         key,
         name: normalizedName,
@@ -410,8 +480,39 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
         setsText: formatSetsText(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg"),
         source: "workouts.data",
         sourceLabel: null,
-      });
+        score: rm,
+        scopeFlags,
+        logPayload: {
+          exerciseName: normalizedName,
+          source: ctx.historySource || "canonicalDisplayHistory",
+          date: record?.date || null,
+          originalWeight: bestSet.originalWeight,
+          originalUnit: bestSet.originalUnit,
+          reps: bestSet.reps,
+          normalizedKgValue: bestSet.normalizedKgValue,
+          normalizedKg: bestSet.normalizedKg,
+          displayWeight: bestSet.displayWeight,
+          displayUnit: bestSet.displayUnit,
+          estimated1RM: Math.round(rm),
+          chosenPRDate: record?.date || null,
+          chosenPRSet: {
+            weight: bestSet.originalWeight,
+            unit: bestSet.originalUnit,
+            reps: bestSet.reps,
+          },
+          exactHistoryUsed: scopeFlags.exactHistoryUsed,
+          legacyHistoryUsed: scopeFlags.legacyHistoryUsed,
+        },
+      };
+      if (!candidateMap[key]) candidateMap[key] = [];
+      candidateMap[key].push(displayRecord);
     });
+  });
+
+  const recordMap = {};
+  Object.entries(candidateMap).forEach(([key, candidates]) => {
+    recordMap[key] = filterAnalyticsPrCandidates(candidates, key)
+      .map(({ score, scopeFlags, logPayload, ...record }) => record);
   });
 
   return recordMap;

@@ -277,6 +277,39 @@ const getHistoryRecordMetrics = (record) => {
   };
 };
 
+const getHistoryRecordUpdatedMs = (record) => {
+  const candidates = [
+    record?.updated_at,
+    record?.updatedAt,
+    record?.remoteUpdatedAt,
+    record?.rowUpdatedAt,
+    record?.savedAt,
+  ];
+
+  for (const candidate of candidates) {
+    const ms = Date.parse(candidate);
+    if (Number.isFinite(ms)) return ms;
+  }
+
+  return 0;
+};
+
+const getHistoryRecordScopeRank = (record) => {
+  const sourceText = String(
+    record?.historyScope
+    || record?.sourceScope
+    || record?.source
+    || record?.sourceTable
+    || record?.recordSource
+    || ""
+  ).toLowerCase();
+
+  if (record?.exactHistory === true || sourceText.includes("exact") || sourceText.includes("workouts.data")) return 3;
+  if (record?.legacyHistory === true || sourceText.includes("legacy")) return 1;
+  if (sourceText.includes("summary_json") || sourceText.includes("workout_session") || sourceText.includes("cache")) return 0;
+  return 2;
+};
+
 const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
   if (!existingRecord) return incomingRecord;
 
@@ -302,9 +335,21 @@ const choosePreferredHistoryRecord = (existingRecord, incomingRecord) => {
 
   const existingMetrics = getHistoryRecordMetrics(existingRecord);
   const incomingMetrics = getHistoryRecordMetrics(incomingRecord);
+  const existingScopeRank = getHistoryRecordScopeRank(existingRecord);
+  const incomingScopeRank = getHistoryRecordScopeRank(incomingRecord);
+
+  if (incomingScopeRank !== existingScopeRank) {
+    return incomingScopeRank > existingScopeRank ? incomingRecord : existingRecord;
+  }
 
   if (incomingMetrics.setCount !== existingMetrics.setCount) {
     return incomingMetrics.setCount > existingMetrics.setCount ? incomingRecord : existingRecord;
+  }
+
+  const existingUpdatedMs = getHistoryRecordUpdatedMs(existingRecord);
+  const incomingUpdatedMs = getHistoryRecordUpdatedMs(incomingRecord);
+  if (existingUpdatedMs !== incomingUpdatedMs && (existingUpdatedMs > 0 || incomingUpdatedMs > 0)) {
+    return incomingUpdatedMs >= existingUpdatedMs ? incomingRecord : existingRecord;
   }
 
   return incomingRecord;
@@ -366,7 +411,7 @@ const getWorkoutRowHistoryData = (row) => {
   return row?.data;
 };
 
-const addWorkoutRowRecordToHistory = (historyMap, exerciseName, record, fallbackDate, scope = "") => {
+const addWorkoutRowRecordToHistory = (historyMap, exerciseName, record, fallbackDate, scope = "", rowMeta = {}) => {
   if (!exerciseName || !isPlainObject(record)) return;
   const recordDate = String(record?.date || record?.workoutDate || record?.workout_date || "").slice(0, 10);
   const resolvedDate = recordDate || fallbackDate;
@@ -392,11 +437,21 @@ const addWorkoutRowRecordToHistory = (historyMap, exerciseName, record, fallback
       ? {
           historyScope,
           sourceScope: historyScope,
+          recordSource: `workouts.data.${historyScope}`,
           sourceTable: "workouts",
           exactHistory: historyScope === "exact",
           legacyHistory: historyScope === "legacy",
         }
       : {}),
+    ...(rowMeta.updatedAt
+      ? {
+          rowUpdatedAt: rowMeta.updatedAt,
+          remoteUpdatedAt: rowMeta.updatedAt,
+          updated_at: nextRecord?.updated_at || rowMeta.updatedAt,
+        }
+      : {}),
+    ...(rowMeta.rowDate ? { rowDate: rowMeta.rowDate } : {}),
+    ...(rowMeta.rowId ? { rowId: rowMeta.rowId } : {}),
   };
 
   if (!historyMap[exerciseName]) historyMap[exerciseName] = [];
@@ -448,6 +503,11 @@ export function buildHistoryFromWorkoutRowsWithScopes(rows) {
 
   sortedRows.forEach((row) => {
     const rowDate = String(row?.date || row?.workout_date || row?.workoutDate || "").slice(0, 10);
+    const rowMeta = {
+      rowDate,
+      rowId: row?.id || null,
+      updatedAt: row?.updated_at || row?.updatedAt || row?.created_at || row?.createdAt || null,
+    };
     const rowHistoryData = getWorkoutRowHistoryData(row);
     const exactHistory = {};
     const legacyHistory = {};
@@ -465,9 +525,9 @@ export function buildHistoryFromWorkoutRowsWithScopes(rows) {
         if (!effectiveDate) return;
 
         if (rowDate && effectiveDate !== rowDate) {
-          addWorkoutRowRecordToHistory(legacyHistory, exerciseName, record, effectiveDate, "legacy");
+          addWorkoutRowRecordToHistory(legacyHistory, exerciseName, record, effectiveDate, "legacy", rowMeta);
         } else {
-          addWorkoutRowRecordToHistory(exactHistory, exerciseName, record, rowDate || effectiveDate, "exact");
+          addWorkoutRowRecordToHistory(exactHistory, exerciseName, record, rowDate || effectiveDate, "exact", rowMeta);
         }
       });
     });
