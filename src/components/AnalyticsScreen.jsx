@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { calc1RM, getRecordSourceSets, sanitizeWorkoutSets } from "../utils/helpers";
+import { calc1RM, getRecordSourceSets, sanitizeWorkoutSet, sanitizeWorkoutSets } from "../utils/helpers";
 import { getBig3ExerciseKey, normalizeExerciseName } from "../utils/exerciseName";
 import { buildBodyPartExerciseKey, normalizeBodyPartLabel, resolveRecordBodyPartLabel } from "../utils/bodyPartClassification";
 import { buildTrainingSummary } from "../utils/trainingSummary";
@@ -102,6 +102,7 @@ const BODY_PART_CHART_PALETTE = [
 ];
 const BODY_PART_CHART_BG = "rgba(18, 199, 194, 0.045)";
 const BODY_PART_CHART_GRID = "rgba(15, 94, 99, 0.075)";
+const LB_PER_KG = 2.20462;
 
 const getBodyPartChartFill = (index = 0) =>
   BODY_PART_CHART_PALETTE[Math.min(index, BODY_PART_CHART_PALETTE.length - 1)] || "#20B8AE";
@@ -161,6 +162,102 @@ const getSetDisplayWeight = (set) => {
   return formatPrWeightValue(set?.displayWeight ?? set?.weight);
 };
 
+const getExplicitDisplayWeight = (set) => {
+  const value = set?.displayWeight ?? set?.originalWeight ?? set?.inputWeight;
+  return value !== undefined && value !== null && String(value).trim() !== "" ? value : null;
+};
+
+const getRecordFallbackDisplayUnit = (record, fallbackUnit = "kg") =>
+  normalizePrUnit(
+    record?.displayUnit
+    || record?.unit
+    || record?.weightUnit
+    || record?.weight_unit
+    || record?.weightMode
+    || record?.weightType
+    || fallbackUnit
+  );
+
+const getAnalyticsDisplayUnit = (rawSet = {}, record = {}, fallbackUnit = "kg") =>
+  normalizePrUnit(
+    rawSet?.displayUnit
+    || rawSet?.unit
+    || rawSet?.weightUnit
+    || rawSet?.weight_unit
+    || rawSet?.weightMode
+    || rawSet?.weightType
+    || record?.displayUnit
+    || record?.unit
+    || record?.weightUnit
+    || record?.weight_unit
+    || record?.weightMode
+    || record?.weightType
+    || fallbackUnit
+  );
+
+const getAnalyticsDisplayWeight = (rawSet = {}, sanitizedSet = {}, displayUnit = "kg") => {
+  if (displayUnit === "BW" || sanitizedSet?.weight === "BW" || String(rawSet?.weight || "").toUpperCase() === "BW") {
+    return "自重";
+  }
+
+  const explicitDisplayWeight = getExplicitDisplayWeight(rawSet);
+  if (explicitDisplayWeight !== null) return formatPrWeightValue(explicitDisplayWeight);
+
+  const normalizedKg = Number(
+    sanitizedSet?.normalizedWeightKg
+    ?? sanitizedSet?.weightKg
+    ?? sanitizedSet?.weight
+  );
+  if (displayUnit === "lb" && Number.isFinite(normalizedKg)) {
+    return formatPrWeightValue(normalizedKg * LB_PER_KG);
+  }
+
+  return formatPrWeightValue(rawSet?.weight ?? sanitizedSet?.weight);
+};
+
+const buildValidSetEntries = (record, { allowBodyweight = false } = {}) => {
+  const fallbackUnit = getRecordFallbackDisplayUnit(record);
+  return getRecordSourceSets(record)
+    .map((rawSet) => {
+      const rawSetUnit = rawSet?.displayUnit
+        || rawSet?.unit
+        || rawSet?.weightUnit
+        || rawSet?.weight_unit
+        || rawSet?.weightMode
+        || rawSet?.weightType
+        || null;
+      const displayUnit = getAnalyticsDisplayUnit(rawSet, record, fallbackUnit);
+      const explicitDisplayWeight = getExplicitDisplayWeight(rawSet);
+      const sanitizeUnit = displayUnit === "lb" && !rawSetUnit && explicitDisplayWeight === null
+        ? "kg"
+        : displayUnit;
+      const normalizedRawSet = {
+        ...rawSet,
+        displayUnit: sanitizeUnit,
+        unit: rawSet?.unit || rawSet?.weightMode || rawSet?.weightType || sanitizeUnit,
+        weightUnit: rawSet?.weightUnit || rawSet?.weight_unit || sanitizeUnit,
+        weight_unit: rawSet?.weight_unit || rawSet?.weightUnit || sanitizeUnit,
+        weightMode: rawSet?.weightMode || rawSet?.unit || sanitizeUnit,
+        weightType: rawSet?.weightType || rawSet?.unit || sanitizeUnit,
+      };
+      const sanitizedSet = sanitizeWorkoutSet(normalizedRawSet, { allowBodyweight });
+      if (!sanitizedSet) return null;
+      const displayWeight = getAnalyticsDisplayWeight(rawSet, sanitizedSet, displayUnit);
+      return {
+        rawSet,
+        set: {
+          ...sanitizedSet,
+          displayWeight,
+          originalWeight: getExplicitDisplayWeight(rawSet) ?? displayWeight,
+          displayUnit,
+        },
+        displayWeight,
+        displayUnit,
+      };
+    })
+    .filter(Boolean);
+};
+
 const formatPrSetLabel = (item) => {
   if (!item) return "";
   const unit = normalizePrUnit(item.displayUnit || item.unit || "kg");
@@ -196,6 +293,13 @@ const getRecordScopeFlags = (record) => {
 const logAnalyticsPrCalculation = (payload) => {
   console.log("[analytics pr]", {
     action: "analytics_pr_calculation",
+    ...payload,
+  });
+};
+
+const logAnalyticsPrDisplayUnit = (payload) => {
+  console.log("[analytics pr]", {
+    action: "analytics_pr_display_unit",
     ...payload,
   });
 };
@@ -244,12 +348,13 @@ const filterAnalyticsPrCandidates = (candidates = [], key = "") => {
   });
 };
 
-const getBestSet = (validSets = [], fallbackUnit = "kg") =>
-  validSets.reduce((best, set) => {
+const getBestSet = (validSets = [], fallbackUnit = "kg", setEntries = []) =>
+  validSets.reduce((best, set, index) => {
     const score = calc1RM([set]);
     if (!best || score > best.score) {
-      const displayUnit = getSetDisplayUnit(set, fallbackUnit);
-      const displayWeight = getSetDisplayWeight(set);
+      const entry = setEntries[index];
+      const displayUnit = entry?.displayUnit || getSetDisplayUnit(set, fallbackUnit);
+      const displayWeight = entry?.displayWeight ?? getSetDisplayWeight(set);
       return {
         weight: Number(set.weight),
         normalizedKgValue: Number(set.weight),
@@ -265,11 +370,11 @@ const getBestSet = (validSets = [], fallbackUnit = "kg") =>
     return best;
   }, null);
 
-const formatSetsText = (sets = [], fallbackUnit = "kg") =>
-  sets.map((set) => formatPrSetLabel({
+const formatSetsText = (sets = [], fallbackUnit = "kg", setEntries = []) =>
+  sets.map((set, index) => formatPrSetLabel({
     weight: Number(set.weight),
-    displayWeight: getSetDisplayWeight(set),
-    displayUnit: getSetDisplayUnit(set, fallbackUnit),
+    displayWeight: setEntries[index]?.displayWeight ?? getSetDisplayWeight(set),
+    displayUnit: setEntries[index]?.displayUnit || getSetDisplayUnit(set, fallbackUnit),
     reps: Number(set.reps),
   })).join(" / ");
 
@@ -331,9 +436,10 @@ const buildHistoryBestMap = (history = {}, ctx) => {
       const bodyPart = resolveAnalyticsBodyPart(record, exerciseName, ctx);
       if (!bodyPart) return;
 
-      const validSets = buildValidSets(record);
+      const setEntries = buildValidSetEntries(record, { allowBodyweight: false });
+      const validSets = setEntries.map((entry) => entry.set);
       const rm = calc1RM(validSets);
-      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg");
+      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries);
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
@@ -364,6 +470,16 @@ const buildHistoryBestMap = (history = {}, ctx) => {
         exactHistoryUsed: scopeFlags.exactHistoryUsed,
         legacyHistoryUsed: scopeFlags.legacyHistoryUsed,
       };
+      logAnalyticsPrDisplayUnit({
+        exerciseName: normalizedName,
+        date: record?.date || null,
+        originalWeight: bestSet.originalWeight,
+        originalUnit: bestSet.originalUnit,
+        displayWeight: bestSet.displayWeight,
+        displayUnit: bestSet.displayUnit,
+        normalizedKg: bestSet.normalizedKg,
+        usedForCalculationOnly: true,
+      });
       if (!candidateMap[key]) candidateMap[key] = [];
       candidateMap[key].push({
         key,
@@ -458,9 +574,10 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
       const bodyPart = resolveAnalyticsBodyPart(record, exerciseName, ctx);
       if (!bodyPart) return;
 
-      const validSets = buildValidSets(record);
+      const setEntries = buildValidSetEntries(record, { allowBodyweight: false });
+      const validSets = setEntries.map((entry) => entry.set);
       const rm = calc1RM(validSets);
-      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg");
+      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries);
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
@@ -477,7 +594,7 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
         displayUnit: bestSet.displayUnit,
         reps: bestSet.reps,
         estimated1RM: Math.round(rm),
-        setsText: formatSetsText(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg"),
+        setsText: formatSetsText(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries),
         source: "workouts.data",
         sourceLabel: null,
         score: rm,
@@ -504,6 +621,16 @@ const buildHistoryRecordMap = (history = {}, ctx) => {
           legacyHistoryUsed: scopeFlags.legacyHistoryUsed,
         },
       };
+      logAnalyticsPrDisplayUnit({
+        exerciseName: normalizedName,
+        date: record?.date || null,
+        originalWeight: bestSet.originalWeight,
+        originalUnit: bestSet.originalUnit,
+        displayWeight: bestSet.displayWeight,
+        displayUnit: bestSet.displayUnit,
+        normalizedKg: bestSet.normalizedKg,
+        usedForCalculationOnly: true,
+      });
       if (!candidateMap[key]) candidateMap[key] = [];
       candidateMap[key].push(displayRecord);
     });

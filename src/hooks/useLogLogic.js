@@ -53,6 +53,65 @@ const withWeightMode = (set, mode) => ({
     weight_unit: mode,
 });
 
+const getDisplayUnitForMode = (mode) => {
+    const normalized = normalizeWeightMode(mode);
+    return normalized === "lbs" ? "lb" : normalized;
+};
+
+const updateSetForWeightMode = (set, nextMode, currentMode) => {
+    const target = set || { weight: "", reps: "", done: false };
+    let nextSet = { ...target };
+
+    if (nextMode === "BW") {
+        const rawWeight = String(target.weight ?? "").trim();
+        const numericWeight = Number(rawWeight);
+        const hasWeightedValue =
+            rawWeight
+            && rawWeight.toUpperCase() !== "BW"
+            && Number.isFinite(numericWeight)
+            && numericWeight > 0;
+
+        nextSet = {
+            ...nextSet,
+            weight: "BW",
+            lastWeightedValue: hasWeightedValue ? formatWeightValue(numericWeight) : target.lastWeightedValue,
+            lastWeightedUnit: hasWeightedValue ? currentMode : target.lastWeightedUnit || currentMode,
+        };
+    } else if (currentMode === "BW") {
+        const restoredWeight = convertWeightDisplay(
+            target.lastWeightedValue,
+            target.lastWeightedUnit || nextMode,
+            nextMode
+        );
+
+        nextSet = {
+            ...nextSet,
+            weight: restoredWeight,
+            lastWeightedValue: restoredWeight || target.lastWeightedValue,
+            lastWeightedUnit: restoredWeight ? nextMode : target.lastWeightedUnit,
+        };
+    } else {
+        const displayWeight = String(target.weight ?? "").trim();
+
+        nextSet = {
+            ...nextSet,
+            weight: displayWeight || "",
+            lastWeightedValue: displayWeight || target.lastWeightedValue,
+            lastWeightedUnit: displayWeight ? nextMode : target.lastWeightedUnit,
+        };
+    }
+
+    nextSet = withWeightMode(nextSet, nextMode);
+
+    if (nextSet.weight === "BW") {
+        nextSet.done = Boolean(nextSet.reps);
+    } else if (nextSet.weight || nextSet.reps) {
+        nextSet.done = Boolean(nextSet.weight && nextSet.reps);
+    }
+
+    return nextSet;
+};
+
 export function useLogLogic({
     logData,
     setLogData,
@@ -72,14 +131,18 @@ export function useLogLogic({
     const addSet = (ex) => {
         setLogData((p) => {
             const key = ex.name;
-            const defaultUnit = normalizeWeightMode(typeof getExUnit === "function" ? getExUnit(key) : "kg");
             const current = p[key]
                 ? p[key].map((s) => ({ ...s }))
                 : getExSets(ex);
+            const fallbackUnit = normalizeWeightMode(typeof getExUnit === "function" ? getExUnit(key) : "kg");
+            const defaultUnit = current.length
+                ? getSetWeightMode(current[0], fallbackUnit)
+                : fallbackUnit;
             const nextSet = withWeightMode({
                 weight: defaultUnit === "BW" ? "BW" : "",
                 reps: "",
                 done: false,
+                unitManuallyChanged: false,
             }, defaultUnit);
 
             const next = {
@@ -190,57 +253,51 @@ export function useLogLogic({
                 ? normalizeWeightMode(requestedMode)
                 : ({ kg: "lbs", lbs: "BW", BW: "kg" }[currentMode] || "kg");
 
-            let nextSet = { ...target };
-
-            if (nextMode === "BW") {
-                const rawWeight = String(target.weight ?? "").trim();
-                const numericWeight = Number(rawWeight);
-                const hasWeightedValue =
-                    rawWeight
-                    && rawWeight.toUpperCase() !== "BW"
-                    && Number.isFinite(numericWeight)
-                    && numericWeight > 0;
-
-                nextSet = {
-                    ...nextSet,
-                    weight: "BW",
-                    lastWeightedValue: hasWeightedValue ? formatWeightValue(numericWeight) : target.lastWeightedValue,
-                    lastWeightedUnit: hasWeightedValue ? currentMode : target.lastWeightedUnit || currentMode,
-                };
-            } else if (currentMode === "BW") {
-                const restoredWeight = convertWeightDisplay(
-                    target.lastWeightedValue,
-                    target.lastWeightedUnit || nextMode,
-                    nextMode
-                );
-
-                nextSet = {
-                    ...nextSet,
-                    weight: restoredWeight,
-                    lastWeightedValue: restoredWeight || target.lastWeightedValue,
-                    lastWeightedUnit: restoredWeight ? nextMode : target.lastWeightedUnit,
-                };
-            } else {
-                const displayWeight = String(target.weight ?? "").trim();
-
-                nextSet = {
-                    ...nextSet,
-                    weight: displayWeight || "",
-                    lastWeightedValue: displayWeight || target.lastWeightedValue,
-                    lastWeightedUnit: displayWeight ? nextMode : target.lastWeightedUnit,
-                };
-            }
-
-            nextSet = withWeightMode(nextSet, nextMode);
-
-            if (nextSet.weight === "BW") {
-                nextSet.done = Boolean(nextSet.reps);
-            } else if (nextSet.weight || nextSet.reps) {
-                nextSet.done = Boolean(nextSet.weight && nextSet.reps);
-            }
-
             const beforeSet = { ...target };
-            current[idx] = nextSet;
+            const beforeUnits = current.map((set) => getDisplayUnitForMode(getSetWeightMode(set, fallbackUnit)));
+            const propagatedToSetIndexes = [];
+            const skippedManualSetIndexes = [];
+            const nextSets = current.map((set, setIndex) => {
+                if (setIndex === idx) {
+                    return {
+                        ...updateSetForWeightMode(set, nextMode, currentMode),
+                        unitManuallyChanged: true,
+                    };
+                }
+
+                if (idx !== 0) return set;
+
+                if (set?.unitManuallyChanged) {
+                    skippedManualSetIndexes.push(setIndex);
+                    return set;
+                }
+
+                propagatedToSetIndexes.push(setIndex);
+                return {
+                    ...updateSetForWeightMode(
+                        set,
+                        nextMode,
+                        getSetWeightMode(set, fallbackUnit)
+                    ),
+                    unitManuallyChanged: false,
+                };
+            });
+            const nextSet = nextSets[idx] || updateSetForWeightMode(target, nextMode, currentMode);
+            const afterUnits = nextSets.map((set) => getDisplayUnitForMode(getSetWeightMode(set, fallbackUnit)));
+
+            console.log("[set mutation]", {
+                action: "unit_change_propagation",
+                date: logDate,
+                user_id: userId || null,
+                exerciseName: key,
+                changedSetIndex: idx,
+                changedUnit: getDisplayUnitForMode(nextMode),
+                propagatedToSetIndexes,
+                skippedManualSetIndexes,
+                beforeUnits,
+                afterUnits,
+            });
+
             onWorkoutContentChange?.("unit_change", {
                 exerciseName: key,
                 setIndex: idx,
@@ -249,7 +306,7 @@ export function useLogLogic({
                 explicitEdit: true,
             });
 
-            const next = { ...p, [key]: current };
+            const next = { ...p, [key]: nextSets };
 
             save("draft_logData", next);
             return next;
