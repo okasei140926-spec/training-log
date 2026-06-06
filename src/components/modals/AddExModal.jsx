@@ -101,11 +101,7 @@ export default function AddExModal({
 
 
     useEffect(() => {
-        setAdded(prev => {
-            const next = new Set(prev);
-            existingNames.forEach(n => next.add(n));
-            return next;
-        });
+        setAdded(new Set(existingNames));
     }, [existingNames.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const suggestions = getSuggestions(target);
@@ -234,6 +230,12 @@ export default function AddExModal({
         return Array.from(added).some((addedName) => normalizeExerciseName(addedName) === normalizedName);
     };
 
+    const existsInCurrentWorkout = (exerciseName) => {
+        const normalizedName = normalizeExerciseName(exerciseName);
+        if (!normalizedName) return false;
+        return (existingNames || []).some((existingName) => normalizeExerciseName(existingName) === normalizedName);
+    };
+
     const handleQuick = (s) => {
         const exerciseName = String(s || "").trim();
         if (!exerciseName) {
@@ -241,7 +243,10 @@ export default function AddExModal({
             return;
         }
 
-        if (hasAddedExercise(exerciseName)) {
+        const checkedInModal = hasAddedExercise(exerciseName);
+        const existsInWorkout = existsInCurrentWorkout(exerciseName);
+
+        if (checkedInModal && existsInWorkout) {
             onQuickAdd(exerciseName, true, activeTab, { action: "exercise_remove" });
             setAdded((prev) => {
                 const next = new Set(prev);

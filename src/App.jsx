@@ -2231,13 +2231,126 @@ export default function GymApp() {
 
     const applyLogDraftState = useCallback((draft) => {
         const normalizedDraft = normalizeLogDraftState(draft);
+        const currentDate = normalizeDraftDateKey(logDate);
+        const incomingDate = normalizeDraftDateKey(
+            normalizedDraft?.meta?.date ||
+            normalizedDraft?.meta?.keyDate ||
+            normalizedDraft?.meta?.draftDate ||
+            normalizedDraft?.meta?.workoutDate ||
+            currentDate
+        );
+        const previousDraft = normalizeLogDraftState(latestLogDraftRef.current || {
+            todayLabels,
+            logData,
+            sessionEx,
+            exerciseUnits,
+        });
+        const pendingChange = currentDate
+            ? pendingWorkoutContentChangeDatesRef.current.get(currentDate) || {}
+            : {};
+        const previousMetrics = getRawDraftSetMetrics(previousDraft);
+        const restoredMetrics = getRawDraftSetMetrics(normalizedDraft);
+        const lostExerciseNames = getRemovedRawDraftExerciseNames(previousDraft, normalizedDraft);
+        const previousDisplayedExerciseNames = previousMetrics.exerciseNames;
+        const restoredExerciseNames = restoredMetrics.exerciseNames;
+        const incomingSource = normalizedDraft?.meta?.source || "unknown";
+        const dateMismatch = Boolean(screen === "log" && currentDate && incomingDate && incomingDate !== currentDate);
+        const regressionDetected = (
+            lostExerciseNames.length > 0 ||
+            restoredMetrics.exerciseCount < previousMetrics.exerciseCount ||
+            restoredMetrics.setCount < previousMetrics.setCount
+        );
+        const protectsCurrentLog = screen === "log" && currentDate && (!incomingDate || incomingDate === currentDate);
+        const userMutationSource = new Set([
+            "current_log_draft",
+            "user_edit",
+            "exercise_add",
+            "manual_exercise_add",
+            "exercise_remove",
+            "exercise_delete",
+            "exercise_rename",
+            "exercise_reorder",
+            "set_add",
+            "set_input_change",
+            "weight_change",
+            "reps_change",
+            "unit_change",
+            "explicit_set_edit",
+        ]);
+        const explicitDelete = Boolean(pendingChange.explicitDelete);
+        const explicitUserEdit = Boolean(userMutationSource.has(incomingSource));
+        const previousHasContent = hasDraftContent(previousDraft);
+        const shouldBlockRegression = (
+            dateMismatch ||
+            (
+                protectsCurrentLog &&
+                previousHasContent &&
+                regressionDetected &&
+                !explicitDelete &&
+                !explicitUserEdit
+            )
+        );
+
+        if (shouldBlockRegression) {
+            console.warn("[restore] workout_restore_integrity_check", {
+                env: getRuntimeEnvironmentLabel(),
+                action: "workout_restore_integrity_check",
+                date: currentDate,
+                user_id: user?.id || null,
+                previousDisplayedExerciseNames,
+                restoredExerciseNames,
+                lostExerciseNames,
+                previousSetCount: previousMetrics.setCount,
+                restoredSetCount: restoredMetrics.setCount,
+                appliedSource: null,
+                rejectedSource: incomingSource,
+                reason: dateMismatch
+                    ? "draft date does not match current log date"
+                    : "restore would remove current draft exercises or sets",
+                dateMismatch,
+                incomingDate,
+                currentDate,
+                explicitDelete,
+                explicitUserEdit,
+                pendingExplicitEdit: Boolean(pendingChange.explicitEdit),
+                overwrittenByRestore: false,
+            });
+            return previousDraft;
+        }
+
+        if (protectsCurrentLog || regressionDetected || incomingSource !== "unknown") {
+            console.log("[restore] workout_restore_integrity_check", {
+                env: getRuntimeEnvironmentLabel(),
+                action: "workout_restore_integrity_check",
+                date: currentDate || incomingDate || null,
+                user_id: user?.id || null,
+                previousDisplayedExerciseNames,
+                restoredExerciseNames,
+                lostExerciseNames,
+                previousSetCount: previousMetrics.setCount,
+                restoredSetCount: restoredMetrics.setCount,
+                appliedSource: incomingSource,
+                rejectedSource: null,
+                reason: regressionDetected
+                    ? (explicitDelete ? "explicit delete restore applied" : "user mutation restore applied")
+                    : "restore applied",
+                dateMismatch: false,
+                incomingDate,
+                currentDate,
+                explicitDelete,
+                explicitUserEdit,
+                pendingExplicitEdit: Boolean(pendingChange.explicitEdit),
+                overwrittenByRestore: regressionDetected,
+            });
+        }
+
         latestLogDraftRef.current = normalizedDraft;
         setTodayLabels(normalizedDraft.todayLabels);
         setLogData(normalizedDraft.logData);
         setSessionEx(normalizedDraft.sessionEx);
         setExerciseUnits(normalizedDraft.exerciseUnits);
         return normalizedDraft;
-    }, []);
+    }, [exerciseUnits, hasDraftContent, logData, logDate, screen, sessionEx, todayLabels, user?.id]);
 
     const applyCurrentLogDraft = useCallback((draft, { persist = true } = {}) => {
         const datedDraft = withDraftDateMeta(logDate, draft, {
@@ -3744,6 +3857,21 @@ export default function GymApp() {
                             remoteVolume: remoteMetrics.volume,
                             blockedReason: saveGuardDecision.blockedReason,
                         });
+                        console.warn("[save] workout_save_integrity_check", {
+                            env: getRuntimeEnvironmentLabel(),
+                            action: "workout_save_integrity_check",
+                            date: workoutDate,
+                            user_id: userId,
+                            beforeSaveExerciseNames: incomingMetrics.exerciseNames,
+                            afterSaveExerciseNames: getHistoryMetricsForDate(dateScopedHistoryForSave, workoutDate).exerciseNames,
+                            remoteVerifiedExerciseNames: remoteMetrics.exerciseNames,
+                            lostExerciseNames: saveGuardDecision.details.removedExerciseNames,
+                            sourceUsedForSave: "workouts.data_guard_blocked",
+                            blockedRegression: true,
+                            blockedReason: saveGuardDecision.blockedReason,
+                            explicitEdit,
+                            explicitDelete: Boolean(pendingChange.explicitDelete),
+                        });
                         results.skippedDates.push(workoutDate);
                         return;
                     }
@@ -3805,6 +3933,32 @@ export default function GymApp() {
                             updatedAt: null,
                         })
                         : getEmptyWorkoutMetrics();
+                    const verifiedNames = new Set(
+                        (verifiedMetrics.exerciseNames || [])
+                            .map((exerciseName) => normalizeExerciseName(exerciseName))
+                            .filter(Boolean)
+                    );
+                    const lostExerciseNamesAfterVerify = (incomingMetrics.exerciseNames || []).filter((exerciseName) => {
+                        const normalizedExerciseName = normalizeExerciseName(exerciseName);
+                        return normalizedExerciseName && !verifiedNames.has(normalizedExerciseName);
+                    });
+                    console[lostExerciseNamesAfterVerify.length ? "error" : "log"]("[save] workout_save_integrity_check", {
+                        env: getRuntimeEnvironmentLabel(),
+                        action: "workout_save_integrity_check",
+                        date: workoutDate,
+                        user_id: userId,
+                        beforeSaveExerciseNames: incomingMetrics.exerciseNames,
+                        afterSaveExerciseNames: getHistoryMetricsForDate(dateScopedHistoryForSave, workoutDate).exerciseNames,
+                        remoteVerifiedExerciseNames: verifiedMetrics.exerciseNames,
+                        lostExerciseNames: lostExerciseNamesAfterVerify,
+                        sourceUsedForSave: "workouts.data",
+                        blockedRegression: lostExerciseNamesAfterVerify.length > 0,
+                        blockedReason: lostExerciseNamesAfterVerify.length
+                            ? "verified workouts.data lost exercises after save"
+                            : null,
+                        explicitEdit,
+                        explicitDelete: Boolean(pendingChange.explicitDelete),
+                    });
                     if (isMetricPersistenceMismatch(incomingMetrics, verifiedMetrics)) {
                         console.error("[save verify] workouts.data mismatch after save", {
                             env: getRuntimeEnvironmentLabel(),
@@ -7046,9 +7200,23 @@ export default function GymApp() {
 
         if (alreadyInSession) {
             console.log("[add-exercise] duplicate ignored", {
+                action: "exercise_add_attempt",
+                env: getRuntimeEnvironmentLabel(),
+                date: logDate,
+                user_id: user?.id || null,
                 name: trimmed,
+                exerciseName: trimmed,
+                bodyPart: label,
                 label,
                 before: beforeNames,
+                beforeExerciseNames: beforeNames,
+                afterExerciseNames: beforeNames,
+                added: false,
+                blocked: false,
+                blockedReason: null,
+                duplicateDetected: true,
+                filteredOut: false,
+                removedExerciseNames: [],
             });
             requestLogExerciseFocus(existingExercise);
             return;
@@ -7100,6 +7268,27 @@ export default function GymApp() {
             explicitDelete: false,
             allowed: !blockedReason,
             blockedReason,
+        });
+
+        console[blockedReason ? "warn" : "log"]("[exercise add]", {
+            action: "exercise_add_attempt",
+            env: getRuntimeEnvironmentLabel(),
+            date: logDate,
+            user_id: user?.id || null,
+            exerciseName: trimmed,
+            bodyPart: label,
+            beforeExerciseNames: beforeNames,
+            afterExerciseNames: afterNames,
+            beforeSetCount,
+            afterSetCount,
+            added: !blockedReason,
+            blocked: Boolean(blockedReason),
+            blockedReason,
+            duplicateDetected: false,
+            filteredOut: false,
+            removedExerciseNames,
+            selectedBodyPartFilter: labelOverride || todayLabels[0] || null,
+            explicitDelete: false,
         });
 
         if (blockedReason) return;
@@ -7509,6 +7698,48 @@ export default function GymApp() {
             },
         };
     }, [getExUnit, history]);
+
+    useEffect(() => {
+        if (screen !== "log" || !logDate) return;
+        const normalizedDate = normalizeDraftDateKey(logDate);
+        const canonicalDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, canonicalDisplayHistory);
+        const latestDraft = normalizeLogDraftState(latestLogDraftRef.current || {});
+        const logDataExerciseNames = Object.keys(logData || {});
+        const sessionExNames = (sessionEx || []).map((exercise) => exercise.name);
+        const latestLogDraftRefExerciseNames = getRawDraftSetMetrics(latestDraft).exerciseNames;
+        const canonicalDisplayHistoryExerciseNamesForDate = (canonicalDraftForDate.sessionEx || []).map((exercise) => exercise.name);
+        const finalRenderedExerciseNames = (exercises || []).map((exercise) => exercise.name);
+        const renderedNames = new Set(
+            finalRenderedExerciseNames
+                .map((exerciseName) => normalizeExerciseName(exerciseName))
+                .filter(Boolean)
+        );
+        const expectedNames = [
+            ...logDataExerciseNames,
+            ...sessionExNames,
+            ...latestLogDraftRefExerciseNames,
+        ];
+        const missingFromRendered = [...new Set(expectedNames)].filter((exerciseName) => {
+            const normalizedExerciseName = normalizeExerciseName(exerciseName);
+            return normalizedExerciseName && !renderedNames.has(normalizedExerciseName);
+        });
+
+        console[missingFromRendered.length ? "warn" : "log"]("[log screen] exercise render source", {
+            env: getRuntimeEnvironmentLabel(),
+            action: "log_screen_exercise_render_source",
+            selectedDate: normalizedDate,
+            user_id: user?.id || null,
+            logDataExerciseNames,
+            sessionExNames,
+            latestLogDraftRefExerciseNames,
+            canonicalDisplayHistoryExerciseNamesForDate,
+            finalRenderedExerciseNames,
+            missingFromRendered,
+            missingReason: missingFromRendered.length
+                ? "final rendered exercises are missing current draft/logData names"
+                : null,
+        });
+    }, [buildSavedWorkoutDraftForDate, canonicalDisplayHistory, exercises, logData, logDate, screen, sessionEx, user?.id]);
 
     const logRestoreDecision = useCallback((dateStr, savedDraft, localDraft, finalDraft, source) => {
         const metricGetExUnit = (name) =>
