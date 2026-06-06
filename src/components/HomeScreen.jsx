@@ -6,6 +6,24 @@ const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "�
 const WEEKLY_DEBUG_DATE = "2026-06-03";
 const WEEKLY_CONSISTENCY_DATES = ["2026-06-01", "2026-06-02", "2026-06-03"];
 
+const getPerfNow = () => (
+    typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now()
+);
+
+const shouldLogHomePerfDebug = () => {
+    if (typeof window === "undefined") return false;
+    try {
+        return window.localStorage?.getItem("pump_debug_perf") === "1"
+            || window.localStorage?.getItem("pump_debug_history") === "1";
+    } catch {
+        return false;
+    }
+};
+
+const durationDebugSignatures = new Set();
+
 const FALLBACK_PART_MAP = {
     "ベンチ": "胸",
     "インクライン": "胸",
@@ -207,6 +225,28 @@ function getRecordVolume(record) {
     }, 0);
 }
 
+function resolveRecordDuration(record, workoutDurationSecByDate, dateKey) {
+    const candidates = [
+        { source: "duration_sec", value: Number(record?.duration_sec) / 60 },
+        { source: "durationSec", value: Number(record?.durationSec) / 60 },
+        { source: "savedWorkoutDurationSecByDate", value: Number(workoutDurationSecByDate?.[dateKey]) / 60 },
+        { source: "elapsedMinutes", value: Number(record?.elapsedMinutes) },
+        { source: "durationMinutes", value: Number(record?.durationMinutes) },
+    ].filter((candidate) => Number.isFinite(candidate.value) && candidate.value > 0);
+
+    if (!candidates.length) return { minutes: null, source: null, rawDuration: null };
+
+    const best = candidates.reduce((max, candidate) => (
+        candidate.value > max.value ? candidate : max
+    ), candidates[0]);
+
+    return {
+        minutes: Math.max(1, Math.round(best.value)),
+        source: best.source,
+        rawDuration: best.value,
+    };
+}
+
 
 function getExerciseFatigueCoeff(exName) {
     const name = String(exName || "");
@@ -378,13 +418,8 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
             const setCount = getRecordSetCount(record);
             if (setCount <= 0) return;
             const dateKey = String(record.date || "").slice(0, 10);
-            const recordMinutes =
-                Number(record.elapsedMinutes) > 0 ? Math.round(Number(record.elapsedMinutes))
-                : Number(record.durationMinutes) > 0 ? Math.round(Number(record.durationMinutes))
-                : Number(record.duration_sec) > 0 ? Math.round(Number(record.duration_sec) / 60)
-                : Number(record.durationSec) > 0 ? Math.round(Number(record.durationSec) / 60)
-                : Number(workoutDurationSecByDate[dateKey]) > 0 ? Math.round(Number(workoutDurationSecByDate[dateKey]) / 60)
-                : null;
+            const durationInfo = resolveRecordDuration(record, workoutDurationSecByDate, dateKey);
+            const recordMinutes = durationInfo.minutes;
 
             if (!sessions[dateKey]) {
                 sessions[dateKey] = {
@@ -393,10 +428,18 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
                     sets: 0,
                     volume: 0,
                     minutes: recordMinutes,
+                    durationSource: durationInfo.source,
+                    rawDuration: durationInfo.rawDuration,
                     exercises: [],
                 };
             } else if (!sessions[dateKey].minutes && recordMinutes) {
                 sessions[dateKey].minutes = recordMinutes;
+                sessions[dateKey].durationSource = durationInfo.source;
+                sessions[dateKey].rawDuration = durationInfo.rawDuration;
+            } else if (recordMinutes && sessions[dateKey].minutes && recordMinutes > sessions[dateKey].minutes) {
+                sessions[dateKey].minutes = recordMinutes;
+                sessions[dateKey].durationSource = durationInfo.source;
+                sessions[dateKey].rawDuration = durationInfo.rawDuration;
             }
 
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
@@ -426,12 +469,36 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
 
     return Object.values(sessions)
         .sort((a, b) => b.date.localeCompare(a.date))
-        .map(s => ({
-            ...s,
-            parts: [...s.parts].slice(0, 3),
-            volume: Number.isFinite(s.volume) ? Math.round(s.volume) : 0,
-            exercises: (s.exercises || []).sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999)),
-        }));
+        .map(s => {
+            const normalized = {
+                ...s,
+                parts: [...s.parts].slice(0, 3),
+                volume: Number.isFinite(s.volume) ? Math.round(s.volume) : 0,
+                exercises: (s.exercises || []).sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999)),
+            };
+
+            if (normalized.sets >= 5 && Number(normalized.minutes || 0) <= 1) {
+                const signature = `${normalized.date}:${normalized.sets}:${normalized.minutes}:${normalized.durationSource}`;
+                if (!durationDebugSignatures.has(signature)) {
+                    durationDebugSignatures.add(signature);
+                    console.warn("[home duration]", {
+                        action: "workout_duration_debug",
+                        date: normalized.date,
+                        sessionId: normalized.date,
+                        exerciseNames: normalized.exercises.map((exercise) => exercise.name),
+                        setCount: normalized.sets,
+                        startTime: null,
+                        endTime: null,
+                        rawDuration: normalized.rawDuration,
+                        displayedDuration: normalized.minutes,
+                        source: normalized.durationSource,
+                        reasonIfOneMinute: "recent session has 5+ sets but duration resolves to 1 minute or less",
+                    });
+                }
+            }
+
+            return normalized;
+        });
 }
 
 function collectWeeklySetsFromSessions(sessions = []) {
@@ -681,14 +748,39 @@ export default function HomeScreen({
     historyRemoteReady = false,
     remoteLoadFailed = false,
 }) {
+    const renderStartedAt = getPerfNow();
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
     const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
     const [homeMetricsReady, setHomeMetricsReady] = useState(false);
     const [trustedHomeSnapshot, setTrustedHomeSnapshot] = useState(null);
     const trustedHomeSnapshotRef = useRef(null);
+    const renderCountRef = useRef(0);
+    const lastRenderTraceAtRef = useRef(0);
+    const homeSnapshotLogSignatureRef = useRef("");
+    const weeklyConsistencyLogSignatureRef = useRef("");
+    const homeRenderStateLogSignatureRef = useRef("");
     const week = getWeekRange();
     const weekKey = `${week.start}:${week.end}`;
+    renderCountRef.current += 1;
+
+    useEffect(() => {
+        if (!shouldLogHomePerfDebug()) return;
+        const now = getPerfNow();
+        if (now - lastRenderTraceAtRef.current < 1000) return;
+        lastRenderTraceAtRef.current = now;
+        console.log("[perf]", {
+            action: "perf_render_trace",
+            component: "HomeScreen",
+            renderCount: renderCountRef.current,
+            timestamp: new Date().toISOString(),
+            historyLength: Object.keys(history || {}).length,
+            trustedHistoryLength: Object.values(history || {}).reduce((sum, records) => (
+                sum + (Array.isArray(records) ? records.length : 0)
+            ), 0),
+            durationMs: Math.round((getPerfNow() - renderStartedAt) * 10) / 10,
+        });
+    });
 
     useEffect(() => {
         const timeoutId = window.setTimeout(() => setHomeMetricsReady(true), 80);
@@ -739,29 +831,39 @@ export default function HomeScreen({
         );
 
         if (staleOverwrite) {
-            console.warn("[home weekly consistency]", {
+            const signature = JSON.stringify({
                 action: "home_weekly_stale_overwrite_blocked",
-                staleSource: incomingHomeSnapshot.source,
-                staleBodyPartCounts: nextCounts,
-                staleShoulderCount: nextCounts["肩"] || 0,
-                staleTricepsCount: nextCounts["三頭"] || 0,
-                trustedBodyPartCounts: previousCounts,
-                trustedShoulderCount: previousCounts["肩"] || 0,
-                trustedTricepsCount: previousCounts["三頭"] || 0,
-                trustedBicepsCount: previousCounts["二頭"] || 0,
-                applied: false,
-                reason: "incoming weekly summary regressed from trusted allSessions snapshot",
+                weekKey,
+                nextCounts,
+                previousCounts,
                 regressedBodyParts,
-                timestamp: new Date().toISOString(),
-                recentSessionsDates: previous.sessions?.slice(0, 4).map((session) => session.date) || [],
-                allSessionsDates: incomingHomeSnapshot.sessions.map((session) => session.date),
             });
+            if (homeSnapshotLogSignatureRef.current !== signature) {
+                homeSnapshotLogSignatureRef.current = signature;
+                console.warn("[home weekly consistency]", {
+                    action: "home_weekly_stale_overwrite_blocked",
+                    staleSource: incomingHomeSnapshot.source,
+                    staleBodyPartCounts: nextCounts,
+                    staleShoulderCount: nextCounts["肩"] || 0,
+                    staleTricepsCount: nextCounts["三頭"] || 0,
+                    trustedBodyPartCounts: previousCounts,
+                    trustedShoulderCount: previousCounts["肩"] || 0,
+                    trustedTricepsCount: previousCounts["三頭"] || 0,
+                    trustedBicepsCount: previousCounts["二頭"] || 0,
+                    applied: false,
+                    reason: "incoming weekly summary regressed from trusted allSessions snapshot",
+                    regressedBodyParts,
+                    timestamp: new Date().toISOString(),
+                    recentSessionsDates: previous.sessions?.slice(0, 4).map((session) => session.date) || [],
+                    allSessionsDates: incomingHomeSnapshot.sessions.map((session) => session.date),
+                });
+            }
             return;
         }
 
         const previousSignature = bodyPartCountsSignature(previousCounts);
         const nextSignature = bodyPartCountsSignature(nextCounts);
-        if (!previous || !sameWeek || previousSignature !== nextSignature) {
+        if (shouldLogHomePerfDebug() && (!previous || !sameWeek || previousSignature !== nextSignature)) {
             console.log("[home weekly consistency]", {
                 action: "home_weekly_render_value_changed",
                 previousBodyPartCounts: previousCounts,
@@ -782,7 +884,7 @@ export default function HomeScreen({
 
         trustedHomeSnapshotRef.current = incomingHomeSnapshot;
         setTrustedHomeSnapshot(incomingHomeSnapshot);
-    }, [homeMetricsReady, incomingHomeSnapshot, recordsLoading]);
+    }, [homeMetricsReady, incomingHomeSnapshot, recordsLoading, weekKey]);
 
     const activeHomeSnapshot = trustedHomeSnapshot?.weekKey === weekKey
         ? trustedHomeSnapshot
@@ -805,20 +907,25 @@ export default function HomeScreen({
         if (!homeMetricsReady || recordsLoading) return;
         const nextWeeklySets = collectWeeklySetsFromSessions(weeklySessions);
         const directHistoryWeeklySets = collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides);
-        const directDebug = collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides);
         const directSignature = JSON.stringify(directHistoryWeeklySets);
         const sessionSignature = JSON.stringify(nextWeeklySets);
         const mismatchDetected = directSignature !== sessionSignature;
-        console.log("[home weekly aggregation]", {
-            ...directDebug,
-            bodyPartCounts: nextWeeklySets,
-            directHistoryBodyPartCounts: directHistoryWeeklySets,
-            source: "trusted history sessions",
-            appliedSource: "recentRecords/trustedHistory sessions",
-            ignoredStaleSource: mismatchDetected ? "direct weekly history aggregation" : null,
+        const signature = JSON.stringify({
+            weekKey,
+            sessionSignature,
+            directSignature,
+            recentDates: recentSessions.map((session) => session.date),
+            weeklyDates: weeklySessions.map((session) => session.date),
         });
-        console.log("[home weekly consistency]", {
+        if (!mismatchDetected && !shouldLogHomePerfDebug()) return;
+        if (weeklyConsistencyLogSignatureRef.current === signature) return;
+        weeklyConsistencyLogSignatureRef.current = signature;
+        const directDebug = shouldLogHomePerfDebug() || mismatchDetected
+            ? collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides)
+            : {};
+        console[mismatchDetected ? "warn" : "log"]("[home weekly consistency]", {
             action: "home_weekly_consistency_check",
+            ...(shouldLogHomePerfDebug() ? directDebug : {}),
             weekRange: { start: week.start, end: week.end },
             recentRecordsSource: activeHomeSnapshot.source,
             weeklySummarySource: activeHomeSnapshot.source,
@@ -839,18 +946,20 @@ export default function HomeScreen({
             appliedSource: activeHomeSnapshot.source,
             ignoredStaleSource: mismatchDetected ? "history_cache/summary_json/stale weekly summary" : null,
         });
-        console.log("[home weekly consistency]", {
-            action: "home_screen_received_sessions",
-            receivedSessionsLength: allSessions.length,
-            receivedDates: allSessions.map((session) => session.date),
-            recentSessionsDatesAndCounts: summarizeSessionsByDate(recentSessions),
-            weeklySetsInputDatesAndCounts: summarizeSessionsByDate(weeklySessions),
-            finalBodyPartCounts: nextWeeklySets,
-            shoulderCount: nextWeeklySets["肩"] || 0,
-            tricepsCount: nextWeeklySets["三頭"] || 0,
-            bicepsCount: nextWeeklySets["二頭"] || 0,
-            backCount: nextWeeklySets["背中"] || 0,
-        });
+        if (shouldLogHomePerfDebug()) {
+            console.log("[home weekly consistency]", {
+                action: "home_screen_received_sessions",
+                receivedSessionsLength: allSessions.length,
+                receivedDates: allSessions.map((session) => session.date),
+                recentSessionsDatesAndCounts: summarizeSessionsByDate(recentSessions),
+                weeklySetsInputDatesAndCounts: summarizeSessionsByDate(weeklySessions),
+                finalBodyPartCounts: nextWeeklySets,
+                shoulderCount: nextWeeklySets["肩"] || 0,
+                tricepsCount: nextWeeklySets["三頭"] || 0,
+                bicepsCount: nextWeeklySets["二頭"] || 0,
+                backCount: nextWeeklySets["背中"] || 0,
+            });
+        }
     }, [
         activeHomeSnapshot.source,
         allSessions,
@@ -861,6 +970,7 @@ export default function HomeScreen({
         recentSessions,
         recordsLoading,
         week.end,
+        weekKey,
         week.start,
         weeklySessions,
     ]);
@@ -894,6 +1004,7 @@ export default function HomeScreen({
             : partsToShow.slice(0, 4).map(part => ({ part, sets: 0 }));
 
     useEffect(() => {
+        if (!shouldLogHomePerfDebug() && !recordsLoading && !remoteLoadFailed) return;
         const historyDatesCount = Object.keys(history || {}).length;
         const historySetCount = Object.values(history || {}).reduce((dateTotal, record) => {
             const safeRecord = sanitizeHistoryRecord(record);
@@ -910,6 +1021,18 @@ export default function HomeScreen({
                     : "waiting for trusted remote history"
                 : "recordsLoading prop is still true"
             : "ready";
+        const signature = JSON.stringify({
+            historyRemoteReady,
+            remoteLoadFailed,
+            weeklyLoading,
+            recentLoading,
+            weeklySummaryExists: weeklyDisplay.length > 0,
+            recentRecordsCount: recentSessions.length,
+            historyDatesCount,
+            loadingReason,
+        });
+        if (homeRenderStateLogSignatureRef.current === signature) return;
+        homeRenderStateLogSignatureRef.current = signature;
 
         console.log("[home render state]", {
             historyRemoteReady,

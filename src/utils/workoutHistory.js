@@ -9,6 +9,12 @@ import { normalizeExerciseName } from "./exerciseName";
 
 const normalizeDateKey = (value) => String(value || "").slice(0, 10);
 
+const getPerfNow = () => (
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now()
+);
+
 const uniqueDates = (dates = []) => (
   [...new Set((dates || []).map(normalizeDateKey).filter(Boolean))]
 );
@@ -277,8 +283,9 @@ export const buildTrustedHistory = ({
   allowCacheFallback = false,
   source = "unknown",
   logger = console,
-  log = true,
+  log = false,
 } = {}) => {
+  const startedAt = getPerfNow();
   const workoutScopes = buildHistoryFromWorkoutRowsWithScopes(workoutRows || []);
   const sessionFallback = summaryHistory
     ? { history: summaryHistory, rejectedDateMismatchCount: 0 }
@@ -355,6 +362,15 @@ export const buildTrustedHistory = ({
     + Number(sessionFallback.rejectedDateMismatchCount || 0);
 
   if (log && logger?.log) {
+    const durationMs = Math.round((getPerfNow() - startedAt) * 10) / 10;
+    logger.log("[history] build trusted history perf", {
+      action: "build_trusted_history_perf",
+      calledFrom: source,
+      inputLength: (workoutRows || []).length + (sessionRows || []).length,
+      outputLength: finalDates.length,
+      durationMs,
+      skippedByMemo: false,
+    });
     logger.log("[history] build trusted history", {
       action: "build_trusted_history",
       source,

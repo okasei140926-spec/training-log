@@ -100,6 +100,22 @@ const debugLog = (...args) => {
     if (process.env.NODE_ENV !== "production") console.debug(...args);
 };
 
+const getPerfNow = () => (
+    typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now()
+);
+
+const shouldLogPerfDebug = () => {
+    if (typeof window === "undefined") return false;
+    try {
+        return window.localStorage?.getItem("pump_debug_perf") === "1"
+            || window.localStorage?.getItem("pump_debug_history") === "1";
+    } catch {
+        return false;
+    }
+};
+
 const EX_TO_LABEL = {};
 Object.entries(SUGGESTIONS).forEach(([label, names]) => {
     names.forEach((n) => {
@@ -928,6 +944,7 @@ const buildRemoteHistoryWithWorkoutRowsPriority = (workoutRows = [], sessionRows
         workoutRows,
         sessionRows,
         source: "remote_workouts_priority",
+        log: shouldLogPerfDebug(),
     }).history;
 };
 
@@ -2318,7 +2335,7 @@ export default function GymApp() {
             return previousDraft;
         }
 
-        if (protectsCurrentLog || regressionDetected || incomingSource !== "unknown") {
+        if (shouldLogPerfDebug() || regressionDetected) {
             console.log("[restore] workout_restore_integrity_check", {
                 env: getRuntimeEnvironmentLabel(),
                 action: "workout_restore_integrity_check",
@@ -2711,6 +2728,8 @@ export default function GymApp() {
     const supabaseFetchInFlightRef = useRef(new Map());
     const supabaseFetchBackoffRef = useRef({});
     const supabaseFetchFreshUntilRef = useRef({});
+    const homePropsDebugSignatureRef = useRef("");
+    const logScreenRenderDebugSignatureRef = useRef("");
 
     const markSupabaseFetchFresh = useCallback((key, ttlMs = 30000) => {
         if (!key) return;
@@ -3218,7 +3237,7 @@ export default function GymApp() {
             setWorkoutsDataHistory(incomingHistory);
         }
 
-        if (previousSignature !== nextSignature) {
+        if (shouldLogPerfDebug() && previousSignature !== nextSignature) {
             console.log("[home weekly summary] render value source changed", {
                 action: "home_weekly_render_value_changed",
                 source,
@@ -5341,26 +5360,28 @@ export default function GymApp() {
                     localStorageDates: getValidWorkoutDatesFromHistory(localMergeCandidate),
                     appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
                 });
-                console.log("[home weekly summary] apply", {
-                    source: "workouts.data",
-                    env: getRuntimeEnvironmentLabel(),
-                    user_id: user.id,
-                    requestId: "initial-load",
-                    applied: initialWorkoutsDataApplied,
-                    reason: "history_initial_load",
-                    ...getHomeWeeklySummaryDebug(appliedWorkoutsDataHistory),
-                    ...getHomeWeeklySourceDebug({
-                        workoutsHistory: appliedWorkoutsDataHistory,
-                        summaryHistory: initialSummaryHistory,
-                        finalHistory: appliedWorkoutsDataHistory,
-                        weekRange: currentWeekRange,
+                if (shouldLogPerfDebug()) {
+                    console.log("[home weekly summary] apply", {
                         source: "workouts.data",
-                        appliedSource: initialWorkoutsDataApplied ? "workouts.data" : "none",
-                        ignoredStaleSource: sessionsRes.skipped
-                            ? "summary_json skipped on initial load"
-                            : "summary_json ignored for home weekly",
-                    }),
-                });
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        requestId: "initial-load",
+                        applied: initialWorkoutsDataApplied,
+                        reason: "history_initial_load",
+                        ...getHomeWeeklySummaryDebug(appliedWorkoutsDataHistory),
+                        ...getHomeWeeklySourceDebug({
+                            workoutsHistory: appliedWorkoutsDataHistory,
+                            summaryHistory: initialSummaryHistory,
+                            finalHistory: appliedWorkoutsDataHistory,
+                            weekRange: currentWeekRange,
+                            source: "workouts.data",
+                            appliedSource: initialWorkoutsDataApplied ? "workouts.data" : "none",
+                            ignoredStaleSource: sessionsRes.skipped
+                                ? "summary_json skipped on initial load"
+                                : "summary_json ignored for home weekly",
+                        }),
+                    });
+                }
 
                 if (!isActive) return;
 
@@ -5589,15 +5610,17 @@ export default function GymApp() {
                     requestId: "save-sync",
                     workoutsHistory: mergedHistory,
                 });
-                console.log("[home weekly summary] apply", {
-                    source: "workouts.data",
-                    env: getRuntimeEnvironmentLabel(),
-                    user_id: currentUserId,
-                    requestId: "save-sync",
-                    applied: true,
-                    reason: "workouts.data save sync",
-                    ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
-                });
+                if (shouldLogPerfDebug()) {
+                    console.log("[home weekly summary] apply", {
+                        source: "workouts.data",
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: currentUserId,
+                        requestId: "save-sync",
+                        applied: true,
+                        reason: "workouts.data save sync",
+                        ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
+                    });
+                }
 
                 const sessionSyncDates = syncDates.filter(
                     (date) => !workoutSyncResults.skippedDates.includes(date)
@@ -5972,7 +5995,7 @@ export default function GymApp() {
                 }
 
                 if (cancelled || displayHistoryRefreshRequestIdRef.current !== requestId) {
-                    console.log("[home weekly summary] ignore stale", {
+                    if (shouldLogPerfDebug()) console.log("[home weekly summary] ignore stale", {
                         source: sessionsRes.error ? "workouts.data" : "workouts.data + workout_sessions.summary_json",
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
@@ -6046,24 +6069,26 @@ export default function GymApp() {
                     workoutsHistory: workoutsOnlyHistory,
                     summaryHistory: sessionsRes.error ? {} : buildHistoryFromWorkoutSessionRows(sessionsRes.data || []),
                 });
-                console.log("[home weekly summary] apply", {
-                    source: "workouts.data",
-                    env: getRuntimeEnvironmentLabel(),
-                    user_id: user.id,
-                    requestId,
-                    applied: displayWorkoutsDataApplied,
-                    reason: "display refresh workouts.data canonical",
-                    ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory, weekRange),
-                    ...getHomeWeeklySourceDebug({
-                        workoutsHistory: workoutsOnlyHistory,
-                        summaryHistory: sessionsRes.error ? {} : buildHistoryFromWorkoutSessionRows(sessionsRes.data || []),
-                        finalHistory: nextWorkoutsDataHistory,
-                        weekRange,
+                if (shouldLogPerfDebug()) {
+                    console.log("[home weekly summary] apply", {
                         source: "workouts.data",
-                        appliedSource: displayWorkoutsDataApplied ? "workouts.data" : "none",
-                        ignoredStaleSource: displayWorkoutsDataApplied ? "summary_json/history_cache/localStorage" : "stale display history refresh",
-                    }),
-                });
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        requestId,
+                        applied: displayWorkoutsDataApplied,
+                        reason: "display refresh workouts.data canonical",
+                        ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory, weekRange),
+                        ...getHomeWeeklySourceDebug({
+                            workoutsHistory: workoutsOnlyHistory,
+                            summaryHistory: sessionsRes.error ? {} : buildHistoryFromWorkoutSessionRows(sessionsRes.data || []),
+                            finalHistory: nextWorkoutsDataHistory,
+                            weekRange,
+                            source: "workouts.data",
+                            appliedSource: displayWorkoutsDataApplied ? "workouts.data" : "none",
+                            ignoredStaleSource: displayWorkoutsDataApplied ? "summary_json/history_cache/localStorage" : "stale display history refresh",
+                        }),
+                    });
+                }
                 setHistoryLoadError("");
             } catch (error) {
                 if (cancelled) return;
@@ -6201,7 +6226,7 @@ export default function GymApp() {
                 );
 
                 if (cancelled || homeWeeklySummaryRequestIdRef.current !== requestId) {
-                    console.log("[home weekly summary] ignore stale", {
+                    if (shouldLogPerfDebug()) console.log("[home weekly summary] ignore stale", {
                         source: "workouts.data",
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
@@ -6233,25 +6258,27 @@ export default function GymApp() {
                 historyRemoteLoadFailedRef.current = false;
                 setHistoryLoadError("");
 
-                console.log("[home weekly summary] apply", {
-                    source: "workouts.data",
-                    env: getRuntimeEnvironmentLabel(),
-                    user_id: user.id,
-                    requestId,
-                    applied: homeWeeklyApplied,
-                    reason: "home screen workouts.data refresh",
-                    ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory, weekRange),
-                    ...getHomeWeeklySourceDebug({
-                        workoutsHistory: remoteWorkoutsHistory,
-                        finalHistory: nextWorkoutsDataHistory,
-                        weekRange,
+                if (shouldLogPerfDebug()) {
+                    console.log("[home weekly summary] apply", {
                         source: "workouts.data",
-                        appliedSource: homeWeeklyApplied ? "workouts.data" : "none",
-                        ignoredStaleSource: homeWeeklyApplied
-                            ? "summary_json/history_cache/localStorage"
-                            : "stale home_weekly_summary_refresh",
-                    }),
-                });
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        requestId,
+                        applied: homeWeeklyApplied,
+                        reason: "home screen workouts.data refresh",
+                        ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory, weekRange),
+                        ...getHomeWeeklySourceDebug({
+                            workoutsHistory: remoteWorkoutsHistory,
+                            finalHistory: nextWorkoutsDataHistory,
+                            weekRange,
+                            source: "workouts.data",
+                            appliedSource: homeWeeklyApplied ? "workouts.data" : "none",
+                            ignoredStaleSource: homeWeeklyApplied
+                                ? "summary_json/history_cache/localStorage"
+                                : "stale home_weekly_summary_refresh",
+                        }),
+                    });
+                }
             } catch (error) {
                 if (cancelled) return;
                 console.error("[home weekly summary] refresh failed", {
@@ -6540,15 +6567,26 @@ export default function GymApp() {
         existingHistory: displayHistory,
         workoutsDataHistory,
         source: "canonicalDisplayHistory",
+        log: shouldLogPerfDebug(),
     }), [displayHistory, workoutsDataHistory]);
 
     const canonicalDisplayHistory = trustedDisplayHistoryResult.history;
 
     useEffect(() => {
         if (screen !== "history") return;
+        if (!shouldLogPerfDebug()) return;
         const weekRange = getCurrentWeekRangeForHomeSummary();
         const debugDates = ["2026-06-01", "2026-06-02", "2026-06-03"];
         const summary = getHomeWeeklySummaryDebug(canonicalDisplayHistory, weekRange);
+        const signature = JSON.stringify({
+            dates: getHistoryDatesInRange(canonicalDisplayHistory, weekRange),
+            counts: summary.bodyPartCounts,
+            history: getHistoryOverallMetrics(history),
+            workoutsDataHistory: getHistoryOverallMetrics(workoutsDataHistory),
+            displayHistory: getHistoryOverallMetrics(displayHistory),
+        });
+        if (homePropsDebugSignatureRef.current === signature) return;
+        homePropsDebugSignatureRef.current = signature;
 
         console.log("[home props]", {
             action: "home_props_before_render",
@@ -6792,17 +6830,19 @@ export default function GymApp() {
                 replaceDate: Boolean(pendingChange.explicitDelete),
             });
 
-            console.log("[save] local draft applied to history", {
-                env: getRuntimeEnvironmentLabel(),
-                user_id: user?.id || null,
-                date: logDate,
-                reason: pendingChange.reason,
-                explicitDelete: Boolean(pendingChange.explicitDelete),
-                draftInput: getDraftInputDebugSummary({ exercises, logData, labels: todayLabels }),
-                saving: getHistoryDebugSummaryForDate(nextHistory, logDate),
-                previous: getHistoryDebugSummaryForDate(prev, logDate),
-                diffPreviousToSaving: getHistoryDebugDiffForDate(prev, nextHistory, logDate),
-            });
+            if (shouldLogPerfDebug()) {
+                console.log("[save] local draft applied to history", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user?.id || null,
+                    date: logDate,
+                    reason: pendingChange.reason,
+                    explicitDelete: Boolean(pendingChange.explicitDelete),
+                    draftInput: getDraftInputDebugSummary({ exercises, logData, labels: todayLabels }),
+                    saving: getHistoryDebugSummaryForDate(nextHistory, logDate),
+                    previous: getHistoryDebugSummaryForDate(prev, logDate),
+                    diffPreviousToSaving: getHistoryDebugDiffForDate(prev, nextHistory, logDate),
+                });
+            }
 
             if (serializeHistoryMap(nextHistory) === serializeHistoryMap(prev)) return prev;
             latestHistoryRef.current = nextHistory;
@@ -6815,15 +6855,17 @@ export default function GymApp() {
                 workoutsHistory: nextHistory,
             });
             persistHistoryForUser(user?.id, nextHistory);
-            console.log("[home weekly summary] apply", {
-                source: "workouts.data",
-                env: getRuntimeEnvironmentLabel(),
-                user_id: user?.id || null,
-                requestId: "local-draft-flush",
-                applied: true,
-                reason: "local draft flush to workouts.data canonical",
-                ...getHomeWeeklySummaryDebug(nextHistory),
-            });
+            if (shouldLogPerfDebug()) {
+                console.log("[home weekly summary] apply", {
+                    source: "workouts.data",
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user?.id || null,
+                    requestId: "local-draft-flush",
+                    applied: true,
+                    reason: "local draft flush to workouts.data canonical",
+                    ...getHomeWeeklySummaryDebug(nextHistory),
+                });
+            }
             return nextHistory;
         });
     }, [applyWorkoutsDataHistorySnapshot, exercises, getExUnit, history, logData, logDate, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate]); // ← 依存配列
@@ -7702,12 +7744,10 @@ export default function GymApp() {
     useEffect(() => {
         if (screen !== "log" || !logDate) return;
         const normalizedDate = normalizeDraftDateKey(logDate);
-        const canonicalDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, canonicalDisplayHistory);
         const latestDraft = normalizeLogDraftState(latestLogDraftRef.current || {});
         const logDataExerciseNames = Object.keys(logData || {});
         const sessionExNames = (sessionEx || []).map((exercise) => exercise.name);
         const latestLogDraftRefExerciseNames = getRawDraftSetMetrics(latestDraft).exerciseNames;
-        const canonicalDisplayHistoryExerciseNamesForDate = (canonicalDraftForDate.sessionEx || []).map((exercise) => exercise.name);
         const finalRenderedExerciseNames = (exercises || []).map((exercise) => exercise.name);
         const renderedNames = new Set(
             finalRenderedExerciseNames
@@ -7723,6 +7763,21 @@ export default function GymApp() {
             const normalizedExerciseName = normalizeExerciseName(exerciseName);
             return normalizedExerciseName && !renderedNames.has(normalizedExerciseName);
         });
+        const shouldLogRenderSource = missingFromRendered.length > 0 || shouldLogPerfDebug();
+        if (!shouldLogRenderSource) return;
+        const canonicalDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, canonicalDisplayHistory);
+        const canonicalDisplayHistoryExerciseNamesForDate = (canonicalDraftForDate.sessionEx || []).map((exercise) => exercise.name);
+        const signature = JSON.stringify({
+            normalizedDate,
+            logDataExerciseNames,
+            sessionExNames,
+            latestLogDraftRefExerciseNames,
+            canonicalDisplayHistoryExerciseNamesForDate,
+            finalRenderedExerciseNames,
+            missingFromRendered,
+        });
+        if (logScreenRenderDebugSignatureRef.current === signature) return;
+        logScreenRenderDebugSignatureRef.current = signature;
 
         console[missingFromRendered.length ? "warn" : "log"]("[log screen] exercise render source", {
             env: getRuntimeEnvironmentLabel(),
@@ -8189,15 +8244,17 @@ export default function GymApp() {
                         requestId: "log-date-refresh",
                         workoutsHistory: remoteWorkoutsHistory,
                     });
-                    console.log("[home weekly summary] apply", {
-                        source: "workouts.data",
-                        env: getRuntimeEnvironmentLabel(),
-                        user_id: user.id,
-                        requestId: "log-date-refresh",
-                        applied: logDateRefreshApplied,
-                        reason: "log date workouts.data refresh",
-                        ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
-                    });
+                    if (shouldLogPerfDebug()) {
+                        console.log("[home weekly summary] apply", {
+                            source: "workouts.data",
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: user.id,
+                            requestId: "log-date-refresh",
+                            applied: logDateRefreshApplied,
+                            reason: "log date workouts.data refresh",
+                            ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
+                        });
+                    }
                 }
                 applyCurrentLogDraft(cleanSavedDraftForDate);
                 setHistoryLoadError("");
@@ -9590,14 +9647,43 @@ export default function GymApp() {
                             tabs={bottomTabs}
                             activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
                             onSelectTab={(nextScreen) => {
+                                const tappedAt = getPerfNow();
+                                const isCenterWorkoutButton = nextScreen === "log";
+                                console.log("[navigation]", {
+                                    action: isCenterWorkoutButton ? "center_workout_button_tap" : "nav_button_tap",
+                                    currentScreen: screen,
+                                    targetScreen: nextScreen,
+                                    timestamp: new Date().toISOString(),
+                                    onClickFired: true,
+                                    navigationApplied: false,
+                                    blocked: false,
+                                    blockedReason: null,
+                                });
+                                const logNavigationApplied = () => {
+                                    window.requestAnimationFrame(() => {
+                                        console.log("[navigation]", {
+                                            action: isCenterWorkoutButton ? "center_workout_button_tap" : "nav_button_tap",
+                                            currentScreen: screen,
+                                            targetScreen: nextScreen,
+                                            timestamp: new Date().toISOString(),
+                                            onClickFired: true,
+                                            navigationApplied: true,
+                                            blocked: false,
+                                            blockedReason: null,
+                                            delayMs: Math.round((getPerfNow() - tappedAt) * 10) / 10,
+                                        });
+                                    });
+                                };
                                 if (nextScreen === "log") {
                                     handleLogForDate(getTodayKey());
+                                    logNavigationApplied();
                                     return;
                                 }
                                 if (screen === "log") {
                                     persistCurrentLog();
                                 }
                                 setScreen(nextScreen);
+                                logNavigationApplied();
                             }}
                             isRecording={isRecording}
                         />
