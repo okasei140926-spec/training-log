@@ -6725,7 +6725,7 @@ export default function GymApp() {
 
 
     const { getPrev, getPR, getPreviousPR, copySetDown, copyRepDown } = useWorkout({
-        history,
+        history: canonicalDisplayHistory,
         manualBests,
         sessionHistory,
         setLogData: setLogDataAndSaveDraft,
@@ -9126,7 +9126,7 @@ export default function GymApp() {
                                         onToggleExUnit={toggleExUnit}
                                         muscleEx={muscleEx}
                                         setTodayLabels={updateTodayLabels}
-                                        history={history}
+                                        history={canonicalDisplayHistory}
                                         logDate={logDate}
                                         workoutElapsedSec={displayedWorkoutElapsedSec}
                                         workoutTimerStatus={displayedWorkoutTimerStatus}
