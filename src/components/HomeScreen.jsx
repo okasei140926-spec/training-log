@@ -234,7 +234,14 @@ function resolveRecordDuration(record, workoutDurationSecByDate, dateKey) {
         { source: "durationMinutes", value: Number(record?.durationMinutes) },
     ].filter((candidate) => Number.isFinite(candidate.value) && candidate.value > 0);
 
-    if (!candidates.length) return { minutes: null, source: null, rawDuration: null };
+    if (!candidates.length) {
+        return {
+            minutes: null,
+            source: null,
+            rawDuration: null,
+            rawDurationCandidates: [],
+        };
+    }
 
     const best = candidates.reduce((max, candidate) => (
         candidate.value > max.value ? candidate : max
@@ -244,6 +251,7 @@ function resolveRecordDuration(record, workoutDurationSecByDate, dateKey) {
         minutes: Math.max(1, Math.round(best.value)),
         source: best.source,
         rawDuration: best.value,
+        rawDurationCandidates: candidates,
     };
 }
 
@@ -430,16 +438,19 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
                     minutes: recordMinutes,
                     durationSource: durationInfo.source,
                     rawDuration: durationInfo.rawDuration,
+                    rawDurationCandidates: durationInfo.rawDurationCandidates || [],
                     exercises: [],
                 };
             } else if (!sessions[dateKey].minutes && recordMinutes) {
                 sessions[dateKey].minutes = recordMinutes;
                 sessions[dateKey].durationSource = durationInfo.source;
                 sessions[dateKey].rawDuration = durationInfo.rawDuration;
+                sessions[dateKey].rawDurationCandidates = durationInfo.rawDurationCandidates || [];
             } else if (recordMinutes && sessions[dateKey].minutes && recordMinutes > sessions[dateKey].minutes) {
                 sessions[dateKey].minutes = recordMinutes;
                 sessions[dateKey].durationSource = durationInfo.source;
                 sessions[dateKey].rawDuration = durationInfo.rawDuration;
+                sessions[dateKey].rawDurationCandidates = durationInfo.rawDurationCandidates || [];
             }
 
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
@@ -489,12 +500,17 @@ function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecB
                         setCount: normalized.sets,
                         startTime: null,
                         endTime: null,
-                        rawDuration: normalized.rawDuration,
-                        displayedDuration: normalized.minutes,
+                        rawDurationCandidates: normalized.rawDurationCandidates || [],
+                        chosenDuration: normalized.minutes,
+                        rejectedDurationCandidates: normalized.rawDurationCandidates || [],
+                        displayedDuration: null,
                         source: normalized.durationSource,
-                        reasonIfOneMinute: "recent session has 5+ sets but duration resolves to 1 minute or less",
+                        reasonIfOneMinute: "recent session has 5+ sets but only suspicious 1-minute duration candidates",
                     });
                 }
+                normalized.minutes = null;
+                normalized.durationSource = null;
+                normalized.rawDuration = null;
             }
 
             return normalized;
