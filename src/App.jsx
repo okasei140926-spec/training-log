@@ -19,6 +19,7 @@ import {
     sanitizeWorkoutSets,
 } from "./utils/helpers";
 import { buildTrustedHistory } from "./features/workout/buildTrustedHistory";
+import { useWorkoutLog } from "./features/workout/useWorkoutLog";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
@@ -2581,12 +2582,7 @@ export default function GymApp() {
         }
     }, [logDate, user?.id]);
 
-    const {
-        addSet,
-        setField,
-        setWeightMode,
-        saveLog,
-    } = useLogLogic({
+    const { saveLog } = useLogLogic({
         logData,
         setLogData: setLogDataAndSaveDraft,
         history,
@@ -6480,6 +6476,9 @@ export default function GymApp() {
 
     useEffect(() => {
         if (screen !== "log") return;
+        if (String(latestLogDraftRef.current?.meta?.source || "").startsWith("useWorkoutLog:")) {
+            return;
+        }
 
         const normalizedDate = String(logDate || "").slice(0, 10);
         const pendingChange = normalizedDate
@@ -6601,6 +6600,132 @@ export default function GymApp() {
         () => mergeDraftExercisesWithLogData(sourceExercises, logData, todayLabels),
         [sourceExercises, logData, todayLabels]
     );
+
+    const workoutLogInitialDraft = useMemo(() => ({
+        date: logDate,
+        todayLabels,
+        exercises,
+        logData,
+        sessionEx: exercises,
+        exerciseUnits,
+        meta: latestLogDraftRef.current?.meta || null,
+    }), [exerciseUnits, exercises, logData, logDate, todayLabels]);
+
+    const handleWorkoutLogDraftChange = useCallback((nextDraft, mutation = {}) => {
+        const normalizedDate = normalizeDraftDateKey(nextDraft?.date || logDate);
+        const currentDate = normalizeDraftDateKey(logDate);
+        if (!normalizedDate || normalizedDate !== currentDate) {
+            console.warn("[workout log] skipped date-mismatched draft sync", {
+                action: "draft_restore_date_check",
+                keyDate: currentDate,
+                payloadDate: normalizedDate,
+                selectedDate: currentDate,
+                accepted: false,
+                rejectedReason: "useWorkoutLog draft date does not match current log date",
+            });
+            return;
+        }
+
+        const source = `useWorkoutLog:${mutation.reason || nextDraft?.meta?.source || "draft_change"}`;
+        const normalizedDraft = withDraftDateMeta(normalizedDate, normalizeLogDraftState({
+            todayLabels: nextDraft?.todayLabels?.length ? nextDraft.todayLabels : todayLabels,
+            logData: nextDraft?.logData || {},
+            sessionEx: nextDraft?.sessionEx ?? nextDraft?.exercises ?? [],
+            exerciseUnits: nextDraft?.exerciseUnits || {},
+            meta: makeDraftMeta(nextDraft?.meta || {}, {
+                source,
+                hasUnsavedChanges: true,
+            }),
+        }), {
+            source,
+            hasUnsavedChanges: true,
+        });
+
+        latestLogDraftRef.current = normalizedDraft;
+        setTodayLabels((prev) =>
+            JSON.stringify(prev || []) === JSON.stringify(normalizedDraft.todayLabels || [])
+                ? prev
+                : normalizedDraft.todayLabels
+        );
+        setLogData((prev) =>
+            JSON.stringify(prev || {}) === JSON.stringify(normalizedDraft.logData || {})
+                ? prev
+                : normalizedDraft.logData
+        );
+        setSessionEx((prev) =>
+            JSON.stringify(prev) === JSON.stringify(normalizedDraft.sessionEx)
+                ? prev
+                : normalizedDraft.sessionEx
+        );
+        setExerciseUnits((prev) =>
+            JSON.stringify(prev || {}) === JSON.stringify(normalizedDraft.exerciseUnits || {})
+                ? prev
+                : normalizedDraft.exerciseUnits
+        );
+
+        if (mutation.reason) {
+            markWorkoutContentChanged(normalizedDate, mutation.reason, {
+                explicitDelete: Boolean(mutation.explicitDelete),
+                explicitEdit: Boolean(mutation.explicitEdit),
+                details: mutation.details || null,
+            });
+        }
+    }, [logDate, markWorkoutContentChanged, todayLabels]);
+
+    const handleWorkoutLogDraftPersist = useCallback((nextDraft) => {
+        const normalizedDate = normalizeDraftDateKey(nextDraft?.date || logDate);
+        if (!normalizedDate) return;
+
+        const source = `useWorkoutLog:${nextDraft?.meta?.source || "draft_persist"}`;
+        const normalizedDraft = withDraftDateMeta(normalizedDate, normalizeLogDraftState({
+            todayLabels: nextDraft?.todayLabels?.length ? nextDraft.todayLabels : todayLabels,
+            logData: nextDraft?.logData || {},
+            sessionEx: nextDraft?.sessionEx ?? nextDraft?.exercises ?? [],
+            exerciseUnits: nextDraft?.exerciseUnits || {},
+            meta: makeDraftMeta(nextDraft?.meta || {}, {
+                source,
+                hasUnsavedChanges: nextDraft?.meta?.hasUnsavedChanges ?? true,
+            }),
+        }), {
+            source,
+            hasUnsavedChanges: nextDraft?.meta?.hasUnsavedChanges ?? true,
+            updatedAt: nextDraft?.meta?.updatedAt,
+            remoteVerifiedAt: nextDraft?.meta?.remoteVerifiedAt,
+        });
+
+        const draftSignature = JSON.stringify({
+            date: normalizedDate,
+            content: getWorkoutDraftSignature(normalizedDraft),
+            metaSource: normalizedDraft.meta?.source || null,
+            hasUnsavedChanges: normalizedDraft.meta?.hasUnsavedChanges ?? null,
+            updatedAt: normalizedDraft.meta?.updatedAt || null,
+            remoteVerifiedAt: normalizedDraft.meta?.remoteVerifiedAt || null,
+        });
+        if (lastAutosavedDraftSignatureRef.current === draftSignature) return;
+        lastAutosavedDraftSignatureRef.current = draftSignature;
+        saveDraftForDate(normalizedDate, normalizedDraft);
+        latestLogDraftRef.current = normalizedDraft;
+    }, [logDate, saveDraftForDate, todayLabels]);
+
+    const workoutLog = useWorkoutLog({
+        date: logDate,
+        initialDraft: workoutLogInitialDraft,
+        debug: shouldLogPerfDebug(),
+        debounceMs: 350,
+        onDraftChange: handleWorkoutLogDraftChange,
+        onDraftPersist: handleWorkoutLogDraftPersist,
+    });
+
+    const workoutLogExercises = workoutLog.exercises;
+    const workoutLogData = workoutLog.logData;
+    const workoutLogExerciseUnits = workoutLog.exerciseUnits;
+    const addSet = workoutLog.addSet;
+    const setField = workoutLog.setField;
+    const setWeightMode = workoutLog.setWeightMode;
+
+    const getWorkoutLogExUnit = useCallback((name) => (
+        workoutLogExerciseUnits?.[name] || getExUnit(name)
+    ), [getExUnit, workoutLogExerciseUnits]);
 
     const displayHistory = useMemo(() => {
         if (!logDate) return history;
@@ -7165,89 +7290,10 @@ export default function GymApp() {
 
 
     const removeEx = (idOrName, maybeName) => {
-        markWorkoutContentChanged(logDate, "exercise_delete", { explicitDelete: true });
         const isNameOnly = maybeName === undefined;
-        const targetId = isNameOnly ? null : idOrName;
         const targetName = isNameOnly ? idOrName : maybeName;
-        let shouldClearDateArtifacts = false;
-        const currentDraft = getCurrentLogDraftSnapshot();
-        const currentLabels = currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels;
-        const currentLogData = currentDraft.logData || {};
-        const currentExerciseUnits = currentDraft.exerciseUnits || exerciseUnits;
-        const currentSessionExercises = mergeDraftExercisesWithLogData(
-            currentDraft.sessionEx !== null ? currentDraft.sessionEx : exercises,
-            currentLogData,
-            currentLabels
-        );
-        const nextSession = currentSessionExercises.filter(e => {
-            if (targetId !== null) return e.id !== targetId;
-            return e.name !== targetName;
-        });
-        const nextLogData = { ...currentLogData };
-        delete nextLogData[targetName];
-        const nextExerciseUnits = { ...currentExerciseUnits };
-        delete nextExerciseUnits[targetName];
-
-        applyCurrentLogDraft({
-            todayLabels: currentLabels,
-            logData: nextLogData,
-            sessionEx: nextSession,
-            exerciseUnits: nextExerciseUnits,
-        });
-
-        setHistory(prev => {
-            if (!prev[targetName]) return prev;
-
-            const next = { ...prev };
-            const filtered = (next[targetName] || []).filter(r => r.date !== logDate);
-
-            if (filtered.length > 0) {
-                next[targetName] = filtered;
-            } else {
-                delete next[targetName];
-            }
-
-            shouldClearDateArtifacts = !Object.values(next).some((records) =>
-                (records || []).some((record) => record?.date === logDate)
-            );
-
-            return next;
-        });
-
-        appendHistoryDeleteMarkers({
-            records: [buildHistoryRecordDeleteKey(logDate, targetName)],
-        });
-
-        if (shouldClearDateArtifacts) {
-            appendHistoryDeleteMarkers({ dates: [logDate] });
-            clearDraftForDate(logDate);
-            setSavedWorkoutDurationSecByDate((prev) => {
-                if (!prev[logDate]) return prev;
-                const next = { ...prev };
-                delete next[logDate];
-                return next;
-            });
-            if (summary?.date === logDate) setSummary(null);
-            if (workoutDayShareTarget?.workoutDate === logDate) setWorkoutDayShareTarget(null);
-            if (workoutStartedForDate === logDate) resetWorkoutElapsedTimer();
-            if (user?.id) {
-                deleteRemoteWorkoutArtifactsForDate(user.id, logDate)
-                    .then(() => {
-                        clearSyncFailure(logDate);
-                        setSessionSyncVersion((prev) => prev + 1);
-                    })
-                    .catch((error) => {
-                        recordSyncFailure(logDate, error, "delete_workout_artifacts");
-                        console.error("workout date artifact delete failed", {
-                            error,
-                            userId: user.id,
-                            workoutDate: logDate,
-                        });
-                    });
-            }
-        }
-
-        queueWorkoutSessionSync(logDate);
+        workoutLog.removeExercise(idOrName, maybeName);
+        clearExerciseOverrideForLabel(targetName, todayLabels[0]);
     };
 
     const setExerciseOverrideForLabel = useCallback((exerciseName, label) => {
@@ -7302,23 +7348,15 @@ export default function GymApp() {
             });
             return;
         }
-        const currentDraft = getCurrentLogDraftSnapshot();
-        const currentLabels = currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels;
-        const currentLogData = currentDraft.logData || {};
-        const currentExerciseUnits = currentDraft.exerciseUnits || exerciseUnits;
-        const currentSessionExercises = mergeDraftExercisesWithLogData(
-            currentDraft.sessionEx !== null ? currentDraft.sessionEx : exercises,
-            currentLogData,
-            currentLabels
-        );
-        const beforeNames = currentSessionExercises.map((e) => e.name);
-        const existingExercise = currentSessionExercises.find(
+        const beforeExercises = workoutLog.exercises || [];
+        const beforeNames = beforeExercises.map((e) => e.name);
+        const existingExercise = beforeExercises.find(
             (e) => normalizeExerciseName(e.name) === normalizedName
         );
         const alreadyInSession = !!existingExercise;
 
         if (alreadyInSession) {
-            console.log("[add-exercise] duplicate ignored", {
+            if (shouldLogPerfDebug()) console.log("[add-exercise] duplicate ignored", {
                 action: "exercise_add_attempt",
                 env: getRuntimeEnvironmentLabel(),
                 date: logDate,
@@ -7341,27 +7379,20 @@ export default function GymApp() {
             return;
         }
 
-        markWorkoutContentChanged(logDate, "exercise_add");
-
         const ex = {
             id: Date.now() + (Math.random() * 1000 | 0),
             name: trimmed,
             label,
             bodyPart: label,
         };
-        const nextLogDataForDraft = currentLogData[trimmed]
-            ? currentLogData
-            : { ...currentLogData, [trimmed]: makeDefaultDraftSets() };
-        const nextSessionForDraft = alreadyInSession
-            ? currentSessionExercises
-            : [...currentSessionExercises, ex];
+        const nextSessionForDraft = [...beforeExercises, ex];
         const afterNames = nextSessionForDraft.map((exercise) => exercise.name);
         const removedExerciseNames = beforeNames.filter((beforeName) => {
             const normalizedBefore = normalizeExerciseName(beforeName);
             return normalizedBefore && !afterNames.some((afterName) => normalizeExerciseName(afterName) === normalizedBefore);
         });
-        const beforeSetCount = beforeNames.reduce((sum, exerciseName) => sum + ((currentLogData[exerciseName] || []).length || 0), 0);
-        const afterSetCount = afterNames.reduce((sum, exerciseName) => sum + ((nextLogDataForDraft[exerciseName] || []).length || 0), 0);
+        const beforeSetCount = beforeExercises.reduce((sum, exercise) => sum + ((exercise.sets || []).length || 0), 0);
+        const afterSetCount = nextSessionForDraft.reduce((sum, exercise) => sum + ((exercise.sets || []).length || 0), 0);
         const blockedReason = removedExerciseNames.length
             ? "exercise add would remove existing exercises"
             : afterNames.length < beforeNames.length
@@ -7372,7 +7403,7 @@ export default function GymApp() {
 
         const action = options.action || "exercise_add";
 
-        console[blockedReason ? "warn" : "log"]("[exercise mutation]", {
+        if (shouldLogPerfDebug() || blockedReason) console[blockedReason ? "warn" : "log"]("[exercise mutation]", {
             action,
             env: getRuntimeEnvironmentLabel(),
             date: logDate,
@@ -7389,7 +7420,7 @@ export default function GymApp() {
             blockedReason,
         });
 
-        console[blockedReason ? "warn" : "log"]("[exercise add]", {
+        if (shouldLogPerfDebug() || blockedReason) console[blockedReason ? "warn" : "log"]("[exercise add]", {
             action: "exercise_add_attempt",
             env: getRuntimeEnvironmentLabel(),
             date: logDate,
@@ -7412,19 +7443,14 @@ export default function GymApp() {
 
         if (blockedReason) return;
 
-        console.log("[add-exercise] adding exercise", {
+        if (shouldLogPerfDebug()) console.log("[add-exercise] adding exercise", {
             name: trimmed,
             label,
             before: beforeNames,
             after: afterNames,
         });
 
-        applyCurrentLogDraft({
-            todayLabels: currentLabels,
-            logData: nextLogDataForDraft,
-            sessionEx: nextSessionForDraft,
-            exerciseUnits: currentExerciseUnits,
-        });
+        workoutLog.addExercise(ex, label, { reason: "exercise_add" });
 
         setMuscleEx((prev) => {
             const next = { ...prev };
@@ -7446,71 +7472,17 @@ export default function GymApp() {
     };
 
     const reorderEx = (fromIdx, toIdx) => {
-        markWorkoutContentChanged(logDate, "exercise_reorder");
-        const currentDraft = getCurrentLogDraftSnapshot();
-        const current = [...mergeDraftExercisesWithLogData(
-            currentDraft.sessionEx !== null ? currentDraft.sessionEx : exercises,
-            currentDraft.logData || {},
-            currentDraft.todayLabels || todayLabels
-        )];
-        const [moved] = current.splice(fromIdx, 1);
-        if (!moved) return;
-        current.splice(toIdx, 0, moved);
-        applyCurrentLogDraft({
-            ...currentDraft,
-            todayLabels: currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels,
-            sessionEx: current,
-        });
+        workoutLog.reorderExercise(fromIdx, toIdx);
     };
 
     const renameEx = (id, newName) => {
         const trimmed = newName.trim();
         if (!trimmed) return;
 
-        const oldEx = exercises.find((e) => e.id === id);
+        const oldEx = (workoutLog.exercises || []).find((e) => e.id === id);
         if (!oldEx || oldEx.name === trimmed) return;
 
-        markWorkoutContentChanged(logDate, "exercise_rename", {
-            explicitEdit: true,
-            details: {
-                beforeName: oldEx.name,
-                afterName: trimmed,
-            },
-        });
-
-        const currentDraft = getCurrentLogDraftSnapshot();
-        const currentLabels = currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels;
-        const currentExercises = mergeDraftExercisesWithLogData(
-            currentDraft.sessionEx !== null ? currentDraft.sessionEx : exercises,
-            currentDraft.logData || {},
-            currentLabels
-        );
-        const nextSessionEx = currentExercises.map((e) =>
-            e.id === id || normalizeExerciseName(e.name) === normalizeExerciseName(oldEx.name)
-                ? { ...e, name: trimmed }
-                : e
-        );
-        const nextLogData = { ...(currentDraft.logData || {}) };
-        const oldDataKey = Object.prototype.hasOwnProperty.call(nextLogData, oldEx.name)
-            ? oldEx.name
-            : Object.prototype.hasOwnProperty.call(nextLogData, id)
-                ? id
-                : null;
-        if (oldDataKey && oldDataKey !== trimmed) {
-            nextLogData[trimmed] = nextLogData[oldDataKey];
-            delete nextLogData[oldDataKey];
-        }
-        const nextUnits = { ...(currentDraft.exerciseUnits || exerciseUnits) };
-        if (Object.prototype.hasOwnProperty.call(nextUnits, oldEx.name)) {
-            nextUnits[trimmed] = nextUnits[oldEx.name];
-            delete nextUnits[oldEx.name];
-        }
-        applyCurrentLogDraft({
-            todayLabels: currentLabels,
-            logData: nextLogData,
-            sessionEx: nextSessionEx,
-            exerciseUnits: nextUnits,
-        });
+        workoutLog.renameExercise(id, trimmed);
 
         // muscleExも更新
         setMuscleEx((p) => {
@@ -7535,84 +7507,17 @@ export default function GymApp() {
     };
 
     const quickAdd = (name, remove, labelOverride, options = {}) => {
-        const tgts = labelOverride
-            ? [labelOverride]
-            : Array.isArray(addTarget)
-                ? addTarget
-                : (addTarget ? [addTarget] : []);
-        const action = remove ? "exercise_remove" : (options.action || "exercise_add");
-        const currentDraft = getCurrentLogDraftSnapshot();
-        const currentLabels = currentDraft.todayLabels?.length ? currentDraft.todayLabels : todayLabels;
-        const currentLogData = currentDraft.logData || {};
-        const currentExerciseUnits = currentDraft.exerciseUnits || exerciseUnits;
-        const currentSessionExercises = mergeDraftExercisesWithLogData(
-            currentDraft.sessionEx !== null ? currentDraft.sessionEx : exercises,
-            currentLogData,
-            currentLabels
-        );
-        const beforeNames = currentSessionExercises.map((exercise) => exercise.name);
-
-        if (!remove) {
-            setMuscleEx((prev) => {
-                const next = { ...prev };
-
-                tgts.forEach((label) => {
-                    const list = next[label] || [];
-
-                    if (!list.find((e) => e.name === name)) {
-                        next[label] = [...list, { id: Date.now(), name }];
-                    }
-                    setExerciseOverrideForLabel(name, label);
-                });
-
-                return next;
-            });
-        }
-
-        if (!remove) {
-            addExToSession(name, labelOverride, { action });
-        } else {
-            const normalizedName = normalizeExerciseName(name);
-            const nextSession = currentSessionExercises.filter((exercise) => normalizeExerciseName(exercise.name) !== normalizedName);
-            const nextLogData = { ...currentLogData };
-            delete nextLogData[name];
-            const nextExerciseUnits = { ...currentExerciseUnits };
-            delete nextExerciseUnits[name];
+        if (remove) {
+            removeEx(name);
+            const tgts = labelOverride
+                ? [labelOverride]
+                : Array.isArray(addTarget)
+                    ? addTarget
+                    : (addTarget ? [addTarget] : []);
             tgts.forEach((label) => clearExerciseOverrideForLabel(name, label));
-            const afterNames = nextSession.map((exercise) => exercise.name);
-            const removedExerciseNames = beforeNames.filter((beforeName) => {
-                const normalizedBefore = normalizeExerciseName(beforeName);
-                return normalizedBefore && !afterNames.some((afterName) => normalizeExerciseName(afterName) === normalizedBefore);
-            });
-            const beforeSetCount = beforeNames.reduce((sum, exerciseName) => sum + ((currentLogData[exerciseName] || []).length || 0), 0);
-            const afterSetCount = afterNames.reduce((sum, exerciseName) => sum + ((nextLogData[exerciseName] || []).length || 0), 0);
-
-            console.log("[exercise mutation]", {
-                action,
-                env: getRuntimeEnvironmentLabel(),
-                date: logDate,
-                user_id: user?.id || null,
-                addedExerciseName: null,
-                removedExerciseNames,
-                beforeExerciseNames: beforeNames,
-                afterExerciseNames: afterNames,
-                beforeSetCount,
-                afterSetCount,
-                selectedBodyPartFilter: labelOverride || todayLabels[0] || null,
-                explicitDelete: true,
-                allowed: true,
-                blockedReason: null,
-            });
-
-            markWorkoutContentChanged(logDate, "exercise_delete", { explicitDelete: true });
-            applyCurrentLogDraft({
-                todayLabels: currentLabels,
-                logData: nextLogData,
-                sessionEx: nextSession,
-                exerciseUnits: nextExerciseUnits,
-            });
+            return;
         }
-
+        addExToSession(name, labelOverride, options);
     };
 
     const quickAddToSession = (name, remove, labelOverride, options) => {
@@ -9473,8 +9378,8 @@ export default function GymApp() {
                                         onUpdateHiddenBodyParts={setHiddenBodyParts}
                                         todayLabels={todayLabels}
                                         dayColor={dayColor}
-                                        exercises={exercises}
-                                        logData={logData}
+                                        exercises={workoutLogExercises}
+                                        logData={workoutLogData}
                                         getExSets={getExSets}
                                         setField={setField}
                                         setWeightMode={setWeightMode}
@@ -9496,7 +9401,7 @@ export default function GymApp() {
                                         onCopyDown={copySetDown}
                                         onCopyDownReps={copyRepDown}
                                         unit={unit}
-                                        getExUnit={getExUnit}
+                                        getExUnit={getWorkoutLogExUnit}
                                         onToggleExUnit={toggleExUnit}
                                         muscleEx={muscleEx}
                                         setTodayLabels={updateTodayLabels}
