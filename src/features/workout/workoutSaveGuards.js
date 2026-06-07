@@ -1,5 +1,5 @@
 import {
-  getHistoryMetricsForDate,
+  getTrustedHistoryMetricsForDate as getHistoryMetricsForDate,
   pickHistoryForDate,
 } from "./buildTrustedHistory";
 import { normalizeExerciseName } from "../../utils/exerciseName";

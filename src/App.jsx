@@ -20,6 +20,18 @@ import {
 } from "./utils/helpers";
 import { buildTrustedHistory } from "./features/workout/buildTrustedHistory";
 import { useWorkoutLog } from "./features/workout/useWorkoutLog";
+import {
+    fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
+    fetchWorkoutRows as fetchWorkoutRowsFromRepository,
+    fetchWorkoutRowsForDates as fetchWorkoutRowsForDatesFromRepository,
+    saveWorkoutForDate as saveWorkoutForDateInRepository,
+} from "./features/workout/workoutRepository";
+import {
+    clearWorkoutDraft as clearStoredWorkoutDraft,
+    loadWorkoutDraft as loadStoredWorkoutDraft,
+    makeVerifiedWorkoutDraft as makeStoredVerifiedWorkoutDraft,
+    saveWorkoutDraft as saveStoredWorkoutDraft,
+} from "./features/workout/workoutDraftStore";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
@@ -1709,6 +1721,17 @@ export default function GymApp() {
             });
         };
 
+        const storedWorkoutDraft = loadStoredWorkoutDraft(normalizedDate, {
+            logger: console,
+            log: false,
+        });
+        const acceptedStoredWorkoutDraft = storedWorkoutDraft
+            ? normalizeDraftForLoad(storedWorkoutDraft, storedWorkoutDraft?.meta?.source || "workoutDraftStore")
+            : null;
+        if (acceptedStoredWorkoutDraft && hasDraftPayloadContent(acceptedStoredWorkoutDraft)) {
+            return acceptedStoredWorkoutDraft;
+        }
+
         const datedLogData = load(getDraftKey("draft_logData", normalizedDate), null);
         const datedTodayLabels = load(getDraftKey("draft_todayLabels", normalizedDate), []);
         const datedRawSessionEx = load(getDraftKey("draft_sessionEx", normalizedDate), null);
@@ -1805,6 +1828,19 @@ export default function GymApp() {
             exerciseNames: (sessionEx || []).map((exercise) => exercise.name),
             logDataNames: Object.keys(logData),
         });
+        const nextStoredDraft = withDraftDateMeta(normalizedDate, {
+            ...draft,
+            todayLabels,
+            logData,
+            sessionEx,
+            exerciseUnits: draft.exerciseUnits || {},
+            meta,
+        }, meta);
+
+        saveStoredWorkoutDraft(normalizedDate, nextStoredDraft, {
+            logger: console,
+            log: shouldLogPerfDebug(),
+        });
 
         save(getDraftKey("draft_todayLabels", normalizedDate), todayLabels);
         save(getDraftKey("draft_logData", normalizedDate), logData);
@@ -1823,6 +1859,7 @@ export default function GymApp() {
 
     const clearDraftForDate = useCallback((dateStr) => {
         if (!dateStr) return;
+        clearStoredWorkoutDraft(dateStr);
 
         [
             getDraftKey("draft_todayLabels", dateStr),
@@ -2433,7 +2470,6 @@ export default function GymApp() {
                 content: getWorkoutDraftSignature(normalizedDraft),
                 metaSource: normalizedDraft.meta?.source || null,
                 hasUnsavedChanges: normalizedDraft.meta?.hasUnsavedChanges ?? null,
-                updatedAt: normalizedDraft.meta?.updatedAt || null,
                 remoteVerifiedAt: normalizedDraft.meta?.remoteVerifiedAt || null,
             });
             if (lastAutosavedDraftSignatureRef.current !== draftSignature) {
@@ -3736,14 +3772,13 @@ export default function GymApp() {
 
         if (!userId || !normalizedDates.length) return [];
 
-        const { data, error } = await supabase
-            .from("workouts")
-            .select("date, data")
-            .eq("user_id", userId)
-            .in("date", normalizedDates);
+        const { rows, error } = await fetchWorkoutRowsForDatesFromRepository({
+            userId,
+            dates: normalizedDates,
+        });
 
         if (error) throw error;
-        return data || [];
+        return rows || [];
     }, []);
 
     const hasRemoteWorkoutForDate = useCallback(async (userId, workoutDate) => {
@@ -3819,12 +3854,13 @@ export default function GymApp() {
                 try {
                     const hasWorkoutForDate = hasValidWorkoutOnDate(normalizedHistoryMap, workoutDate);
                     const incomingMetrics = getHistoryMetricsForDate(normalizedHistoryMap, workoutDate);
-                    const { data: existingWorkoutRow, error: existingWorkoutError } = await supabase
-                        .from("workouts")
-                        .select("date, data")
-                        .eq("user_id", userId)
-                        .eq("date", workoutDate)
-                        .maybeSingle();
+                    const {
+                        row: existingWorkoutRow,
+                        error: existingWorkoutError,
+                    } = await fetchWorkoutRowForDateFromRepository({
+                        userId,
+                        date: workoutDate,
+                    });
 
                     if (existingWorkoutError) throw existingWorkoutError;
 
@@ -3971,46 +4007,42 @@ export default function GymApp() {
                         });
                     }
 
-                    const { error } = hasWorkoutForDate
-                        ? await supabase
-                            .from("workouts")
-                            .upsert({
-                                user_id: userId,
-                                date: workoutDate,
-                                data: dateScopedHistoryForSave,
-                            }, {
-                                onConflict: "user_id,date",
-                            })
-                        : await supabase
-                            .from("workouts")
-                            .delete()
-                            .eq("user_id", userId)
-                            .eq("date", workoutDate);
+                    const repositorySaveResult = await saveWorkoutForDateInRepository({
+                        userId,
+                        date: workoutDate,
+                        history: dateScopedHistoryForSave,
+                        remoteHistory: existingWorkoutRow?.data || {},
+                        reason: pendingChange.reason,
+                        explicitEdit,
+                        explicitDelete: Boolean(pendingChange.explicitDelete),
+                        source: "syncWorkoutRowsForDates",
+                        logger: console,
+                    });
 
-                    if (error) throw error;
-
-                    const { data: verifyWorkoutRow, error: verifyWorkoutError } = await supabase
-                        .from("workouts")
-                        .select("date, data")
-                        .eq("user_id", userId)
-                        .eq("date", workoutDate)
-                        .maybeSingle();
-
-                    if (verifyWorkoutError) {
-                        logRecordFetchError("workouts_post_save_verify", "workouts", verifyWorkoutError, {
-                            userId,
-                            workoutDate,
-                            query: "workouts.select(date,data).eq(user_id).eq(date).maybeSingle",
-                            responseData: verifyWorkoutRow,
-                        });
-                        throw verifyWorkoutError;
+                    if (repositorySaveResult.blocked || repositorySaveResult.skipped) {
+                        results.skippedDates.push(workoutDate);
+                        return;
                     }
 
-                    const verifiedMetrics = verifyWorkoutRow
-                        ? getHistoryMetricsForDate(verifyWorkoutRow.data || {}, workoutDate, {
-                            updatedAt: null,
-                        })
-                        : getEmptyWorkoutMetrics();
+                    if (repositorySaveResult.error || !repositorySaveResult.ok) {
+                        logRecordFetchError("workouts_post_save_verify", "workouts", repositorySaveResult.error, {
+                            userId,
+                            workoutDate,
+                            query: "workoutRepository.saveWorkoutForDate",
+                            responseData: repositorySaveResult.verifiedRow,
+                        });
+                        throw repositorySaveResult.error || new Error(`workouts.data verification failed for ${workoutDate}`);
+                    }
+
+                    const verifyWorkoutRow = repositorySaveResult.verifiedRow;
+
+                    const verifiedMetrics = repositorySaveResult.verifiedMetrics || (
+                        verifyWorkoutRow
+                            ? getHistoryMetricsForDate(verifyWorkoutRow.data || {}, workoutDate, {
+                                updatedAt: null,
+                            })
+                            : getEmptyWorkoutMetrics()
+                    );
                     const verifiedNames = new Set(
                         (verifiedMetrics.exerciseNames || [])
                             .map((exerciseName) => normalizeExerciseName(exerciseName))
@@ -5560,13 +5592,11 @@ export default function GymApp() {
 
                 const sessionRangeStart = getDateDaysAgoKey(REMOTE_HISTORY_SESSION_LOOKBACK_DAYS);
                 const [workoutsRes, sessionsRes] = await Promise.all([
-                    supabase
-                        .from("workouts")
-                        .select("date, data")
-                        .eq("user_id", currentUserId)
-                        .gte("date", sessionRangeStart)
-                        .order("date", { ascending: true })
-                        .limit(REMOTE_HISTORY_SESSION_LIMIT),
+                    fetchWorkoutRowsFromRepository({
+                        userId: currentUserId,
+                        fromDate: sessionRangeStart,
+                        limit: REMOTE_HISTORY_SESSION_LIMIT,
+                    }),
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
@@ -5580,8 +5610,8 @@ export default function GymApp() {
                     logRecordFetchError("history_save_reconcile", "workouts", workoutsRes.error, {
                         userId: currentUserId,
                         dateRange: { from: sessionRangeStart, limit: REMOTE_HISTORY_SESSION_LIMIT },
-                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
-                        responseData: workoutsRes.data,
+                        query: "workoutRepository.fetchWorkoutRows",
+                        responseData: workoutsRes.rows,
                     });
                     throw workoutsRes.error;
                 }
@@ -5604,9 +5634,10 @@ export default function GymApp() {
                 }
                 if (latestUserIdRef.current !== currentUserId) return;
 
+                const workoutRows = workoutsRes.rows || [];
                 const remoteHistory = applyHistoryDeleteMarkers(
                     buildRemoteHistoryWithWorkoutRowsPriority(
-                        workoutsRes.data || [],
+                        workoutRows,
                         sessionsRes.error ? [] : (sessionsRes.data || [])
                     ),
                     effectiveDeleteMarkers
@@ -5745,13 +5776,10 @@ export default function GymApp() {
                     const remoteVerifiedAt = new Date().toISOString();
                     const verifiedHistoryForDate = workoutSyncResults.verifiedHistoryByDate?.[date] || applyPreferredHistoryDates({}, mergedHistory, [date]);
                     const verifiedHistorySnapshot = applyLocalHistoryDates(mergedHistory, verifiedHistoryForDate, [date]);
-                    const savedDraft = withDraftMeta(
+                    const savedDraft = makeStoredVerifiedWorkoutDraft(
+                        date,
                         buildWorkoutDraftForDateFromHistory(date, verifiedHistoryForDate),
-                        {
-                            source: "save_verified",
-                            remoteVerifiedAt,
-                            hasUnsavedChanges: false,
-                        }
+                        { remoteVerifiedAt }
                     );
                     if (!savedDraft.hasSavedWorkout) return;
                     const localDraftForDate = date === logDate
@@ -7966,12 +7994,10 @@ export default function GymApp() {
         const refreshLogDateFromSupabase = async () => {
             try {
                 const [workoutsRes, sessionRes] = await Promise.all([
-                    supabase
-                        .from("workouts")
-                        .select("date, data")
-                        .eq("user_id", user.id)
-                        .eq("date", normalizedDate)
-                        .limit(1),
+                    fetchWorkoutRowForDateFromRepository({
+                        userId: user.id,
+                        date: normalizedDate,
+                    }),
                     supabase
                         .from("workout_sessions")
                         .select("workout_date, duration_sec, summary_json")
@@ -7984,8 +8010,8 @@ export default function GymApp() {
                     logRecordFetchError("log_date_refresh", "workouts", workoutsRes.error, {
                         userId: user.id,
                         workoutDate: normalizedDate,
-                        query: "workouts.select(date,data).eq(user_id).eq(date).limit(1)",
-                        responseData: workoutsRes.data,
+                        query: "workoutRepository.fetchWorkoutRowForDate",
+                        responseData: workoutsRes.row,
                     });
                     throw workoutsRes.error;
                 }
@@ -8010,7 +8036,8 @@ export default function GymApp() {
                 if (cancelled) return;
                 if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
 
-                const workoutRowsForDate = (workoutsRes.data || []).filter((row) => {
+                const fetchedWorkoutRowsForDate = workoutsRes.row ? [workoutsRes.row] : [];
+                const workoutRowsForDate = fetchedWorkoutRowsForDate.filter((row) => {
                     const rowDate = normalizeDraftDateKey(row?.date);
                     const accepted = rowDate === normalizedDate;
                     if (!accepted) {
@@ -8067,7 +8094,7 @@ export default function GymApp() {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
                         requestedDate: normalizedDate,
-                        remoteRowDates: (workoutsRes.data || []).map((row) => normalizeDraftDateKey(row?.date)).filter(Boolean),
+                        remoteRowDates: fetchedWorkoutRowsForDate.map((row) => normalizeDraftDateKey(row?.date)).filter(Boolean),
                         remoteDataDates: getValidWorkoutDatesFromHistory(rawRemoteHistory),
                         remoteSessionDates: sessionRowsForDate.map((row) => normalizeDraftDateKey(row?.workout_date || row?.date)).filter(Boolean),
                         restoredHistoryDates: getValidWorkoutDatesFromHistory(remoteHistory),

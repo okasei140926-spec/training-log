@@ -161,6 +161,7 @@ export function saveWorkoutDraft(date, draft, {
   storage,
   prefix = DEFAULT_PREFIX,
   logger = console,
+  log = false,
   skipIfSame = true,
 } = {}) {
   const normalizedDate = normalizeDateKey(date);
@@ -182,18 +183,42 @@ export function saveWorkoutDraft(date, draft, {
   }
 
   const key = getWorkoutDraftKey(normalizedDate, prefix);
+  const nextHash = getWorkoutDraftSnapshotHash(nextDraft);
+  const previousDraft = safeParse(store.getItem(key), null);
+  const previousHash = previousDraft ? getWorkoutDraftSnapshotHash(previousDraft) : "";
   if (skipIfSame) {
-    const previousDraft = safeParse(store.getItem(key), null);
     if (
       previousDraft
-      && getWorkoutDraftSnapshotHash(previousDraft) === getWorkoutDraftSnapshotHash(nextDraft)
+      && previousHash === nextHash
       && stableStringify(previousDraft?.meta || {}) === stableStringify(nextDraft?.meta || {})
     ) {
+      if (log && logger?.log) {
+        logger.log("[workout draft] save skipped same snapshot", {
+          action: "workout_draft_store_save",
+          date: normalizedDate,
+          draftHash: nextHash,
+          previousDraftHash: previousHash,
+          skippedSameSnapshot: true,
+          hasUnsavedChanges: Boolean(nextDraft?.meta?.hasUnsavedChanges),
+          source: nextDraft?.meta?.source || null,
+        });
+      }
       return true;
     }
   }
 
   store.setItem(key, JSON.stringify(nextDraft));
+  if (log && logger?.log) {
+    logger.log("[workout draft] saved", {
+      action: "workout_draft_store_save",
+      date: normalizedDate,
+      draftHash: nextHash,
+      previousDraftHash: previousHash,
+      skippedSameSnapshot: false,
+      hasUnsavedChanges: Boolean(nextDraft?.meta?.hasUnsavedChanges),
+      source: nextDraft?.meta?.source || null,
+    });
+  }
   return true;
 }
 
