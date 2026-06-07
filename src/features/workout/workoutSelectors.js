@@ -1,4 +1,4 @@
-import { calc1RM, sanitizeHistoryRecord } from "../../utils/helpers";
+import { sanitizeHistoryRecord } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import { normalizeBodyPartLabel } from "../../utils/bodyPartClassification";
 import { getSetCountByBodyPart } from "../../utils/setCountByBodyPart";
@@ -6,7 +6,14 @@ import { getExerciseCountByBodyPart } from "../../utils/exerciseCountByBodyPart"
 
 const normalizeDateKey = (value) => String(value || "").slice(0, 10);
 
+const LB_TO_KG = 0.453592;
+
 const roundMetric = (value) => Math.round(Number(value || 0) * 10) / 10;
+
+const getNumericValue = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
 
 const isInRange = (date, startDate, endDate) => {
   const normalizedDate = normalizeDateKey(date);
@@ -18,17 +25,46 @@ const isInRange = (date, startDate, endDate) => {
   return true;
 };
 
-const getDisplayUnit = (set) => {
-  const unit = String(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || "kg");
-  if (unit === "lbs") return "lb";
-  return unit;
+const normalizeDisplayUnit = (unit) => {
+  const value = String(unit || "kg").trim().toLowerCase();
+  if (["lbs", "lb", "pound", "pounds"].includes(value)) return "lb";
+  if (["bw", "bodyweight", "自重"].includes(value)) return "BW";
+  return "kg";
 };
+
+const getDisplayUnit = (set) =>
+  normalizeDisplayUnit(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || "kg");
 
 const getDisplayWeight = (set) => {
   if (set?.weight === "BW" || getDisplayUnit(set) === "BW") return "自重";
   const value = set?.displayWeight ?? set?.originalWeight ?? set?.inputWeight ?? set?.weight;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? roundMetric(numeric) : value;
+};
+
+const getWeightKgForCalculation = (set) => {
+  if (!set || set.weight === "BW" || getDisplayUnit(set) === "BW") return 0;
+
+  const displayUnit = getDisplayUnit(set);
+  const displayWeight = getNumericValue(set.displayWeight ?? set.originalWeight ?? set.inputWeight);
+  if (displayWeight !== null) {
+    return displayUnit === "lb" ? displayWeight * LB_TO_KG : displayWeight;
+  }
+
+  const normalizedWeight = getNumericValue(set.normalizedWeightKg ?? set.weightKg ?? set.weight_kg);
+  if (normalizedWeight !== null) return normalizedWeight;
+
+  const rawWeight = getNumericValue(set.weight);
+  if (rawWeight === null) return 0;
+  return displayUnit === "lb" ? rawWeight * LB_TO_KG : rawWeight;
+};
+
+const calcEstimated1RMFromKg = (weightKg, reps) => {
+  const weight = Number(weightKg);
+  const repCount = Number(reps);
+  if (!Number.isFinite(weight) || !Number.isFinite(repCount) || weight <= 0 || repCount <= 0) return 0;
+  if (repCount === 1) return weight;
+  return weight * (1 + repCount / 30);
 };
 
 export function historyToWorkoutSessions(trustedHistory = {}) {
@@ -50,7 +86,7 @@ export function historyToWorkoutSessions(trustedHistory = {}) {
       const sets = sanitized.sets || [];
       const bodyPart = normalizeBodyPartLabel(sanitized.bodyPart || record?.bodyPart || record?.body_part, "その他");
       const volume = sets.reduce((sum, set) => {
-        const weight = Number(set?.weight);
+        const weight = getWeightKgForCalculation(set);
         const reps = Number(set?.reps);
         if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) return sum;
         return sum + weight * reps;
@@ -165,22 +201,24 @@ export function selectExercisePrHistory(trustedHistory, exerciseName) {
       if (!sanitized?.date) return;
 
       (sanitized.sets || []).forEach((set, setIndex) => {
-        const normalizedKg = set?.weight === "BW" ? 0 : Number(set?.weight || 0);
+        const normalizedKg = getWeightKgForCalculation(set);
         const reps = Number(set?.reps || 0);
         if (set?.weight !== "BW" && (!Number.isFinite(normalizedKg) || normalizedKg <= 0)) return;
         if (!Number.isFinite(reps) || reps <= 0) return;
+        const displayWeight = getDisplayWeight(set);
+        const displayUnit = getDisplayUnit(set);
 
         records.push({
           exerciseName: historyExerciseName,
           date: sanitized.date,
           setIndex,
-          originalWeight: getDisplayWeight(set),
-          originalUnit: getDisplayUnit(set),
-          displayWeight: getDisplayWeight(set),
-          displayUnit: getDisplayUnit(set),
+          originalWeight: displayWeight,
+          originalUnit: displayUnit,
+          displayWeight,
+          displayUnit,
           normalizedKg,
           reps,
-          estimated1RM: set?.weight === "BW" ? 0 : calc1RM([set]),
+          estimated1RM: set?.weight === "BW" ? 0 : calcEstimated1RMFromKg(normalizedKg, reps),
           source: "trustedHistory",
           originalSet: set,
         });

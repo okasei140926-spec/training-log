@@ -79,10 +79,12 @@ export function buildTrustedHistory({
   cacheHistory = {},
   allowCacheFallback = false,
   calledFrom = "features/workout",
+  source = "",
   logger = console,
   log = false,
 } = {}) {
   const startedAt = getPerfNow();
+  const buildSource = source || calledFrom;
   const result = buildLegacyTrustedHistory({
     workoutRows,
     sessionRows,
@@ -91,7 +93,7 @@ export function buildTrustedHistory({
     summaryHistory,
     cacheHistory,
     allowCacheFallback,
-    source: calledFrom,
+    source: buildSource,
     logger,
     log,
   });
@@ -121,7 +123,7 @@ export function buildTrustedHistory({
     const summaryJsonFallbackDates = uniqueDates(result.summaryJsonFallbackDates || []);
     logger.log("[workout] build trusted history", {
       action: "build_trusted_history",
-      calledFrom,
+      calledFrom: buildSource,
       inputWorkoutsRowsCount: (workoutRows || []).length,
       exactDates,
       legacyFallbackDates,

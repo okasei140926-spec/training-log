@@ -18,7 +18,7 @@ import {
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
 } from "./utils/helpers";
-import { buildTrustedHistory } from "./utils/workoutHistory";
+import { buildTrustedHistory } from "./features/workout/buildTrustedHistory";
 import { QUICK_LABELS, LABEL_COLORS, SUGGESTIONS } from "./constants/suggestions";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";

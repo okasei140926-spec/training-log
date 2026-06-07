@@ -16,6 +16,33 @@ const getStorage = (storage) => {
   return window.localStorage || null;
 };
 
+const stableStringify = (value) => {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => (
+      `${JSON.stringify(key)}:${stableStringify(value[key])}`
+    )).join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
+
+export const getWorkoutDraftSnapshotHash = (draft = {}) => stableStringify({
+  date: normalizeDateKey(draft?.date || draft?.meta?.date),
+  exercises: (draft?.exercises || []).map((exercise) => ({
+    id: exercise?.id || "",
+    name: exercise?.name || exercise?.exerciseName || "",
+    bodyPart: exercise?.bodyPart || exercise?.body_part || exercise?.label || "",
+    sets: (exercise?.sets || []).map((set) => ({
+      weight: set?.weight ?? "",
+      reps: set?.reps ?? "",
+      unit: set?.unit || set?.displayUnit || set?.weightUnit || set?.weight_unit || "",
+      done: Boolean(set?.done),
+    })),
+  })),
+  logData: draft?.logData || {},
+  exerciseUnits: draft?.exerciseUnits || {},
+});
+
 export const getWorkoutDraftKey = (date, prefix = DEFAULT_PREFIX) =>
   `${prefix}:${normalizeDateKey(date)}`;
 
@@ -134,6 +161,7 @@ export function saveWorkoutDraft(date, draft, {
   storage,
   prefix = DEFAULT_PREFIX,
   logger = console,
+  skipIfSame = true,
 } = {}) {
   const normalizedDate = normalizeDateKey(date);
   const store = getStorage(storage);
@@ -153,7 +181,19 @@ export function saveWorkoutDraft(date, draft, {
     return false;
   }
 
-  store.setItem(getWorkoutDraftKey(normalizedDate, prefix), JSON.stringify(nextDraft));
+  const key = getWorkoutDraftKey(normalizedDate, prefix);
+  if (skipIfSame) {
+    const previousDraft = safeParse(store.getItem(key), null);
+    if (
+      previousDraft
+      && getWorkoutDraftSnapshotHash(previousDraft) === getWorkoutDraftSnapshotHash(nextDraft)
+      && stableStringify(previousDraft?.meta || {}) === stableStringify(nextDraft?.meta || {})
+    ) {
+      return true;
+    }
+  }
+
+  store.setItem(key, JSON.stringify(nextDraft));
   return true;
 }
 

@@ -35,6 +35,9 @@ const makeExercise = (exercise = {}) => ({
 
 const getExerciseNames = (exercises = []) => exercises.map((exercise) => exercise.name).filter(Boolean);
 
+const getTotalSetCount = (exercises = []) =>
+  (exercises || []).reduce((sum, exercise) => sum + (exercise?.sets || []).length, 0);
+
 const getRemovedExerciseNames = (before = [], after = []) => {
   const afterNames = new Set(after.map((exercise) => normalizeExerciseName(exercise.name)).filter(Boolean));
   return before
@@ -80,18 +83,24 @@ export function useWorkoutLog({
       const beforeExercises = prevDraft.exercises || [];
       const afterExercises = updater(beforeExercises).map(makeExercise);
       const removedExerciseNames = getRemovedExerciseNames(beforeExercises, afterExercises);
-      const isDelete = reason === "exercise_remove";
+      const beforeSetCount = getTotalSetCount(beforeExercises);
+      const afterSetCount = getTotalSetCount(afterExercises);
+      const isDelete = reason === "exercise_remove" || reason === "set_remove";
 
-      if (!isDelete && removedExerciseNames.length) {
+      if (!isDelete && (removedExerciseNames.length || afterSetCount < beforeSetCount)) {
         logger?.warn?.("[workout log] blocked non-delete exercise regression", {
           action: "workout_restore_integrity_check",
           date: normalizedDate,
           previousDisplayedExerciseNames: getExerciseNames(beforeExercises),
           restoredExerciseNames: getExerciseNames(afterExercises),
           lostExerciseNames: removedExerciseNames,
+          beforeSetCount,
+          afterSetCount,
           appliedSource: null,
           rejectedSource: reason,
-          reason: "non-delete mutation removed exercises",
+          reason: removedExerciseNames.length
+            ? "non-delete mutation removed exercises"
+            : "non-delete mutation reduced set count",
         });
         return prevDraft;
       }
@@ -111,10 +120,24 @@ export function useWorkoutLog({
       const duplicate = exercises.some((existing) =>
         normalizeExerciseName(existing.name) === normalizeExerciseName(nextExercise.name)
       );
+      logger?.log?.("[workout log] exercise add attempt", {
+        action: "exercise_add_attempt",
+        date: normalizedDate,
+        exerciseName: nextExercise.name,
+        bodyPart: nextExercise.bodyPart,
+        beforeExerciseNames: getExerciseNames(exercises),
+        afterExerciseNames: duplicate ? getExerciseNames(exercises) : getExerciseNames([...exercises, nextExercise]),
+        added: !duplicate,
+        blocked: duplicate,
+        blockedReason: duplicate ? "duplicate exercise" : "",
+        duplicateDetected: duplicate,
+        filteredOut: false,
+        removedExerciseNames: [],
+      });
       if (duplicate) return exercises;
       return [...exercises, nextExercise];
     });
-  }, [mutateExercises]);
+  }, [logger, mutateExercises, normalizedDate]);
 
   const removeExercise = useCallback((exerciseName) => {
     mutateExercises("exercise_remove", (exercises) =>
@@ -140,15 +163,60 @@ export function useWorkoutLog({
     mutateExercises("set_input_change", (exercises) =>
       exercises.map((exercise) => {
         if (normalizeExerciseName(exercise.name) !== normalizeExerciseName(exerciseName)) return exercise;
+        const nextUnit = patch?.unit || patch?.displayUnit || patch?.weightUnit || patch?.weight_unit || patch?.weightMode;
+        const shouldPropagateUnit = setIndex === 0 && nextUnit;
+        const beforeUnits = (exercise.sets || []).map((set) => set?.unit || set?.displayUnit || set?.weightUnit || "kg");
+        const propagatedToSetIndexes = [];
+        const skippedManualSetIndexes = [];
+        const nextSets = (exercise.sets || []).map((set, index) => {
+          if (index === setIndex) {
+            return makeSet({
+              ...set,
+              ...patch,
+              ...(nextUnit
+                ? {
+                    unit: nextUnit,
+                    displayUnit: nextUnit === "lbs" ? "lb" : nextUnit,
+                    unitManuallyChanged: true,
+                  }
+                : {}),
+            });
+          }
+          if (shouldPropagateUnit) {
+            if (set?.unitManuallyChanged) {
+              skippedManualSetIndexes.push(index);
+              return set;
+            }
+            propagatedToSetIndexes.push(index);
+            return makeSet({
+              ...set,
+              unit: nextUnit,
+              displayUnit: nextUnit === "lbs" ? "lb" : nextUnit,
+            });
+          }
+          return set;
+        });
+
+        if (shouldPropagateUnit) {
+          logger?.log?.("[workout log] unit change propagation", {
+            action: "unit_change_propagation",
+            exerciseName,
+            changedSetIndex: setIndex,
+            changedUnit: nextUnit,
+            propagatedToSetIndexes,
+            skippedManualSetIndexes,
+            beforeUnits,
+            afterUnits: nextSets.map((set) => set?.unit || set?.displayUnit || set?.weightUnit || "kg"),
+          });
+        }
+
         return {
           ...exercise,
-          sets: (exercise.sets || []).map((set, index) =>
-            index === setIndex ? makeSet({ ...set, ...patch }) : set
-          ),
+          sets: nextSets,
         };
       })
     );
-  }, [mutateExercises]);
+  }, [logger, mutateExercises]);
 
   const api = useMemo(() => ({
     date: normalizedDate,
