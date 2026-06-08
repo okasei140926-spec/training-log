@@ -7165,8 +7165,34 @@ export default function GymApp() {
 
     // useEffectより前に定義
     const persistCurrentLog = useCallback(() => {
-        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(String(logDate || "").slice(0, 10));
+        const normalizedLogDate = String(logDate || "").slice(0, 10);
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedLogDate);
         if (!pendingChange) return;
+
+        const latestDraftCandidate = latestLogDraftRef.current || null;
+        const latestDraftDate = normalizeDraftDateKey(
+            latestDraftCandidate?.date
+            || latestDraftCandidate?.meta?.date
+            || normalizedLogDate
+        );
+        const useLatestDraft =
+            latestDraftDate === normalizedLogDate
+            && hasDraftContent(latestDraftCandidate);
+        const saveDraftSnapshot = normalizeLogDraftState(useLatestDraft
+            ? latestDraftCandidate
+            : {
+                todayLabels,
+                logData,
+                sessionEx: exercises,
+                exerciseUnits,
+            });
+        const saveLabels = saveDraftSnapshot.todayLabels?.length
+            ? saveDraftSnapshot.todayLabels
+            : todayLabels;
+        const saveLogData = saveDraftSnapshot.logData || {};
+        const saveExercises = saveDraftSnapshot.sessionEx || [];
+        const saveExerciseUnits = saveDraftSnapshot.exerciseUnits || {};
+        const getSaveExUnit = (name) => saveExerciseUnits?.[name] || getExUnit(name);
 
         const timerPersistence =
             workoutStartedForDate === logDate
@@ -7182,15 +7208,15 @@ export default function GymApp() {
         const durationSec = Math.max(
             0,
             timerDurationSec,
-            Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
+            Math.floor(Number(savedWorkoutDurationSecByDate[normalizedLogDate]) || 0)
         );
         const incomingMetrics = getDraftMetricsForDate({
-            exercises,
-            logData,
-            getExUnit,
-            workoutDate: logDate,
+            exercises: saveExercises,
+            logData: saveLogData,
+            getExUnit: getSaveExUnit,
+            workoutDate: normalizedLogDate,
         });
-        const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || history || {}, logDate);
+        const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || history || {}, normalizedLogDate);
         const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
         const saveGuardDecision = getWorkoutSaveGuardDecision({
             incomingMetrics,
@@ -7215,7 +7241,7 @@ export default function GymApp() {
             env: getRuntimeEnvironmentLabel(),
             action: "workout_save_guard",
             user_id: user?.id || null,
-            date: logDate,
+            date: normalizedLogDate,
             reason: pendingChange.reason || null,
             explicitEdit,
             explicitDelete: Boolean(pendingChange.explicitDelete),
@@ -7235,7 +7261,7 @@ export default function GymApp() {
                 env: getRuntimeEnvironmentLabel(),
                 action: "workout_save_guard",
                 user_id: user?.id || null,
-                date: logDate,
+                date: normalizedLogDate,
                 reason: pendingChange.reason || null,
                 explicitEdit,
                 localVolume: incomingMetrics.volume,
@@ -7247,17 +7273,50 @@ export default function GymApp() {
                 source: "local_auto_persist",
             });
         }
+        if (shouldLogPerfDebug() && explicitEdit && normalizedLogDate !== getTodayKey()) {
+            console.log("[workout edit] past workout edit debug", {
+                action: "past_workout_edit_debug",
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                selectedDate: logDate,
+                saveTargetDate: normalizedLogDate,
+                exerciseName: pendingChange.details?.exerciseName || null,
+                setIndex: pendingChange.details?.setIndex ?? null,
+                field: pendingChange.details?.field || null,
+                beforeValue: pendingChange.details?.beforeValue ?? null,
+                afterValue: pendingChange.details?.afterValue ?? null,
+                draftKey: getDraftKey("draft_logData", normalizedLogDate),
+                draftHash: getWorkoutDraftSignature(saveDraftSnapshot),
+                previousDraftHash: lastAutosavedDraftSignatureRef.current || null,
+                saveReason: pendingChange.reason || null,
+                explicitEdit,
+                saveBlocked: Boolean(wouldDestructivelyOverwrite && !pendingChange.explicitDelete),
+                blockReason: wouldDestructivelyOverwrite && !pendingChange.explicitDelete
+                    ? saveGuardDecision.blockedReason || null
+                    : null,
+                repositorySaved: false,
+                remoteVerified: false,
+                restoredAfterSave: false,
+                restoredSource: null,
+                rolledBackAfterInput: false,
+                usedLatestDraft: useLatestDraft,
+            });
+        }
 
         console[wouldDestructivelyOverwrite && !pendingChange.explicitDelete ? "warn" : "log"]("[set mutation]", {
             action: "workout_autosave",
             env: getRuntimeEnvironmentLabel(),
-            date: logDate,
+            date: normalizedLogDate,
             user_id: user?.id || null,
             exerciseName: pendingChange.details?.exerciseName || null,
             beforeSetCount: existingMetrics.setCount,
             afterSetCount: incomingMetrics.setCount,
             beforeSets: null,
-            afterSets: getDraftInputDebugSummary({ exercises, logData, labels: todayLabels }).setsByExercise,
+            afterSets: getDraftInputDebugSummary({
+                exercises: saveExercises,
+                logData: saveLogData,
+                labels: saveLabels,
+            }).setsByExercise,
             dirty: true,
             source: "autosave",
             allowed: !(wouldDestructivelyOverwrite && !pendingChange.explicitDelete),
@@ -7271,7 +7330,7 @@ export default function GymApp() {
             console.warn("[save guard] blocked destructive local draft apply", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user?.id || null,
-                date: logDate,
+                date: normalizedLogDate,
                 reason: pendingChange.reason || "unknown",
                 localMetrics: incomingMetrics,
                 remoteMetrics: existingMetrics,
@@ -7290,18 +7349,18 @@ export default function GymApp() {
         pendingWorkoutNotificationRef.current = {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             userId: user?.id || null,
-            logDate,
+            logDate: normalizedLogDate,
         };
-        queueWorkoutSessionSync(logDate);
+        queueWorkoutSessionSync(normalizedLogDate);
 
         setHistory((prev) => {
             const nextHistory = buildDraftHistoryForDate({
                 baseHistory: prev,
-                workoutDate: logDate,
-                exercises,
-                logData,
-                getExUnit,
-                labels: todayLabels,
+                workoutDate: normalizedLogDate,
+                exercises: saveExercises,
+                logData: saveLogData,
+                getExUnit: getSaveExUnit,
+                labels: saveLabels,
                 durationSec,
                 replaceDate: Boolean(pendingChange.explicitDelete),
             });
@@ -7310,13 +7369,18 @@ export default function GymApp() {
                 console.log("[save] local draft applied to history", {
                     env: getRuntimeEnvironmentLabel(),
                     user_id: user?.id || null,
-                    date: logDate,
+                    date: normalizedLogDate,
                     reason: pendingChange.reason,
                     explicitDelete: Boolean(pendingChange.explicitDelete),
-                    draftInput: getDraftInputDebugSummary({ exercises, logData, labels: todayLabels }),
-                    saving: getHistoryDebugSummaryForDate(nextHistory, logDate),
-                    previous: getHistoryDebugSummaryForDate(prev, logDate),
-                    diffPreviousToSaving: getHistoryDebugDiffForDate(prev, nextHistory, logDate),
+                    draftInput: getDraftInputDebugSummary({
+                        exercises: saveExercises,
+                        logData: saveLogData,
+                        labels: saveLabels,
+                    }),
+                    saving: getHistoryDebugSummaryForDate(nextHistory, normalizedLogDate),
+                    previous: getHistoryDebugSummaryForDate(prev, normalizedLogDate),
+                    diffPreviousToSaving: getHistoryDebugDiffForDate(prev, nextHistory, normalizedLogDate),
+                    usedLatestDraft: useLatestDraft,
                 });
             }
 
@@ -7344,7 +7408,7 @@ export default function GymApp() {
             }
             return nextHistory;
         });
-    }, [applyWorkoutsDataHistorySnapshot, exercises, getExUnit, history, logData, logDate, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate]); // ← 依存配列
+    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, history, logData, logDate, queueWorkoutSessionSync, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate]); // ← 依存配列
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {

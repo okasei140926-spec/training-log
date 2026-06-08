@@ -364,11 +364,19 @@ export function useWorkoutLog({
       }
 
       const nextDraft = persistMutation(prevDraft, afterExercises, reason);
+      const resolvedDetails = typeof mutation.details === "function"
+        ? mutation.details({
+          beforeExercises,
+          afterExercises,
+          prevDraft,
+          nextDraft,
+        })
+        : mutation.details;
       lastMutationRef.current = {
         reason,
         explicitDelete,
         explicitEdit: !explicitDelete,
-        details: mutation.details || null,
+        details: resolvedDetails || null,
       };
       return nextDraft;
     });
@@ -468,7 +476,10 @@ export function useWorkoutLog({
     const exerciseName = String(exerciseInput?.name || exerciseInput || "").trim();
     if (!exerciseName) return;
 
-    mutateExercises(field === "weight" ? "weight_change" : field === "reps" ? "reps_change" : "set_input_change", (exercises) =>
+    const reason = field === "weight" ? "weight_change" : field === "reps" ? "reps_change" : "set_input_change";
+    let editDetails = null;
+
+    mutateExercises(reason, (exercises) =>
       exercises.map((exercise) => {
         if (normalizeExerciseName(exercise.name) !== normalizeExerciseName(exerciseName)) return exercise;
         const currentSets = exercise.sets || [];
@@ -485,22 +496,21 @@ export function useWorkoutLog({
         }
 
         const nextSets = currentSets.map((set, index) => (index === setIndex ? nextSet : set));
-        lastMutationRef.current = {
-          reason: field === "weight" ? "weight_change" : field === "reps" ? "reps_change" : "set_input_change",
-          explicitDelete: false,
-          explicitEdit: true,
-          details: {
-            exerciseName,
-            setIndex,
-            beforeSet,
-            afterSet: nextSet,
-          },
+        editDetails = {
+          exerciseName,
+          setIndex,
+          field,
+          beforeValue: beforeSet?.[field],
+          afterValue: value,
+          beforeSet,
+          afterSet: nextSet,
         };
         return { ...exercise, sets: nextSets };
       }), {
-        details: {
+        details: () => editDetails || {
           exerciseName,
           setIndex,
+          field,
         },
       }
     );
@@ -509,6 +519,8 @@ export function useWorkoutLog({
   const setWeightMode = useCallback((exerciseInput, setIndex, requestedMode) => {
     const exerciseName = String(exerciseInput?.name || exerciseInput || "").trim();
     if (!exerciseName) return;
+
+    let editDetails = null;
 
     mutateExercises("unit_change", (exercises) =>
       exercises.map((exercise) => {
@@ -557,22 +569,21 @@ export function useWorkoutLog({
           });
         }
 
-        lastMutationRef.current = {
-          reason: "unit_change",
-          explicitDelete: false,
-          explicitEdit: true,
-          details: {
-            exerciseName,
-            setIndex,
-            beforeSet,
-            afterSet: nextSet,
-          },
+        editDetails = {
+          exerciseName,
+          setIndex,
+          field: "unit",
+          beforeValue: getDisplayUnitForMode(currentMode),
+          afterValue: getDisplayUnitForMode(nextMode),
+          beforeSet,
+          afterSet: nextSet,
         };
         return { ...exercise, sets: nextSets };
       }), {
-        details: {
+        details: () => editDetails || {
           exerciseName,
           setIndex,
+          field: "unit",
         },
       }
     );
