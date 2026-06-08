@@ -1018,8 +1018,28 @@ const serializeTrustedRows = (rows = [], getDate = normalizeTrustedWorkoutRowDat
         data: row?.data ?? row?.summary_json ?? row,
         duration_sec: row?.duration_sec ?? null,
         total_volume: row?.total_volume ?? null,
+        updated_at: row?.updated_at ?? null,
     })))
 );
+
+const serializeTrustedRow = (row, getDate = normalizeTrustedWorkoutRowDate) => (
+    JSON.stringify({
+        date: getDate(row),
+        data: row?.data ?? row?.summary_json ?? row,
+        duration_sec: row?.duration_sec ?? null,
+        total_volume: row?.total_volume ?? null,
+        updated_at: row?.updated_at ?? null,
+    })
+);
+
+const buildTrustedRowSignatureMap = (rows = [], getDate = normalizeTrustedWorkoutRowDate) => {
+    const map = new Map();
+    (rows || []).forEach((row) => {
+        const date = getDate(row);
+        if (date) map.set(date, serializeTrustedRow(row, getDate));
+    });
+    return map;
+};
 
 const buildDraftHistoryForDate = ({
     baseHistory = {},
@@ -2856,6 +2876,8 @@ export default function GymApp() {
     const workoutsDataHistoryRef = useRef(workoutsDataHistory);
     const trustedWorkoutRowsRef = useRef(trustedWorkoutRows);
     const trustedSessionRowsRef = useRef(trustedSessionRows);
+    const trustedWorkoutRowSignaturesRef = useRef(buildTrustedRowSignatureMap(trustedWorkoutRows, normalizeTrustedWorkoutRowDate));
+    const trustedSessionRowSignaturesRef = useRef(buildTrustedRowSignatureMap(trustedSessionRows, normalizeTrustedSessionRowDate));
     const trustedRowsOwnerRef = useRef(null);
     const displayHistoryRefreshRequestIdRef = useRef(0);
     const homeWeeklySummaryRequestIdRef = useRef(0);
@@ -2871,20 +2893,59 @@ export default function GymApp() {
         source = "workouts.data",
     } = {}) => {
         const incomingRows = (rows || []).filter((row) => normalizeTrustedWorkoutRowDate(row));
+        if (!replace) {
+            const hasIncomingChange = incomingRows.some((row) => {
+                const date = normalizeTrustedWorkoutRowDate(row);
+                return trustedWorkoutRowSignaturesRef.current.get(date) !== serializeTrustedRow(row, normalizeTrustedWorkoutRowDate);
+            });
+            if (!hasIncomingChange) {
+                if (shouldLogPerfDebug()) {
+                    const previousSignature = serializeTrustedRows(trustedWorkoutRowsRef.current || [], normalizeTrustedWorkoutRowDate);
+                    console.log("[history] trusted row cache update", {
+                        action: "trusted_row_cache_update",
+                        source,
+                        rowsCount: incomingRows.length,
+                        rowsHash: previousSignature,
+                        previousRowsHash: previousSignature,
+                        skippedSameSnapshot: true,
+                        stateUpdated: false,
+                    });
+                }
+                return false;
+            }
+        }
         const nextRows = replace
             ? sortTrustedRowsByDate(incomingRows, normalizeTrustedWorkoutRowDate)
             : mergeTrustedRowsByDate(trustedWorkoutRowsRef.current || [], incomingRows, normalizeTrustedWorkoutRowDate);
         const previousSignature = serializeTrustedRows(trustedWorkoutRowsRef.current || [], normalizeTrustedWorkoutRowDate);
         const nextSignature = serializeTrustedRows(nextRows, normalizeTrustedWorkoutRowDate);
-        if (previousSignature === nextSignature) return false;
+        if (previousSignature === nextSignature) {
+            if (shouldLogPerfDebug()) {
+                console.log("[history] trusted row cache update", {
+                    action: "trusted_row_cache_update",
+                    source,
+                    rowsCount: nextRows.length,
+                    rowsHash: nextSignature,
+                    previousRowsHash: previousSignature,
+                    skippedSameSnapshot: true,
+                    stateUpdated: false,
+                });
+            }
+            return false;
+        }
         trustedWorkoutRowsRef.current = nextRows;
+        trustedWorkoutRowSignaturesRef.current = buildTrustedRowSignatureMap(nextRows, normalizeTrustedWorkoutRowDate);
         setTrustedWorkoutRows(nextRows);
         if (shouldLogPerfDebug()) {
-            console.log("[history] trusted workout rows applied", {
-                action: "trusted_workout_rows_apply",
+            console.log("[history] trusted row cache update", {
+                action: "trusted_row_cache_update",
                 source,
                 replace,
                 rowsCount: nextRows.length,
+                rowsHash: nextSignature,
+                previousRowsHash: previousSignature,
+                skippedSameSnapshot: false,
+                stateUpdated: true,
                 dates: nextRows.map(normalizeTrustedWorkoutRowDate),
             });
         }
@@ -2896,20 +2957,59 @@ export default function GymApp() {
         source = "workout_sessions.summary_json",
     } = {}) => {
         const incomingRows = (rows || []).filter((row) => normalizeTrustedSessionRowDate(row));
+        if (!replace) {
+            const hasIncomingChange = incomingRows.some((row) => {
+                const date = normalizeTrustedSessionRowDate(row);
+                return trustedSessionRowSignaturesRef.current.get(date) !== serializeTrustedRow(row, normalizeTrustedSessionRowDate);
+            });
+            if (!hasIncomingChange) {
+                if (shouldLogPerfDebug()) {
+                    const previousSignature = serializeTrustedRows(trustedSessionRowsRef.current || [], normalizeTrustedSessionRowDate);
+                    console.log("[history] trusted row cache update", {
+                        action: "trusted_row_cache_update",
+                        source,
+                        rowsCount: incomingRows.length,
+                        rowsHash: previousSignature,
+                        previousRowsHash: previousSignature,
+                        skippedSameSnapshot: true,
+                        stateUpdated: false,
+                    });
+                }
+                return false;
+            }
+        }
         const nextRows = replace
             ? sortTrustedRowsByDate(incomingRows, normalizeTrustedSessionRowDate)
             : mergeTrustedRowsByDate(trustedSessionRowsRef.current || [], incomingRows, normalizeTrustedSessionRowDate);
         const previousSignature = serializeTrustedRows(trustedSessionRowsRef.current || [], normalizeTrustedSessionRowDate);
         const nextSignature = serializeTrustedRows(nextRows, normalizeTrustedSessionRowDate);
-        if (previousSignature === nextSignature) return false;
+        if (previousSignature === nextSignature) {
+            if (shouldLogPerfDebug()) {
+                console.log("[history] trusted row cache update", {
+                    action: "trusted_row_cache_update",
+                    source,
+                    rowsCount: nextRows.length,
+                    rowsHash: nextSignature,
+                    previousRowsHash: previousSignature,
+                    skippedSameSnapshot: true,
+                    stateUpdated: false,
+                });
+            }
+            return false;
+        }
         trustedSessionRowsRef.current = nextRows;
+        trustedSessionRowSignaturesRef.current = buildTrustedRowSignatureMap(nextRows, normalizeTrustedSessionRowDate);
         setTrustedSessionRows(nextRows);
         if (shouldLogPerfDebug()) {
-            console.log("[history] trusted session rows applied", {
-                action: "trusted_session_rows_apply",
+            console.log("[history] trusted row cache update", {
+                action: "trusted_row_cache_update",
                 source,
                 replace,
                 rowsCount: nextRows.length,
+                rowsHash: nextSignature,
+                previousRowsHash: previousSignature,
+                skippedSameSnapshot: false,
+                stateUpdated: true,
                 dates: nextRows.map(normalizeTrustedSessionRowDate),
             });
         }
@@ -3277,6 +3377,8 @@ export default function GymApp() {
         trustedRowsOwnerRef.current = nextOwner;
         trustedWorkoutRowsRef.current = [];
         trustedSessionRowsRef.current = [];
+        trustedWorkoutRowSignaturesRef.current = new Map();
+        trustedSessionRowSignaturesRef.current = new Map();
         setTrustedWorkoutRows([]);
         setTrustedSessionRows([]);
     }, [user?.id]);
@@ -6944,7 +7046,6 @@ export default function GymApp() {
         log: shouldLogPerfDebug(),
     });
 
-    const trustedDisplayHistoryResult = workoutHistoryView.trustedHistoryResult;
     const canonicalDisplayHistory = workoutHistoryView.trustedHistory;
 
     useEffect(() => {
@@ -6985,7 +7086,7 @@ export default function GymApp() {
             bicepsCount: summary.bodyPartCounts["二頭"] || 0,
             backCount: summary.bodyPartCounts["背中"] || 0,
         });
-    }, [canonicalDisplayHistory, displayHistory, history, screen, trustedDisplayHistoryResult, user?.id, workoutsDataHistory]);
+    }, [canonicalDisplayHistory, displayHistory, history, screen, user?.id, workoutsDataHistory]);
 
     useEffect(() => {
         if (screen !== "log") return;

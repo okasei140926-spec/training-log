@@ -847,32 +847,34 @@ export default function HomeScreen({
         );
 
         if (staleOverwrite) {
-            const signature = JSON.stringify({
-                action: "home_weekly_stale_overwrite_blocked",
-                weekKey,
-                nextCounts,
-                previousCounts,
-                regressedBodyParts,
-            });
-            if (homeSnapshotLogSignatureRef.current !== signature) {
-                homeSnapshotLogSignatureRef.current = signature;
-                console.warn("[home weekly consistency]", {
+            if (shouldLogHomePerfDebug()) {
+                const signature = JSON.stringify({
                     action: "home_weekly_stale_overwrite_blocked",
-                    staleSource: incomingHomeSnapshot.source,
-                    staleBodyPartCounts: nextCounts,
-                    staleShoulderCount: nextCounts["肩"] || 0,
-                    staleTricepsCount: nextCounts["三頭"] || 0,
-                    trustedBodyPartCounts: previousCounts,
-                    trustedShoulderCount: previousCounts["肩"] || 0,
-                    trustedTricepsCount: previousCounts["三頭"] || 0,
-                    trustedBicepsCount: previousCounts["二頭"] || 0,
-                    applied: false,
-                    reason: "incoming weekly summary regressed from trusted allSessions snapshot",
+                    weekKey,
+                    nextCounts,
+                    previousCounts,
                     regressedBodyParts,
-                    timestamp: new Date().toISOString(),
-                    recentSessionsDates: previous.sessions?.slice(0, 4).map((session) => session.date) || [],
-                    allSessionsDates: incomingHomeSnapshot.sessions.map((session) => session.date),
                 });
+                if (homeSnapshotLogSignatureRef.current !== signature) {
+                    homeSnapshotLogSignatureRef.current = signature;
+                    console.warn("[home weekly consistency]", {
+                        action: "home_weekly_stale_overwrite_blocked",
+                        staleSource: incomingHomeSnapshot.source,
+                        staleBodyPartCounts: nextCounts,
+                        staleShoulderCount: nextCounts["肩"] || 0,
+                        staleTricepsCount: nextCounts["三頭"] || 0,
+                        trustedBodyPartCounts: previousCounts,
+                        trustedShoulderCount: previousCounts["肩"] || 0,
+                        trustedTricepsCount: previousCounts["三頭"] || 0,
+                        trustedBicepsCount: previousCounts["二頭"] || 0,
+                        applied: false,
+                        reason: "incoming weekly summary regressed from trusted allSessions snapshot",
+                        regressedBodyParts,
+                        timestamp: new Date().toISOString(),
+                        recentSessionsDates: previous.sessions?.slice(0, 4).map((session) => session.date) || [],
+                        allSessionsDates: incomingHomeSnapshot.sessions.map((session) => session.date),
+                    });
+                }
             }
             return;
         }
@@ -920,6 +922,7 @@ export default function HomeScreen({
     );
 
     useEffect(() => {
+        if (!shouldLogHomePerfDebug()) return;
         if (!homeMetricsReady || recordsLoading) return;
         const nextWeeklySets = collectWeeklySetsFromSessions(weeklySessions);
         const directHistoryWeeklySets = collectWeeklySets(history, muscleEx, exerciseBodyPartOverrides);
@@ -933,15 +936,13 @@ export default function HomeScreen({
             recentDates: recentSessions.map((session) => session.date),
             weeklyDates: weeklySessions.map((session) => session.date),
         });
-        if (!mismatchDetected && !shouldLogHomePerfDebug()) return;
+        if (!mismatchDetected) return;
         if (weeklyConsistencyLogSignatureRef.current === signature) return;
         weeklyConsistencyLogSignatureRef.current = signature;
-        const directDebug = shouldLogHomePerfDebug() || mismatchDetected
-            ? collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides)
-            : {};
-        console[mismatchDetected ? "warn" : "log"]("[home weekly consistency]", {
+        const directDebug = collectWeeklyAggregationDebug(history, muscleEx, exerciseBodyPartOverrides);
+        console.warn("[home weekly consistency]", {
             action: "home_weekly_consistency_check",
-            ...(shouldLogHomePerfDebug() ? directDebug : {}),
+            ...directDebug,
             weekRange: { start: week.start, end: week.end },
             recentRecordsSource: activeHomeSnapshot.source,
             weeklySummarySource: activeHomeSnapshot.source,
@@ -962,20 +963,18 @@ export default function HomeScreen({
             appliedSource: activeHomeSnapshot.source,
             ignoredStaleSource: mismatchDetected ? "history_cache/summary_json/stale weekly summary" : null,
         });
-        if (shouldLogHomePerfDebug()) {
-            console.log("[home weekly consistency]", {
-                action: "home_screen_received_sessions",
-                receivedSessionsLength: allSessions.length,
-                receivedDates: allSessions.map((session) => session.date),
-                recentSessionsDatesAndCounts: summarizeSessionsByDate(recentSessions),
-                weeklySetsInputDatesAndCounts: summarizeSessionsByDate(weeklySessions),
-                finalBodyPartCounts: nextWeeklySets,
-                shoulderCount: nextWeeklySets["肩"] || 0,
-                tricepsCount: nextWeeklySets["三頭"] || 0,
-                bicepsCount: nextWeeklySets["二頭"] || 0,
-                backCount: nextWeeklySets["背中"] || 0,
-            });
-        }
+        console.log("[home weekly consistency]", {
+            action: "home_screen_received_sessions",
+            receivedSessionsLength: allSessions.length,
+            receivedDates: allSessions.map((session) => session.date),
+            recentSessionsDatesAndCounts: summarizeSessionsByDate(recentSessions),
+            weeklySetsInputDatesAndCounts: summarizeSessionsByDate(weeklySessions),
+            finalBodyPartCounts: nextWeeklySets,
+            shoulderCount: nextWeeklySets["肩"] || 0,
+            tricepsCount: nextWeeklySets["三頭"] || 0,
+            bicepsCount: nextWeeklySets["二頭"] || 0,
+            backCount: nextWeeklySets["背中"] || 0,
+        });
     }, [
         activeHomeSnapshot.source,
         allSessions,
