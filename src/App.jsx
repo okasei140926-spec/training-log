@@ -19,6 +19,7 @@ import {
     sanitizeWorkoutSets,
 } from "./utils/helpers";
 import { buildTrustedHistory } from "./features/workout/buildTrustedHistory";
+import { useWorkoutHistory } from "./features/workout/useWorkoutHistory";
 import { useWorkoutLog } from "./features/workout/useWorkoutLog";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
@@ -985,6 +986,40 @@ const buildRemoteHistoryWithWorkoutRowsPriority = (workoutRows = [], sessionRows
         log: shouldLogPerfDebug(),
     }).history;
 };
+
+const normalizeTrustedWorkoutRowDate = (row) => (
+    String(row?.date || row?.workout_date || row?.workoutDate || "").slice(0, 10)
+);
+
+const normalizeTrustedSessionRowDate = (row) => (
+    String(row?.workout_date || row?.date || row?.workoutDate || "").slice(0, 10)
+);
+
+const sortTrustedRowsByDate = (rows = [], getDate = normalizeTrustedWorkoutRowDate) => (
+    [...(rows || [])].sort((a, b) => getDate(a).localeCompare(getDate(b)))
+);
+
+const mergeTrustedRowsByDate = (currentRows = [], incomingRows = [], getDate = normalizeTrustedWorkoutRowDate) => {
+    const rowsByDate = new Map();
+    (currentRows || []).forEach((row) => {
+        const date = getDate(row);
+        if (date) rowsByDate.set(date, row);
+    });
+    (incomingRows || []).forEach((row) => {
+        const date = getDate(row);
+        if (date) rowsByDate.set(date, row);
+    });
+    return sortTrustedRowsByDate(Array.from(rowsByDate.values()), getDate);
+};
+
+const serializeTrustedRows = (rows = [], getDate = normalizeTrustedWorkoutRowDate) => (
+    JSON.stringify(sortTrustedRowsByDate(rows || [], getDate).map((row) => ({
+        date: getDate(row),
+        data: row?.data ?? row?.summary_json ?? row,
+        duration_sec: row?.duration_sec ?? null,
+        total_volume: row?.total_volume ?? null,
+    })))
+);
 
 const buildDraftHistoryForDate = ({
     baseHistory = {},
@@ -2185,6 +2220,8 @@ export default function GymApp() {
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState({});
     const [workoutsDataHistory, setWorkoutsDataHistory] = useState({});
+    const [trustedWorkoutRows, setTrustedWorkoutRows] = useState([]);
+    const [trustedSessionRows, setTrustedSessionRows] = useState([]);
     const [manualBests, setManualBests] = useState([]);
     const [historySyncReady, setHistorySyncReady] = useState(false);
     const [historyRemoteReady, setHistoryRemoteReady] = useState(false);
@@ -2817,6 +2854,9 @@ export default function GymApp() {
     const pendingDeleteUndoRef = useRef(null);
     const historyRemoteLoadFailedRef = useRef(false);
     const workoutsDataHistoryRef = useRef(workoutsDataHistory);
+    const trustedWorkoutRowsRef = useRef(trustedWorkoutRows);
+    const trustedSessionRowsRef = useRef(trustedSessionRows);
+    const trustedRowsOwnerRef = useRef(null);
     const displayHistoryRefreshRequestIdRef = useRef(0);
     const homeWeeklySummaryRequestIdRef = useRef(0);
     const historyHasTrustedRemoteSnapshotRef = useRef(false);
@@ -2825,6 +2865,56 @@ export default function GymApp() {
     const supabaseFetchFreshUntilRef = useRef({});
     const homePropsDebugSignatureRef = useRef("");
     const logScreenRenderDebugSignatureRef = useRef("");
+
+    const applyTrustedWorkoutRowsSnapshot = useCallback((rows = [], {
+        replace = false,
+        source = "workouts.data",
+    } = {}) => {
+        const incomingRows = (rows || []).filter((row) => normalizeTrustedWorkoutRowDate(row));
+        const nextRows = replace
+            ? sortTrustedRowsByDate(incomingRows, normalizeTrustedWorkoutRowDate)
+            : mergeTrustedRowsByDate(trustedWorkoutRowsRef.current || [], incomingRows, normalizeTrustedWorkoutRowDate);
+        const previousSignature = serializeTrustedRows(trustedWorkoutRowsRef.current || [], normalizeTrustedWorkoutRowDate);
+        const nextSignature = serializeTrustedRows(nextRows, normalizeTrustedWorkoutRowDate);
+        if (previousSignature === nextSignature) return false;
+        trustedWorkoutRowsRef.current = nextRows;
+        setTrustedWorkoutRows(nextRows);
+        if (shouldLogPerfDebug()) {
+            console.log("[history] trusted workout rows applied", {
+                action: "trusted_workout_rows_apply",
+                source,
+                replace,
+                rowsCount: nextRows.length,
+                dates: nextRows.map(normalizeTrustedWorkoutRowDate),
+            });
+        }
+        return true;
+    }, []);
+
+    const applyTrustedSessionRowsSnapshot = useCallback((rows = [], {
+        replace = false,
+        source = "workout_sessions.summary_json",
+    } = {}) => {
+        const incomingRows = (rows || []).filter((row) => normalizeTrustedSessionRowDate(row));
+        const nextRows = replace
+            ? sortTrustedRowsByDate(incomingRows, normalizeTrustedSessionRowDate)
+            : mergeTrustedRowsByDate(trustedSessionRowsRef.current || [], incomingRows, normalizeTrustedSessionRowDate);
+        const previousSignature = serializeTrustedRows(trustedSessionRowsRef.current || [], normalizeTrustedSessionRowDate);
+        const nextSignature = serializeTrustedRows(nextRows, normalizeTrustedSessionRowDate);
+        if (previousSignature === nextSignature) return false;
+        trustedSessionRowsRef.current = nextRows;
+        setTrustedSessionRows(nextRows);
+        if (shouldLogPerfDebug()) {
+            console.log("[history] trusted session rows applied", {
+                action: "trusted_session_rows_apply",
+                source,
+                replace,
+                rowsCount: nextRows.length,
+                dates: nextRows.map(normalizeTrustedSessionRowDate),
+            });
+        }
+        return true;
+    }, []);
 
     const markSupabaseFetchFresh = useCallback((key, ttlMs = 30000) => {
         if (!key) return;
@@ -3179,6 +3269,16 @@ export default function GymApp() {
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
+    }, [user?.id]);
+
+    useEffect(() => {
+        const nextOwner = user?.id || null;
+        if (trustedRowsOwnerRef.current === nextOwner) return;
+        trustedRowsOwnerRef.current = nextOwner;
+        trustedWorkoutRowsRef.current = [];
+        trustedSessionRowsRef.current = [];
+        setTrustedWorkoutRows([]);
+        setTrustedSessionRows([]);
     }, [user?.id]);
 
     useEffect(() => {
@@ -3778,8 +3878,11 @@ export default function GymApp() {
         });
 
         if (error) throw error;
+        applyTrustedWorkoutRowsSnapshot(rows || [], {
+            source: "fetchRemoteWorkoutRowsForDates",
+        });
         return rows || [];
-    }, []);
+    }, [applyTrustedWorkoutRowsSnapshot]);
 
     const hasRemoteWorkoutForDate = useCallback(async (userId, workoutDate) => {
         const normalizedDate = String(workoutDate || "").slice(0, 10);
@@ -4118,6 +4221,11 @@ export default function GymApp() {
                     results.verifiedHistoryByDate[workoutDate] = verifyWorkoutRow?.data
                         ? applyPreferredHistoryDates({}, verifyWorkoutRow.data, [workoutDate])
                         : {};
+                    if (verifyWorkoutRow) {
+                        applyTrustedWorkoutRowsSnapshot([verifyWorkoutRow], {
+                            source: "workouts.data save verified",
+                        });
+                    }
                     if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
                         console.log("[workout edit] workouts.data after save", {
                             env: getRuntimeEnvironmentLabel(),
@@ -4154,7 +4262,7 @@ export default function GymApp() {
         );
 
         return results;
-    }, [clearSyncFailure, recordSyncFailure]);
+    }, [applyTrustedWorkoutRowsSnapshot, clearSyncFailure, recordSyncFailure]);
 
     const deleteRemoteWorkoutArtifactsForDate = useCallback(async (userId, workoutDate, nextHistoryMap = null) => {
         const normalizedDate = String(workoutDate || "").slice(0, 10);
@@ -5384,6 +5492,14 @@ export default function GymApp() {
                         historyHasTrustedRemoteSnapshotRef.current = true;
                         setHistoryRemoteReady(true);
                         setHistoryLoadError("");
+                        applyTrustedWorkoutRowsSnapshot(workoutsRes.data || [], {
+                            source: "history_initial_load conversion fallback",
+                        });
+                        if (!sessionsRes.error && !sessionsRes.skipped) {
+                            applyTrustedSessionRowsSnapshot(sessionsRes.data || [], {
+                                source: "history_initial_load conversion fallback",
+                            });
+                        }
                         applyWorkoutsDataHistorySnapshot(workoutsOnlyHistory, {
                             source: "workouts.data",
                             reason: "history_initial_load conversion fallback",
@@ -5478,6 +5594,14 @@ export default function GymApp() {
 
                 historyRemoteLoadFailedRef.current = false;
                 historyHasTrustedRemoteSnapshotRef.current = true;
+                applyTrustedWorkoutRowsSnapshot(workoutsRes.data || [], {
+                    source: "history_initial_load",
+                });
+                if (!sessionsRes.error && !sessionsRes.skipped) {
+                    applyTrustedSessionRowsSnapshot(sessionsRes.data || [], {
+                        source: "history_initial_load",
+                    });
+                }
                 setHistoryRemoteReady(true);
                 setHistoryLoadError("");
                 setHistory(mergedHistory);
@@ -5538,6 +5662,8 @@ export default function GymApp() {
             isActive = false;
         };
     }, [
+        applyTrustedSessionRowsSnapshot,
+        applyTrustedWorkoutRowsSnapshot,
         applyWorkoutsDataHistorySnapshot,
         getCurrentHistoryDeleteMarkers,
         historyReloadNonce,
@@ -5929,6 +6055,8 @@ export default function GymApp() {
         syncWorkoutSessionSnapshot,
         syncWorkoutRowsForDates,
         cleanupWorkoutSessionsForHistory,
+        applyTrustedSessionRowsSnapshot,
+        applyTrustedWorkoutRowsSnapshot,
         applyWorkoutsDataHistorySnapshot,
         workoutFinishedAt,
         workoutIsFinished,
@@ -6144,6 +6272,14 @@ export default function GymApp() {
 
                 historyHasTrustedRemoteSnapshotRef.current = true;
                 historyRemoteLoadFailedRef.current = false;
+                applyTrustedWorkoutRowsSnapshot(workoutsRes.data || [], {
+                    source: "display_history_refresh",
+                });
+                if (!sessionsRes.error) {
+                    applyTrustedSessionRowsSnapshot(sessionsRes.data || [], {
+                        source: "display_history_refresh",
+                    });
+                }
                 if (serializeHistoryMap(nextHistory) !== serializeHistoryMap(currentHistory)) {
                     setHistory(nextHistory);
                     persistHistoryForUser(user.id, nextHistory);
@@ -6209,6 +6345,8 @@ export default function GymApp() {
             cancelled = true;
         };
     }, [
+        applyTrustedSessionRowsSnapshot,
+        applyTrustedWorkoutRowsSnapshot,
         applyWorkoutsDataHistorySnapshot,
         applyLocalHistoryDates,
         getCurrentHistoryDeleteMarkers,
@@ -6297,6 +6435,9 @@ export default function GymApp() {
                 }
 
                 const { data } = homeFetch.value;
+                applyTrustedWorkoutRowsSnapshot(data || [], {
+                    source: "home_weekly_summary_refresh",
+                });
 
                 const remoteWorkoutsHistory = applyHistoryDeleteMarkers(
                     buildHistoryFromWorkoutRows(data || []),
@@ -6396,6 +6537,7 @@ export default function GymApp() {
             cancelled = true;
         };
     }, [
+        applyTrustedWorkoutRowsSnapshot,
         applyWorkoutsDataHistorySnapshot,
         applyLocalHistoryDates,
         getCurrentHistoryDeleteMarkers,
@@ -6772,9 +6914,9 @@ export default function GymApp() {
         const nextHistory = buildDraftHistoryForDate({
             baseHistory: history,
             workoutDate: logDate,
-            exercises,
-            logData,
-            getExUnit,
+            exercises: workoutLogExercises,
+            logData: workoutLogData,
+            getExUnit: getWorkoutLogExUnit,
             labels: todayLabels,
             durationSec,
             replaceDate: Boolean(pendingChange.explicitDelete),
@@ -6782,25 +6924,28 @@ export default function GymApp() {
 
         return nextHistory;
     }, [
-        exercises,
-        getExUnit,
         history,
-        logData,
         logDate,
         savedWorkoutDurationSecByDate,
         screen,
         todayLabels,
+        getWorkoutLogExUnit,
+        workoutLogData,
+        workoutLogExercises,
         workoutStartedForDate,
     ]);
 
-    const trustedDisplayHistoryResult = useMemo(() => buildTrustedHistory({
+    const workoutHistoryView = useWorkoutHistory({
+        workoutRows: trustedWorkoutRows,
+        sessionRows: trustedSessionRows,
         existingHistory: displayHistory,
         workoutsDataHistory,
-        source: "canonicalDisplayHistory",
+        calledFrom: "canonicalDisplayHistory",
         log: shouldLogPerfDebug(),
-    }), [displayHistory, workoutsDataHistory]);
+    });
 
-    const canonicalDisplayHistory = trustedDisplayHistoryResult.history;
+    const trustedDisplayHistoryResult = workoutHistoryView.trustedHistoryResult;
+    const canonicalDisplayHistory = workoutHistoryView.trustedHistory;
 
     useEffect(() => {
         if (screen !== "history") return;
@@ -6820,7 +6965,7 @@ export default function GymApp() {
 
         console.log("[home props]", {
             action: "home_props_before_render",
-            sourceOfHistoryProp: "trustedHistory (buildTrustedHistory displayHistory/workoutsDataHistory by date)",
+            sourceOfHistoryProp: "useWorkoutHistory trustedHistory (workouts.data exactHistory priority)",
             user_id: user?.id || null,
             historyLength: getHistoryOverallMetrics(history),
             workoutsDataHistoryLength: getHistoryOverallMetrics(workoutsDataHistory),
@@ -8067,6 +8212,12 @@ export default function GymApp() {
                         }
                         return accepted;
                     });
+                applyTrustedWorkoutRowsSnapshot(workoutRowsForDate, {
+                    source: "log_date_refresh",
+                });
+                applyTrustedSessionRowsSnapshot(sessionRowsForDate, {
+                    source: "log_date_refresh",
+                });
                 const rawRemoteHistory = buildRemoteHistoryWithWorkoutRowsPriority(
                     workoutRowsForDate,
                     sessionRowsForDate
@@ -8293,6 +8444,8 @@ export default function GymApp() {
             cancelled = true;
         };
     }, [
+        applyTrustedSessionRowsSnapshot,
+        applyTrustedWorkoutRowsSnapshot,
         applyWorkoutsDataHistorySnapshot,
         applyLocalHistoryDates,
         applyCurrentLogDraft,

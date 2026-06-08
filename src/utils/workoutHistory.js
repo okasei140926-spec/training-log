@@ -136,6 +136,7 @@ const applyCandidateHistoryDates = ({
   exactDateSet,
   blockExactDates = false,
   onlyIfMissing = false,
+  forceReplace = false,
 }) => {
   let nextHistory = trustedHistory;
   let rejectedStaleSnapshotCount = 0;
@@ -151,6 +152,19 @@ const applyCandidateHistoryDates = ({
     const currentMetrics = getHistoryMetricsForDate(nextHistory, date);
     if (onlyIfMissing && currentMetrics.hasWorkout) {
       rejectedDates.push({ date, reason: "trusted history already has date" });
+      return;
+    }
+
+    if (forceReplace) {
+      const candidateMetrics = getHistoryMetricsForDate(candidateHistory, date);
+      if (!candidateMetrics.hasWorkout) {
+        rejectedStaleSnapshotCount += 1;
+        rejectedDates.push({ date, reason: "missing exact workout data" });
+        return;
+      }
+      nextHistory = applyPreferredHistoryDates(nextHistory, candidateHistory, [date]);
+      sourceByDate[date] = sourceName;
+      appliedDates.push(date);
       return;
     }
 
@@ -331,6 +345,7 @@ export const buildTrustedHistory = ({
     candidateHistory: workoutScopes.exactHistory,
     dates: exactDates,
     sourceName: "workouts.data exactHistory",
+    forceReplace: true,
   });
 
   applyCandidate({
