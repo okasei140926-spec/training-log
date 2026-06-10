@@ -25,7 +25,7 @@ export async function fetchWorkoutRows({
 
   let query = supabase
     .from("workouts")
-    .select("id,user_id,date,data,created_at,updated_at")
+    .select("id,user_id,date,data,created_at")
     .eq("user_id", userId)
     .order("date", { ascending: true });
 
@@ -49,7 +49,7 @@ export async function fetchWorkoutRowsForDates({
 
   const { data, error } = await supabase
     .from("workouts")
-    .select("id,user_id,date,data,created_at,updated_at")
+    .select("id,user_id,date,data,created_at")
     .eq("user_id", userId)
     .in("date", normalizedDates)
     .order("date", { ascending: true });
@@ -65,7 +65,7 @@ export async function fetchWorkoutRowForDate({
   const normalizedDate = requireUserAndDate(userId, date);
   const { data, error } = await supabase
     .from("workouts")
-    .select("id,user_id,date,data,created_at,updated_at")
+    .select("id,user_id,date,data,created_at")
     .eq("user_id", userId)
     .eq("date", normalizedDate)
     .maybeSingle();
