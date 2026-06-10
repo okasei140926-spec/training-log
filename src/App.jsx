@@ -266,7 +266,7 @@ const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
 const APP_VERSION_STORAGE_KEY = "pumpAppVersion";
 const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
 const REMOTE_HISTORY_SESSION_LIMIT = 400;
-const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 21;
+const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 120;
 const INITIAL_HOME_HISTORY_LIMIT = 80;
 const HISTORY_RECOVERY_LIMIT = 250;
 const DIAGNOSTIC_LOOKBACK_DAYS = 45;
@@ -6196,10 +6196,10 @@ export default function GymApp() {
 
     useEffect(() => {
         if (!user?.id || !historySyncReady) return;
-        if (!["calendar", "analytics"].includes(screen)) return;
+        if (!["home", "calendar", "analytics", "log"].includes(screen)) return;
         const trustedDisplayHistory = mergeHistoryMaps(workoutsDataHistory || {}, history || {});
         const trustedHistoryMetrics = getHistoryOverallMetrics(trustedDisplayHistory);
-        if (trustedHistoryMetrics.setCount > 0 && screen !== "analytics") {
+        if (trustedHistoryMetrics.setCount > 0 && !["analytics", "home", "log"].includes(screen)) {
             console.log("[home fetch] display_history skipped; trustedHistory already available", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user.id,
@@ -6212,7 +6212,7 @@ export default function GymApp() {
             });
             return;
         }
-        if (trustedHistoryMetrics.setCount > 0 && screen === "analytics") {
+        if (trustedHistoryMetrics.setCount > 0 && ["analytics", "home", "log"].includes(screen)) {
             console.log("[home fetch] display_history background refresh for analytics PR", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user.id,
@@ -7066,7 +7066,13 @@ export default function GymApp() {
     const displayHistory = useMemo(() => {
         if (!logDate) return history;
         const hasPendingDraftEdit = pendingWorkoutContentChangeDatesRef.current.has(String(logDate || "").slice(0, 10));
-        const shouldOverlayDraft = screen === "log" || workoutStartedForDate === logDate || hasPendingDraftEdit;
+        const week = getCurrentWeekRangeForHomeSummary();
+        const isLogDateThisWeek = logDate >= week.start && logDate <= week.end;
+        const shouldOverlayDraft =
+            screen === "log" ||
+            workoutStartedForDate === logDate ||
+            hasPendingDraftEdit ||
+            (isLogDateThisWeek && workoutLogExercises.length > 0);
         if (!shouldOverlayDraft) return history;
 
         const durationSec = Math.max(
