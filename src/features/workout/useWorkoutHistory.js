@@ -62,7 +62,9 @@ export function useWorkoutHistory({
   const workoutRowsHash = useMemo(() => hashRows(workoutRows, "date"), [workoutRows]);
   const sessionRowsHash = useMemo(() => hashRows(sessionRows, "workout_date"), [sessionRows]);
   const hasRemoteWorkoutRows = (workoutRows || []).length > 0;
-  const fallbackExistingHistory = hasRemoteWorkoutRows ? EMPTY_HISTORY : (existingHistory || EMPTY_HISTORY);
+  // existingHistory is always passed through: buildTrustedHistory's forceReplace:true for exactHistory
+  // ensures Supabase data wins for dates it covers, while older/draft dates survive intact.
+  const fallbackExistingHistory = existingHistory || EMPTY_HISTORY;
   const fallbackWorkoutsDataHistory = hasRemoteWorkoutRows ? EMPTY_HISTORY : (workoutsDataHistory || EMPTY_HISTORY);
   const fallbackSummaryHistory = hasRemoteWorkoutRows ? EMPTY_HISTORY : (summaryHistory || EMPTY_HISTORY);
   const fallbackCacheHistory = hasRemoteWorkoutRows || !allowCacheFallback ? EMPTY_HISTORY : (cacheHistory || EMPTY_HISTORY);
