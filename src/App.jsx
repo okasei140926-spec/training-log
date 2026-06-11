@@ -41,7 +41,10 @@ import { Browser } from "@capacitor/browser";
 import { useAI } from "./hooks/useAI";
 import { useSettings } from "./hooks/useSettings";
 
-import LogScreen from "./components/LogScreen";
+import LogScreenView from "./components/LogScreenView";
+import CalendarScreenView from "./components/CalendarScreenView";
+import FeedScreenView from "./components/FeedScreenView";
+import RankingScreenView from "./components/RankingScreenView";
 import HomeScreen from "./components/HomeScreen";
 import AppHeader from "./components/layout/AppHeader";
 import BottomNav from "./components/layout/BottomNav";
@@ -103,8 +106,6 @@ import { useHistoryHandlers } from "./hooks/useHistoryHandlers";
 
 const AnalyticsScreen = lazy(() => import("./components/AnalyticsScreen"));
 const PhotoScreen = lazy(() => import("./components/PhotoScreen"));
-const FriendsScreen = lazy(() => import("./components/FriendsScreen"));
-const HistoryScreen = lazy(() => import("./components/HistoryScreen"));
 const AIScreen = lazy(() => import("./components/AIScreen"));
 const Auth = lazy(() => import("./components/Auth"));
 
@@ -7107,106 +7108,62 @@ export default function GymApp() {
                     )}
 
                     {screen === "log" && (
-                        <div
-                            onPointerDownCapture={handleLogScreenInputPointerDownCapture}
-                            onFocusCapture={handleLogScreenFocusCapture}
-                            onBlurCapture={handleLogScreenBlurCapture}
-                            onTouchStart={(e) => {
-                                touchStartX.current = e.touches[0].clientX;
-                                touchStartY.current = e.touches[0].clientY;
-                            }}
-                            onTouchEnd={(e) => {
-                                if (touchStartX.current == null || touchStartY.current == null) return;
-
-                                const endX = e.changedTouches[0].clientX;
-                                const endY = e.changedTouches[0].clientY;
-
-                                const dx = endX - touchStartX.current;
-                                const dy = Math.abs(endY - touchStartY.current);
-
-                                const startedFromLeftEdge = touchStartX.current <= 24;
-                                const isRightSwipe = dx >= 80;
-                                const isHorizontal = dy < 40;
-
-                                if (startedFromLeftEdge && isRightSwipe && isHorizontal) {
-                                    setScreen("history");
-                                }
-
-                                touchStartX.current = null;
-                                touchStartY.current = null;
-                            }}
-                        >
-                            {(() => {
-                                const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate;
-                                const displayedWorkoutTimerStatus = showCurrentLogWorkoutTimer
-                                    ? workoutTimerStatus
-                                    : "idle";
-                                const displayedWorkoutElapsedSec = showCurrentLogWorkoutTimer
-                                    ? workoutElapsedSec
-                                    : (savedWorkoutDurationSecByDate[logDate] || 0);
-
-                                return (
-                                    <LogScreen
-                                        user={user}
-                                        manualBests={manualBests}
-                                        customBodyParts={customBodyParts}
-                                        hiddenBodyParts={hiddenBodyParts}
-                                        onAddCustomBodyPart={(bodyPart) => {
-                                            setCustomBodyParts((prev) =>
-                                                prev.includes(bodyPart) ? prev : [...prev, bodyPart]
-                                            );
-                                        }}
-                                        onUpdateHiddenBodyParts={setHiddenBodyParts}
-                                        todayLabels={todayLabels}
-                                        dayColor={dayColor}
-                                        exercises={workoutLogExercises}
-                                        logData={workoutLogData}
-                                        getExSets={getExSets}
-                                        setField={setField}
-                                        setWeightMode={setWeightMode}
-                                        addSet={addSet}
-                                        removeEx={removeEx}
-                                        timerLeft={timerLeft}
-                                        intervalSec={intervalSec}
-                                        setIntervalSec={setIntervalSec}
-                                        startTimer={startTimer}
-                                        stopTimer={stopTimer}
-                                        saveLog={handleSaveLog}
-                                        onAddEx={addExToSession}
-                                        onQuickAddEx={quickAddToSession}
-                                        onReorderEx={reorderEx}
-                                        onRenameEx={renameEx}
-                                        getPrev={getPrev}
-                                        getPR={getPR}
-                                        getPreviousPR={getPreviousPR}
-                                        onCopyDown={copySetDown}
-                                        onCopyDownReps={copyRepDown}
-                                        unit={unit}
-                                        getExUnit={getWorkoutLogExUnit}
-                                        onToggleExUnit={toggleExUnit}
-                                        muscleEx={muscleEx}
-                                        setTodayLabels={updateTodayLabels}
-                                        history={canonicalDisplayHistory}
-                                        logDate={logDate}
-                                        workoutElapsedSec={displayedWorkoutElapsedSec}
-                                        workoutTimerStatus={displayedWorkoutTimerStatus}
-                                        onFinishWorkoutTimer={handleFinishWorkoutTimerAndShowSummary}
-                                        onSetInputFocusChange={handleLogSetInputFocusChange}
-                                        focusExerciseRequest={logExerciseFocusRequest}
-                                        onFocusExerciseHandled={(request) => {
-                                            setLogExerciseFocusRequest((current) =>
-                                                current?.nonce === request?.nonce ? null : current
-                                            );
-                                        }}
-                                        lastActiveExercise={lastActiveLogExerciseByDate?.[logDate] || null}
-                                        onActiveExerciseChange={handleLogExerciseActiveChange}
-                                        resetSession={() => {
-                                            deleteAllHistoryForDate(logDate);
-                                        }}
-                                    />
-                                );
-                            })()}
-                        </div>
+                        <LogScreenView
+                            handleLogScreenInputPointerDownCapture={handleLogScreenInputPointerDownCapture}
+                            handleLogScreenFocusCapture={handleLogScreenFocusCapture}
+                            handleLogScreenBlurCapture={handleLogScreenBlurCapture}
+                            touchStartX={touchStartX}
+                            touchStartY={touchStartY}
+                            setScreen={setScreen}
+                            workoutStartedForDate={workoutStartedForDate}
+                            logDate={logDate}
+                            workoutTimerStatus={workoutTimerStatus}
+                            workoutElapsedSec={workoutElapsedSec}
+                            savedWorkoutDurationSecByDate={savedWorkoutDurationSecByDate}
+                            user={user}
+                            manualBests={manualBests}
+                            customBodyParts={customBodyParts}
+                            hiddenBodyParts={hiddenBodyParts}
+                            setCustomBodyParts={setCustomBodyParts}
+                            setHiddenBodyParts={setHiddenBodyParts}
+                            todayLabels={todayLabels}
+                            dayColor={dayColor}
+                            workoutLogExercises={workoutLogExercises}
+                            workoutLogData={workoutLogData}
+                            getExSets={getExSets}
+                            setField={setField}
+                            setWeightMode={setWeightMode}
+                            addSet={addSet}
+                            removeEx={removeEx}
+                            timerLeft={timerLeft}
+                            intervalSec={intervalSec}
+                            setIntervalSec={setIntervalSec}
+                            startTimer={startTimer}
+                            stopTimer={stopTimer}
+                            handleSaveLog={handleSaveLog}
+                            addExToSession={addExToSession}
+                            quickAddToSession={quickAddToSession}
+                            reorderEx={reorderEx}
+                            renameEx={renameEx}
+                            getPrev={getPrev}
+                            getPR={getPR}
+                            getPreviousPR={getPreviousPR}
+                            copySetDown={copySetDown}
+                            copyRepDown={copyRepDown}
+                            unit={unit}
+                            getWorkoutLogExUnit={getWorkoutLogExUnit}
+                            toggleExUnit={toggleExUnit}
+                            muscleEx={muscleEx}
+                            updateTodayLabels={updateTodayLabels}
+                            canonicalDisplayHistory={canonicalDisplayHistory}
+                            handleFinishWorkoutTimerAndShowSummary={handleFinishWorkoutTimerAndShowSummary}
+                            handleLogSetInputFocusChange={handleLogSetInputFocusChange}
+                            logExerciseFocusRequest={logExerciseFocusRequest}
+                            setLogExerciseFocusRequest={setLogExerciseFocusRequest}
+                            lastActiveLogExerciseByDate={lastActiveLogExerciseByDate}
+                            handleLogExerciseActiveChange={handleLogExerciseActiveChange}
+                            deleteAllHistoryForDate={deleteAllHistoryForDate}
+                        />
                     )}
 
                     {screen === "analytics" && (
@@ -7227,58 +7184,35 @@ export default function GymApp() {
 
 
                     {screen === "feed" && !showOfflineOnlyCard && (
-                        <FriendsScreen
-                            mode="feed"
+                        <FeedScreenView
                             history={history}
                             historySyncDiagnostic={historySyncDiagnostic}
                             manualBests={manualBests}
                             sessionSyncVersion={sessionSyncVersion}
-                            deletedWorkoutDates={historyDeleteMarkersRef.current?.dates || []}
+                            historyDeleteMarkersRef={historyDeleteMarkersRef}
                             user={user}
-                            onLogin={() => setShowAuth(true)}
-                            onOpenRecord={() => setScreen("history")}
-                            onLogout={handleLogout}
-
-                            onCopyMenu={(exs) => {
-                                setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
-                                setLogData(exs.reduce((acc, ex) => ({
-                                    ...acc,
-                                    [ex.name]: [
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                    ],
-                                }), {}));
-                                setLogMode("today");
-                                setScreen("log");
-                            }}
+                            setShowAuth={setShowAuth}
+                            setScreen={setScreen}
+                            handleLogout={handleLogout}
+                            setSessionEx={setSessionEx}
+                            setLogData={setLogData}
+                            setLogMode={setLogMode}
                         />
                     )}
 
                     {screen === "ranking" && !showOfflineOnlyCard && (
-                        <FriendsScreen
-                            mode="ranking"
+                        <RankingScreenView
                             history={history}
                             historySyncDiagnostic={historySyncDiagnostic}
                             manualBests={manualBests}
                             sessionSyncVersion={sessionSyncVersion}
                             user={user}
-                            onLogin={() => setShowAuth(true)}
-                            onOpenRecord={() => setScreen("history")}
-                            onLogout={handleLogout}
-                            onCopyMenu={(exs) => {
-                                setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
-                                setLogData(exs.reduce((acc, ex) => ({
-                                    ...acc,
-                                    [ex.name]: [
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                        { weight: String(ex.weight || ""), reps: String(ex.reps || ""), done: false },
-                                    ],
-                                }), {}));
-                                setLogMode("today");
-                                setScreen("log");
-                            }}
+                            setShowAuth={setShowAuth}
+                            setScreen={setScreen}
+                            handleLogout={handleLogout}
+                            setSessionEx={setSessionEx}
+                            setLogData={setLogData}
+                            setLogMode={setLogMode}
                         />
                     )}
 
@@ -7300,42 +7234,27 @@ export default function GymApp() {
                     )}
 
                     {screen === "calendar" && (
-                        <HistoryScreen
-                            history={canonicalDisplayHistory}
-                            todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
+                        <CalendarScreenView
+                            canonicalDisplayHistory={canonicalDisplayHistory}
+                            workoutElapsedSec={workoutElapsedSec}
+                            savedWorkoutDurationSecByDate={savedWorkoutDurationSecByDate}
+                            logDate={logDate}
                             muscleEx={muscleEx}
                             exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                             hiddenBodyParts={hiddenBodyParts}
-                            onEditHistory={handleEditHistory}
-                            onDeleteHistory={handleDeleteHistory}
-                            onDeleteDate={deleteAllHistoryForDate}
-                            workoutDurationSecByDate={savedWorkoutDurationSecByDate}
+                            handleEditHistory={handleEditHistory}
+                            handleDeleteHistory={handleDeleteHistory}
+                            deleteAllHistoryForDate={deleteAllHistoryForDate}
                             unit={unit}
                             getExUnit={getExUnit}
-                            onLogForDate={handleCalendarDayOpen}
+                            handleCalendarDayOpen={handleCalendarDayOpen}
                             user={user}
                             manualBests={manualBests}
                             customBodyParts={customBodyParts}
-                            onAddManualBest={(best) => {
-                                setManualBests((prev) => [best, ...prev]);
-                            }}
-                            onUpdateManualBest={(updatedBest) => {
-                                setManualBests((prev) =>
-                                    prev.map((item) => (item.id === updatedBest.id ? updatedBest : item))
-                                );
-                            }}
-                            onDeleteManualBest={(id) => {
-                                setManualBests((prev) => prev.filter((item) => item.id !== id));
-                            }}
-                            onAddCustomBodyPart={(bodyPart) => {
-                                setCustomBodyParts((prev) =>
-                                    prev.includes(bodyPart) ? prev : [...prev, bodyPart]
-                                );
-                            }}
-                            onOpenWorkoutDaySummary={(nextSummary) => {
-                                setSummary(nextSummary);
-                            }}
-                            onOpenWorkoutDayShare={openWorkoutDayShareModal}
+                            setManualBests={setManualBests}
+                            setCustomBodyParts={setCustomBodyParts}
+                            setSummary={setSummary}
+                            openWorkoutDayShareModal={openWorkoutDayShareModal}
                         />
                     )}
 
