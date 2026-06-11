@@ -19,7 +19,6 @@ import {
     sanitizeWorkoutSets,
 } from "./utils/helpers";
 import { buildTrustedHistory } from "./features/workout/buildTrustedHistory";
-import { useWorkoutHistory } from "./features/workout/useWorkoutHistory";
 import { useWorkoutLog } from "./features/workout/useWorkoutLog";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
@@ -73,6 +72,7 @@ import {
 import { useWorkout } from "./hooks/useWorkout";
 import { useTimer } from "./hooks/useTimer";
 import { useLogLogic } from "./hooks/useLogLogic";
+import { useDisplayHistory } from "./hooks/useDisplayHistory";
 import {
     enablePushNotificationsForUser,
     getNotificationPermission,
@@ -5156,60 +5156,28 @@ export default function GymApp() {
         workoutLogExerciseUnits?.[name] || getExUnit(name)
     ), [getExUnit, workoutLogExerciseUnits]);
 
-    const displayHistory = useMemo(() => {
-        if (!logDate) return history;
-        const hasPendingDraftEdit = pendingWorkoutContentChangeDatesRef.current.has(String(logDate || "").slice(0, 10));
-        const week = getCurrentWeekRangeForHomeSummary();
-        const isLogDateThisWeek = logDate >= week.start && logDate <= week.end;
-        const shouldOverlayDraft =
-            screen === "log" ||
-            workoutStartedForDate === logDate ||
-            hasPendingDraftEdit ||
-            (isLogDateThisWeek && workoutLogExercises.length > 0);
-        if (!shouldOverlayDraft) return history;
-
-        const durationSec = Math.max(
-            0,
-            workoutStartedForDate === logDate
-                ? computeWorkoutDisplayElapsedSec(workoutTimerStateRef.current)
-                : 0,
-            Math.floor(Number(savedWorkoutDurationSecByDate[logDate]) || 0)
-        );
-        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(String(logDate || "").slice(0, 10)) || {};
-        const nextHistory = buildDraftHistoryForDate({
-            baseHistory: history,
-            workoutDate: logDate,
-            exercises: workoutLogExercises,
-            logData: workoutLogData,
-            getExUnit: getWorkoutLogExUnit,
-            labels: todayLabels,
-            durationSec,
-            replaceDate: Boolean(pendingChange.explicitDelete),
-        });
-
-        return nextHistory;
-    }, [
+    const {
+        displayHistory,
+        canonicalDisplayHistory,
+    } = useDisplayHistory({
         history,
-        logDate,
-        savedWorkoutDurationSecByDate,
-        screen,
-        todayLabels,
-        getWorkoutLogExUnit,
-        workoutLogData,
-        workoutLogExercises,
-        workoutStartedForDate,
-    ]);
-
-    const workoutHistoryView = useWorkoutHistory({
-        workoutRows: trustedWorkoutRows,
-        sessionRows: trustedSessionRows,
-        existingHistory: displayHistory,
         workoutsDataHistory,
-        calledFrom: "canonicalDisplayHistory",
-        log: shouldLogPerfDebug(),
+        trustedWorkoutRows,
+        trustedSessionRows,
+        logDate,
+        screen,
+        workoutStartedForDate,
+        savedWorkoutDurationSecByDate,
+        todayLabels,
+        workoutLogExercises,
+        workoutLogData,
+        getWorkoutLogExUnit,
+        pendingWorkoutContentChangeDatesRef,
+        workoutTimerStateRef,
+        buildDraftHistoryForDate,
+        getCurrentWeekRangeForHomeSummary,
+        shouldLogPerfDebug,
     });
-
-    const canonicalDisplayHistory = workoutHistoryView.trustedHistory;
 
     useEffect(() => {
         if (screen !== "history") return;
