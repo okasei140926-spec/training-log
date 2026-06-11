@@ -98,6 +98,7 @@ import {
     REMOTE_HISTORY_SESSION_LIMIT,
 } from "./hooks/useHistorySync";
 import { useHistorySave } from "./hooks/useHistorySave";
+import { useWorkoutSummary } from "./hooks/useWorkoutSummary";
 
 const AnalyticsScreen = lazy(() => import("./components/AnalyticsScreen"));
 const PhotoScreen = lazy(() => import("./components/PhotoScreen"));
@@ -260,7 +261,6 @@ const isPlainObject = (value) =>
 const serializeHistoryMap = (historyMap) => JSON.stringify(historyMap || {});
 const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
 const APP_VERSION_STORAGE_KEY = "pumpAppVersion";
-const DIAGNOSTIC_LOOKBACK_DAYS = 45;
 
 const getDateDaysAgoKey = (days) => {
     const date = new Date();
@@ -2912,15 +2912,7 @@ export default function GymApp() {
     );
     const [focusedAiChatInput, setFocusedAiChatInput] = useState(false);
     const [isAiKeyboardOpen, setIsAiKeyboardOpen] = useState(false);
-    const [historySyncDiagnostic, setHistorySyncDiagnostic] = useState({
-        localHistoryDates: [],
-        remoteWorkoutDates: [],
-        sessionDates: [],
-        missingFromRemoteWorkouts: [],
-        missingFromWorkoutSessions: [],
-        syncFailedDates: [],
-        lastSyncErrorByDate: {},
-    });
+    // historySyncDiagnostic state and refreshHistorySyncDiagnostic are provided by useWorkoutSummary (called below)
 
     const handleLogSetInputFocusChange = useCallback((inputId) => {
         if (inputId && typeof document !== "undefined") {
@@ -3420,6 +3412,17 @@ export default function GymApp() {
         describeHistoryRecordsForDate,
     });
 
+    const {
+        historySyncDiagnostic,
+        refreshHistorySyncDiagnostic,
+    } = useWorkoutSummary({
+        runDedupeSupabaseFetch,
+        syncFailuresByDateRef,
+        getDateDaysAgoKey,
+        getNextMonthPrefix,
+        logRecordFetchError,
+    });
+
     const closeWorkoutDaySummary = useCallback(() => {
         setSummary(null);
     }, []);
@@ -3740,134 +3743,7 @@ export default function GymApp() {
         }
     }, []);
 
-    const refreshHistorySyncDiagnostic = useCallback(async (userId, historyMap, { prefix = "" } = {}) => {
-        if (!userId) {
-            setHistorySyncDiagnostic({
-                localHistoryDates: [],
-                remoteWorkoutDates: [],
-                sessionDates: [],
-                missingFromRemoteWorkouts: [],
-                missingFromWorkoutSessions: [],
-                syncFailedDates: [],
-                lastSyncErrorByDate: {},
-            });
-            return;
-        }
-
-        try {
-            const localHistoryDates = getValidWorkoutDatesFromHistory(historyMap || {}, { prefix });
-
-            const rangeStart = prefix ? `${prefix}-01` : getDateDaysAgoKey(DIAGNOSTIC_LOOKBACK_DAYS);
-            const rangeEndPrefix = prefix ? getNextMonthPrefix(prefix) : "";
-            let workoutsQuery = supabase
-                .from("workouts")
-                .select("date")
-                .eq("user_id", userId)
-                .gte("date", rangeStart)
-                .order("date", { ascending: true });
-            let sessionsQuery = supabase
-                .from("workout_sessions")
-                .select("workout_date")
-                .eq("user_id", userId)
-                .gte("workout_date", rangeStart)
-                .order("workout_date", { ascending: true });
-
-            if (rangeEndPrefix) {
-                workoutsQuery = workoutsQuery.lt("date", `${rangeEndPrefix}-01`);
-                sessionsQuery = sessionsQuery.lt("workout_date", `${rangeEndPrefix}-01`);
-            }
-
-            const diagnosticFetchKey = `history_sync_diagnostic:${userId}:${rangeStart}:${rangeEndPrefix || "open"}`;
-            const diagnosticFetch = await runDedupeSupabaseFetch(
-                diagnosticFetchKey,
-                async () => {
-                    const [remoteWorkoutsRes, remoteSessionsRes] = await Promise.all([
-                        workoutsQuery.limit(120),
-                        sessionsQuery.limit(120),
-                    ]);
-                    if (remoteWorkoutsRes.error) {
-                        logRecordFetchError("history_sync_diagnostic", "workouts", remoteWorkoutsRes.error, {
-                            userId,
-                            dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
-                        });
-                        throw remoteWorkoutsRes.error;
-                    }
-                    if (remoteSessionsRes.error) {
-                        logRecordFetchError("history_sync_diagnostic", "workout_sessions", remoteSessionsRes.error, {
-                            userId,
-                            dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
-                        });
-                        throw remoteSessionsRes.error;
-                    }
-                    return { remoteWorkoutsRes, remoteSessionsRes };
-                },
-                {
-                    minIntervalMs: 60000,
-                    freshTtlMs: 90000,
-                    backoffMs: 60000,
-                    context: {
-                        fetchName: "history_sync_diagnostic",
-                        user_id: userId,
-                        dateRange: { from: rangeStart, toBefore: rangeEndPrefix ? `${rangeEndPrefix}-01` : null },
-                        tables: ["workouts", "workout_sessions"],
-                    },
-                }
-            );
-
-            if (diagnosticFetch.skipped) return;
-
-            const { remoteWorkoutsRes, remoteSessionsRes } = diagnosticFetch.value;
-
-            const remoteWorkoutDates = [...new Set(
-                (remoteWorkoutsRes.data || [])
-                    .map((row) => String(row?.date || "").slice(0, 10))
-                    .filter((date) => !prefix || date.startsWith(prefix))
-            )].sort();
-            const sessionDates = [...new Set(
-                (remoteSessionsRes.data || [])
-                    .map((row) => String(row?.workout_date || "").slice(0, 10))
-                    .filter((date) => !prefix || date.startsWith(prefix))
-            )].sort();
-
-            const localOrRemoteDates = [...new Set([...localHistoryDates, ...remoteWorkoutDates])].sort();
-            const missingFromRemoteWorkouts = localHistoryDates.filter((date) => !remoteWorkoutDates.includes(date));
-            const missingFromWorkoutSessions = localOrRemoteDates.filter((date) => !sessionDates.includes(date));
-            const syncFailedDates = [...new Set(
-                Object.keys(syncFailuresByDateRef.current).filter((date) => !prefix || date.startsWith(prefix))
-            )].sort();
-            const lastSyncErrorByDate = syncFailedDates.reduce((acc, date) => {
-                acc[date] = syncFailuresByDateRef.current[date];
-                return acc;
-            }, {});
-
-            const diagnosticPayload = {
-                localHistoryDates,
-                remoteWorkoutDates,
-                sessionDates,
-                missingFromRemoteWorkouts,
-                missingFromWorkoutSessions,
-                syncFailedDates,
-                lastSyncErrorByDate,
-            };
-
-            setHistorySyncDiagnostic(diagnosticPayload);
-            debugLog("[sync] history remote diagnostic", {
-                userId,
-                prefix,
-                ...diagnosticPayload,
-            });
-        } catch (error) {
-            console.error("[sync] history remote diagnostic failed", {
-                error,
-                message: error?.message,
-                code: error?.code,
-                details: error?.details,
-                hint: error?.hint,
-                userId,
-                prefix,
-            });
-        }
-    }, [runDedupeSupabaseFetch, syncFailuresByDateRef]);
+    // refreshHistorySyncDiagnostic is provided by useWorkoutSummary (called above)
 
 
 
