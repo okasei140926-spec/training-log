@@ -2915,7 +2915,10 @@ export default function GymApp() {
         replace = false,
         source = "workouts.data",
     } = {}) => {
-        const incomingRows = (rows || []).filter((row) => normalizeTrustedWorkoutRowDate(row));
+        const deletedDates = new Set(historyDeleteMarkersRef.current?.dates || []);
+        const incomingRows = (rows || [])
+            .filter((row) => normalizeTrustedWorkoutRowDate(row))
+            .filter((row) => !deletedDates.has(normalizeTrustedWorkoutRowDate(row)));
         if (!replace) {
             const hasIncomingChange = incomingRows.some((row) => {
                 const date = normalizeTrustedWorkoutRowDate(row);
