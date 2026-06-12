@@ -103,6 +103,7 @@ import { useHistorySave } from "./hooks/useHistorySave";
 import { useWorkoutSummary } from "./hooks/useWorkoutSummary";
 import { useHistoryHandlers } from "./hooks/useHistoryHandlers";
 import { useWorkoutHandlers } from "./hooks/useWorkoutHandlers";
+import { useUIHandlers } from "./hooks/useUIHandlers";
 
 const AnalyticsScreen = lazy(() => import("./components/AnalyticsScreen"));
 const PhotoScreen = lazy(() => import("./components/PhotoScreen"));
@@ -2916,147 +2917,12 @@ export default function GymApp() {
     const [isAiKeyboardOpen, setIsAiKeyboardOpen] = useState(false);
     // historySyncDiagnostic state and refreshHistorySyncDiagnostic are provided by useWorkoutSummary (called below)
 
-    const handleLogSetInputFocusChange = useCallback((inputId) => {
-        if (inputId && typeof document !== "undefined") {
-            document.body?.setAttribute("data-log-set-input-active", "true");
-        }
-        setFocusedLogSetInputId(inputId || null);
-    }, []);
-
-    const requestLogExerciseFocus = useCallback((exercise) => {
-        if (!exercise?.id && !exercise?.name) return;
-        setLogExerciseFocusRequest({
-            id: exercise.id,
-            name: exercise.name,
-            nonce: Date.now() + Math.random(),
-        });
-    }, []);
-
-    const handleLogExerciseActiveChange = useCallback((exercise) => {
-        if (!exercise?.id && !exercise?.name) return;
-        setLastActiveLogExerciseByDate((prev) => ({
-            ...(prev || {}),
-            [logDate]: {
-                id: exercise.id,
-                name: exercise.name,
-                updatedAt: Date.now(),
-            },
-        }));
-    }, [logDate]);
-
-    const markLogSetInputActive = useCallback((setInput, shouldScroll = true) => {
-        if (!(setInput instanceof HTMLElement)) return;
-        document.body?.setAttribute("data-log-set-input-active", "true");
-        setFocusedLogSetInputId(setInput.getAttribute("data-log-set-input-id") || "__log_set_input__");
-        if (!shouldScroll) return;
-        window.setTimeout(() => {
-            setInput.scrollIntoView?.({ block: "center", inline: "nearest", behavior: "smooth" });
-        }, 120);
-    }, []);
-
-    const clearLogSetInputActiveIfClosed = useCallback(() => {
-        const activeElement = document.activeElement;
-        if (activeElement instanceof HTMLElement && activeElement.closest("[data-log-set-input='true']")) {
-            markLogSetInputActive(activeElement);
-            return;
-        }
-        const viewport = window.visualViewport;
-        const keyboardInset = viewport
-            ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
-            : 0;
-        if (keyboardInset > 80) {
-            document.body?.setAttribute("data-log-set-input-active", "true");
-            setIsLogKeyboardOpen(true);
-            return;
-        }
-        document.body?.removeAttribute("data-log-set-input-active");
-        setFocusedLogSetInputId(null);
-        setIsLogKeyboardOpen(false);
-    }, [markLogSetInputActive]);
-
-    const handleLogScreenFocusCapture = useCallback((event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
-        const setInput = target.closest("[data-log-set-input='true']");
-        if (!setInput) return;
-        markLogSetInputActive(setInput);
-    }, [markLogSetInputActive]);
-
-    const handleLogScreenInputPointerDownCapture = useCallback((event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
-        const setInput = target.closest("[data-log-set-input='true']");
-        if (!setInput) return;
-        markLogSetInputActive(setInput);
-    }, [markLogSetInputActive]);
-
-    const handleLogScreenBlurCapture = useCallback(() => {
-        window.setTimeout(clearLogSetInputActiveIfClosed, 360);
-    }, [clearLogSetInputActiveIfClosed]);
-
-    const handleAiInputFocusChange = useCallback((isFocused) => {
-        setFocusedAiChatInput(Boolean(isFocused));
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === "undefined" || typeof document === "undefined") return undefined;
-        if (screen !== "log") {
-            document.body?.removeAttribute("data-log-set-input-active");
-            return undefined;
-        }
-
-        const activateFromTarget = (target) => {
-            if (!(target instanceof HTMLElement)) return;
-            const setInput = target.closest("[data-log-set-input='true']");
-            if (setInput) markLogSetInputActive(setInput);
-        };
-        const handleFocusIn = (event) => activateFromTarget(event.target);
-        const handleTouchStart = (event) => activateFromTarget(event.target);
-        const handlePointerDown = (event) => activateFromTarget(event.target);
-        const scheduleClear = () => window.setTimeout(clearLogSetInputActiveIfClosed, 360);
-
-        const syncKeyboardState = () => {
-            const viewport = window.visualViewport;
-            const keyboardInset = viewport
-                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
-                : 0;
-            const keyboardOpen = keyboardInset > 80;
-            const activeElement = document.activeElement;
-            const activeLogInput =
-                activeElement instanceof HTMLElement
-                    ? activeElement.closest("[data-log-set-input='true']")
-                    : null;
-            setIsLogKeyboardOpen(keyboardOpen);
-            if (activeLogInput) {
-                markLogSetInputActive(activeLogInput, false);
-                return;
-            }
-            if (keyboardOpen) {
-                document.body?.setAttribute("data-log-set-input-active", "true");
-                return;
-            }
-            document.body?.removeAttribute("data-log-set-input-active");
-            setFocusedLogSetInputId(null);
-        };
-
-        document.addEventListener("focusin", handleFocusIn, true);
-        document.addEventListener("touchstart", handleTouchStart, true);
-        document.addEventListener("pointerdown", handlePointerDown, true);
-        document.addEventListener("focusout", scheduleClear, true);
-        window.visualViewport?.addEventListener("resize", syncKeyboardState);
-        window.visualViewport?.addEventListener("scroll", syncKeyboardState);
-        syncKeyboardState();
-
-        return () => {
-            document.removeEventListener("focusin", handleFocusIn, true);
-            document.removeEventListener("touchstart", handleTouchStart, true);
-            document.removeEventListener("pointerdown", handlePointerDown, true);
-            document.removeEventListener("focusout", scheduleClear, true);
-            window.visualViewport?.removeEventListener("resize", syncKeyboardState);
-            window.visualViewport?.removeEventListener("scroll", syncKeyboardState);
-            document.body?.removeAttribute("data-log-set-input-active");
-        };
-    }, [screen, markLogSetInputActive, clearLogSetInputActiveIfClosed]);
+    // handleLogSetInputFocusChange, requestLogExerciseFocus, handleLogExerciseActiveChange,
+    // markLogSetInputActive, clearLogSetInputActiveIfClosed, handleLogScreenFocusCapture,
+    // handleLogScreenInputPointerDownCapture, handleLogScreenBlurCapture, handleAiInputFocusChange
+    // → all extracted to useUIHandlers (called below)
+    // The useEffect that depends on markLogSetInputActive / clearLogSetInputActiveIfClosed
+    // is placed after the useUIHandlers call (search: "log set input activation useEffect")
 
     useEffect(() => {
         const wasOnline = previousOnlineStateRef.current;
@@ -3425,18 +3291,7 @@ export default function GymApp() {
         logRecordFetchError,
     });
 
-    const closeWorkoutDaySummary = useCallback(() => {
-        setSummary(null);
-    }, []);
-
-    const closeWorkoutDayShareModal = useCallback(() => {
-        setWorkoutDayShareTarget(null);
-    }, []);
-
-    const openWorkoutDayShareModal = useCallback((target) => {
-        if (!target?.workoutDate || !target?.sessionPayload) return;
-        setWorkoutDayShareTarget(target);
-    }, []);
+    // closeWorkoutDaySummary, closeWorkoutDayShareModal, openWorkoutDayShareModal → useUIHandlers
 
     const handleLogout = useCallback(async () => {
         await supabase.auth.signOut();
@@ -3644,30 +3499,7 @@ export default function GymApp() {
         return applyPreferredHistoryDates(baseHistory || {}, draftHistory, [normalizedDate]);
     }, [getExUnit, hasDraftContent, loadDraftForDate, savedWorkoutDurationSecByDate]);
 
-    const dismissPendingDeleteUndo = useCallback(() => {
-        const pending = pendingDeleteUndoRef.current;
-        if (pending?.timeoutId) window.clearTimeout(pending.timeoutId);
-        pendingDeleteUndoRef.current = null;
-        setPendingDeleteUndo(null);
-    }, []);
-
-    const getSyncFailureSignature = useCallback((failures) => (
-        Object.entries(failures || {})
-            .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-            .map(([date, failure]) => [
-                date,
-                failure?.stage || "",
-                failure?.code || "",
-                failure?.message || "",
-            ].join(":"))
-            .join("|")
-    ), []);
-
-    const dismissSyncFailureBanner = useCallback(() => {
-        const signature = getSyncFailureSignature(syncFailuresByDateRef.current);
-        if (signature) dismissedSyncFailureSignaturesRef.current.add(signature);
-        setSyncFailuresByDate({ ...syncFailuresByDateRef.current });
-    }, [getSyncFailureSignature, syncFailuresByDateRef]);
+    // dismissPendingDeleteUndo, getSyncFailureSignature, dismissSyncFailureBanner → useUIHandlers
 
 
     const deleteRemoteWorkoutArtifactsForDate = useCallback(async (userId, workoutDate, nextHistoryMap = null) => {
@@ -4043,12 +3875,7 @@ export default function GymApp() {
         };
     }, [user?.id, screen, showAuth]);
 
-    const dismissPushPromptForToday = useCallback(() => {
-        const todayStr = new Date().toISOString().split("T")[0];
-        save(PUSH_PROMPT_LATER_KEY, todayStr);
-        setShowPushPrompt(false);
-        setPushPromptMessage("");
-    }, []);
+    // dismissPushPromptForToday → useUIHandlers
 
     const enablePushFromPrompt = useCallback(async () => {
         if (!user?.id || pushPromptBusy) return;
@@ -5510,6 +5337,102 @@ export default function GymApp() {
     }, [buildDraftWorkoutDaySummary, finishWorkoutTimer, historyRevisionRef, logDate, queueWorkoutSessionSync, setSavedWorkoutDurationSecByDate, user?.id]);
 
 
+
+    const {
+        closeWorkoutDaySummary,
+        closeWorkoutDayShareModal,
+        openWorkoutDayShareModal,
+        getSyncFailureSignature,
+        dismissSyncFailureBanner,
+        dismissPendingDeleteUndo,
+        dismissPushPromptForToday,
+        handleLogSetInputFocusChange,
+        markLogSetInputActive,
+        clearLogSetInputActiveIfClosed,
+        handleLogScreenFocusCapture,
+        handleLogScreenInputPointerDownCapture,
+        handleLogScreenBlurCapture,
+        requestLogExerciseFocus,
+        handleLogExerciseActiveChange,
+        handleAiInputFocusChange,
+    } = useUIHandlers({
+        setSummary,
+        setWorkoutDayShareTarget,
+        syncFailuresByDateRef,
+        dismissedSyncFailureSignaturesRef,
+        setSyncFailuresByDate,
+        pendingDeleteUndoRef,
+        setPendingDeleteUndo,
+        setShowPushPrompt,
+        setPushPromptMessage,
+        setFocusedLogSetInputId,
+        setIsLogKeyboardOpen,
+        setLogExerciseFocusRequest,
+        logDate,
+        setLastActiveLogExerciseByDate,
+        setFocusedAiChatInput,
+    });
+
+    // ── log set input activation useEffect (depends on markLogSetInputActive / clearLogSetInputActiveIfClosed from useUIHandlers) ──
+    useEffect(() => {
+        if (typeof window === "undefined" || typeof document === "undefined") return undefined;
+        if (screen !== "log") {
+            document.body?.removeAttribute("data-log-set-input-active");
+            return undefined;
+        }
+
+        const activateFromTarget = (target) => {
+            if (!(target instanceof HTMLElement)) return;
+            const setInput = target.closest("[data-log-set-input='true']");
+            if (setInput) markLogSetInputActive(setInput);
+        };
+        const handleFocusIn = (event) => activateFromTarget(event.target);
+        const handleTouchStart = (event) => activateFromTarget(event.target);
+        const handlePointerDown = (event) => activateFromTarget(event.target);
+        const scheduleClear = () => window.setTimeout(clearLogSetInputActiveIfClosed, 360);
+
+        const syncKeyboardState = () => {
+            const viewport = window.visualViewport;
+            const keyboardInset = viewport
+                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+                : 0;
+            const keyboardOpen = keyboardInset > 80;
+            const activeElement = document.activeElement;
+            const activeLogInput =
+                activeElement instanceof HTMLElement
+                    ? activeElement.closest("[data-log-set-input='true']")
+                    : null;
+            setIsLogKeyboardOpen(keyboardOpen);
+            if (activeLogInput) {
+                markLogSetInputActive(activeLogInput, false);
+                return;
+            }
+            if (keyboardOpen) {
+                document.body?.setAttribute("data-log-set-input-active", "true");
+                return;
+            }
+            document.body?.removeAttribute("data-log-set-input-active");
+            setFocusedLogSetInputId(null);
+        };
+
+        document.addEventListener("focusin", handleFocusIn, true);
+        document.addEventListener("touchstart", handleTouchStart, true);
+        document.addEventListener("pointerdown", handlePointerDown, true);
+        document.addEventListener("focusout", scheduleClear, true);
+        window.visualViewport?.addEventListener("resize", syncKeyboardState);
+        window.visualViewport?.addEventListener("scroll", syncKeyboardState);
+        syncKeyboardState();
+
+        return () => {
+            document.removeEventListener("focusin", handleFocusIn, true);
+            document.removeEventListener("touchstart", handleTouchStart, true);
+            document.removeEventListener("pointerdown", handlePointerDown, true);
+            document.removeEventListener("focusout", scheduleClear, true);
+            window.visualViewport?.removeEventListener("resize", syncKeyboardState);
+            window.visualViewport?.removeEventListener("scroll", syncKeyboardState);
+            document.body?.removeAttribute("data-log-set-input-active");
+        };
+    }, [screen, markLogSetInputActive, clearLogSetInputActiveIfClosed]);
 
     const {
         setExerciseOverrideForLabel,
