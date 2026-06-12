@@ -70,12 +70,7 @@ import { useTimer } from "./hooks/useTimer";
 import { useLogLogic } from "./hooks/useLogLogic";
 import { useDisplayHistory } from "./hooks/useDisplayHistory";
 import { useWorkoutSession } from "./hooks/useWorkoutSession";
-import {
-    enablePushNotificationsForUser,
-    getNotificationPermission,
-    getPushSupportState,
-    syncPushSubscriptionState,
-} from "./lib/pushNotifications";
+// enablePushNotificationsForUser, getNotificationPermission, getPushSupportState, syncPushSubscriptionState → usePushNotifications
 import {
     cancelRestTimerNotification,
     scheduleRestTimerNotification,
@@ -99,6 +94,7 @@ import { useHistoryHandlers } from "./hooks/useHistoryHandlers";
 import { useWorkoutHandlers } from "./hooks/useWorkoutHandlers";
 import { useUIHandlers } from "./hooks/useUIHandlers";
 import { useLogDateRefresh } from "./hooks/useLogDateRefresh";
+import { usePushNotifications } from "./hooks/usePushNotifications";
 import {
     applyHistoryDeleteMarkers,
     applyPreferredHistoryDates,
@@ -179,7 +175,6 @@ import {
     normalizeTrustedSessionRowDate,
     normalizeTrustedWorkoutRowDate,
     persistHistoryForUser,
-    PUSH_PROMPT_LATER_KEY,
     serializeHistoryMap,
     serializeTrustedRow,
     serializeTrustedRows,
@@ -735,14 +730,16 @@ export default function GymApp() {
         typeof navigator === "undefined" ? true : navigator.onLine
     );
     const [showAuth, setShowAuth] = useState(false);
-    const [showPushPrompt, setShowPushPrompt] = useState(false);
-    const [pushPromptBusy, setPushPromptBusy] = useState(false);
-    const [pushPromptMessage, setPushPromptMessage] = useState("");
-    const [pushStatus, setPushStatus] = useState({
-        enabled: false,
-        permission: getNotificationPermission(),
-        support: getPushSupportState(),
-    });
+
+    const {
+        showPushPrompt,
+        pushPromptBusy,
+        pushPromptMessage,
+        pushStatus,
+        enablePushFromPrompt,
+        setShowPushPrompt,
+        setPushPromptMessage,
+    } = usePushNotifications({ user, screen, showAuth });
 
     useEffect(() => {
         if (screen === "friends") {
@@ -2263,111 +2260,7 @@ export default function GymApp() {
     useEffect(() => { save(EXERCISE_BODY_PART_OVERRIDES_KEY, exerciseBodyPartOverrides); }, [exerciseBodyPartOverrides]);
     useEffect(() => { save("hiddenBodyParts", hiddenBodyParts); }, [hiddenBodyParts]);
 
-    useEffect(() => {
-        let isActive = true;
-
-        const syncPushPromptState = async () => {
-            if (!user?.id) {
-                if (isActive) {
-                    setShowPushPrompt(false);
-                    setPushPromptMessage("");
-                    setPushStatus({
-                        enabled: false,
-                        permission: getNotificationPermission(),
-                        support: getPushSupportState(),
-                    });
-                }
-                return;
-            }
-
-            const support = getPushSupportState();
-            const permission = getNotificationPermission();
-            const todayStr = new Date().toISOString().split("T")[0];
-            const laterDate = load(PUSH_PROMPT_LATER_KEY, "");
-
-            try {
-                let nextStatus = {
-                    enabled: false,
-                    permission,
-                    support,
-                };
-
-                if (support.supported) {
-                    nextStatus = await syncPushSubscriptionState(user.id);
-                }
-
-                if (!isActive) return;
-
-                setPushStatus(nextStatus);
-
-                const shouldShow =
-                    screen === "history" &&
-                    !showAuth &&
-                    !nextStatus.enabled &&
-                    laterDate !== todayStr;
-
-                setShowPushPrompt(shouldShow);
-            } catch (error) {
-                if (!isActive) return;
-
-                console.error("push prompt state sync failed", {
-                    error,
-                    message: error?.message,
-                    userId: user?.id,
-                });
-
-                setPushStatus({
-                    enabled: false,
-                    permission,
-                    support,
-                });
-                setShowPushPrompt(screen === "history" && !showAuth && laterDate !== todayStr);
-            }
-        };
-
-        syncPushPromptState();
-
-        return () => {
-            isActive = false;
-        };
-    }, [user?.id, screen, showAuth]);
-
     // dismissPushPromptForToday → useUIHandlers
-
-    const enablePushFromPrompt = useCallback(async () => {
-        if (!user?.id || pushPromptBusy) return;
-
-        setPushPromptBusy(true);
-        setPushPromptMessage("");
-
-        try {
-            const result = await enablePushNotificationsForUser(user.id);
-
-            setPushStatus({
-                enabled: result.enabled,
-                permission: result.permission,
-                support: result.support,
-            });
-
-            if (result.enabled) {
-                save(PUSH_PROMPT_LATER_KEY, "");
-                setShowPushPrompt(false);
-                setPushPromptMessage("");
-                return;
-            }
-
-            setPushPromptMessage(result.message || "");
-        } catch (error) {
-            console.error("push prompt enable failed", {
-                error,
-                message: error?.message,
-                userId: user?.id,
-            });
-            setPushPromptMessage(error?.message || "通知の有効化に失敗しました。");
-        } finally {
-            setPushPromptBusy(false);
-        }
-    }, [pushPromptBusy, user?.id]);
 
     useEffect(() => {
         if (!user || !historySyncReady) return;
