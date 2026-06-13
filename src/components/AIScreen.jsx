@@ -8,7 +8,7 @@ const formatConvDate = (isoStr) => {
 };
 
 const HEADER_OFFSET = 72;
-const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--bottom-nav-height, 56px))`;
+const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--safe-top, 0px) - var(--bottom-nav-height, 56px))`;
 
 const AI_SUGGESTIONS = [
     { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },
