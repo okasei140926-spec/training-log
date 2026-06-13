@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const HEADER_OFFSET = 72;
-const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--bottom-nav-clearance, 188px) - 10px)`;
+const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--bottom-nav-height, 56px))`;
 
 const AI_SUGGESTIONS = [
     { label: "胸メニュー組んで", prompt: "胸メニュー組んで" },
@@ -582,24 +582,6 @@ export default function AIScreen({
                             開発用：Pro解除
                         </button>
                     )}
-                    <button
-                        type="button"
-                        onClick={handleConversationHistoryClick}
-                        className="pressable"
-                        style={{
-                            padding: "7px 11px",
-                            borderRadius: 999,
-                            border: "1px solid rgba(18, 199, 194, 0.14)",
-                            background: "linear-gradient(180deg, var(--card2), var(--card))",
-                            color: "var(--text2)",
-                            fontSize: 11,
-                            fontWeight: 900,
-                            boxShadow: "var(--shadow-soft)",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        AI会話履歴
-                    </button>
                 </div>
             </div>
 
@@ -611,6 +593,7 @@ export default function AIScreen({
                     padding: shouldShowProPaywall ? "8px 0 16px" : "8px 0 8px",
                     display: "flex",
                     flexDirection: "column",
+                    justifyContent: isInitialState ? "flex-end" : "flex-start",
                     gap: 8,
                     WebkitOverflowScrolling: "touch",
                 }}

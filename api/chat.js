@@ -588,6 +588,8 @@ ${safeContext.exerciseHistoryContext || "種目別の過去記録はありませ
 - 初心者モードでは、1回の提案は最大3〜4種目、セット数も簡単にする
 - 高重量低repなどの表現は、必要な時だけやさしい言葉に言い換える
 - 自然な話し言葉で書く
+- メニューを提案する際は、種目ごとに改行して箇条書きで表示してください
+- 日付を表示する場合は 6/13 形式を使用してください（2026-06-13ではなく）
 - メニュー提案モードでは、返答の最後に必ず次の形式でアプリ用JSONを1行だけ付ける
 PUMP_WORKOUT_PLAN_JSON: [{"exerciseName":"種目名","bodyPart":"胸","unit":"kg","sets":[{"weight":80,"reps":8},{"weight":80,"reps":8},{"weight":75,"reps":8}]}]
 - 自重種目は unit を "bodyweight" にし、sets は [{"reps":10},{"reps":10}] のようにする
