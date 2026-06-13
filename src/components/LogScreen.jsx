@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { calc1RM, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
@@ -160,6 +160,40 @@ const convertKgValueForDisplayUnit = (valueKg, targetUnit) => {
     return 0;
 };
 
+const DEFAULT_SET_COUNT = 3;
+
+const getLastMenuFromHistory = (historyMap, currentDate) => {
+    if (!historyMap || !currentDate) return [];
+
+    const byDate = new Map(); // date → [{name, label, order, setCount}]
+
+    Object.entries(historyMap).forEach(([exerciseName, records]) => {
+        (records || []).forEach((record) => {
+            const date = String(record?.date || "").slice(0, 10);
+            if (!date || date >= currentDate) return;
+            if (!byDate.has(date)) byDate.set(date, []);
+            byDate.get(date).push({
+                name: exerciseName,
+                label: record?.bodyPart || record?.label || "その他",
+                order: record?.order ?? 999,
+                setCount: Math.max(1, (getRecordSourceSets(record) || []).length),
+            });
+        });
+    });
+
+    if (!byDate.size) return [];
+
+    const previousDate = [...byDate.keys()].sort().reverse()[0];
+    const seen = new Set();
+    return (byDate.get(previousDate) || [])
+        .sort((a, b) => a.order - b.order)
+        .filter(({ name }) => {
+            if (seen.has(name)) return false;
+            seen.add(name);
+            return true;
+        });
+};
+
 const normalizeDurationSec = (value) => {
     const durationSec = Math.floor(Number(value) || 0);
     if (!Number.isFinite(durationSec) || durationSec <= 0) return 0;
@@ -220,6 +254,21 @@ export default function LogScreen({
 }) {
 
     const hasExercises = exercises.length > 0;
+
+    const previousMenu = useMemo(
+        () => getLastMenuFromHistory(history, logDate),
+        [history, logDate]
+    );
+
+    const handleLoadPreviousMenu = useCallback(() => {
+        previousMenu.forEach(({ name, label, setCount }) => {
+            onQuickAddEx(name, false, label, { action: "load_previous_menu" });
+            for (let i = DEFAULT_SET_COUNT; i < setCount; i++) {
+                addSet({ name });
+            }
+        });
+    }, [addSet, onQuickAddEx, previousMenu]);
+
     const softBorderColor = "var(--border2)";
     const subActionBg = "var(--btn-secondary)";
     const subActionText = "var(--accent)";
@@ -646,6 +695,24 @@ export default function LogScreen({
                     <div style={{ fontSize: 13, color: "var(--text3)" }}>
                         ＋ボタンから種目を追加してください
                     </div>
+                    {previousMenu.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleLoadPreviousMenu}
+                            style={{
+                                marginTop: 8,
+                                padding: "11px 20px",
+                                borderRadius: 14,
+                                border: `1px solid ${softBorderColor}`,
+                                background: subActionBg,
+                                color: subActionText,
+                                fontSize: 14,
+                                fontWeight: 800,
+                            }}
+                        >
+                            前回のメニューを読み込む
+                        </button>
+                    )}
                 </div>
             )}
 
