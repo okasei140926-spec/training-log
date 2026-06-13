@@ -277,7 +277,7 @@ export function calcRecovery(history, bodyPart, muscleEx, overrides) {
         });
     });
 
-    if (!lastMs) return { pct: 100, status: "excellent" };
+    if (!lastMs) return { pct: 100, status: "excellent", lastDate: null };
 
     const lastHours = Math.max(0, (now - lastMs) / 3600000);
 
@@ -295,7 +295,8 @@ export function calcRecovery(history, bodyPart, muscleEx, overrides) {
         : pct >= 40 ? "tired"
         : "bad";
 
-    return { pct, status };
+    const lastDate = new Date(lastMs).toISOString().slice(0, 10);
+    return { pct, status, lastDate };
 }
 
 export function collectWeeklySets(history, muscleEx, overrides) {

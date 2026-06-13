@@ -270,8 +270,8 @@ export default function HomeScreen({
         return [...base, ...trained];
     }, [hiddenBodyParts, weeklySets]);
 
-    const recoveries = useMemo(() => (
-        homeMetricsReady && !recordsLoading
+    const recoveries = useMemo(() => {
+        const items = homeMetricsReady && !recordsLoading
             ? partsToShow.map(part => ({
                 part,
                 ...calcRecovery(history, part, muscleEx, exerciseBodyPartOverrides),
@@ -280,8 +280,16 @@ export default function HomeScreen({
                 part,
                 pct: 100,
                 status: "excellent",
-            }))
-    ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
+                lastDate: null,
+            }));
+        // lastDate 降順（新しい順）、同日は元の順序を維持（stable sort）
+        return [...items].sort((a, b) => {
+            if (a.lastDate === b.lastDate) return 0;
+            if (!a.lastDate) return 1;
+            if (!b.lastDate) return -1;
+            return b.lastDate.localeCompare(a.lastDate);
+        });
+    }, [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
 
     const monthlyVolume = useMemo(() => {
         if (!homeMetricsReady || recordsLoading) return null;
