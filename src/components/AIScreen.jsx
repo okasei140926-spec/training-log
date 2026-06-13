@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
+const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+const formatConvDate = (isoStr) => {
+    if (!isoStr) return "";
+    const d = new Date(isoStr);
+    return `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAYS[d.getDay()]})`;
+};
+
 const HEADER_OFFSET = 72;
 const AI_VIEWPORT_HEIGHT = `calc(100svh - ${HEADER_OFFSET}px - var(--bottom-nav-height, 56px))`;
 
@@ -390,12 +397,21 @@ export default function AIScreen({
     aiRemaining,
     onAddWorkoutPlan,
     onInputFocusChange,
+    aiConversations = [],
+    aiConversationLoading = false,
+    aiConversationError = "",
+    activeConversationId = null,
+    onOpenConversation,
+    onStartNewConversation,
+    onDeleteConversation,
+    onLoadConversations,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
     const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
     const [selectedWorkoutPlanMap, setSelectedWorkoutPlanMap] = useState({});
     const [isProPaywallDismissed, setIsProPaywallDismissed] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const showDevProControls = process.env.NODE_ENV !== "production" && isPro && typeof onDeactivateProDev === "function";
     const isInitialState =
@@ -576,6 +592,27 @@ export default function AIScreen({
                             開発用：Pro解除
                         </button>
                     )}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            onLoadConversations?.();
+                            setShowHistory(true);
+                        }}
+                        className="pressable"
+                        style={{
+                            padding: "7px 11px",
+                            borderRadius: 999,
+                            border: "1px solid rgba(18, 199, 194, 0.14)",
+                            background: "linear-gradient(180deg, var(--card2), var(--card))",
+                            color: "var(--text2)",
+                            fontSize: 11,
+                            fontWeight: 900,
+                            boxShadow: "var(--shadow-soft)",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        AI会話履歴
+                    </button>
                 </div>
             </div>
 
@@ -585,13 +622,48 @@ export default function AIScreen({
                     minHeight: 0,
                     overflowY: "auto",
                     padding: shouldShowProPaywall ? "8px 0 16px" : "8px 0 8px",
+                    paddingTop: isInitialState ? `calc((${AI_VIEWPORT_HEIGHT} - 120px) * 0.28)` : "8px",
                     display: "flex",
                     flexDirection: "column",
-                    justifyContent: isInitialState ? "flex-end" : "flex-start",
+                    justifyContent: "flex-start",
                     gap: 8,
                     WebkitOverflowScrolling: "touch",
                 }}
             >
+                {activeConversationId && !isInitialState && (
+                    <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        padding: "8px 12px",
+                        borderRadius: 14,
+                        background: "rgba(18,199,194,0.07)",
+                        border: "1px solid rgba(18,199,194,0.16)",
+                        flexShrink: 0,
+                    }}>
+                        <span style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700 }}>
+                            過去の会話を表示中
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => onStartNewConversation?.()}
+                            style={{
+                                padding: "5px 10px",
+                                borderRadius: 999,
+                                border: "1px solid rgba(18,199,194,0.22)",
+                                background: "rgba(18,199,194,0.12)",
+                                color: "var(--accent)",
+                                fontSize: 11,
+                                fontWeight: 900,
+                                flexShrink: 0,
+                            }}
+                        >
+                            新しい会話
+                        </button>
+                    </div>
+                )}
+
                 {isInitialState && (
                     <div
                         style={{
@@ -844,6 +916,225 @@ export default function AIScreen({
                     onClose={closeWorkoutPlanConfirm}
                     onConfirm={confirmWorkoutPlan}
                 />
+            )}
+
+            {showHistory && (
+                <div
+                    onClick={() => setShowHistory(false)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 500,
+                        background: "rgba(0,0,0,0.45)",
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        padding: "16px",
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "100%",
+                            maxWidth: 440,
+                            maxHeight: "78dvh",
+                            display: "flex",
+                            flexDirection: "column",
+                            borderRadius: 24,
+                            background: "var(--card-modal)",
+                            border: "1px solid var(--border2)",
+                            boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
+                            overflow: "hidden",
+                        }}
+                    >
+                        {/* ヘッダー */}
+                        <div style={{
+                            flexShrink: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "16px 16px 12px",
+                            borderBottom: "1px solid var(--border2)",
+                            gap: 12,
+                        }}>
+                            <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>
+                                AI会話履歴
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onStartNewConversation?.();
+                                        setShowHistory(false);
+                                    }}
+                                    style={{
+                                        padding: "7px 12px",
+                                        borderRadius: 999,
+                                        border: "1px solid rgba(18,199,194,0.22)",
+                                        background: "rgba(18,199,194,0.10)",
+                                        color: "var(--accent)",
+                                        fontSize: 12,
+                                        fontWeight: 900,
+                                        whiteSpace: "nowrap",
+                                    }}
+                                >
+                                    + 新しい会話
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowHistory(false)}
+                                    style={{
+                                        width: 32,
+                                        height: 32,
+                                        borderRadius: 999,
+                                        border: "1px solid var(--border2)",
+                                        background: "var(--card2)",
+                                        color: "var(--text2)",
+                                        fontSize: 18,
+                                        fontWeight: 800,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        flexShrink: 0,
+                                    }}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* リスト */}
+                        <div style={{
+                            flex: 1,
+                            overflowY: "auto",
+                            WebkitOverflowScrolling: "touch",
+                            padding: "8px 10px calc(8px + var(--safe-bottom, 0px))",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                        }}>
+                            {aiConversationLoading && (
+                                <div style={{ padding: "24px 0", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+                                    読み込み中…
+                                </div>
+                            )}
+                            {!aiConversationLoading && aiConversationError && (
+                                <div style={{ padding: "16px 8px", textAlign: "center", color: "var(--text3)", fontSize: 13 }}>
+                                    {aiConversationError}
+                                </div>
+                            )}
+                            {!aiConversationLoading && !aiConversationError && aiConversations.length === 0 && (
+                                <div style={{ padding: "32px 8px", textAlign: "center", color: "var(--text3)", fontSize: 13, lineHeight: 1.7 }}>
+                                    まだ会話履歴がありません。<br />AIに話しかけると自動で保存されます。
+                                </div>
+                            )}
+                            {!aiConversationLoading && aiConversations.map((conv) => {
+                                const isActive = conv.id === activeConversationId;
+                                return (
+                                    <div
+                                        key={conv.id}
+                                        style={{
+                                            display: "flex",
+                                            alignItems: "stretch",
+                                            gap: 6,
+                                            borderRadius: 16,
+                                            background: isActive
+                                                ? "linear-gradient(135deg, rgba(18,199,194,0.14), rgba(51,225,219,0.08))"
+                                                : "var(--card2)",
+                                            border: isActive
+                                                ? "1px solid rgba(18,199,194,0.28)"
+                                                : "1px solid var(--border2)",
+                                        }}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onOpenConversation?.(conv.id);
+                                                setShowHistory(false);
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                minWidth: 0,
+                                                padding: "12px 14px",
+                                                background: "none",
+                                                border: "none",
+                                                textAlign: "left",
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                                <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 700 }}>
+                                                    {formatConvDate(conv.updated_at || conv.created_at)}
+                                                </span>
+                                                {isActive && (
+                                                    <span style={{
+                                                        fontSize: 9,
+                                                        fontWeight: 900,
+                                                        color: "var(--accent)",
+                                                        background: "rgba(18,199,194,0.13)",
+                                                        border: "1px solid rgba(18,199,194,0.28)",
+                                                        borderRadius: 999,
+                                                        padding: "1px 6px",
+                                                    }}>
+                                                        表示中
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{
+                                                fontSize: 13,
+                                                fontWeight: 800,
+                                                color: "var(--text)",
+                                                lineHeight: 1.35,
+                                                marginBottom: 3,
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                            }}>
+                                                {conv.title || "AI相談"}
+                                            </div>
+                                            {conv.preview && (
+                                                <div style={{
+                                                    fontSize: 11,
+                                                    color: "var(--text3)",
+                                                    overflow: "hidden",
+                                                    textOverflow: "ellipsis",
+                                                    whiteSpace: "nowrap",
+                                                }}>
+                                                    {conv.preview}
+                                                </div>
+                                            )}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            aria-label="削除"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if (!window.confirm("この会話を削除しますか？")) return;
+                                                await onDeleteConversation?.(conv.id);
+                                            }}
+                                            style={{
+                                                flexShrink: 0,
+                                                width: 36,
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                background: "none",
+                                                border: "none",
+                                                color: "var(--text4)",
+                                                fontSize: 15,
+                                                cursor: "pointer",
+                                                borderLeft: "1px solid var(--border2)",
+                                                borderRadius: "0 16px 16px 0",
+                                            }}
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
