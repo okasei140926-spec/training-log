@@ -670,11 +670,35 @@ export default function GymApp() {
         startNewAiConversation,
         deleteAiConversation,
         loadAiConversations,
+        activateStripeCheckoutSession,
+        openStripePortal,
     } = useAI({ loadConversationsOnMount: screen === "ai" });
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
     }, [user?.id]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const stripeStatus = params.get("stripe_checkout");
+        const sessionId = params.get("session_id");
+
+        if (stripeStatus === "success" && sessionId) {
+            // Remove query params from URL without reloading
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, "", cleanUrl);
+
+            activateStripeCheckoutSession(sessionId).then((ok) => {
+                if (ok) {
+                    setScreen("ai");
+                }
+            });
+        } else if (stripeStatus === "cancel") {
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({}, "", cleanUrl);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         const previousMeta = latestLogDraftRef.current?.meta || null;
@@ -2688,6 +2712,7 @@ export default function GymApp() {
                             onLoadConversations={loadAiConversations}
                             onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
                             onInputFocusChange={handleAiInputFocusChange}
+                            onOpenStripePortal={openStripePortal}
                         />
                     )}
 

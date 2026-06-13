@@ -405,6 +405,7 @@ export default function AIScreen({
     onStartNewConversation,
     onDeleteConversation,
     onLoadConversations,
+    onOpenStripePortal,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
@@ -590,6 +591,23 @@ export default function AIScreen({
                             }}
                         >
                             開発用：Pro解除
+                        </button>
+                    )}
+                    {isPro && typeof onOpenStripePortal === "function" && (
+                        <button
+                            type="button"
+                            onClick={onOpenStripePortal}
+                            style={{
+                                padding: "6px 10px",
+                                borderRadius: 999,
+                                background: "rgba(18,199,194,0.07)",
+                                border: "1px solid rgba(18,199,194,0.18)",
+                                color: "var(--accent)",
+                                fontSize: 11,
+                                fontWeight: 800,
+                            }}
+                        >
+                            サブスク管理
                         </button>
                     )}
                     <button

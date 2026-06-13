@@ -1163,6 +1163,38 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       }
 
       if (!accessToken) return false;
+
+      if (!isNativeCapacitorOrigin()) {
+        try {
+          const apiUrl = getApiUrl("/api/create-checkout-session");
+          const checkoutRes = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
+          const checkoutData = await readApiJson(checkoutRes);
+          if (checkoutData?.url) {
+            window.location.href = checkoutData.url;
+            return true;
+          }
+          logAiApiError("create checkout session failed", {
+            apiUrl,
+            status: checkoutRes.status,
+            response: checkoutData,
+          });
+          return false;
+        } catch (error) {
+          logAiApiError("create checkout session request failed", {
+            apiUrl: getApiUrl("/api/create-checkout-session"),
+            error,
+            message: error?.message,
+          });
+          return false;
+        }
+      }
+
       if (process.env.NODE_ENV === "production") return false;
 
       const apiUrl = getApiUrl("/api/activate-pro-dev");
@@ -1264,6 +1296,92 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
     } catch (error) {
       logAiApiError("deactivate pro request failed", {
         apiUrl: getApiUrl("/api/deactivate-pro-dev"),
+        error,
+        message: error?.message,
+      });
+      return false;
+    }
+  };
+
+  const activateStripeCheckoutSession = async (sessionId) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) return false;
+
+      const apiUrl = getApiUrl("/api/activate-stripe-checkout");
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      const data = await readApiJson(res);
+
+      if (!res.ok) {
+        logAiApiError("activate stripe checkout failed", {
+          apiUrl,
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+        });
+        return false;
+      }
+
+      applyServerAiUsage(data?.aiUsage);
+      return true;
+    } catch (error) {
+      logAiApiError("activate stripe checkout request failed", {
+        apiUrl: getApiUrl("/api/activate-stripe-checkout"),
+        error,
+        message: error?.message,
+      });
+      return false;
+    }
+  };
+
+  const openStripePortal = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) return false;
+
+      const apiUrl = getApiUrl("/api/stripe-portal");
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const data = await readApiJson(res);
+
+      if (!res.ok) {
+        logAiApiError("stripe portal failed", {
+          apiUrl,
+          status: res.status,
+          statusText: res.statusText,
+          response: data,
+        });
+        return false;
+      }
+
+      if (data?.url) {
+        window.open(data.url, "_blank", "noopener,noreferrer");
+        return true;
+      }
+      return false;
+    } catch (error) {
+      logAiApiError("stripe portal request failed", {
+        apiUrl: getApiUrl("/api/stripe-portal"),
         error,
         message: error?.message,
       });
@@ -1587,6 +1705,8 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
     isPro,
     proPlan,
     activatePumpPro,
+    activateStripeCheckoutSession,
+    openStripePortal,
     restorePumpPro,
     deactivatePumpProDev,
     refreshPumpProStatus,
