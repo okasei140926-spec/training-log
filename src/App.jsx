@@ -669,6 +669,7 @@ export default function GymApp() {
         openAiConversation,
         startNewAiConversation,
         deleteAiConversation,
+        loadAiConversations,
     } = useAI({ loadConversationsOnMount: screen === "ai" });
 
     useEffect(() => {
@@ -2684,6 +2685,7 @@ export default function GymApp() {
                             onOpenConversation={openAiConversation}
                             onStartNewConversation={startNewAiConversation}
                             onDeleteConversation={deleteAiConversation}
+                            onLoadConversations={loadAiConversations}
                             onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
                             onInputFocusChange={handleAiInputFocusChange}
                         />
