@@ -286,15 +286,18 @@ export default function HomeScreen({
     const monthlyVolume = useMemo(() => {
         if (!homeMetricsReady || recordsLoading) return null;
         const now = new Date();
+        const todayDay = String(now.getDate()).padStart(2, "0");
         const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
         const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+        // 先月の同期カットオフ: 先月の1日〜今日と同じ日付まで
+        const prevMonthCutoff = `${prevMonth}-${todayDay}`;
         let thisVol = 0;
         let prevVol = 0;
         (allSessions || []).forEach(session => {
             const m = session.date.slice(0, 7);
             if (m === thisMonth) thisVol += session.volume || 0;
-            else if (m === prevMonth) prevVol += session.volume || 0;
+            else if (m === prevMonth && session.date <= prevMonthCutoff) prevVol += session.volume || 0;
         });
         if (thisVol === 0 && prevVol === 0) return null;
         return { thisVol: Math.round(thisVol), prevVol: Math.round(prevVol) };
@@ -517,7 +520,7 @@ export default function HomeScreen({
                             const isUp = diff >= 0;
                             return (
                                 <span style={{ fontSize: 12, fontWeight: 800, color: isUp ? "var(--accent)" : "var(--home-muted)" }}>
-                                    {isUp ? "▲" : "▼"}{pct}% 先月比
+                                    {isUp ? "▲" : "▼"}{pct}% 先月同期比
                                 </span>
                             );
                         })()}
