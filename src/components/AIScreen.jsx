@@ -483,12 +483,6 @@ export default function AIScreen({
         }, 80);
     };
 
-    const handleConversationHistoryClick = () => {
-        if (typeof window !== "undefined") {
-            window.alert?.("会話履歴は準備中です");
-        }
-    };
-
     const openWorkoutPlanConfirm = (plan) => {
         const safePlan = Array.isArray(plan) ? plan : [];
         if (!safePlan.length) return;
