@@ -423,7 +423,7 @@ export function useHistoryAutoSave({
                         const accessToken = session?.access_token;
 
                         if (accessToken) {
-                            fetch("/api/notify-workout-save", {
+                            fetch("/api/push?action=notify-workout", {
                                 method: "POST",
                                 headers: {
                                     "Content-Type": "application/json",

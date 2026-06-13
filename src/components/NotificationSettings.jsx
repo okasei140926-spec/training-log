@@ -123,7 +123,7 @@ export default function NotificationSettings({ user }) {
         return;
       }
 
-      const response = await fetch("/api/send-test-push", {
+      const response = await fetch("/api/push?action=send-test", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

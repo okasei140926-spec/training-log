@@ -1166,7 +1166,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
       if (!isNativeCapacitorOrigin()) {
         try {
-          const apiUrl = getApiUrl("/api/create-checkout-session");
+          const apiUrl = getApiUrl("/api/stripe?action=create-checkout");
           const checkoutRes = await fetch(apiUrl, {
             method: "POST",
             headers: {
@@ -1187,7 +1187,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
           return false;
         } catch (error) {
           logAiApiError("create checkout session request failed", {
-            apiUrl: getApiUrl("/api/create-checkout-session"),
+            apiUrl: getApiUrl("/api/stripe?action=create-checkout"),
             error,
             message: error?.message,
           });
@@ -1197,7 +1197,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
       if (process.env.NODE_ENV === "production") return false;
 
-      const apiUrl = getApiUrl("/api/activate-pro-dev");
+      const apiUrl = getApiUrl("/api/pro?action=activate-dev");
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -1220,7 +1220,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       return true;
     } catch (error) {
       logAiApiError("activate pro request failed", {
-        apiUrl: getApiUrl("/api/activate-pro-dev"),
+        apiUrl: getApiUrl("/api/pro?action=activate-dev"),
         error,
         message: error?.message,
       });
@@ -1272,7 +1272,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
       if (!accessToken) return false;
 
-      const apiUrl = getApiUrl("/api/deactivate-pro-dev");
+      const apiUrl = getApiUrl("/api/pro?action=deactivate-dev");
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -1295,7 +1295,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       return true;
     } catch (error) {
       logAiApiError("deactivate pro request failed", {
-        apiUrl: getApiUrl("/api/deactivate-pro-dev"),
+        apiUrl: getApiUrl("/api/pro?action=deactivate-dev"),
         error,
         message: error?.message,
       });
@@ -1312,7 +1312,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
       if (!accessToken) return false;
 
-      const apiUrl = getApiUrl("/api/activate-stripe-checkout");
+      const apiUrl = getApiUrl("/api/stripe?action=activate");
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -1337,7 +1337,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       return true;
     } catch (error) {
       logAiApiError("activate stripe checkout request failed", {
-        apiUrl: getApiUrl("/api/activate-stripe-checkout"),
+        apiUrl: getApiUrl("/api/stripe?action=activate"),
         error,
         message: error?.message,
       });
@@ -1354,7 +1354,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
       if (!accessToken) return false;
 
-      const apiUrl = getApiUrl("/api/stripe-portal");
+      const apiUrl = getApiUrl("/api/stripe?action=portal");
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -1381,7 +1381,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       return false;
     } catch (error) {
       logAiApiError("stripe portal request failed", {
-        apiUrl: getApiUrl("/api/stripe-portal"),
+        apiUrl: getApiUrl("/api/stripe?action=portal"),
         error,
         message: error?.message,
       });
@@ -1417,7 +1417,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
       if (!accessToken) return null;
 
-      const apiUrl = getApiUrl("/api/pro-status");
+      const apiUrl = getApiUrl("/api/pro");
       const res = await fetch(apiUrl, {
         method: "GET",
         headers: {
@@ -1440,7 +1440,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       return data;
     } catch (error) {
       logAiApiError("pro status request failed", {
-        apiUrl: getApiUrl("/api/pro-status"),
+        apiUrl: getApiUrl("/api/pro"),
         error,
         message: error?.message,
       });

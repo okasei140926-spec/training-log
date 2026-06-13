@@ -11,7 +11,7 @@
   ],
   "crons": [
     {
-      "path": "/api/send-inactivity-push",
+      "path": "/api/push?action=inactivity",
       "schedule": "0 10 * * *"
     }
   ]

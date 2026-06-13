@@ -1409,7 +1409,7 @@ export function useFriendsData({
                 throw new Error("ログインが必要です");
             }
 
-            const response = await fetch("/api/toggle-workout-like", {
+            const response = await fetch("/api/workout-social?action=toggle-like", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

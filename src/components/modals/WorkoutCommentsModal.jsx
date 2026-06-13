@@ -134,7 +134,7 @@ export default function WorkoutCommentsModal({
         throw new Error("ログインが必要です");
       }
 
-      const response = await fetch("/api/add-workout-comment", {
+      const response = await fetch("/api/workout-social?action=add-comment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -182,7 +182,7 @@ export default function WorkoutCommentsModal({
         throw new Error("ログインが必要です");
       }
 
-      const response = await fetch("/api/delete-workout-comment", {
+      const response = await fetch("/api/workout-social?action=delete-comment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
