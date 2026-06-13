@@ -399,17 +399,96 @@ export async function saveWorkoutForDate({
   };
 }
 
+// ─── Pending delete queue (for pagehide / visibilitychange flush) ─────────────
+// key → { userId, date }
+const _pendingDeletes = new Map();
+
+export function registerPendingDelete(userId, date) {
+  const key = `${userId}:${String(date || "").slice(0, 10)}`;
+  _pendingDeletes.set(key, { userId, date: String(date || "").slice(0, 10) });
+}
+
+export function clearPendingDelete(userId, date) {
+  const key = `${userId}:${String(date || "").slice(0, 10)}`;
+  _pendingDeletes.delete(key);
+}
+
+// Internal: parallel delete from workouts + workout_exercises, then verify
+async function _executeDeleteForDate(supabase, userId, date) {
+  // Get workout id so we can explicitly delete workout_exercises in parallel
+  const { data: workoutRow } = await supabase
+    .from("workouts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("date", date)
+    .maybeSingle();
+
+  // Parallel: workouts row (cascades to workout_exercises → workout_sets)
+  //           + explicit workout_exercises delete (belt-and-suspenders)
+  const ops = [
+    supabase.from("workouts").delete().eq("user_id", userId).eq("date", date),
+  ];
+  if (workoutRow?.id) {
+    ops.push(
+      supabase.from("workout_exercises").delete().eq("workout_id", workoutRow.id)
+    );
+  }
+
+  const results = await Promise.all(ops);
+  const error = results.find((r) => r.error)?.error || null;
+  if (error) return { ok: false, error };
+
+  // Verify the row is gone
+  const { data: remaining } = await supabase
+    .from("workouts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("date", date)
+    .maybeSingle();
+
+  if (remaining) {
+    return {
+      ok: false,
+      error: new Error(`deleteWorkoutForDate: row still exists after delete for ${date}`),
+    };
+  }
+
+  return { ok: true, error: null };
+}
+
+// Flush all registered pending deletes (fire-and-forget; best-effort)
+export async function flushPendingDeletes() {
+  if (_pendingDeletes.size === 0) return;
+  const items = [..._pendingDeletes.values()];
+  // Don't clear map here — let clearPendingDelete handle it after each completes
+  await Promise.all(
+    items.map(({ userId, date }) =>
+      _executeDeleteForDate(defaultSupabase, userId, date)
+        .then(() => clearPendingDelete(userId, date))
+        .catch(() => {})
+    )
+  );
+}
+
+// Register page lifecycle listeners once at module load
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      flushPendingDeletes();
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    flushPendingDeletes();
+  });
+}
+
 export async function deleteWorkoutForDate({
   userId,
   date,
   supabase = defaultSupabase,
 } = {}) {
   const normalizedDate = requireUserAndDate(userId, date);
-  const { error } = await supabase
-    .from("workouts")
-    .delete()
-    .eq("user_id", userId)
-    .eq("date", normalizedDate);
-
-  return { ok: !error, error };
+  const result = await _executeDeleteForDate(supabase, userId, normalizedDate);
+  clearPendingDelete(userId, normalizedDate);
+  return result;
 }
