@@ -1,4 +1,4 @@
-import { Bar, BarChart, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { PERIODS, formatDate, formatPrSetLabel } from "./analyticsUtils";
 
 export default function PrDetailView({
