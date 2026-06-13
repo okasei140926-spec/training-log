@@ -101,9 +101,7 @@ function WeeklyTrainingModal({ selectedWeeklyPart, onClose }) {
                                             color: "var(--home-title)",
                                             fontSize: 16,
                                             fontWeight: 950,
-                                            whiteSpace: "nowrap",
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis",
+                                            wordBreak: "break-word",
                                         }}>
                                             {ex.name}
                                         </div>
@@ -122,7 +120,7 @@ function WeeklyTrainingModal({ selectedWeeklyPart, onClose }) {
                                         fontWeight: 850,
                                     }}>
                                         <span>{ex.volume.toLocaleString()} kg</span>
-                                        <span>{ex.dates.join(" / ")}</span>
+                                        <span>{ex.dates.map(d => formatDate(d)).join(" / ")}</span>
                                     </div>
                                 </div>
                             ))}

@@ -21,7 +21,6 @@ import {
     getRegressedBodyParts,
     bodyPartCountsSignature,
 } from "./home/homeUtils";
-import RecoveryCard from "./home/RecoveryCard";
 import WeeklyTrainingModal from "./home/WeeklyTrainingModal";
 import RecoveryModal from "./home/RecoveryModal";
 import SessionModal from "./home/SessionModal";
@@ -42,6 +41,7 @@ export default function HomeScreen({
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
     const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
+    const [selectedRecoveryPart, setSelectedRecoveryPart] = useState(null);
     const [homeMetricsReady, setHomeMetricsReady] = useState(false);
     const [trustedHomeSnapshot, setTrustedHomeSnapshot] = useState(null);
     const trustedHomeSnapshotRef = useRef(null);
@@ -376,22 +376,8 @@ export default function HomeScreen({
                 boxShadow: "var(--home-shadow)",
                 overflow: "hidden",
             }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 13 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, letterSpacing: 0.2, color: "var(--home-title)" }}>回復状況</h2>
-                        <span style={{
-                            width: 17,
-                            height: 17,
-                            borderRadius: 99,
-                            display: "grid",
-                            placeItems: "center",
-                            background: "rgba(130,150,155,0.20)",
-                            color: "var(--home-muted2)",
-                            fontSize: 11,
-                            fontWeight: 900,
-                        }}>i</span>
-                    </div>
-
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, letterSpacing: 0.2, color: "var(--home-title)" }}>回復状況</h2>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
                         {Object.values(RECOVERY_META).map(meta => (
                             <div key={meta.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -402,22 +388,68 @@ export default function HomeScreen({
                     </div>
                 </div>
 
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                    gap: 9,
-                }}>
-                    {recoveries.map(item => (
-                        <RecoveryCard
-                            key={item.part}
-                            {...item}
+                {/* 部位タブ */}
+                <div style={{ display: "flex", gap: 7, overflowX: "auto", marginBottom: 14, paddingBottom: 2, scrollbarWidth: "none" }}>
+                    {recoveries.map(item => {
+                        const meta = RECOVERY_META[item.status];
+                        const isActive = (selectedRecoveryPart || recoveries[0]?.part) === item.part;
+                        return (
+                            <button
+                                key={item.part}
+                                type="button"
+                                onClick={() => setSelectedRecoveryPart(item.part)}
+                                style={{
+                                    flexShrink: 0,
+                                    padding: "6px 13px",
+                                    borderRadius: 999,
+                                    border: `1.5px solid ${isActive ? meta.color : "var(--home-inner-border)"}`,
+                                    background: isActive ? `${meta.color}22` : "var(--home-inner-card)",
+                                    color: isActive ? meta.color : "var(--home-muted2)",
+                                    fontSize: 13,
+                                    fontWeight: 900,
+                                }}
+                            >
+                                {item.part}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* 選択部位のプログレスバー */}
+                {(() => {
+                    const activePart = selectedRecoveryPart || recoveries[0]?.part;
+                    const item = recoveries.find(r => r.part === activePart);
+                    if (!item) return null;
+                    const meta = RECOVERY_META[item.status];
+                    return (
+                        <div
                             onClick={() => {
                                 const detail = collectPartDetail(history, muscleEx, exerciseBodyPartOverrides, item.part);
                                 setSelectedRecovery({ ...item, detail });
                             }}
-                        />
-                    ))}
-                </div>
+                            style={{ cursor: "pointer", padding: "0 2px" }}
+                        >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 9 }}>
+                                <span style={{ fontSize: 28, fontWeight: 950, color: meta.color, letterSpacing: "-1px", lineHeight: 1 }}>
+                                    {item.pct}%
+                                </span>
+                                <span style={{ fontSize: 13, fontWeight: 900, color: meta.color }}>
+                                    {meta.label}
+                                </span>
+                            </div>
+                            <div style={{ height: 12, borderRadius: 999, background: "rgba(130,150,155,0.18)", overflow: "hidden" }}>
+                                <div style={{
+                                    height: "100%",
+                                    width: `${item.pct}%`,
+                                    borderRadius: 999,
+                                    background: meta.color,
+                                    boxShadow: `0 0 12px ${meta.color}66`,
+                                    transition: "width 0.35s ease",
+                                }} />
+                            </div>
+                        </div>
+                    );
+                })()}
             </section>
 
             <section style={{
@@ -542,7 +574,7 @@ export default function HomeScreen({
                         </div>
                         <div style={{ color: "var(--home-text)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.sets} set</div>
                         <div style={{ color: "var(--home-text)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.volume.toLocaleString()} kg</div>
-                        <div style={{ color: "var(--home-muted2)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.minutes ? `${s.minutes}分` : "-"}</div>
+                        <div style={{ color: "var(--home-muted2)", textAlign: "right", fontSize: 12, fontWeight: 850 }}>{s.minutes ? `${s.minutes}分` : ""}</div>
                         <div style={{ color: "var(--home-muted)", fontSize: 22 }}>›</div>
                     </div>
                 ))}

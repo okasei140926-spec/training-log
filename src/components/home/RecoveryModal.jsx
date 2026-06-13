@@ -162,10 +162,33 @@ function RecoveryModal({ selectedRecovery, onClose }) {
                     </div>
                     <div style={recoveryStatCard}>
                         <div style={recoveryStatLabel}>前回から</div>
-                        <div style={recoveryStatValue}>
-                            {selectedRecovery.detail.lastHours ?? "-"}
-                        </div>
-                        <div style={recoveryStatUnit}>時間</div>
+                        {(() => {
+                            const h = selectedRecovery.detail.lastHours;
+                            if (h == null) return (
+                                <>
+                                    <div style={recoveryStatValue}>-</div>
+                                    <div style={recoveryStatUnit}></div>
+                                </>
+                            );
+                            if (h >= 48) {
+                                const days = Math.floor(h / 24);
+                                const hrs = h % 24;
+                                return (
+                                    <>
+                                        <div style={{ ...recoveryStatValue, fontSize: 17 }}>
+                                            {hrs > 0 ? `${days}日${hrs}時間` : `${days}日`}
+                                        </div>
+                                        <div style={recoveryStatUnit}></div>
+                                    </>
+                                );
+                            }
+                            return (
+                                <>
+                                    <div style={recoveryStatValue}>{h}</div>
+                                    <div style={recoveryStatUnit}>時間</div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
 
@@ -210,9 +233,7 @@ function RecoveryModal({ selectedRecovery, onClose }) {
                                         color: "var(--home-text)",
                                         fontSize: 13,
                                         fontWeight: 900,
-                                        whiteSpace: "nowrap",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
+                                        wordBreak: "break-word",
                                     }}>
                                         {r.name}
                                     </div>

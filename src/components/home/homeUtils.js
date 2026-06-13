@@ -92,20 +92,11 @@ export function weightToKg(value) {
 
 export function formatWeightForDisplay(value) {
     if (isBodyWeight(value)) return "自重";
-
-    const raw = String(value ?? "").trim();
     const n = toNumber(value);
-    if (!n) return "0kg";
-
-    if (isLbsValue(value)) {
-        return raw.toLowerCase().includes("lbs") || raw.toLowerCase().includes("lb")
-            ? raw
-            : `${n}lbs`;
-    }
-
-    if (raw.toLowerCase().includes("kg")) return raw;
-
-    return `${n}kg`;
+    if (!n) return "自重";
+    const rounded = Math.round(n * 10) / 10;
+    if (isLbsValue(value)) return `${rounded}lbs`;
+    return `${rounded}kg`;
 }
 
 export function resolveBodyPart(exName, muscleEx, overrides, record = null) {
