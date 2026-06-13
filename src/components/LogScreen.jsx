@@ -255,6 +255,22 @@ export default function LogScreen({
 
     const hasExercises = exercises.length > 0;
 
+    const [memos, setMemos] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("pump_exercise_memos") || "{}"); }
+        catch { return {}; }
+    });
+    const [memoOpenId, setMemoOpenId] = useState(null);
+
+    const saveMemo = useCallback((exerciseName, text) => {
+        setMemos(prev => {
+            const next = text.trim()
+                ? { ...prev, [exerciseName]: text }
+                : (({ [exerciseName]: _removed, ...rest }) => rest)(prev);
+            localStorage.setItem("pump_exercise_memos", JSON.stringify(next));
+            return next;
+        });
+    }, []);
+
     const previousMenu = useMemo(
         () => getLastMenuFromHistory(history, logDate),
         [history, logDate]
@@ -981,6 +997,20 @@ export default function LogScreen({
                                                 >
                                                     履歴
                                                 </button>
+                                                <button
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setMemoOpenId(id => id === ex.id ? null : ex.id);
+                                                    }}
+                                                    style={{
+                                                        ...compactTextButtonStyle,
+                                                        color: memos[ex.name] ? "var(--accent)" : "var(--text2)",
+                                                        borderColor: memos[ex.name] ? "var(--accent)" : softBorderColor,
+                                                    }}
+                                                >
+                                                    メモ
+                                                </button>
                                                 <button onClick={() => removeEx(ex.id, ex.name)} style={{ ...compactIconButtonStyle, color: "var(--text2)", borderColor: softBorderColor }}>×</button>
                                             </div>
                                         </div>
@@ -1075,6 +1105,51 @@ export default function LogScreen({
                                             >
                                                 ＋ セット追加
                                             </button>
+
+                                            {memoOpenId === ex.id ? (
+                                                <textarea
+                                                    autoFocus
+                                                    value={memos[ex.name] || ""}
+                                                    onChange={e => saveMemo(ex.name, e.target.value)}
+                                                    onBlur={() => setMemoOpenId(null)}
+                                                    placeholder="フォームのコツ、注意点など..."
+                                                    style={{
+                                                        display: "block",
+                                                        width: "100%",
+                                                        marginTop: 10,
+                                                        padding: "10px 12px",
+                                                        borderRadius: 10,
+                                                        border: `1px solid ${softBorderColor}`,
+                                                        background: "transparent",
+                                                        color: "var(--text)",
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                        resize: "vertical",
+                                                        minHeight: 60,
+                                                        boxSizing: "border-box",
+                                                        lineHeight: 1.6,
+                                                    }}
+                                                />
+                                            ) : memos[ex.name] ? (
+                                                <div
+                                                    onClick={() => setMemoOpenId(ex.id)}
+                                                    style={{
+                                                        marginTop: 10,
+                                                        padding: "8px 10px",
+                                                        borderRadius: 10,
+                                                        border: `1px solid ${softBorderColor}`,
+                                                        color: "var(--text2)",
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                        lineHeight: 1.6,
+                                                        cursor: "text",
+                                                        whiteSpace: "pre-wrap",
+                                                        wordBreak: "break-word",
+                                                    }}
+                                                >
+                                                    {memos[ex.name]}
+                                                </div>
+                                            ) : null}
 
                                     </div>
                                 )}

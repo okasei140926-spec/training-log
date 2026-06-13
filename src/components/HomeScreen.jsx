@@ -283,6 +283,23 @@ export default function HomeScreen({
             }))
     ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
 
+    const monthlyVolume = useMemo(() => {
+        if (!homeMetricsReady || recordsLoading) return null;
+        const now = new Date();
+        const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+        let thisVol = 0;
+        let prevVol = 0;
+        (allSessions || []).forEach(session => {
+            const m = session.date.slice(0, 7);
+            if (m === thisMonth) thisVol += session.volume || 0;
+            else if (m === prevMonth) prevVol += session.volume || 0;
+        });
+        if (thisVol === 0 && prevVol === 0) return null;
+        return { thisVol: Math.round(thisVol), prevVol: Math.round(prevVol) };
+    }, [homeMetricsReady, recordsLoading, allSessions]);
+
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))
         .filter(x => x.sets > 0);
@@ -447,6 +464,31 @@ export default function HomeScreen({
                             <div style={{ fontSize: 13, color: "var(--home-muted)", fontWeight: 800, marginTop: 2 }}>set</div>
                         </button>
                         ))}
+                    </div>
+                )}
+                {monthlyVolume && (
+                    <div style={{
+                        marginTop: 14,
+                        paddingTop: 12,
+                        borderTop: "1px solid var(--home-row-border)",
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: 8,
+                    }}>
+                        <span style={{ fontSize: 12, color: "var(--home-muted)", fontWeight: 800 }}>今月</span>
+                        <span style={{ fontSize: 17, fontWeight: 950, color: "var(--home-text)" }}>
+                            {monthlyVolume.thisVol.toLocaleString("ja-JP")}kg
+                        </span>
+                        {monthlyVolume.prevVol > 0 && (() => {
+                            const diff = monthlyVolume.thisVol - monthlyVolume.prevVol;
+                            const pct = Math.round(Math.abs(diff) / monthlyVolume.prevVol * 100);
+                            const isUp = diff >= 0;
+                            return (
+                                <span style={{ fontSize: 12, fontWeight: 800, color: isUp ? "var(--accent)" : "var(--home-muted)" }}>
+                                    {isUp ? "▲" : "▼"}{pct}% 先月比
+                                </span>
+                            );
+                        })()}
                     </div>
                 )}
             </section>
