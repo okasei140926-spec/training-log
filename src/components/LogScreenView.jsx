@@ -87,7 +87,8 @@ export default function LogScreenView({
             }}
         >
             {(() => {
-                const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate;
+                const todayKey = new Date().toISOString().slice(0, 10);
+                const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate && logDate === todayKey;
                 const displayedWorkoutTimerStatus = showCurrentLogWorkoutTimer
                     ? workoutTimerStatus
                     : "idle";
