@@ -16,6 +16,7 @@ export const useWorkout = ({
     KG_TO_LBS,
     muscleEx = {},
     exerciseBodyPartOverrides = {},
+    prCache = {},
 }) => {
     const buildValidSets = (record) => {
         return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
@@ -315,6 +316,29 @@ export const useWorkout = ({
         return best;
     };
 
+    const getSqlCachePR = (targetInfo) => {
+        if (!prCache || !targetInfo?.normalizedName) return null;
+        const entry = prCache[targetInfo.normalizedName];
+        if (!entry || entry.max_weight == null || entry.max_reps == null) return null;
+
+        const weight = Number(entry.max_weight);
+        const reps = Number(entry.max_reps);
+        if (!Number.isFinite(weight) || weight <= 0 || reps <= 0) return null;
+
+        const validSets = [{ weight, reps, unit: "kg" }];
+        const rm = calc1RM(validSets);
+        if (!Number.isFinite(rm) || rm <= 0) return null;
+
+        return {
+            date: entry.best_date || null,
+            weight,
+            reps,
+            sets: validSets,
+            rm,
+            isFromSqlCache: true,
+        };
+    };
+
     const getPR = (target) => {
         const targetInfo = getTargetInfo(target);
         const historyBest = getBestHistoryPR(targetInfo);
@@ -322,7 +346,9 @@ export const useWorkout = ({
             getManualPR(targetInfo, historyBest);
             return historyBest;
         }
-        return getManualPR(targetInfo);
+        const manualPR = getManualPR(targetInfo);
+        if (manualPR) return manualPR;
+        return getSqlCachePR(targetInfo);
     };
 
     const getPreviousPR = (target, { excludeDate } = {}) => {
@@ -332,7 +358,9 @@ export const useWorkout = ({
             getManualPR(targetInfo, historyBest);
             return historyBest;
         }
-        return getManualPR(targetInfo);
+        const manualPR = getManualPR(targetInfo);
+        if (manualPR) return manualPR;
+        return getSqlCachePR(targetInfo);
     };
 
     const copySetDown = (name, idx) => {

@@ -43,6 +43,7 @@ import SettingsModal from "./components/modals/SettingsModal";
 // buildWorkoutDaySummary, buildWorkoutDaySummaryPrKey → useWorkoutDaySummaryBuilder
 
 import { useWorkout } from "./hooks/useWorkout";
+import { useSupabasePR } from "./hooks/useSupabasePR";
 import { useTimer } from "./hooks/useTimer";
 import { useLogLogic } from "./hooks/useLogLogic";
 import { useDisplayHistory } from "./hooks/useDisplayHistory";
@@ -1520,6 +1521,8 @@ export default function GymApp() {
 
 
 
+    const { prCache } = useSupabasePR({ userId: user?.id || null });
+
     const { getPrev, getPR, getPreviousPR, copySetDown, copyRepDown } = useWorkout({
         history: canonicalDisplayHistory,
         manualBests,
@@ -1530,6 +1533,7 @@ export default function GymApp() {
         KG_TO_LBS,
         muscleEx,
         exerciseBodyPartOverrides,
+        prCache,
     });
 
     const { handleFinishWorkoutTimerAndShowSummary } = useWorkoutDaySummaryBuilder({

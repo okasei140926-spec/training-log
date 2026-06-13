@@ -11,7 +11,7 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
 const REMOTE_HISTORY_SESSION_LIMIT = 400;
-const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 120;
+const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 30;
 const INITIAL_HOME_HISTORY_LIMIT = 80;
 const HISTORY_RECOVERY_LIMIT = 250;
 
