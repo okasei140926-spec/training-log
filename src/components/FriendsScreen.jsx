@@ -2001,12 +2001,6 @@ export default function FriendsScreen({
     const topThreeRanking = activeRanking.data.slice(0, 3);
     const podiumOrder = [topThreeRanking[1], topThreeRanking[0], topThreeRanking[2]].filter(Boolean);
     const compactRankingRows = rankingTab === "big3" ? activeRanking.data.slice(3) : activeRanking.data;
-    const getRankAccentColor = (rankIndex) => {
-        if (rankIndex === 0) return "#C88A1A";
-        if (rankIndex === 1) return "#7E99A5";
-        if (rankIndex === 2) return "#B66B36";
-        return "var(--text3)";
-    };
 
     if (!user) {
         return <LoginPrompt onLogin={onLogin} />;
@@ -2068,7 +2062,6 @@ export default function FriendsScreen({
                     topThreeRanking={topThreeRanking}
                     podiumOrder={podiumOrder}
                     setSelectedBig3Entry={setSelectedBig3Entry}
-                    getRankAccentColor={getRankAccentColor}
                     compactRankingRows={compactRankingRows}
                 />
             )}

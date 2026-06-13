@@ -2,6 +2,13 @@
 import React from "react";
 import RankAvatar from "./RankAvatar";
 
+const getRankAccentColor = (rankIndex) => {
+    if (rankIndex === 0) return "#C88A1A";
+    if (rankIndex === 1) return "#7E99A5";
+    if (rankIndex === 2) return "#B66B36";
+    return "var(--text3)";
+};
+
 const RANKING_TABS = [
     { key: "big3", label: "BIG3" },
     { key: "consistency", label: "継続" },
@@ -26,7 +33,6 @@ function RankingSection({
     topThreeRanking,
     podiumOrder,
     setSelectedBig3Entry,
-    getRankAccentColor,
     compactRankingRows,
 }) {
     return (
