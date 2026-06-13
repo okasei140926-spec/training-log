@@ -16,8 +16,6 @@ const PRESET_STYLES = {
 };
 
 const formatVolume = (value) => `${Math.round(Number(value || 0)).toLocaleString("ja-JP")}kg`;
-const formatAverageVolume = (totalVolume, workoutCount) =>
-  `${Math.round(workoutCount > 0 ? Number(totalVolume || 0) / workoutCount : 0).toLocaleString("ja-JP")}kg/回`;
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -53,7 +51,7 @@ const buildMonthCalendarCells = (summary) => {
   return cells;
 };
 
-const renderMetric = (label, value) => (
+const renderMetric = (label, value, options = {}) => (
   <div
     key={label}
     style={{
@@ -67,7 +65,14 @@ const renderMetric = (label, value) => (
     }}
   >
     <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", letterSpacing: 1.4 }}>{label}</div>
-    <div style={{ fontSize: 18, fontWeight: 900, color: "#fff", lineHeight: 1.35 }}>{value}</div>
+    <div style={{
+      fontSize: options.small ? 13 : 18,
+      fontWeight: 900,
+      color: "#fff",
+      lineHeight: 1.4,
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word",
+    }}>{value}</div>
   </div>
 );
 
@@ -119,6 +124,25 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
   const monthCalendarCells = buildMonthCalendarCells(summary);
   const monthCalendarRowCount = Math.ceil(monthCalendarCells.length / 7) || 5;
   const compactMonthCalendar = isMonthly && isStory && monthCalendarRowCount > 5;
+
+  const relatedSummaries = summary.relatedSummaries || {};
+  const prevSummaryKey = isMonthly ? "last_month" : "last_week";
+  const compareLabel = isMonthly ? "先月比" : "先週比";
+  const prevVolume = relatedSummaries[prevSummaryKey]?.totalVolume;
+  const volumeDiff = (prevVolume != null && prevVolume > 0)
+    ? Math.round((summary.totalVolume - prevVolume) / prevVolume * 100)
+    : null;
+  const compareValue = volumeDiff != null
+    ? (volumeDiff > 0 ? `▲${volumeDiff}%` : volumeDiff < 0 ? `▼${Math.abs(volumeDiff)}%` : `±0%`)
+    : "-";
+
+  const topWeightEx = (summary.exerciseStats || []).reduce((best, ex) => {
+    if (!best || (ex.maxWeight || 0) > (best.maxWeight || 0)) return ex;
+    return best;
+  }, null);
+  const maxWeightLabel = (topWeightEx && topWeightEx.maxWeight > 0)
+    ? `${topWeightEx.exerciseName}\n${topWeightEx.maxWeight}kg`
+    : "記録なし";
 
   if (isMonthly) {
     return (
@@ -253,12 +277,13 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
           {renderMonthlyMetric("トレ日数", `${summary.workoutCount}日`)}
           {renderMonthlyMetric("総ボリューム", formatVolume(summary.totalVolume))}
           {renderMonthlyMetric("合計セット", `${totalSetCount}セット`)}
-          {renderMonthlyMetric("合計レップ", `${Math.round(Number(summary.totalReps || 0)).toLocaleString("ja-JP")}回`)}
+          {renderMonthlyMetric(compareLabel, compareValue)}
         </div>
 
         <div style={{ display: "grid", gap: isStory ? 10 : 8, marginTop: isStory ? 10 : 8, flex: 1 }}>
           {renderMonthlyMetric("部位別セット", setCountSummary, { wide: true })}
           {renderMonthlyMetric("一番伸びた種目", growthLabel, { wide: true })}
+          {renderMonthlyMetric("最高重量PR", maxWeightLabel, { wide: true })}
         </div>
 
         <div style={{ marginTop: isStory ? 10 : 8, fontSize: 10, color: "rgba(255,255,255,0.45)", letterSpacing: 2 }}>
@@ -308,18 +333,18 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isStory ? 8 : 12, flex: 1 }}>
-        {renderMetric("ワークアウト", `${summary.workoutCount}回`)}
-        {renderMetric("総ボリューム", formatVolume(summary.totalVolume))}
-        {renderMetric("平均ボリューム", formatAverageVolume(summary.totalVolume, summary.workoutCount))}
-        {renderMetric("合計セット", `${totalSetCount}セット`)}
-        {renderMetric(
-          "部位別セット",
-          <div style={{ display: "grid", gap: 4 }}>
-            <div>{setCountSummary}</div>
-          </div>
-        )}
-        {renderMetric("一番伸びた種目", growthLabel)}
+      <div style={{ display: "flex", flexDirection: "column", gap: isStory ? 8 : 10, flex: 1 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isStory ? 8 : 10 }}>
+          {renderMetric("ワークアウト", `${summary.workoutCount}回`)}
+          {renderMetric("総ボリューム", formatVolume(summary.totalVolume))}
+          {renderMetric(compareLabel, compareValue)}
+          {renderMetric("合計セット", `${totalSetCount}セット`)}
+        </div>
+        {renderMetric("部位別セット", setCountSummary, { small: true })}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isStory ? 8 : 10 }}>
+          {renderMetric("一番伸びた種目", growthLabel, { small: true })}
+          {renderMetric("最高重量PR", maxWeightLabel, { small: true })}
+        </div>
       </div>
 
       <div style={{ marginTop: isStory ? 8 : 10, fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>

@@ -44,7 +44,12 @@ export const LB_PER_KG = 2.20462;
 export const getBodyPartChartFill = (index = 0) =>
   BODY_PART_CHART_PALETTE[Math.min(index, BODY_PART_CHART_PALETTE.length - 1)] || "#20B8AE";
 
-export const formatDate = (date) => (date ? date.replace(/-/g, "/") : null);
+const WEEKDAY_LABELS_A = ["日", "月", "火", "水", "木", "金", "土"];
+export const formatDate = (date) => {
+  if (!date) return null;
+  const d = new Date(date + "T00:00:00");
+  return `${d.getMonth() + 1}/${d.getDate()} (${WEEKDAY_LABELS_A[d.getDay()]})`;
+};
 export const getBodyPartDisplayLabel = (bodyPart) => normalizeBodyPartLabel(bodyPart);
 
 export const normalizePrUnit = (unit) => {

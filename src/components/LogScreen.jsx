@@ -514,6 +514,10 @@ export default function LogScreen({
             .sort((a, b) => b.date.localeCompare(a.date))
         : [];
 
+    const historyTargetCurrentSets = historyTarget
+        ? (logData?.[historyTarget] || getExSets?.(exercises.find((e) => e.name === historyTarget)) || [])
+        : [];
+
     const historyTargetUnit = historyTarget && getExUnit
         ? (getExUnit(historyTarget) === "lbs" ? "lbs" : "kg")
         : (unit === "lbs" ? "lbs" : "kg");
@@ -1188,6 +1192,8 @@ export default function LogScreen({
                     exName={historyTarget}
                     records={historyTargetRecords}
                     weightDisplayUnit={historyTargetUnit}
+                    currentDate={logDate}
+                    currentSets={historyTargetCurrentSets}
                     onClose={() => setHistoryTarget(null)}
                 />
             )}

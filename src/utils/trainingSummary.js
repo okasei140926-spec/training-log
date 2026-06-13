@@ -25,7 +25,8 @@ const startOfDay = (date) => {
 
 const formatDateLabel = (dateInput) => {
   const key = formatDateKey(dateInput);
-  return key.replace(/-/g, "/");
+  const [, mm, dd] = key.split("-");
+  return `${parseInt(mm)}/${parseInt(dd)}`;
 };
 
 const getWeekRange = (today = new Date()) => {
@@ -68,7 +69,7 @@ const resolvePeriodMeta = (period, today = new Date()) => {
       shareLabel: "Monthly Summary",
       start,
       end,
-      rangeLabel: `${start.getFullYear()}/${String(start.getMonth() + 1).padStart(2, "0")}`,
+      rangeLabel: `${start.getFullYear()}/${start.getMonth() + 1}`,
     };
   }
 

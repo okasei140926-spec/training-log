@@ -45,11 +45,24 @@ export default function LogExerciseHistoryModal({
   exName,
   records,
   weightDisplayUnit = "kg",
+  currentDate,
+  currentSets = [],
   onClose,
 }) {
-  const normalizedRecords = (records || [])
+  const normalizedPastRecords = (records || [])
     .map(normalizeRecord)
     .filter((record) => record.date && record.sets.length > 0);
+
+  const normalizedCurrentRecord = useMemo(() => {
+    if (!currentDate || !currentSets?.length) return null;
+    const r = normalizeRecord({ date: currentDate, sets: currentSets });
+    if (!r.date || !r.sets.length) return null;
+    return r;
+  }, [currentDate, currentSets]);
+
+  const normalizedRecords = normalizedCurrentRecord
+    ? [...normalizedPastRecords, normalizedCurrentRecord]
+    : normalizedPastRecords;
 
   const allSets = normalizedRecords.flatMap((record) => record.sets);
   const numericSets = allSets.filter((set) => set.weight !== "BW");
@@ -383,13 +396,17 @@ export default function LogExerciseHistoryModal({
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {normalizedRecords.map((record, recordIdx) => (
+              {[
+                ...(normalizedCurrentRecord ? [{ ...normalizedCurrentRecord, isCurrent: true }] : []),
+                ...normalizedPastRecords.map((r) => ({ ...r, isCurrent: false })),
+              ].map((record, recordIdx) => (
                 <div
                   key={`${record.date}-${recordIdx}`}
                   style={{
-                    background: "var(--card2)",
+                    background: record.isCurrent ? "rgba(18,199,194,0.07)" : "var(--card2)",
                     borderRadius: 14,
                     padding: "14px 14px 12px",
+                    border: record.isCurrent ? "1px solid rgba(18,199,194,0.22)" : "1px solid transparent",
                   }}
                 >
                   <div
@@ -401,8 +418,23 @@ export default function LogExerciseHistoryModal({
                       gap: 8,
                     }}
                   >
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
-                      {record.date}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                        {record.date}
+                      </div>
+                      {record.isCurrent && (
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          color: "var(--accent)",
+                          background: "rgba(18,199,194,0.13)",
+                          border: "1px solid rgba(18,199,194,0.28)",
+                          borderRadius: 999,
+                          padding: "2px 7px",
+                        }}>
+                          記録中
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text3)" }}>
                       {record.sets.length}セット

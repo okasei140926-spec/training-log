@@ -185,20 +185,21 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           borderRadius: 24,
           boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
           overflow: "hidden",
-            overscrollBehaviorX: "none",
+          overscrollBehaviorX: "none",
+          display: "flex",
+          flexDirection: "column",
         }}
         onClick={(event) => event.stopPropagation()}
       >
         <div
           style={{
-            maxHeight:
-              "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
+            flex: 1,
+            minHeight: 0,
             overflowY: "auto",
             padding: "18px 16px calc(24px + var(--safe-bottom, 0px))",
             boxSizing: "border-box",
             overscrollBehavior: "contain",
             overscrollBehaviorX: "none",
-            
             touchAction: "pan-y",
             WebkitOverflowScrolling: "touch",
           }}
