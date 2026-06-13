@@ -2007,31 +2007,6 @@ export default function FriendsScreen({
         if (rankIndex === 2) return "#B66B36";
         return "var(--text3)";
     };
-    const renderRankAvatar = (entry, size = 34) => (
-        <div
-            style={{
-                width: size,
-                height: size,
-                borderRadius: "50%",
-                overflow: "hidden",
-                flexShrink: 0,
-                display: "grid",
-                placeItems: "center",
-                background: entry?.isMe
-                    ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                    : "linear-gradient(135deg, rgba(15, 94, 99, 0.12), rgba(18, 199, 194, 0.24))",
-                border: "2px solid rgba(255, 255, 255, 0.9)",
-                boxShadow: "0 8px 18px rgba(15, 94, 99, 0.14)",
-                color: entry?.isMe ? "#fff" : "var(--text)",
-                fontSize: Math.max(11, Math.round(size * 0.36)),
-                fontWeight: 900,
-            }}
-        >
-            {entry?.avatarUrl
-                ? <img src={entry.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : String(entry?.name || "U").slice(0, 1)}
-        </div>
-    );
 
     if (!user) {
         return <LoginPrompt onLogin={onLogin} />;
@@ -2093,7 +2068,6 @@ export default function FriendsScreen({
                     topThreeRanking={topThreeRanking}
                     podiumOrder={podiumOrder}
                     setSelectedBig3Entry={setSelectedBig3Entry}
-                    renderRankAvatar={renderRankAvatar}
                     getRankAccentColor={getRankAccentColor}
                     compactRankingRows={compactRankingRows}
                 />
@@ -2102,7 +2076,6 @@ export default function FriendsScreen({
             <Big3DetailModal
                 selectedBig3Entry={selectedBig3Entry}
                 setSelectedBig3Entry={setSelectedBig3Entry}
-                renderRankAvatar={renderRankAvatar}
             />
 
             <EditUsernameModal

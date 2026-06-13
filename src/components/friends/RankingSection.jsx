@@ -1,5 +1,6 @@
 // src/components/friends/RankingSection.jsx
 import React from "react";
+import RankAvatar from "./RankAvatar";
 
 const RANKING_TABS = [
     { key: "big3", label: "BIG3" },
@@ -25,7 +26,6 @@ function RankingSection({
     topThreeRanking,
     podiumOrder,
     setSelectedBig3Entry,
-    renderRankAvatar,
     getRankAccentColor,
     compactRankingRows,
 }) {
@@ -217,7 +217,7 @@ function RankingSection({
                                                 {rankIndex === 0 ? "♛" : rankIndex === 1 ? "2" : "3"}
                                             </div>
                                             <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
-                                                {renderRankAvatar(entry, isChampion ? 58 : 46)}
+                                                <RankAvatar entry={entry} size={isChampion ? 58 : 46} />
                                             </div>
                                             <div style={{ fontSize: isChampion ? 13 : 12, fontWeight: 950, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                                 {entry.name}
@@ -283,7 +283,7 @@ function RankingSection({
                                             </span>
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                                            {renderRankAvatar(entry, 30)}
+                                            <RankAvatar entry={entry} size={30} />
                                             <div style={{ minWidth: 0 }}>
                                                 <div style={{ fontSize: 13, fontWeight: 950, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2 }}>
                                                     {entry.name}

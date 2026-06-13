@@ -1,7 +1,8 @@
 // src/components/friends/Big3DetailModal.jsx
 import React from "react";
+import RankAvatar from "./RankAvatar";
 
-function Big3DetailModal({ selectedBig3Entry, setSelectedBig3Entry, renderRankAvatar }) {
+function Big3DetailModal({ selectedBig3Entry, setSelectedBig3Entry }) {
     if (!selectedBig3Entry) return null;
 
     return (
@@ -34,7 +35,7 @@ function Big3DetailModal({ selectedBig3Entry, setSelectedBig3Entry, renderRankAv
             >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 16 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                        {renderRankAvatar(selectedBig3Entry, 48)}
+                        <RankAvatar entry={selectedBig3Entry} size={48} />
                         <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 900 }}>
                                 BIG3 内訳
