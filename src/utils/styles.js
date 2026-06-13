@@ -140,9 +140,9 @@ export const css = `
     --home-shadow: 0 18px 40px rgba(0,0,0,0.42);
   }
   .theme-light {
-    --bg: linear-gradient(180deg, #F7FBFB 0%, #F1F6F7 100%);
+    --bg: #e2eaea;
     --card: #ffffff;
-    --card2: #F8FBFB;
+    --card2: #f0f5f5;
     --card-modal: #ffffff;
     --border: #86EFAC;
     --border2: #D8E6E8;
@@ -166,7 +166,7 @@ export const css = `
     --info-soft: #ECFCFD;
     --info-border: #C4F3F2;
     --focus-ring: 0 0 0 4px rgba(51, 225, 219, 0.2);
-    --home-bg: linear-gradient(180deg, #F7FBFB 0%, #F1F6F7 100%);
+    --home-bg: #e2eaea;
     --home-card: #ffffff;
     --home-inner-card: linear-gradient(180deg, #ffffff, #F8FBFB);
     --home-card-border: rgba(18,199,194,0.10);
