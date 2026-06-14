@@ -266,7 +266,7 @@ const logAiContextSnapshot = ({
   });
 };
 
-const fetchLatestWorkoutHistoryForAI = async (userId) => {
+const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
   if (!userId) {
     return {
       source: "no-user",
@@ -276,12 +276,29 @@ const fetchLatestWorkoutHistoryForAI = async (userId) => {
     };
   }
 
-  const { data, error } = await supabase
+  const threeMonthsAgo = (() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  let query = supabase
     .from("workouts")
     .select("date,data")
     .eq("user_id", userId)
     .order("date", { ascending: true })
     .limit(500);
+
+  if (!isPro) {
+    query = query.gte("date", threeMonthsAgo);
+  }
+
+  console.log("[AI history-limit]", {
+    isPro,
+    dateFilter: isPro ? "none (Pro: full history)" : threeMonthsAgo,
+  });
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[AI Coach context] workouts.data fetch failed", {
@@ -1493,7 +1510,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         return;
       }
 
-      const latestWorkoutFetch = await fetchLatestWorkoutHistoryForAI(session?.user?.id);
+      const latestWorkoutFetch = await fetchLatestWorkoutHistoryForAI(session?.user?.id, currentIsPro);
       if (latestWorkoutFetch.error) {
         logAiContextSnapshot({
           source: latestWorkoutFetch.source,

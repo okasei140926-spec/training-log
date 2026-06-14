@@ -134,6 +134,7 @@ export default function HistoryScreen({
   onOpenWorkoutDaySummary,
   onOpenWorkoutDayShare,
   workoutDurationSecByDate = {},
+  minCalendarYearMonth = null,
 }) {
   const [editTarget, setEditTarget] = useState(null);
   const [showManualBestModal, setShowManualBestModal] = useState(false);
@@ -768,6 +769,7 @@ export default function HistoryScreen({
               muscleEx={muscleEx}
               hiddenBodyParts={hiddenBodyParts}
               exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+              minYearMonth={minCalendarYearMonth}
               onDayOpen={(date) => {
                 if (hasValidWorkoutOnDate(history || {}, date)) {
                   setSelectedDate(date);

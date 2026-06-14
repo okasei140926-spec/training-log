@@ -90,9 +90,15 @@ async function handleNotifyWorkout(req, res) {
 
     const relatedUserIds = [user.id, ...friendIds];
 
+    const ninetyDaysAgo = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 3);
+      return d.toISOString().slice(0, 10);
+    })();
+
     const [profileRes, workoutsRes, manualBestsRes] = await Promise.all([
       adminSupabase.from("profiles").select("id, username").eq("id", user.id).single(),
-      adminSupabase.from("workouts").select("user_id, date, data").in("user_id", relatedUserIds).order("date", { ascending: true }),
+      adminSupabase.from("workouts").select("user_id, date, data").in("user_id", relatedUserIds).gte("date", ninetyDaysAgo).order("date", { ascending: true }),
       adminSupabase.from("manual_bests").select("user_id, exercise_name, weight, reps").in("user_id", relatedUserIds),
     ]);
 
@@ -258,10 +264,17 @@ async function handleInactivity(req, res) {
       return res.status(200).json({ success: true, sent: 0, skipped: true, reason: "no-enabled-subscriptions" });
     }
 
+    const ninetyDaysAgo = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 3);
+      return d.toISOString().slice(0, 10);
+    })();
+
     const { data: workoutRows, error: workoutError } = await adminSupabase
       .from("workouts")
       .select("user_id, date, data")
       .in("user_id", userIds)
+      .gte("date", ninetyDaysAgo)
       .order("date", { ascending: true });
 
     if (workoutError) throw workoutError;

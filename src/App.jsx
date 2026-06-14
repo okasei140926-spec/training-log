@@ -797,6 +797,7 @@ export default function GymApp() {
         runDedupeSupabaseFetch,
     } = useHistorySync({
         user,
+        isPro,
         latestHistoryRef,
         workoutsDataHistoryRef,
         workoutsDataHistory,
@@ -2661,30 +2662,38 @@ export default function GymApp() {
                         />
                     )}
 
-                    {screen === "calendar" && (
-                        <CalendarScreenView
-                            canonicalDisplayHistory={canonicalDisplayHistory}
-                            workoutElapsedSec={workoutElapsedSec}
-                            savedWorkoutDurationSecByDate={savedWorkoutDurationSecByDate}
-                            logDate={logDate}
-                            muscleEx={muscleEx}
-                            exerciseBodyPartOverrides={exerciseBodyPartOverrides}
-                            hiddenBodyParts={hiddenBodyParts}
-                            handleEditHistory={handleEditHistory}
-                            handleDeleteHistory={handleDeleteHistory}
-                            deleteAllHistoryForDate={deleteAllHistoryForDate}
-                            unit={unit}
-                            getExUnit={getExUnit}
-                            handleCalendarDayOpen={handleCalendarDayOpen}
-                            user={user}
-                            manualBests={manualBests}
-                            customBodyParts={customBodyParts}
-                            setManualBests={setManualBests}
-                            setCustomBodyParts={setCustomBodyParts}
-                            setSummary={setSummary}
-                            openWorkoutDayShareModal={openWorkoutDayShareModal}
-                        />
-                    )}
+                    {screen === "calendar" && (() => {
+                        const minCalendarYearMonth = isPro ? null : (() => {
+                            const d = new Date();
+                            d.setMonth(d.getMonth() - 3);
+                            return d.toISOString().slice(0, 7); // "YYYY-MM"
+                        })();
+                        return (
+                            <CalendarScreenView
+                                canonicalDisplayHistory={canonicalDisplayHistory}
+                                workoutElapsedSec={workoutElapsedSec}
+                                savedWorkoutDurationSecByDate={savedWorkoutDurationSecByDate}
+                                logDate={logDate}
+                                muscleEx={muscleEx}
+                                exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+                                hiddenBodyParts={hiddenBodyParts}
+                                handleEditHistory={handleEditHistory}
+                                handleDeleteHistory={handleDeleteHistory}
+                                deleteAllHistoryForDate={deleteAllHistoryForDate}
+                                unit={unit}
+                                getExUnit={getExUnit}
+                                handleCalendarDayOpen={handleCalendarDayOpen}
+                                user={user}
+                                manualBests={manualBests}
+                                customBodyParts={customBodyParts}
+                                setManualBests={setManualBests}
+                                setCustomBodyParts={setCustomBodyParts}
+                                setSummary={setSummary}
+                                openWorkoutDayShareModal={openWorkoutDayShareModal}
+                                minCalendarYearMonth={minCalendarYearMonth}
+                            />
+                        );
+                    })()}
 
                     {screen === "ai" && !showOfflineOnlyCard && (
                         <AIScreen

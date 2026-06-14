@@ -22,10 +22,12 @@ export default function CalendarScreenView({
     setCustomBodyParts,
     setSummary,
     openWorkoutDayShareModal,
+    minCalendarYearMonth = null,
 }) {
     return (
         <HistoryScreen
             history={canonicalDisplayHistory}
+            minCalendarYearMonth={minCalendarYearMonth}
             todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
             muscleEx={muscleEx}
             exerciseBodyPartOverrides={exerciseBodyPartOverrides}

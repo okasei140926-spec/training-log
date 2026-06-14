@@ -10,6 +10,22 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
+
+// ─── Free tier date limit ─────────────────────────────────────────────────────
+// Returns the date key for exactly 3 months ago (YYYY-MM-DD).
+const getThreeMonthsAgoKey = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().slice(0, 10);
+};
+
+// For free users: ensure sessionRangeStart is never earlier than 3 months ago.
+// "max(指定日, 3ヶ月前)" — if dateKey is already newer, keep it as-is.
+const clampStartForFreeTier = (dateKey, isPro) => {
+    if (isPro) return dateKey;
+    const limit = getThreeMonthsAgoKey();
+    return dateKey >= limit ? dateKey : limit;
+};
 const REMOTE_HISTORY_SESSION_LIMIT = 400;
 const INITIAL_HOME_HISTORY_LOOKBACK_DAYS = 30;
 const INITIAL_HOME_HISTORY_LIMIT = 80;
@@ -18,6 +34,7 @@ const HISTORY_RECOVERY_LIMIT = 250;
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useHistorySync({
     user,
+    isPro = false,
     latestHistoryRef,
     workoutsDataHistoryRef,
     workoutsDataHistory,
@@ -454,7 +471,16 @@ export function useHistorySync({
             const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
 
             try {
-                const sessionRangeStart = getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS);
+                const sessionRangeStart = clampStartForFreeTier(
+                    getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS),
+                    isPro
+                );
+                console.log("[history-limit] syncHistory initial", {
+                    isPro,
+                    sessionRangeStart,
+                    threeMonthsAgo: getThreeMonthsAgoKey(),
+                    clampApplied: !isPro && sessionRangeStart !== getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS),
+                });
                 const initialHistoryLimit = INITIAL_HOME_HISTORY_LIMIT;
                 const initialFetchKey = `history_initial_load:${user.id}:${sessionRangeStart}:${initialHistoryLimit}`;
                 const initialFetch = await runDedupeSupabaseFetch(
@@ -601,23 +627,35 @@ export function useHistorySync({
                 });
 
                 if (!(workoutsRes.data || []).length && !(sessionsRes.error ? [] : (sessionsRes.data || [])).length) {
-                    const recoveryFetchKey = `history_recovery_latest:${user.id}:${HISTORY_RECOVERY_LIMIT}`;
+                    const recoveryMinDate = clampStartForFreeTier("0000-01-01", isPro);
+                    const recoveryFetchKey = `history_recovery_latest:${user.id}:${HISTORY_RECOVERY_LIMIT}:${recoveryMinDate}`;
+                    console.log("[history-limit] recovery fetch", {
+                        isPro,
+                        recoveryMinDate,
+                        clampApplied: !isPro,
+                    });
                     const recoveryFetch = await runDedupeSupabaseFetch(
                         recoveryFetchKey,
                         async () => {
+                            let recoveryWorkoutsQuery = supabase
+                                .from("workouts")
+                                .select("date, data")
+                                .eq("user_id", user.id)
+                                .order("date", { ascending: false })
+                                .limit(HISTORY_RECOVERY_LIMIT);
+                            let recoverySessionsQuery = supabase
+                                .from("workout_sessions")
+                                .select("workout_date, duration_sec, total_volume, exercise_count, summary_json")
+                                .eq("user_id", user.id)
+                                .order("workout_date", { ascending: false })
+                                .limit(HISTORY_RECOVERY_LIMIT);
+                            if (!isPro) {
+                                recoveryWorkoutsQuery = recoveryWorkoutsQuery.gte("date", recoveryMinDate);
+                                recoverySessionsQuery = recoverySessionsQuery.gte("workout_date", recoveryMinDate);
+                            }
                             const [recoveryWorkoutsRes, recoverySessionsRes] = await Promise.all([
-                                supabase
-                                    .from("workouts")
-                                    .select("date, data")
-                                    .eq("user_id", user.id)
-                                    .order("date", { ascending: false })
-                                    .limit(HISTORY_RECOVERY_LIMIT),
-                                supabase
-                                    .from("workout_sessions")
-                                    .select("workout_date, duration_sec, total_volume, exercise_count, summary_json")
-                                    .eq("user_id", user.id)
-                                    .order("workout_date", { ascending: false })
-                                    .limit(HISTORY_RECOVERY_LIMIT),
+                                recoveryWorkoutsQuery,
+                                recoverySessionsQuery,
                             ]);
 
                             if (recoveryWorkoutsRes.error) {
@@ -928,6 +966,7 @@ export function useHistorySync({
         setWorkoutsDataHistory,
         shouldLogPerfDebug,
         workoutsDataHistoryRef,
+        isPro,
     ]);
 
     // ─── refreshDisplayHistoryFromSupabase effect ─────────────────────────────
@@ -969,9 +1008,18 @@ export function useHistorySync({
             displayHistoryRefreshRequestIdRef.current = requestId;
             const queryLabel = "display_history_refresh";
             const weekRange = getCurrentWeekRangeForHomeSummary();
-            const sessionRangeStart = screen === "calendar"
+            const rawSessionRangeStart = screen === "calendar"
                 ? `${formatDateKey(new Date()).slice(0, 7)}-01`
                 : getDateDaysAgoKey(120);
+            const sessionRangeStart = clampStartForFreeTier(rawSessionRangeStart, isPro);
+            console.log("[history-limit] refreshDisplay", {
+                isPro,
+                screen,
+                rawSessionRangeStart,
+                sessionRangeStart,
+                threeMonthsAgo: getThreeMonthsAgoKey(),
+                clampApplied: sessionRangeStart !== rawSessionRangeStart,
+            });
             const sessionRangeEnd = screen === "calendar"
                 ? `${getNextMonthPrefix(formatDateKey(new Date()).slice(0, 7))}-01`
                 : null;
@@ -1240,6 +1288,7 @@ export function useHistorySync({
         setHistory,
         shouldLogPerfDebug,
         workoutsDataHistoryRef,
+        isPro,
     ]);
 
     // ─── home weekly summary effect ────────────────────────────────────────────

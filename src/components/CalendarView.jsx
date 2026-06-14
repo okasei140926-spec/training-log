@@ -14,6 +14,8 @@ export default function CalendarView({
   muscleEx = {},
   hiddenBodyParts = [],
   exerciseBodyPartOverrides = {},
+  // Earliest navigable month as "YYYY-MM". null means no limit (Pro users).
+  minYearMonth = null,
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -44,7 +46,11 @@ export default function CalendarView({
   const todayStr =
     `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
+  const currentYearMonth = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const isAtMinMonth = Boolean(minYearMonth && currentYearMonth <= minYearMonth);
+
   const prevMonth = () => {
+    if (isAtMinMonth) return;
     if (month === 0) {
       setYear((y) => y - 1);
       setMonth(11);
@@ -76,7 +82,18 @@ export default function CalendarView({
     <div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <button onClick={prevMonth} style={{ background: "none", color: "var(--text2)", fontSize: 24, padding: "4px 10px" }}>‹</button>
+        <button
+          onClick={prevMonth}
+          disabled={isAtMinMonth}
+          style={{
+            background: "none",
+            color: isAtMinMonth ? "var(--text5)" : "var(--text2)",
+            fontSize: 24,
+            padding: "4px 10px",
+            opacity: isAtMinMonth ? 0.35 : 1,
+            cursor: isAtMinMonth ? "default" : "pointer",
+          }}
+        >‹</button>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>{year}年{month + 1}月</div>
           <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>{monthWorkouts}日トレーニング</div>
