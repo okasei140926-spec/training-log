@@ -514,13 +514,17 @@ export default function LogScreen({
             .sort((a, b) => b.date.localeCompare(a.date))
         : [];
 
-    const historyTargetCurrentSets = historyTarget
-        ? (logData?.[historyTarget] || getExSets?.(exercises.find((e) => e.name === historyTarget)) || [])
-        : [];
-
     const historyTargetUnit = historyTarget && getExUnit
         ? (getExUnit(historyTarget) === "lbs" ? "lbs" : "kg")
         : (unit === "lbs" ? "lbs" : "kg");
+
+    const historyTargetCurrentSets = historyTarget
+        ? (logData?.[historyTarget] || getExSets?.(exercises.find((e) => e.name === historyTarget)) || [])
+            .map((set) => {
+                if (historyTargetUnit !== "lbs" || !set.weight || String(set.weight).toUpperCase() === "BW") return set;
+                return { ...set, weight: storeW(set.weight, "lbs") };
+            })
+        : [];
 
     useEffect(() => {
         if (!exercises.some((ex) => ex.id === reorderMenuId)) {
