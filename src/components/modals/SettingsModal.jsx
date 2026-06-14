@@ -208,11 +208,15 @@ export default function SettingsModal({
   };
 
   const handleManageSubscription = async () => {
+    const isNative = isNativePurchaseEnvironment();
+    console.log("[manage subscription] clicked", { isNative, hasPortal: Boolean(onManageStripePortal) });
     // Web PWA (Stripe): ネイティブ環境でなければ Stripe カスタマーポータルを開く
-    if (!isNativePurchaseEnvironment() && onManageStripePortal) {
+    if (!isNative && onManageStripePortal) {
+      console.log("[manage subscription] calling Stripe portal");
       setProActionBusy(true);
       try {
         const ok = await onManageStripePortal();
+        console.log("[manage subscription] portal result", { ok });
         if (!ok) setProMessage("ポータルを開けませんでした。再度お試しください。");
       } finally {
         setProActionBusy(false);

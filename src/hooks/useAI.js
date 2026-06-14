@@ -1392,9 +1392,10 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       }
 
       if (data?.url) {
-        window.open(data.url, "_blank", "noopener,noreferrer");
+        window.location.href = data.url;
         return true;
       }
+      console.warn("[stripe portal] no URL in response", { data });
       return false;
     } catch (error) {
       logAiApiError("stripe portal request failed", {

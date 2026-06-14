@@ -1050,6 +1050,11 @@ export function useHistorySync({
                     .limit(displayHistoryLimit);
 
                 const displayFetchKey = `display_history:${screen}:${user.id}:${sessionRangeStart}:${sessionRangeEnd || "open"}:${displayHistoryLimit}`;
+                console.log("[refreshDisplay] about to runDedupeSupabaseFetch", {
+                    screen,
+                    displayFetchKey,
+                    isFresh: isSupabaseFetchFresh(displayFetchKey),
+                });
                 const displayFetch = await runDedupeSupabaseFetch(
                     displayFetchKey,
                     async () => {
