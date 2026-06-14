@@ -45,12 +45,14 @@ export default function SettingsModal({
   onManageStripePortal = null,
   dailyFreeAiLimit = 5,
   aiUsageCount = 0,
+  onForceSyncHistory = null,
 }) {
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
   const [showProManager, setShowProManager] = useState(false);
   const [proStatusData, setProStatusData] = useState(null);
   const [proActionBusy, setProActionBusy] = useState(false);
   const [proMessage, setProMessage] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
 
   const plan = proStatusData?.plan || proPlan || {
     isPro,
@@ -157,6 +159,7 @@ export default function SettingsModal({
     if (!isOpen) {
       setShowProManager(false);
       setProMessage("");
+      setSyncMessage("");
       return;
     }
     if (showProManager) refreshProStatus({ silent: true });
@@ -603,6 +606,39 @@ export default function SettingsModal({
                 <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7 }}>
                   履歴、種目設定、下書きなどをJSONで保存します。
                 </div>
+                {onForceSyncHistory && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const count = onForceSyncHistory();
+                        setSyncMessage(
+                          count > 0
+                            ? `${count}件の記録を同期キューに追加しました。`
+                            : "同期対象の記録がありません。"
+                        );
+                        setTimeout(() => setSyncMessage(""), 4000);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "14px 16px",
+                        borderRadius: 14,
+                        background: "var(--card2)",
+                        border: "1px solid var(--border2)",
+                        color: "var(--text)",
+                        fontSize: 14,
+                        fontWeight: 900,
+                      }}
+                    >
+                      記録を再同期
+                    </button>
+                    {syncMessage && (
+                      <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
+                        {syncMessage}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 

@@ -983,6 +983,17 @@ export default function GymApp() {
         setSessionSyncVersion,
     });
 
+    const forceSyncLocalHistory = useCallback(() => {
+        const dates = getValidWorkoutDatesFromHistory(latestHistoryRef.current || history);
+        if (!dates.length) return 0;
+        dates.forEach((date) => {
+            markWorkoutContentChanged(date, "manual_resync", { explicitEdit: true });
+        });
+        // Force the autoSave effect to re-run by updating history state reference
+        setHistory((prev) => ({ ...prev }));
+        return dates.length;
+    }, [history, markWorkoutContentChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => {
@@ -2862,6 +2873,7 @@ export default function GymApp() {
                         onManageStripePortal={openStripePortal}
                         dailyFreeAiLimit={dailyFreeAiLimit}
                         aiUsageCount={aiUsageCount}
+                        onForceSyncHistory={forceSyncLocalHistory}
                     />
                     {showAuth && (
                         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
