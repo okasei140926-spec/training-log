@@ -37,6 +37,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef(null);
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
+  const prevIsOpenRef = useRef(false);
   const [selectedSummaryKey, setSelectedSummaryKey] = useState(null);
 
   const summaryOptions = useMemo(() => {
@@ -67,8 +68,12 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   const activeSummary = summaryMap[selectedSummaryKey] || summary;
 
   useEffect(() => {
-    if (!isOpen || !summary) return;
-    setSelectedSummaryKey(summary.key);
+    // モーダルが開いた瞬間だけ初期化する。
+    // summary が後から更新されても選択状態をリセットしない。
+    if (isOpen && !prevIsOpenRef.current && summary) {
+      setSelectedSummaryKey(summary.key);
+    }
+    prevIsOpenRef.current = isOpen;
   }, [isOpen, summary]);
 
   useEffect(() => {
