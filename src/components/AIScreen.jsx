@@ -123,11 +123,10 @@ const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit })
         </div>
         <div style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
             {[
-                "今日のメニュー提案",
+                "AI Coach無制限",
                 "重量設定の相談",
-                "記録分析",
                 "弱点部位の改善提案",
-                "Proシェアカード",
+                "全期間データ閲覧",
             ].map((feature) => (
                 <div
                     key={feature}

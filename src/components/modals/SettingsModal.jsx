@@ -319,7 +319,7 @@ export default function SettingsModal({
             gap: 10,
           }}
         >
-          {["AI Coach無制限", "メニュー提案", "重量設定の相談", "記録分析", "弱点部位の改善提案"].map((item) => (
+          {["AI Coach無制限", "重量設定の相談", "弱点部位の改善提案", "全期間データ閲覧（無料は直近3ヶ月）"].map((item) => (
             <div key={item} style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text)", fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: "var(--accent)", fontWeight: 950 }}>✓</span>
               {item}
