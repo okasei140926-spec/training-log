@@ -1015,19 +1015,25 @@ export default function GymApp() {
                 .filter(Boolean)
         );
 
+        // IMPORTANT: after the initial sync, history state = Supabase-only (mergedHistory = remoteHistory).
+        // latestHistoryRef.current reflects the same. We must read localStorage directly to find
+        // dates that exist locally but were never uploaded to Supabase.
+        const localHistory =
+            loadTrustedHistoryCache(getUserHistoryCacheKey(user.id), null) ||
+            loadTrustedHistoryCache("history", {});
         const since = getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS);
-        const localDates = getValidWorkoutDatesFromHistory(latestHistoryRef.current || history, { since });
+        const localDates = getValidWorkoutDatesFromHistory(localHistory, { since });
         const unsyncedDates = localDates.filter((date) => !remoteDateSet.has(date));
 
-        if (!unsyncedDates.length) return;
-
-        console.log("[startup reconcile] local dates missing from Supabase — queuing for sync", {
+        console.log("[startup reconcile] local vs remote comparison", {
             env: getRuntimeEnvironmentLabel(),
             user_id: user.id,
-            unsyncedDates,
             localDatesInWindow: localDates.length,
             remoteDatesInWindow: remoteDateSet.size,
+            unsyncedDates,
         });
+
+        if (!unsyncedDates.length) return;
 
         unsyncedDates.forEach((date) => {
             markWorkoutContentChanged(date, "startup_unsynced_local", { explicitEdit: true });
