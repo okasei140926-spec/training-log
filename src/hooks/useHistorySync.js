@@ -1294,6 +1294,7 @@ export function useHistorySync({
         shouldLogPerfDebug,
         workoutsDataHistoryRef,
         isPro,
+        isSupabaseFetchFresh,
     ]);
 
     // ─── home weekly summary effect ────────────────────────────────────────────
