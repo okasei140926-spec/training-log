@@ -26,6 +26,7 @@ export default function LogScreenView({
     setField,
     setWeightMode,
     addSet,
+    removeSet,
     removeEx,
     timerLeft,
     intervalSec,
@@ -116,6 +117,7 @@ export default function LogScreenView({
                         setField={setField}
                         setWeightMode={setWeightMode}
                         addSet={addSet}
+                        removeSet={removeSet}
                         removeEx={removeEx}
                         timerLeft={timerLeft}
                         intervalSec={intervalSec}
