@@ -805,7 +805,7 @@ export function useHistorySync({
                     });
                 }
 
-                const mergedHistory = remoteHistory;
+                let mergedHistory = remoteHistory;
                 const appliedWorkoutsDataHistory = workoutsOnlyHistory;
                 const currentWeekRange = getCurrentWeekRangeForHomeSummary();
                 markSupabaseFetchFresh(`display_history:history:${user.id}:${currentWeekRange.start}:${currentWeekRange.end}:${INITIAL_HOME_HISTORY_LIMIT}`, 45000);
@@ -871,26 +871,12 @@ export function useHistorySync({
                         source: "history_initial_load",
                     });
                 }
-                setHistoryRemoteReady(true);
-                setHistoryLoadError("");
-                setHistory(mergedHistory);
-                console.log("[restore] history ready state applied", {
-                    env: getRuntimeEnvironmentLabel(),
-                    user_id: user.id,
-                    historyRemoteReady: true,
-                    remoteLoadFailed: false,
-                    workoutsRowsCount: fetchedWorkoutRowsCount,
-                    workoutSessionsRowsCount: fetchedSessionRowsCount,
-                    history: getHistoryOverallMetrics(mergedHistory),
-                    workoutsDataHistory: getHistoryOverallMetrics(appliedWorkoutsDataHistory),
-                    appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
-                });
                 // ── Startup reconciliation ────────────────────────────────
-                // Must run BEFORE persistHistoryForUser overwrites localStorage
-                // with Supabase-only data, which would erase local-only dates.
-                // Uses localMergeCandidate (pre-sync local cache) vs workoutsRes.data
-                // (live Supabase rows) to avoid the race condition where
-                // trustedWorkoutRows state is empty due to a cancelled invocation.
+                // Run BEFORE setHistory/persistHistoryForUser so that:
+                // 1. localMergeCandidate still has local-only dates (not yet overwritten)
+                // 2. unsyncedDates' data can be merged into mergedHistory before it's
+                //    applied as the canonical state — this ensures latestHistoryRef.current
+                //    has the data when useHistoryAutoSave tries to upsert it
                 if (onStartupUnsyncedLocalDates && startupReconcileForUserRef.current !== user.id) {
                     startupReconcileForUserRef.current = user.id;
                     const since = getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS);
@@ -907,10 +893,29 @@ export function useHistorySync({
                         unsyncedDates,
                     });
                     if (unsyncedDates.length > 0) {
+                        // Merge local-only dates into mergedHistory so that:
+                        // - setHistory() shows them on the calendar immediately
+                        // - persistHistoryForUser() doesn't erase them from localStorage
+                        // - latestHistoryRef.current has the data for useHistoryAutoSave
+                        mergedHistory = applyLocalHistoryDates(mergedHistory, localMergeCandidate, unsyncedDates);
                         onStartupUnsyncedLocalDates(unsyncedDates);
                     }
                 }
-                if (hasRemoteWorkout) {
+                setHistoryRemoteReady(true);
+                setHistoryLoadError("");
+                setHistory(mergedHistory);
+                console.log("[restore] history ready state applied", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user.id,
+                    historyRemoteReady: true,
+                    remoteLoadFailed: false,
+                    workoutsRowsCount: fetchedWorkoutRowsCount,
+                    workoutSessionsRowsCount: fetchedSessionRowsCount,
+                    history: getHistoryOverallMetrics(mergedHistory),
+                    workoutsDataHistory: getHistoryOverallMetrics(appliedWorkoutsDataHistory),
+                    appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
+                });
+                if (hasRemoteWorkout || mergedHistory !== remoteHistory) {
                     persistHistoryForUser(user.id, mergedHistory);
                 }
             } catch (error) {
