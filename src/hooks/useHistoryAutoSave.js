@@ -73,6 +73,7 @@ export function useHistoryAutoSave({
     saveDraftForDate,
     setHistory,
     setSessionSyncVersion,
+    forceSyncVersion,
 }) {
     useEffect(() => {
         if (!user || !historySyncReady) return;
@@ -475,5 +476,6 @@ export function useHistoryAutoSave({
         loadDraftForDate,
         saveDraftForDate,
         workoutTimerStateRef,
+        forceSyncVersion,
     ]);
 }

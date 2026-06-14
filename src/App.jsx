@@ -614,6 +614,7 @@ export default function GymApp() {
     const [summary, setSummary] = useState(null);
     const [workoutDayShareTarget, setWorkoutDayShareTarget] = useState(null);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [forceSyncVersion, setForceSyncVersion] = useState(0);
     const [syncFailuresByDate, setSyncFailuresByDate] = useState({});
     const [syncRetrying, setSyncRetrying] = useState(false);
     const [pendingDeleteUndo, setPendingDeleteUndo] = useState(null);
@@ -984,13 +985,15 @@ export default function GymApp() {
     });
 
     const forceSyncLocalHistory = useCallback(() => {
-        const dates = getValidWorkoutDatesFromHistory(latestHistoryRef.current || history);
+        // Limit to last 30 days to avoid firing 100+ parallel Supabase requests at once
+        const since = getDateDaysAgoKey(30);
+        const dates = getValidWorkoutDatesFromHistory(latestHistoryRef.current || history, { since });
         if (!dates.length) return 0;
         dates.forEach((date) => {
             markWorkoutContentChanged(date, "manual_resync", { explicitEdit: true });
         });
-        // Force the autoSave effect to re-run by updating history state reference
-        setHistory((prev) => ({ ...prev }));
+        // Increment forceSyncVersion to reliably re-trigger useHistoryAutoSave effect
+        setForceSyncVersion((v) => v + 1);
         return dates.length;
     }, [history, markWorkoutContentChanged]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1078,6 +1081,7 @@ export default function GymApp() {
         saveDraftForDate,
         setHistory,
         setSessionSyncVersion,
+        forceSyncVersion,
     });
 
     useEffect(() => {
