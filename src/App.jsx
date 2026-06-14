@@ -1336,6 +1336,7 @@ export default function GymApp() {
         workoutLogData,
         workoutLogExerciseUnits,
         addSet,
+        removeSet,
         setField,
         setWeightMode,
     } = useWorkoutLogBridge({
@@ -2592,6 +2593,7 @@ export default function GymApp() {
                             setField={setField}
                             setWeightMode={setWeightMode}
                             addSet={addSet}
+                            removeSet={removeSet}
                             removeEx={removeEx}
                             timerLeft={timerLeft}
                             intervalSec={intervalSec}

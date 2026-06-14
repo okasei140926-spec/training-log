@@ -167,8 +167,8 @@ export function useHistorySave({
                         : getEmptyWorkoutMetrics();
                     const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(workoutDate) || {};
                     const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
-                    if (!hasWorkoutForDate && !pendingChange.explicitDelete) {
-                        console.warn("[save guard] skip empty workout delete without explicit delete intent", {
+                    if (!hasWorkoutForDate && !pendingChange.explicitDelete && !explicitEdit) {
+                        console.warn("[save guard] skip empty workout without explicit edit or delete intent", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
                             date: workoutDate,
@@ -176,6 +176,7 @@ export function useHistorySave({
                             remoteMetrics,
                             reason: pendingChange.reason || "missing local workout data",
                             explicitDelete: false,
+                            explicitEdit: false,
                             safety: "avoid deleting Supabase data when history failed to load",
                         });
                         results.skippedDates.push(workoutDate);

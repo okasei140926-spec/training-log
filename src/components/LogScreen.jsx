@@ -240,7 +240,7 @@ export default function LogScreen({
     onAddCustomBodyPart,
     onUpdateHiddenBodyParts,
     todayLabels,
-    exercises, logData, getExSets, setField, setWeightMode, addSet, removeEx,
+    exercises, logData, getExSets, setField, setWeightMode, addSet, removeSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, getPreviousPR, onCopyDown, onCopyDownReps, unit = "kg",
     getExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
     workoutElapsedSec = 0,
@@ -1089,6 +1089,7 @@ export default function LogScreen({
                                                 unit={getSetDisplayUnit(set, exUnit)}
                                                 onCopyDown={onCopyDown}
                                                 onCopyDownReps={onCopyDownReps}
+                                                onDeleteSet={removeSet ? (setIdx) => removeSet(ex, setIdx) : undefined}
                                             />
                                         ))}
 

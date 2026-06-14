@@ -79,6 +79,7 @@ export default function SetRow({
     previousSet,
     previousUnit = "kg",
     unit = "kg",
+    onDeleteSet,
 }) {
     const [showUnitMenu, setShowUnitMenu] = useState(false);
     const [keyboardInset, setKeyboardInset] = useState(0);
@@ -321,20 +322,48 @@ export default function SetRow({
                 </div>
             )}
 
-            <div style={inputWrapStyle}>
-                <input
-                    type="text"
-                    inputMode="numeric"
-                    data-log-set-input="true"
-                    data-log-set-input-id={`${inputId || `${ex?.name || "set"}-${idx}`}:reps`}
-                    value={set.reps}
-                    onChange={(e) => setField(ex, idx, "reps", e.target.value)}
-                    onFocus={() => notifyInputFocus("reps")}
-                    onBlur={notifyInputBlur}
-                    placeholder="0"
-                    style={{ ...inputStyle, paddingRight: 28, boxShadow: "var(--shadow-soft)" }}
-                />
-                <span style={repsSuffixStyle}>回</span>
+            <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                    <div style={inputWrapStyle}>
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            data-log-set-input="true"
+                            data-log-set-input-id={`${inputId || `${ex?.name || "set"}-${idx}`}:reps`}
+                            value={set.reps}
+                            onChange={(e) => setField(ex, idx, "reps", e.target.value)}
+                            onFocus={() => notifyInputFocus("reps")}
+                            onBlur={notifyInputBlur}
+                            placeholder="0"
+                            style={{ ...inputStyle, paddingRight: 28, boxShadow: "var(--shadow-soft)" }}
+                        />
+                        <span style={repsSuffixStyle}>回</span>
+                    </div>
+                    {onDeleteSet && (
+                        <button
+                            type="button"
+                            onClick={() => onDeleteSet(idx)}
+                            style={{
+                                flexShrink: 0,
+                                width: 24,
+                                height: 24,
+                                borderRadius: "50%",
+                                border: "1px solid var(--border2)",
+                                background: "var(--btn-secondary)",
+                                color: "var(--text3)",
+                                fontSize: 14,
+                                fontWeight: 900,
+                                padding: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                lineHeight: 1,
+                            }}
+                        >
+                            ×
+                        </button>
+                    )}
+                </div>
                 {targetRepsLabel && (
                     <div style={{
                         marginTop: 4,

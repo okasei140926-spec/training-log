@@ -472,6 +472,24 @@ export function useWorkoutLog({
     );
   }, [mutateExercises]);
 
+  const removeSet = useCallback((exerciseInput, setIndex) => {
+    const exerciseName = String(exerciseInput?.name || exerciseInput || "").trim();
+    if (!exerciseName) return;
+
+    mutateExercises("set_remove", (exercises) =>
+      exercises.map((exercise) => {
+        if (normalizeExerciseName(exercise.name) !== normalizeExerciseName(exerciseName)) return exercise;
+        const currentSets = exercise.sets || [];
+        return {
+          ...exercise,
+          sets: currentSets.filter((_, index) => index !== setIndex),
+        };
+      }), {
+        details: { exerciseName, setIndex },
+      }
+    );
+  }, [mutateExercises]);
+
   const setField = useCallback((exerciseInput, setIndex, field, value) => {
     const exerciseName = String(exerciseInput?.name || exerciseInput || "").trim();
     if (!exerciseName) return;
@@ -621,6 +639,7 @@ export function useWorkoutLog({
     addExercise,
     removeExercise,
     addSet,
+    removeSet,
     setField,
     setWeightMode,
     reorderExercise,
@@ -628,6 +647,7 @@ export function useWorkoutLog({
   }), [
     addExercise,
     addSet,
+    removeSet,
     draft,
     normalizedDate,
     removeExercise,

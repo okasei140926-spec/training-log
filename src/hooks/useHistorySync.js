@@ -971,6 +971,7 @@ export function useHistorySync({
         user,
         HISTORY_OWNER_KEY,
         applyHistoryDeleteMarkers,
+        applyLocalHistoryDates,
         attachRecordFetchContext,
         buildHistoryFromWorkoutSessionRows,
         buildRemoteHistoryWithWorkoutRowsPriority,

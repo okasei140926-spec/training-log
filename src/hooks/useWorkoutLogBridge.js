@@ -180,6 +180,7 @@ export function useWorkoutLogBridge({
         workoutLogData: workoutLog.logData,
         workoutLogExerciseUnits: workoutLog.exerciseUnits,
         addSet: workoutLog.addSet,
+        removeSet: workoutLog.removeSet,
         setField: workoutLog.setField,
         setWeightMode: workoutLog.setWeightMode,
     };
