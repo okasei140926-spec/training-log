@@ -24,8 +24,16 @@ const downloadBlob = (blob, fileName) => {
   URL.revokeObjectURL(objectUrl);
 };
 
+const DESIGN_PRESETS = [
+  { key: "dark-detail",  label: "A", sub: "ダーク詳細" },
+  { key: "dark-simple",  label: "B", sub: "ダークシンプル" },
+  { key: "light-detail", label: "C", sub: "ライト詳細" },
+  { key: "light-simple", label: "D", sub: "ライトシンプル" },
+];
+
 export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   const [sizeKey, setSizeKey] = useState("square");
+  const [designKey, setDesignKey] = useState("dark-detail");
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef(null);
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
@@ -126,7 +134,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
 
       const file = new File(
         [blob],
-        `pump-${activeSummary.key}-${activeSummary.startKey}-${sizeKey}.png`,
+        `pump-${activeSummary.key}-${activeSummary.startKey}-${sizeKey}-${designKey}.png`,
         { type: "image/png" }
       );
 
@@ -283,7 +291,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             </div>
           )}
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           {Object.values(CARD_PRESETS).map((preset) => (
             <button
               key={preset.key}
@@ -301,6 +309,42 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
               }}
             >
               {preset.label}
+            </button>
+          ))}
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 6,
+            marginBottom: 12,
+          }}
+        >
+          {DESIGN_PRESETS.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              onClick={() => setDesignKey(preset.key)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 2,
+                padding: "7px 4px",
+                borderRadius: 10,
+                border: designKey === preset.key
+                  ? "1.5px solid rgba(18, 199, 194, 0.7)"
+                  : "1px solid rgba(18, 199, 194, 0.12)",
+                background: designKey === preset.key
+                  ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                  : "var(--card2)",
+                color: designKey === preset.key ? "#fff" : "var(--text2)",
+                boxShadow: designKey === preset.key ? "0 6px 16px rgba(15, 94, 99, 0.14)" : "none",
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 800, lineHeight: 1 }}>{preset.label}</span>
+              <span style={{ fontSize: 9, fontWeight: 600, opacity: 0.8, lineHeight: 1.2 }}>{preset.sub}</span>
             </button>
           ))}
         </div>
@@ -332,7 +376,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
                 transformOrigin: "top left",
               }}
             >
-              <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} />
+              <TrainingSummaryShareCard ref={cardRef} summary={activeSummary} sizeKey={sizeKey} designKey={designKey} />
             </div>
           </div>
         </div>
