@@ -1196,6 +1196,13 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
             window.location.href = checkoutData.url;
             return true;
           }
+          // 400 "すでにPro会員です。" — DB says active but frontend isPro is stale.
+          // Refresh Pro status from server so the UI reflects the correct state.
+          if (checkoutRes.status === 400 && checkoutData?.error?.includes("Pro")) {
+            console.warn("[stripe checkout] already pro — refreshing status", { response: checkoutData });
+            refreshPumpProStatus().catch(() => {});
+            return false;
+          }
           logAiApiError("create checkout session failed", {
             apiUrl,
             status: checkoutRes.status,

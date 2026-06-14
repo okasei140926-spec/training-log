@@ -1155,6 +1155,14 @@ export function useHistorySync({
                     .filter((date) => !pendingLocalDates.has(date));
                 const workoutsDates = getValidWorkoutDatesFromHistory(workoutsOnlyHistory)
                     .filter((date) => !pendingLocalDates.has(date));
+                console.log("[refreshDisplay] dates after filter", {
+                    screen,
+                    workoutsRowsReturned: workoutsRes.data?.length || 0,
+                    allRemoteDates: getValidWorkoutDatesFromHistory(remoteHistory),
+                    remoteDatesAfterFilter: remoteDates,
+                    pendingLocalDates: [...pendingLocalDates],
+                    earlyReturn: !remoteDates.length && !workoutsDates.length,
+                });
                 if (!remoteDates.length && !workoutsDates.length) return;
 
                 const currentHistory = latestHistoryRef.current || {};
