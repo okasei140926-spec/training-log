@@ -785,6 +785,15 @@ export default function GymApp() {
         normalizeHistoryDeleteMarkers(historyDeleteMarkersRef.current)
     ), []);
 
+    // Stable ref so onStartupUnsyncedLocalDates can be defined before markWorkoutContentChanged
+    const markWorkoutContentChangedRef = useRef(null);
+    const onStartupUnsyncedLocalDates = useCallback((unsyncedDates) => {
+        unsyncedDates.forEach((date) => {
+            markWorkoutContentChangedRef.current?.(date, "startup_unsynced_local", { explicitEdit: true });
+        });
+        setForceSyncVersion((v) => v + 1);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const {
         trustedWorkoutRows,
         trustedSessionRows,
@@ -813,12 +822,7 @@ export default function GymApp() {
         sessionSyncVersion,
         applyLocalHistoryDates,
         pendingWorkoutContentChangeDatesRef,
-        onStartupUnsyncedLocalDates: useCallback((unsyncedDates) => {
-            unsyncedDates.forEach((date) => {
-                markWorkoutContentChanged(date, "startup_unsynced_local", { explicitEdit: true });
-            });
-            setForceSyncVersion((v) => v + 1);
-        }, [markWorkoutContentChanged]), // eslint-disable-line react-hooks/exhaustive-deps
+        onStartupUnsyncedLocalDates,
         // module-level helpers
         shouldLogPerfDebug,
         getRuntimeEnvironmentLabel,
@@ -902,6 +906,9 @@ export default function GymApp() {
         buildHistoryFromWorkoutSessionRows,
         describeHistoryRecordsForDate,
     });
+
+    // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it
+    markWorkoutContentChangedRef.current = markWorkoutContentChanged;
 
     const {
         historySyncDiagnostic,
