@@ -492,13 +492,13 @@ export function useHistorySync({
                             .select("date, data")
                             .eq("user_id", user.id)
                             .gte("date", sessionRangeStart)
-                            .order("date", { ascending: true })
+                            .order("date", { ascending: false })
                             .limit(initialHistoryLimit);
                         if (workoutsRes.error) {
                             const context = logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
                                 userId: user.id,
                                 dateRange: { from: sessionRangeStart, limit: initialHistoryLimit },
-                                query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                                query: "workouts.select(date,data).eq(user_id).gte(date).order(date desc).limit",
                                 responseData: workoutsRes.data,
                             });
                             throw attachRecordFetchContext(workoutsRes.error, context);
@@ -1042,11 +1042,15 @@ export function useHistorySync({
                     sessionsQuery = sessionsQuery.lt("workout_date", sessionRangeEnd);
                 }
 
+                // DESC order ensures the most recent dates are always returned
+                // when the total row count exceeds the limit.
+                // buildHistoryFromWorkoutRows sorts internally so order doesn't matter there.
+                const ascendingOrder = screen === "calendar";
                 workoutsQuery = workoutsQuery
-                    .order("date", { ascending: true })
+                    .order("date", { ascending: ascendingOrder })
                     .limit(displayHistoryLimit);
                 sessionsQuery = sessionsQuery
-                    .order("workout_date", { ascending: true })
+                    .order("workout_date", { ascending: ascendingOrder })
                     .limit(displayHistoryLimit);
 
                 const displayFetchKey = `display_history:${screen}:${user.id}:${sessionRangeStart}:${sessionRangeEnd || "open"}:${displayHistoryLimit}`;
