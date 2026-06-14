@@ -243,7 +243,9 @@ export default function SetRow({
         <div
             style={{
                 display: "grid",
-                gridTemplateColumns: "30px minmax(48px, 0.48fr) minmax(126px, 1.42fr) minmax(78px, 0.82fr)",
+                gridTemplateColumns: onDeleteSet
+                    ? "30px minmax(48px, 0.48fr) minmax(126px, 1.42fr) minmax(68px, 0.82fr) 22px"
+                    : "30px minmax(48px, 0.48fr) minmax(126px, 1.42fr) minmax(78px, 0.82fr)",
                 gap: 7,
                 alignItems: "center",
                 marginBottom: 10,
@@ -322,48 +324,20 @@ export default function SetRow({
                 </div>
             )}
 
-            <div style={{ minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
-                    <div style={inputWrapStyle}>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            data-log-set-input="true"
-                            data-log-set-input-id={`${inputId || `${ex?.name || "set"}-${idx}`}:reps`}
-                            value={set.reps}
-                            onChange={(e) => setField(ex, idx, "reps", e.target.value)}
-                            onFocus={() => notifyInputFocus("reps")}
-                            onBlur={notifyInputBlur}
-                            placeholder="0"
-                            style={{ ...inputStyle, paddingRight: 28, boxShadow: "var(--shadow-soft)" }}
-                        />
-                        <span style={repsSuffixStyle}>回</span>
-                    </div>
-                    {onDeleteSet && (
-                        <button
-                            type="button"
-                            onClick={() => onDeleteSet(idx)}
-                            style={{
-                                flexShrink: 0,
-                                width: 24,
-                                height: 24,
-                                borderRadius: "50%",
-                                border: "1px solid var(--border2)",
-                                background: "var(--btn-secondary)",
-                                color: "var(--text3)",
-                                fontSize: 14,
-                                fontWeight: 900,
-                                padding: 0,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                lineHeight: 1,
-                            }}
-                        >
-                            ×
-                        </button>
-                    )}
-                </div>
+            <div style={inputWrapStyle}>
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    data-log-set-input="true"
+                    data-log-set-input-id={`${inputId || `${ex?.name || "set"}-${idx}`}:reps`}
+                    value={set.reps}
+                    onChange={(e) => setField(ex, idx, "reps", e.target.value)}
+                    onFocus={() => notifyInputFocus("reps")}
+                    onBlur={notifyInputBlur}
+                    placeholder="0"
+                    style={{ ...inputStyle, paddingRight: 28, boxShadow: "var(--shadow-soft)" }}
+                />
+                <span style={repsSuffixStyle}>回</span>
                 {targetRepsLabel && (
                     <div style={{
                         marginTop: 4,
@@ -377,6 +351,31 @@ export default function SetRow({
                     </div>
                 )}
             </div>
+
+            {onDeleteSet && (
+                <button
+                    type="button"
+                    onClick={() => onDeleteSet(idx)}
+                    style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        border: "1px solid var(--border2)",
+                        background: "var(--btn-secondary)",
+                        color: "var(--text3)",
+                        fontSize: 13,
+                        fontWeight: 900,
+                        padding: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        lineHeight: 1,
+                        alignSelf: "center",
+                    }}
+                >
+                    ×
+                </button>
+            )}
 
             {showUnitMenu && (
                 <div
