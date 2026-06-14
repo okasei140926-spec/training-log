@@ -429,6 +429,18 @@ export function collectRecentSessions(history, muscleEx, overrides, workoutDurat
         });
     });
 
+    const _debugDate = "2026-06-13";
+    if (sessions[_debugDate]) {
+        console.log("[collectRecentSessions] 6/13 session found", {
+            sets: sessions[_debugDate].sets,
+            parts: [...sessions[_debugDate].parts],
+            exercises: sessions[_debugDate].exercises.map((e) => ({ name: e.name, setCount: e.setCount })),
+        });
+    } else {
+        const allDates = Object.keys(sessions).sort().slice(-5);
+        console.warn("[collectRecentSessions] 6/13 session NOT found. Latest 5 dates:", allDates);
+    }
+
     return Object.values(sessions)
         .sort((a, b) => b.date.localeCompare(a.date))
         .map(s => {

@@ -1104,6 +1104,30 @@ export function useHistorySync({
 
                 const { workoutsRes, sessionsRes } = displayFetch.value;
 
+                // ── 6/13 specific diagnostic ──────────────────────────────
+                const _debugDate = "2026-06-13";
+                const _debugRow = (workoutsRes.data || []).find((r) => String(r?.date || "").slice(0, 10) === _debugDate);
+                if (_debugRow) {
+                    const _debugHistory = buildHistoryFromWorkoutRows([_debugRow]);
+                    const _debugExercises = Object.entries(_debugHistory || {}).map(([name, records]) => ({
+                        name,
+                        recordCount: records.length,
+                        firstRecordSets: records[0]?.sets || [],
+                        firstRecordDate: records[0]?.date,
+                    }));
+                    console.log("[refreshDisplay] 6/13 row found", {
+                        rawRow: { date: _debugRow.date, dataKeys: Object.keys(_debugRow.data || {}) },
+                        builtExercises: _debugExercises,
+                        isInHistory: _debugExercises.length > 0,
+                    });
+                } else {
+                    console.warn("[refreshDisplay] 6/13 row NOT in workoutsRes.data", {
+                        totalRows: workoutsRes.data?.length,
+                        dates: (workoutsRes.data || []).map((r) => r?.date).filter(Boolean).sort().slice(-10),
+                    });
+                }
+                // ─────────────────────────────────────────────────────────
+
                 if (sessionsRes.error) {
                     logRecordFetchError(queryLabel, "workout_sessions", sessionsRes.error, {
                         userId: user.id,
