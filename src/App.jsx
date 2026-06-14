@@ -2859,6 +2859,7 @@ export default function GymApp() {
                         onRestorePro={restorePumpPro}
                         onDeactivateProDev={deactivatePumpProDev}
                         onRefreshProStatus={refreshPumpProStatus}
+                        onManageStripePortal={openStripePortal}
                         dailyFreeAiLimit={dailyFreeAiLimit}
                         aiUsageCount={aiUsageCount}
                     />

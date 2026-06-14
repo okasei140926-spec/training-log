@@ -42,6 +42,7 @@ export default function SettingsModal({
   onRestorePro,
   onDeactivateProDev,
   onRefreshProStatus,
+  onManageStripePortal = null,
   dailyFreeAiLimit = 5,
   aiUsageCount = 0,
 }) {
@@ -206,7 +207,19 @@ export default function SettingsModal({
     }
   };
 
-  const handleManageSubscription = () => {
+  const handleManageSubscription = async () => {
+    // Web PWA (Stripe): ネイティブ環境でなければ Stripe カスタマーポータルを開く
+    if (!isNativePurchaseEnvironment() && onManageStripePortal) {
+      setProActionBusy(true);
+      try {
+        const ok = await onManageStripePortal();
+        if (!ok) setProMessage("ポータルを開けませんでした。再度お試しください。");
+      } finally {
+        setProActionBusy(false);
+      }
+      return;
+    }
+    // ネイティブ (Apple/Google): managementURL があればそちらへ、なければ標準設定画面
     const managementURL = plan.managementURL || plan.managementUrl;
     if (managementURL) {
       const opened = window.open(managementURL, "_blank", "noopener,noreferrer");
@@ -333,6 +346,7 @@ export default function SettingsModal({
             <button
               type="button"
               onClick={handleManageSubscription}
+              disabled={proActionBusy}
               style={{
                 width: "100%",
                 padding: "14px 16px",
@@ -342,6 +356,7 @@ export default function SettingsModal({
                 color: "var(--text)",
                 fontSize: 14,
                 fontWeight: 900,
+                opacity: proActionBusy ? 0.7 : 1,
               }}
             >
               サブスクリプションを管理

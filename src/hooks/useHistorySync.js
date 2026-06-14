@@ -972,10 +972,10 @@ export function useHistorySync({
     // ─── refreshDisplayHistoryFromSupabase effect ─────────────────────────────
     useEffect(() => {
         if (!user?.id || !historySyncReady) return;
-        if (!["home", "calendar", "analytics", "log"].includes(screen)) return;
+        if (!["home", "calendar", "analytics", "log", "history"].includes(screen)) return;
         const trustedDisplayHistory = (workoutsDataHistory || {});
         const trustedHistoryMetrics = getHistoryOverallMetrics(trustedDisplayHistory);
-        if (trustedHistoryMetrics.setCount > 0 && !["analytics", "home", "log"].includes(screen)) {
+        if (trustedHistoryMetrics.setCount > 0 && !["analytics", "home", "log", "history"].includes(screen)) {
             console.log("[home fetch] display_history skipped; trustedHistory already available", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user.id,
@@ -988,7 +988,7 @@ export function useHistorySync({
             });
             return;
         }
-        if (trustedHistoryMetrics.setCount > 0 && ["analytics", "home", "log"].includes(screen)) {
+        if (trustedHistoryMetrics.setCount > 0 && ["analytics", "home", "log", "history"].includes(screen)) {
             console.log("[home fetch] display_history background refresh for analytics PR", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user.id,
