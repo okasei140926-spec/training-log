@@ -359,8 +359,11 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             display: "flex",
             justifyContent: "center",
             marginBottom: 14,
-            overflow: "hidden",
+            overflowX: "hidden",
+            overflowY: "auto",
+            maxHeight: "min(55dvh, 360px)",
             width: "100%",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <div
