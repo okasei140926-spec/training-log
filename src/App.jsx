@@ -57,7 +57,7 @@ import { normalizeExerciseName } from "./utils/exerciseName";
 import { convertPlanWeight, normalizePlanUnit, normalizeWorkoutPlan } from "./utils/aiWorkoutPlan";
 // computeWorkoutDisplayElapsedSec, getWorkoutTimerPersistence → usePersistCurrentLog
 // APP_VERSION and HISTORY_CACHE_SCHEMA_VERSION are used only in appHelpers.js
-import { useHistorySync } from "./hooks/useHistorySync";
+import { useHistorySync, INITIAL_HOME_HISTORY_LOOKBACK_DAYS } from "./hooks/useHistorySync";
 import { useHistorySave } from "./hooks/useHistorySave";
 import { useWorkoutSummary } from "./hooks/useWorkoutSummary";
 import { useHistoryHandlers } from "./hooks/useHistoryHandlers";
@@ -593,6 +593,7 @@ export default function GymApp() {
     const touchStartY = useRef(null);
     const latestUserIdRef = useRef(null);
     const latestHistoryRef = useRef(history);
+    const startupReconcileUserIdRef = useRef(null);
     const pendingWorkoutNotificationRef = useRef(null);
     const historyDeleteMarkersRef = useRef(createEmptyHistoryDeleteMarkers());
     const dismissedSyncFailureSignaturesRef = useRef(new Set());
@@ -996,6 +997,43 @@ export default function GymApp() {
         setForceSyncVersion((v) => v + 1);
         return dates.length;
     }, [history, markWorkoutContentChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ─── Startup reconciliation ───────────────────────────────────────────────
+    // When historySyncReady fires for the first time per session, compare local history
+    // against trustedWorkoutRows (rows actually fetched from Supabase). Any local dates
+    // within the initial fetch window that are absent from Supabase get queued for sync.
+    // This is the root-cause fix for "worked out offline / app restarted before sync".
+    useEffect(() => {
+        if (!historySyncReady || !user?.id || historyRemoteLoadFailedRef.current) return;
+        if (startupReconcileUserIdRef.current === user.id) return;
+        startupReconcileUserIdRef.current = user.id;
+
+        // trustedWorkoutRows covers the initial fetch window (INITIAL_HOME_HISTORY_LOOKBACK_DAYS days)
+        const remoteDateSet = new Set(
+            trustedWorkoutRows
+                .map((row) => String(row?.date || "").slice(0, 10))
+                .filter(Boolean)
+        );
+
+        const since = getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS);
+        const localDates = getValidWorkoutDatesFromHistory(latestHistoryRef.current || history, { since });
+        const unsyncedDates = localDates.filter((date) => !remoteDateSet.has(date));
+
+        if (!unsyncedDates.length) return;
+
+        console.log("[startup reconcile] local dates missing from Supabase — queuing for sync", {
+            env: getRuntimeEnvironmentLabel(),
+            user_id: user.id,
+            unsyncedDates,
+            localDatesInWindow: localDates.length,
+            remoteDatesInWindow: remoteDateSet.size,
+        });
+
+        unsyncedDates.forEach((date) => {
+            markWorkoutContentChanged(date, "startup_unsynced_local", { explicitEdit: true });
+        });
+        setForceSyncVersion((v) => v + 1);
+    }, [historySyncReady, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
