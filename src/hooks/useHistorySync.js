@@ -49,6 +49,7 @@ export function useHistorySync({
     sessionSyncVersion,
     applyLocalHistoryDates,
     pendingWorkoutContentChangeDatesRef,
+    onStartupUnsyncedLocalDates = null,
     // module-level helpers from App.jsx passed as params
     shouldLogPerfDebug,
     getRuntimeEnvironmentLabel,
@@ -105,6 +106,7 @@ export function useHistorySync({
     const supabaseFetchInFlightRef = useRef(new Map());
     const supabaseFetchBackoffRef = useRef({});
     const supabaseFetchFreshUntilRef = useRef({});
+    const startupReconcileForUserRef = useRef(null);
 
     // ─── Callbacks ────────────────────────────────────────────────────────────
 
@@ -883,6 +885,31 @@ export function useHistorySync({
                     workoutsDataHistory: getHistoryOverallMetrics(appliedWorkoutsDataHistory),
                     appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
                 });
+                // ── Startup reconciliation ────────────────────────────────
+                // Must run BEFORE persistHistoryForUser overwrites localStorage
+                // with Supabase-only data, which would erase local-only dates.
+                // Uses localMergeCandidate (pre-sync local cache) vs workoutsRes.data
+                // (live Supabase rows) to avoid the race condition where
+                // trustedWorkoutRows state is empty due to a cancelled invocation.
+                if (onStartupUnsyncedLocalDates && startupReconcileForUserRef.current !== user.id) {
+                    startupReconcileForUserRef.current = user.id;
+                    const since = getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS);
+                    const localDates = getValidWorkoutDatesFromHistory(localMergeCandidate, { since });
+                    const remoteDateSet = new Set(
+                        (workoutsRes.data || []).map((r) => String(r?.date || "").slice(0, 10)).filter(Boolean)
+                    );
+                    const unsyncedDates = localDates.filter((d) => !remoteDateSet.has(d));
+                    console.log("[startup reconcile] local vs remote comparison", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        localDatesInWindow: localDates.length,
+                        remoteDatesInWindow: remoteDateSet.size,
+                        unsyncedDates,
+                    });
+                    if (unsyncedDates.length > 0) {
+                        onStartupUnsyncedLocalDates(unsyncedDates);
+                    }
+                }
                 if (hasRemoteWorkout) {
                     persistHistoryForUser(user.id, mergedHistory);
                 }
@@ -967,6 +994,7 @@ export function useHistorySync({
         shouldLogPerfDebug,
         workoutsDataHistoryRef,
         isPro,
+        onStartupUnsyncedLocalDates,
     ]);
 
     // ─── refreshDisplayHistoryFromSupabase effect ─────────────────────────────
