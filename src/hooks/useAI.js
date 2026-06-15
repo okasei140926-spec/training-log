@@ -21,8 +21,10 @@ const AI_DAILY_LIMIT = 5;
 const AI_USAGE_STORAGE_KEY = "ai_usage_state";
 const AI_PRO_STORAGE_KEY = "pump_pro_enabled";
 const AI_API_ORIGIN = process.env.REACT_APP_API_ORIGIN || "https://training-log-mu.vercel.app";
-const AI_WORKOUTS_SELECT_QUERY = "workouts.select(date,data).eq(user_id).order(date.asc).limit(500)";
+const AI_WORKOUTS_SELECT_QUERY = "workouts.select(date,data).eq(user_id).order(date.asc).limit(150)";
 const AI_CONTEXT_CANONICAL_SOURCE = "workouts.data";
+const AI_HISTORY_CACHE_TTL_MS = 10 * 60 * 1000; // 10分
+const _aiHistoryCache = new Map(); // key: `${userId}:${isPro}` → { result, fetchedAt }
 const INITIAL_AI_MESSAGE = {
   role: "assistant",
   content: "こんにちは！AI Coachです。トレーニングについて何でも聞いてください 💪",
@@ -276,6 +278,13 @@ const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
     };
   }
 
+  const cacheKey = `${userId}:${isPro}`;
+  const cached = _aiHistoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < AI_HISTORY_CACHE_TTL_MS) {
+    console.log("[AI history-limit] cache hit", { isPro, cacheAge: Date.now() - cached.fetchedAt });
+    return cached.result;
+  }
+
   const threeMonthsAgo = (() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 3);
@@ -287,7 +296,7 @@ const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
     .select("date,data")
     .eq("user_id", userId)
     .order("date", { ascending: true })
-    .limit(500);
+    .limit(150);
 
   if (!isPro) {
     query = query.gte("date", threeMonthsAgo);
@@ -296,6 +305,7 @@ const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
   console.log("[AI history-limit]", {
     isPro,
     dateFilter: isPro ? "none (Pro: full history)" : threeMonthsAgo,
+    limit: 150,
   });
 
   const { data, error } = await query;
@@ -323,12 +333,14 @@ const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
     };
   }
 
-  return {
+  const result = {
     source: AI_CONTEXT_CANONICAL_SOURCE,
     history: buildHistoryFromWorkoutRows(data || []),
     rows: data || [],
     error: null,
   };
+  _aiHistoryCache.set(cacheKey, { result, fetchedAt: Date.now() });
+  return result;
 };
 
 const summarizeWorkoutDay = (groupedHistory, dateKey) => {

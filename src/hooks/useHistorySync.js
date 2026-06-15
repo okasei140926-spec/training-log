@@ -511,7 +511,8 @@ export function useHistorySync({
                             .eq("user_id", user.id)
                             .gte("date", initialWeekRange.start)
                             .lte("date", initialWeekRange.end)
-                            .order("date", { ascending: true });
+                            .order("date", { ascending: true })
+                            .limit(14);
                         if (weekWorkoutsRes.error) {
                             const context = logRecordFetchError("history_initial_load_week", "workouts", weekWorkoutsRes.error, {
                                 userId: user.id,

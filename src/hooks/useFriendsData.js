@@ -518,7 +518,8 @@ export function useFriendsData({
                     .select("user_id, date, data")
                     .in("user_id", nextFriendIds)
                     .gte("date", previousMonthStart)
-                    .order("date", { ascending: false }),
+                    .order("date", { ascending: false })
+                    .limit(50),
                 supabase
                     .from("workout_sessions")
                     .select("id, user_id, workout_date, created_at, updated_at, visibility, summary_json, total_volume, exercise_count")
