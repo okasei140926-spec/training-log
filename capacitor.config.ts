@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId: "app.ironlog.traininglog",
   appName: "PUMP",
   webDir: "build",
-  bundledWebRuntime: false,
 };
 
 export default config;
