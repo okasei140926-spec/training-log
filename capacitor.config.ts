@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "app.ironlog.traininglog",
+  appId: "com.okanishiseita.ironlog",
   appName: "PUMP",
   webDir: "build",
 };
