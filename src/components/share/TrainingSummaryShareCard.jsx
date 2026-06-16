@@ -255,7 +255,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
         <div
           ref={ref}
           style={{
-            width: preset.width, height: preset.height,
+            width: preset.width, minHeight: preset.height,
             borderRadius: 30, overflow: "hidden",
             background: darkMonthlyBg,
             border: "1px solid rgba(255,255,255,0.08)",
@@ -319,7 +319,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
       <div
         ref={ref}
         style={{
-          width: preset.width, height: preset.height,
+          width: preset.width, minHeight: preset.height,
           borderRadius: 30, overflow: "hidden",
           background: darkWeeklyBg,
           border: "1px solid rgba(255,255,255,0.08)",
@@ -370,7 +370,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
       <div
         ref={ref}
         style={{
-          width: preset.width, height: preset.height,
+          width: preset.width, minHeight: preset.height,
           borderRadius: 30, overflow: "hidden",
           background: bg,
           border: "1px solid rgba(255,255,255,0.08)",
@@ -434,7 +434,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
         <div
           ref={ref}
           style={{
-            width: preset.width, height: preset.height,
+            width: preset.width, minHeight: preset.height,
             borderRadius: 30, overflow: "hidden",
             background: lightBg,
             border: "1px solid rgba(0,184,169,0.18)",
@@ -480,7 +480,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
       <div
         ref={ref}
         style={{
-          width: preset.width, height: preset.height,
+          width: preset.width, minHeight: preset.height,
           borderRadius: 30, overflow: "hidden",
           background: lightBg,
           border: "1px solid rgba(0,184,169,0.18)",
@@ -525,7 +525,7 @@ const TrainingSummaryShareCard = forwardRef(function TrainingSummaryShareCard(
     <div
       ref={ref}
       style={{
-        width: preset.width, height: preset.height,
+        width: preset.width, minHeight: preset.height,
         borderRadius: 30, overflow: "hidden",
         background: lightBg,
         border: "1px solid rgba(0,184,169,0.18)",

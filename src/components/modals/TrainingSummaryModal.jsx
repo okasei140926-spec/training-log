@@ -36,6 +36,9 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
   const [designKey, setDesignKey] = useState("dark-detail");
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef(null);
+  const [cardRenderedHeight, setCardRenderedHeight] = useState(
+    () => getCardDimensions("square").height
+  );
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
   const prevIsOpenRef = useRef(false);
   const [selectedSummaryKey, setSelectedSummaryKey] = useState(null);
@@ -75,6 +78,24 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
     }
     prevIsOpenRef.current = isOpen;
   }, [isOpen, summary]);
+
+  // sizeKey 変更時にプリセット高さへリセット（ResizeObserver が更新するまでの暫定値）
+  useEffect(() => {
+    setCardRenderedHeight(getCardDimensions(sizeKey).height);
+  }, [sizeKey]);
+
+  // カードの実際の描画高さを追跡し、プレビューの内側ラッパーを動的に更新する
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const node = cardRef.current;
+    if (!node) return undefined;
+    const observer = new ResizeObserver(() => {
+      const h = node.offsetHeight;
+      if (h > 0) setCardRenderedHeight(h);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -361,7 +382,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             marginBottom: 14,
             overflowX: "hidden",
             overflowY: "auto",
-            maxHeight: "min(55dvh, 360px)",
+            maxHeight: "min(62dvh, 420px)",
             width: "100%",
             WebkitOverflowScrolling: "touch",
           }}
@@ -369,7 +390,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           <div
             style={{
               width: preview.width * preview.scale,
-              height: preview.height * preview.scale,
+              height: cardRenderedHeight * preview.scale,
               overflow: "hidden",
               borderRadius: sizeKey === "story" ? 20 : 18,
               boxShadow: "0 18px 38px rgba(15, 23, 42, 0.16)",
@@ -379,7 +400,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             <div
               style={{
                 width: preview.width,
-                height: preview.height,
+                height: cardRenderedHeight,
                 transform: `scale(${preview.scale})`,
                 transformOrigin: "top left",
               }}
