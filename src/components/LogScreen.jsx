@@ -970,7 +970,20 @@ export default function LogScreen({
                                                                     </span>
                                                                 )}
                                                                 {isPR && prDiff > 0 && (
-                                                                    <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, lineHeight: 1.2 }}>
+                                                                    <span style={{
+                                                                        display: "inline-flex",
+                                                                        alignItems: "center",
+                                                                        padding: "3px 8px",
+                                                                        borderRadius: 999,
+                                                                        background: "linear-gradient(135deg, rgba(234,179,8,0.18), rgba(18,199,194,0.14))",
+                                                                        border: "1px solid rgba(234,179,8,0.4)",
+                                                                        boxShadow: "0 2px 8px rgba(234,179,8,0.18)",
+                                                                        fontSize: 12,
+                                                                        fontWeight: 800,
+                                                                        color: "#FACC15",
+                                                                        lineHeight: 1.2,
+                                                                        animation: "prBadgeIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both",
+                                                                    }}>
                                                                         PR更新 +{prDiffDisplay.toFixed(1)}{formatWeightUnit(currentTopDisplayUnit)}
                                                                     </span>
                                                                 )}
