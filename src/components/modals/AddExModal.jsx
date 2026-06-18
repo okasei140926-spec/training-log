@@ -1,8 +1,25 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/suggestions";
 import { load, save } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import CustomBodyPartModal from "./CustomBodyPartModal";
+
+// プリセットに存在しない種目名をワークアウト履歴から洗い出す
+const findNonPresetExercises = (history) => {
+    const allPreset = new Set(
+        Object.values(SUGGESTIONS).flat().map((n) => normalizeExerciseName(n))
+    );
+    const found = new Map(); // normalizedName → { name, count }
+    Object.entries(history || {}).forEach(([exName, records]) => {
+        const norm = normalizeExerciseName(exName);
+        if (!norm || allPreset.has(norm)) return;
+        if (!found.has(norm)) {
+            found.set(norm, { name: exName, count: 0 });
+        }
+        found.get(norm).count += (records?.length || 0);
+    });
+    return Array.from(found.values()).sort((a, b) => b.count - a.count);
+};
 
 const matchesActiveTab = (bodyPart, activeTab) => {
     if (!bodyPart || bodyPart === "その他") return false;
@@ -27,6 +44,9 @@ export default function AddExModal({
     onQuickAdd,
     existingNames = [],
     muscleEx = {},
+    customExercisesByBodyPart = {},
+    onSaveCustomExercise,
+    onBulkSaveCustomExercises,
     history = {},
     manualBests = [],
     customBodyParts = [],
@@ -47,6 +67,15 @@ export default function AddExModal({
     const [showCustomBodyPartModal, setShowCustomBodyPartModal] = useState(false);
     const [hiddenExerciseSuggestions, setHiddenExerciseSuggestions] = useState(() =>
         load("hiddenExerciseSuggestions", {})
+    );
+    const [showMigration, setShowMigration] = useState(false);
+    const [migrationBusy, setMigrationBusy] = useState(false);
+    const [migrationDone, setMigrationDone] = useState(false);
+
+    const nonPresetExercises = useMemo(
+        () => findNonPresetExercises(history),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        []
     );
 
     const isFree = !target || (Array.isArray(target) && target.length === 0);
@@ -120,6 +149,15 @@ export default function AddExModal({
         return historyUsageMap[normalizeExerciseName(exName)] || 0;
     };
 
+    // Supabase カスタム種目の名前セット（バッジ表示判定用）
+    const supabaseCustomNames = useMemo(() => {
+        const names = new Set();
+        Object.values(customExercisesByBodyPart).forEach((list) =>
+            list.forEach((ex) => names.add(ex.name))
+        );
+        return names;
+    }, [customExercisesByBodyPart]);
+
     const freeItems = (() => {
         if (!isFree || !activeTab) return [];
         const fixed = SUGGESTIONS[activeTab] || [];
@@ -128,7 +166,8 @@ export default function AddExModal({
             .filter((best) => matchesActiveTab(best?.body_part, activeTab))
             .map((best) => best.exercise_name)
             .filter(Boolean);
-        return [...new Set([...fixed, ...custom, ...fromManualBests])]
+        const fromSupabase = (customExercisesByBodyPart[activeTab] || []).map(ex => ex.name);
+        return [...new Set([...fixed, ...custom, ...fromManualBests, ...fromSupabase])]
             .filter((name) => !hiddenExerciseSuggestions[`${activeTab}::${name}`])
             .map((item, originalIndex) => ({
                 item,
@@ -287,6 +326,7 @@ export default function AddExModal({
         if (!name.trim()) return;
         const trimmed = name.trim();
         onQuickAdd(trimmed, false, activeTab, { action: "manual_exercise_add" });
+        onSaveCustomExercise?.(trimmed, activeTab);
         setAdded(p => new Set([...p, trimmed]));
         setName("");
     };
@@ -296,6 +336,7 @@ export default function AddExModal({
             {items.map(s => {
                 const key = typeof s === "string" ? s : s.name;
                 const isAdded = hasAddedExercise(key);
+                const isCustom = supabaseCustomNames.has(key);
                 return (
                     <button
                         key={key}
@@ -315,12 +356,26 @@ export default function AddExModal({
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
+                            gap: 8,
                             boxShadow: "0 8px 18px rgba(0, 0, 0, 0.10)"
                         }}>
-                        <span style={{ textDecoration: isAdded ? "line-through" : "none", opacity: isAdded ? 0.78 : 1 }}>{key}</span>
+                        <span style={{ textDecoration: isAdded ? "line-through" : "none", opacity: isAdded ? 0.78 : 1, flex: 1, minWidth: 0 }}>{key}</span>
+                        {isCustom && !isAdded && (
+                            <span style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                color: "#FACC15",
+                                background: "rgba(234,179,8,0.14)",
+                                border: "1px solid rgba(234,179,8,0.3)",
+                                borderRadius: 999,
+                                padding: "2px 6px",
+                                lineHeight: 1.4,
+                                flexShrink: 0,
+                            }}>MY</span>
+                        )}
                         {isAdded
-                            ? <span style={{ color: "rgba(18, 199, 194, 0.82)", fontSize: 16, fontWeight: 700 }}>✓</span>
-                            : <span style={{ color: "var(--text3)", fontSize: 14 }}>＋</span>
+                            ? <span style={{ color: "rgba(18, 199, 194, 0.82)", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>✓</span>
+                            : <span style={{ color: "var(--text3)", fontSize: 14, flexShrink: 0 }}>＋</span>
                         }
                     </button>
                 );
@@ -450,6 +505,84 @@ export default function AddExModal({
                             手動で追加
                         </button>
                     </div>
+
+                    {/* マイグレーション：過去の手動種目を一括登録 */}
+                    {onBulkSaveCustomExercises && nonPresetExercises.length > 0 && !migrationDone && (
+                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border2)" }}>
+                            {!showMigration ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMigration(true)}
+                                    style={{
+                                        width: "100%",
+                                        padding: "9px 14px",
+                                        borderRadius: 10,
+                                        border: "1px dashed rgba(18, 199, 194, 0.3)",
+                                        background: "transparent",
+                                        color: "var(--text3)",
+                                        fontSize: 12,
+                                        textAlign: "left",
+                                    }}
+                                >
+                                    過去の記録から {nonPresetExercises.length} 件のカスタム種目が見つかりました →
+                                </button>
+                            ) : (
+                                <div>
+                                    <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 8, fontWeight: 700 }}>
+                                        過去の記録から検出されたカスタム種目（{nonPresetExercises.length}件）
+                                    </div>
+                                    <div style={{ maxHeight: 120, overflowY: "auto", marginBottom: 8 }}>
+                                        {nonPresetExercises.map((ex) => (
+                                            <div key={ex.name} style={{ fontSize: 12, color: "var(--text2)", padding: "3px 0", display: "flex", gap: 6 }}>
+                                                <span style={{ color: "var(--text3)" }}>×{ex.count}</span>
+                                                <span>{ex.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMigration(false)}
+                                            style={{ flex: 1, padding: "8px", borderRadius: 10, border: "none", background: "var(--card2)", color: "var(--text2)", fontSize: 12 }}
+                                        >
+                                            閉じる
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={migrationBusy}
+                                            onClick={async () => {
+                                                setMigrationBusy(true);
+                                                // body_part は "その他" で登録（ユーザーが後でタブから選択可能）
+                                                await onBulkSaveCustomExercises(
+                                                    nonPresetExercises.map((ex) => ({ name: ex.name, body_part: "その他" }))
+                                                );
+                                                setMigrationBusy(false);
+                                                setMigrationDone(true);
+                                                setShowMigration(false);
+                                            }}
+                                            style={{
+                                                flex: 2,
+                                                padding: "8px",
+                                                borderRadius: 10,
+                                                border: "none",
+                                                background: migrationBusy ? "rgba(18, 199, 194, 0.12)" : "linear-gradient(135deg, #0F5E63, #12C7C2)",
+                                                color: migrationBusy ? "var(--text3)" : "#fff",
+                                                fontSize: 12,
+                                                fontWeight: 700,
+                                            }}
+                                        >
+                                            {migrationBusy ? "登録中..." : "すべて登録する"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {migrationDone && (
+                        <div style={{ marginTop: 10, fontSize: 12, color: "rgba(18,199,194,0.9)", textAlign: "center" }}>
+                            カスタム種目を登録しました ✓
+                        </div>
+                    )}
                 </div>
             </div>
 

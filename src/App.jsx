@@ -77,6 +77,7 @@ import { useDraftStore } from "./hooks/useDraftStore";
 import { useLogDraftApplicator } from "./hooks/useLogDraftApplicator";
 import { useWorkoutsDataHistorySync } from "./hooks/useWorkoutsDataHistorySync";
 import { useAuthSetup } from "./hooks/useAuthSetup";
+import { useCustomExercises } from "./hooks/useCustomExercises";
 import {
     applyHistoryDeleteMarkers,
     applyPreferredHistoryDates,
@@ -956,6 +957,8 @@ export default function GymApp() {
         setShowSettingsModal,
         setShowAuth,
     });
+
+    const { customExercisesByBodyPart, addCustomExercise, bulkAddCustomExercises } = useCustomExercises(user);
 
     const { fetchRemoteWorkoutRowsForDates, hasRemoteWorkoutForDate, buildLatestLocalHistoryForRetryDate, deleteRemoteWorkoutArtifactsForDate } = useWorkoutSyncHelpers({
         applyTrustedWorkoutRowsSnapshot,
@@ -2614,6 +2617,9 @@ export default function GymApp() {
                             getWorkoutLogExUnit={getWorkoutLogExUnit}
                             toggleExUnit={toggleExUnit}
                             muscleEx={muscleEx}
+                            customExercisesByBodyPart={customExercisesByBodyPart}
+                            onSaveCustomExercise={addCustomExercise}
+                            onBulkSaveCustomExercises={bulkAddCustomExercises}
                             updateTodayLabels={updateTodayLabels}
                             canonicalDisplayHistory={canonicalDisplayHistory}
                             handleFinishWorkoutTimerAndShowSummary={handleFinishWorkoutTimerAndShowSummary}

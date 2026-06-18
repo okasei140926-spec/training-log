@@ -47,6 +47,9 @@ export default function LogScreenView({
     getWorkoutLogExUnit,
     toggleExUnit,
     muscleEx,
+    customExercisesByBodyPart,
+    onSaveCustomExercise,
+    onBulkSaveCustomExercises,
     updateTodayLabels,
     canonicalDisplayHistory,
     handleFinishWorkoutTimerAndShowSummary,
@@ -138,6 +141,9 @@ export default function LogScreenView({
                         getExUnit={getWorkoutLogExUnit}
                         onToggleExUnit={toggleExUnit}
                         muscleEx={muscleEx}
+                        customExercisesByBodyPart={customExercisesByBodyPart}
+                        onSaveCustomExercise={onSaveCustomExercise}
+                        onBulkSaveCustomExercises={onBulkSaveCustomExercises}
                         setTodayLabels={updateTodayLabels}
                         history={canonicalDisplayHistory}
                         logDate={logDate}

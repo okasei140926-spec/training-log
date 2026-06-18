@@ -243,6 +243,9 @@ export default function LogScreen({
     exercises, logData, getExSets, setField, setWeightMode, addSet, removeSet, removeEx,
     onAddEx, onQuickAddEx, onReorderEx, onRenameEx, getPrev, getPR, getPreviousPR, onCopyDown, onCopyDownReps, unit = "kg",
     getExUnit, setTodayLabels, history, logDate, resetSession, muscleEx,
+    customExercisesByBodyPart = {},
+    onSaveCustomExercise,
+    onBulkSaveCustomExercises,
     workoutElapsedSec = 0,
     workoutTimerStatus = "idle",
     onFinishWorkoutTimer,
@@ -1196,6 +1199,9 @@ export default function LogScreen({
                     onQuickAdd={handleQuickAdd}
                     existingNames={exercises.map(e => e.name)}
                     muscleEx={muscleEx}
+                    customExercisesByBodyPart={customExercisesByBodyPart}
+                    onSaveCustomExercise={onSaveCustomExercise}
+                    onBulkSaveCustomExercises={onBulkSaveCustomExercises}
                     history={history}
                     manualBests={manualBests}
                     customBodyParts={customBodyParts}
