@@ -179,7 +179,7 @@ export function useWorkoutHandlers({
 
         workoutLog.addExercise(ex, label, { reason: "exercise_add" });
 
-        const muscleExLabel = getPrimaryDefaultBodyPartLabel(normalizedName) || label;
+        const muscleExLabel = label || getPrimaryDefaultBodyPartLabel(normalizedName);
         setMuscleEx((prev) => {
             const next = { ...prev };
             const list = next[muscleExLabel] || [];
