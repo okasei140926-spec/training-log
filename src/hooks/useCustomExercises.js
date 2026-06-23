@@ -69,6 +69,25 @@ export function useCustomExercises(user) {
         return 0;
     }, [user?.id]);
 
+    const renameCustomExercise = useCallback(async (oldName, newName) => {
+        if (!user?.id || !oldName?.trim() || !newName?.trim()) return;
+        const oldTrimmed = oldName.trim();
+        const newTrimmed = newName.trim();
+        if (oldTrimmed === newTrimmed) return;
+
+        const { error } = await supabase
+            .from("custom_exercises")
+            .update({ name: newTrimmed })
+            .eq("user_id", user.id)
+            .eq("name", oldTrimmed);
+
+        if (!error) {
+            setCustomExercises((prev) =>
+                prev.map((e) => e.name === oldTrimmed ? { ...e, name: newTrimmed } : e)
+            );
+        }
+    }, [user?.id]);
+
     // AddExModal の muscleEx と同じ形式: { bodyPart: [{id, name}] }
     const customExercisesByBodyPart = customExercises.reduce((acc, ex) => {
         if (!acc[ex.body_part]) acc[ex.body_part] = [];
@@ -81,5 +100,6 @@ export function useCustomExercises(user) {
         customExercisesByBodyPart,
         addCustomExercise,
         bulkAddCustomExercises,
+        renameCustomExercise,
     };
 }

@@ -958,7 +958,7 @@ export default function GymApp() {
         setShowAuth,
     });
 
-    const { customExercisesByBodyPart, addCustomExercise, bulkAddCustomExercises } = useCustomExercises(user);
+    const { customExercisesByBodyPart, addCustomExercise, bulkAddCustomExercises, renameCustomExercise } = useCustomExercises(user);
 
     const { fetchRemoteWorkoutRowsForDates, hasRemoteWorkoutForDate, buildLatestLocalHistoryForRetryDate, deleteRemoteWorkoutArtifactsForDate } = useWorkoutSyncHelpers({
         applyTrustedWorkoutRowsSnapshot,
@@ -1734,6 +1734,7 @@ export default function GymApp() {
         startWorkoutTimerIfNeeded,
         shouldLogPerfDebug,
         getRuntimeEnvironmentLabel,
+        renameCustomExercise,
     });
 
     const handleAddAiWorkoutPlanToLog = (rawPlan) => {

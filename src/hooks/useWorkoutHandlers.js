@@ -14,6 +14,7 @@ export function useWorkoutHandlers({
     startWorkoutTimerIfNeeded,
     shouldLogPerfDebug,
     getRuntimeEnvironmentLabel,
+    renameCustomExercise,
 }) {
     const setExerciseOverrideForLabel = useCallback((exerciseName, label) => {
         const normalizedName = normalizeExerciseName(exerciseName);
@@ -231,6 +232,7 @@ export function useWorkoutHandlers({
             return next;
         });
 
+        renameCustomExercise?.(oldEx.name, trimmed);
     };
 
     const quickAdd = (name, remove, labelOverride, options = {}) => {
