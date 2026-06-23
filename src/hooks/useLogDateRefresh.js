@@ -54,7 +54,26 @@ export function useLogDateRefresh({
         if (screen !== "log" || !user?.id || !historySyncReady || !logDate) return;
         const normalizedDate = String(logDate || "").slice(0, 10);
         if (!normalizedDate) return;
-        if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
+        if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) {
+            // Supabase fetch はスキップするが、ローカルドラフトを必ず適用する。
+            // handleLogForDate 内の applyLogDraftState は stale closure でブロックされるため、
+            // この effect が唯一の適用ルートになる。return だけだと画面が前の日付のデータを
+            // 表示し続けるバグが発生する（今日の記録が消えたように見える）。
+            const localDraft = loadDraftForDate(normalizedDate);
+            const hasContent = (
+                localDraft?.sessionEx !== null ||
+                Object.keys(localDraft?.logData || {}).length > 0 ||
+                Object.keys(localDraft?.exerciseUnits || {}).length > 0 ||
+                (localDraft?.todayLabels || []).length > 0
+            );
+            if (hasContent) {
+                applyCurrentLogDraft(withDraftDateMeta(normalizedDate, localDraft, {
+                    source: localDraft?.meta?.source || "pending_draft_restore",
+                    hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
+                }));
+            }
+            return;
+        }
 
         let cancelled = false;
 
