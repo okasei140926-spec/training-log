@@ -22,6 +22,10 @@ body {
   --app-height: 100dvh;
   --bottom-nav-base-height: 56px;
   --bottom-nav-height: calc(var(--bottom-nav-base-height) + var(--safe-bottom));
+  --bottom-nav-bg: rgba(15, 19, 20, 0.97);
+}
+.theme-light {
+  --bottom-nav-bg: rgba(255, 255, 255, 0.98);
 }
 
 html,
