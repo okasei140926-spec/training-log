@@ -62,7 +62,6 @@ export const S = {
 	    right: 0,
 	    width: "100%",
 	    zIndex: 520,
-	    paddingBottom: "env(safe-area-inset-bottom, 0px)",
 	    pointerEvents: "none",
 	    background: "var(--bottom-nav-bg, rgba(15,19,20,0.97))",
 	    backdropFilter: "blur(10px)",
