@@ -538,10 +538,23 @@ export default function GymApp() {
         const root = document.documentElement;
         let rafId = 0;
         let timeoutId = 0;
+        let safeTimerId = 0;
 
         const applyViewportHeight = () => {
             const viewportHeight = window.visualViewport?.height || window.innerHeight;
             root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
+        };
+
+        // iOS PWA: env(safe-area-inset-bottom) may return 0 on initial render
+        // before the browser has finalized safe area metrics. Use a probe element
+        // to read the computed value and set it explicitly as a px value.
+        const applySafeBottom = () => {
+            const probe = document.createElement("div");
+            probe.style.cssText = "position:fixed;bottom:0;left:0;width:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden;";
+            root.appendChild(probe);
+            const safeBottom = parseFloat(getComputedStyle(probe).height) || 0;
+            root.removeChild(probe);
+            root.style.setProperty("--safe-bottom", `${safeBottom}px`);
         };
 
         const scheduleViewportHeightUpdate = () => {
@@ -549,12 +562,19 @@ export default function GymApp() {
             clearTimeout(timeoutId);
             rafId = window.requestAnimationFrame(() => {
                 applyViewportHeight();
-                timeoutId = window.setTimeout(applyViewportHeight, 80);
+                applySafeBottom();
+                timeoutId = window.setTimeout(() => {
+                    applyViewportHeight();
+                    applySafeBottom();
+                }, 80);
             });
         };
 
         applyViewportHeight();
+        applySafeBottom();
         scheduleViewportHeightUpdate();
+        // Re-apply after 200ms to catch iOS PWA delayed safe area resolution
+        safeTimerId = window.setTimeout(applySafeBottom, 200);
 
         window.addEventListener("resize", scheduleViewportHeightUpdate);
         window.addEventListener("orientationchange", scheduleViewportHeightUpdate);
@@ -564,6 +584,7 @@ export default function GymApp() {
         return () => {
             cancelAnimationFrame(rafId);
             clearTimeout(timeoutId);
+            clearTimeout(safeTimerId);
             window.removeEventListener("resize", scheduleViewportHeightUpdate);
             window.removeEventListener("orientationchange", scheduleViewportHeightUpdate);
             window.visualViewport?.removeEventListener("resize", scheduleViewportHeightUpdate);
