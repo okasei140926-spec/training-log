@@ -131,8 +131,18 @@ export function useWorkoutSession({ getTodayKey, user }) {
 
         const timerId = window.setInterval(syncElapsed, 1000);
 
+        // When returning from background, setInterval may have been paused.
+        // Re-sync immediately on visibility restore.
+        const onVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                syncElapsed();
+            }
+        };
+        document.addEventListener("visibilitychange", onVisibilityChange);
+
         return () => {
             window.clearInterval(timerId);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
         };
     }, [
         workoutFinishedAt,
