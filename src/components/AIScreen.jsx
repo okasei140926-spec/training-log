@@ -28,18 +28,20 @@ const CompactBubble = ({ children, role }) => (
     <div style={{ display: "flex", justifyContent: role === "user" ? "flex-end" : "flex-start" }}>
         <div
             style={{
-                maxWidth: "84%",
+                maxWidth: role === "user" ? "80%" : "92%",
                 padding: role === "user" ? "11px 14px" : "12px 14px",
                 fontSize: 13,
-                lineHeight: 1.5,
+                lineHeight: 1.6,
                 borderRadius: role === "user" ? "18px 18px 6px 18px" : "18px 18px 18px 6px",
                 background:
                     role === "user"
                         ? "linear-gradient(135deg, var(--accent), var(--accent2))"
-                        : "linear-gradient(180deg, rgba(18, 199, 194, 0.12), rgba(18, 199, 194, 0.06))",
+                        : "var(--card)",
                 color: role === "user" ? "#fff" : "var(--text)",
-                border: role === "assistant" ? "1px solid rgba(18, 199, 194, 0.12)" : "none",
-                boxShadow: role === "user" ? "var(--shadow-soft)" : "0 10px 18px rgba(15,94,99,0.06)",
+                border: role === "assistant" ? "1px solid rgba(18, 199, 194, 0.10)" : "none",
+                boxShadow: role === "user" ? "var(--shadow-soft)" : "0 4px 12px rgba(15,94,99,0.06)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
             }}
         >
             {children}
@@ -534,7 +536,7 @@ export default function AIScreen({
                 maxHeight: AI_VIEWPORT_HEIGHT,
                 overflow: "hidden",
                 background: "var(--bg)",
-                padding: "0 16px 4px",
+                padding: "0 16px 0",
                 gap: 8,
             }}
         >
@@ -651,32 +653,27 @@ export default function AIScreen({
                     <div style={{
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        padding: "8px 12px",
-                        borderRadius: 14,
-                        background: "rgba(18,199,194,0.07)",
-                        border: "1px solid rgba(18,199,194,0.16)",
+                        justifyContent: "center",
+                        gap: 8,
                         flexShrink: 0,
                     }}>
-                        <span style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700 }}>
-                            過去の会話を表示中
+                        <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 700 }}>
+                            過去の会話
                         </span>
                         <button
                             type="button"
                             onClick={() => onStartNewConversation?.()}
                             style={{
-                                padding: "5px 10px",
+                                padding: "3px 8px",
                                 borderRadius: 999,
-                                border: "1px solid rgba(18,199,194,0.22)",
-                                background: "rgba(18,199,194,0.12)",
+                                border: "1px solid rgba(18,199,194,0.18)",
+                                background: "transparent",
                                 color: "var(--accent)",
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: 900,
-                                flexShrink: 0,
                             }}
                         >
-                            新しい会話
+                            + 新しい会話
                         </button>
                     </div>
                 )}
