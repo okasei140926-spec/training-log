@@ -2831,52 +2831,7 @@ export default function GymApp() {
                         </div>
                     )}
 
-                    {!shouldHideBottomNav && (
-                        <BottomNav
-                            tabs={bottomTabs}
-                            activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
-                            onSelectTab={(nextScreen) => {
-                                const tappedAt = getPerfNow();
-                                const isCenterWorkoutButton = nextScreen === "log";
-                                console.log("[navigation]", {
-                                    action: isCenterWorkoutButton ? "center_workout_button_tap" : "nav_button_tap",
-                                    currentScreen: screen,
-                                    targetScreen: nextScreen,
-                                    timestamp: new Date().toISOString(),
-                                    onClickFired: true,
-                                    navigationApplied: false,
-                                    blocked: false,
-                                    blockedReason: null,
-                                });
-                                const logNavigationApplied = () => {
-                                    window.requestAnimationFrame(() => {
-                                        console.log("[navigation]", {
-                                            action: isCenterWorkoutButton ? "center_workout_button_tap" : "nav_button_tap",
-                                            currentScreen: screen,
-                                            targetScreen: nextScreen,
-                                            timestamp: new Date().toISOString(),
-                                            onClickFired: true,
-                                            navigationApplied: true,
-                                            blocked: false,
-                                            blockedReason: null,
-                                            delayMs: Math.round((getPerfNow() - tappedAt) * 10) / 10,
-                                        });
-                                    });
-                                };
-                                if (nextScreen === "log") {
-                                    handleLogForDate(getTodayKey());
-                                    logNavigationApplied();
-                                    return;
-                                }
-                                if (screen === "log") {
-                                    persistCurrentLog();
-                                }
-                                setScreen(nextScreen);
-                                logNavigationApplied();
-                            }}
-                            isRecording={isRecording}
-                        />
-                    )}
+                    {/* BottomNav moved outside app-shell to avoid maxWidth/margin containment */}
 
                     {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
                     <WorkoutDaySummaryModal
@@ -2959,6 +2914,52 @@ export default function GymApp() {
                 <SplashScreen visible={showSplashScreen} />
                 <Analytics />
             </div>
+            {!shouldHideBottomNav && (
+                <BottomNav
+                    tabs={bottomTabs}
+                    activeTab={screen === "photos" ? "analytics" : screen === "ranking" ? "feed" : screen === "calendar" ? "history" : screen}
+                    onSelectTab={(nextScreen) => {
+                        const tappedAt = getPerfNow();
+                        const isCenterWorkoutButton = nextScreen === "log";
+                        console.log("[navigation]", {
+                            action: isCenterWorkoutButton ? "center_workout_button_tap" : "nav_button_tap",
+                            currentScreen: screen,
+                            targetScreen: nextScreen,
+                            timestamp: new Date().toISOString(),
+                            onClickFired: true,
+                            navigationApplied: false,
+                            blocked: false,
+                            blockedReason: null,
+                        });
+                        const logNavigationApplied = () => {
+                            window.requestAnimationFrame(() => {
+                                console.log("[navigation]", {
+                                    action: isCenterWorkoutButton ? "center_workout_button_tap" : "nav_button_tap",
+                                    currentScreen: screen,
+                                    targetScreen: nextScreen,
+                                    timestamp: new Date().toISOString(),
+                                    onClickFired: true,
+                                    navigationApplied: true,
+                                    blocked: false,
+                                    blockedReason: null,
+                                    delayMs: Math.round((getPerfNow() - tappedAt) * 10) / 10,
+                                });
+                            });
+                        };
+                        if (nextScreen === "log") {
+                            handleLogForDate(getTodayKey());
+                            logNavigationApplied();
+                            return;
+                        }
+                        if (screen === "log") {
+                            persistCurrentLog();
+                        }
+                        setScreen(nextScreen);
+                        logNavigationApplied();
+                    }}
+                    isRecording={isRecording}
+                />
+            )}
         </>
     );
 }

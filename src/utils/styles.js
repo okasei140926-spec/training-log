@@ -68,6 +68,9 @@ export const S = {
 	    background: "var(--bottom-nav-bg, rgba(15,19,20,0.97))",
 	    backdropFilter: "blur(10px)",
 	    WebkitBackdropFilter: "blur(10px)",
+	    // Force GPU compositing layer on iOS PWA to prevent initial paint glitch
+	    transform: "translateZ(0)",
+	    WebkitTransform: "translateZ(0)",
 	  },
   bottomNavInner: {
     display: "flex",
