@@ -1,5 +1,5 @@
 // src/components/friends/FeedSection.jsx
-import React from "react";
+import React, { useRef, useState } from "react";
 import { supabase } from "../../utils/supabase";
 import { S } from "../../utils/styles";
 import InviteCard from "./InviteCard";
@@ -39,6 +39,27 @@ function FeedSection({
     copied,
     handleCopyInvite,
 }) {
+    const fileInputRef = useRef(null);
+    const [showAvatarSheet, setShowAvatarSheet] = useState(false);
+
+    const handleAvatarFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const ext = file.name.split(".").pop();
+        const path = `${user.id}.${ext}`;
+        await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
+        const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(path);
+        await supabase.from("profiles").update({ avatar1_url: publicUrl }).eq("id", user.id);
+        setAvatarUrl(publicUrl);
+        e.target.value = "";
+    };
+
+    const handleDeleteAvatar = async () => {
+        await supabase.from("profiles").update({ avatar1_url: null }).eq("id", user.id);
+        setAvatarUrl(null);
+        setShowAvatarSheet(false);
+    };
+
     return (
         <>
             <div
@@ -400,30 +421,22 @@ function FeedSection({
                                     color: "#fff",
                                     overflow: "hidden",
                                     cursor: "pointer",
+                                    flexShrink: 0,
                                 }}
-                                onClick={() => document.getElementById("friends-avatar-input")?.click()}
+                                onClick={() => setShowAvatarSheet(true)}
                             >
                                 {avatarUrl
                                     ? <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                     : profileInitial
                                 }
-                                <input
-                                    id="friends-avatar-input"
-                                    type="file"
-                                    accept="image/*"
-                                    style={{ display: "none" }}
-                                    onChange={async (e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        const ext = file.name.split(".").pop();
-                                        const path = `${user.id}.${ext}`;
-                                        await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
-                                        const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(path);
-                                        await supabase.from("profiles").update({ avatar1_url: publicUrl }).eq("id", user.id);
-                                        setAvatarUrl(publicUrl);
-                                    }}
-                                />
                             </div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: "none" }}
+                                onChange={handleAvatarFileChange}
+                            />
                             <div>
                                 <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
                                     {getDisplayUsername(myUsername, { isMe: true })}
@@ -456,6 +469,82 @@ function FeedSection({
 
                 <InviteCard copied={copied} onCopyInvite={handleCopyInvite} />
             </div>
+
+            {/* アバター変更アクションシート */}
+            {showAvatarSheet && (
+                <div
+                    onClick={() => setShowAvatarSheet(false)}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 600,
+                        background: "rgba(0,0,0,0.45)",
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        padding: "0 12px calc(12px + env(safe-area-inset-bottom, 0px))",
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: "100%",
+                            maxWidth: 430,
+                            borderRadius: 20,
+                            background: "var(--card)",
+                            border: "1px solid var(--border2)",
+                            overflow: "hidden",
+                            boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
+                        }}
+                    >
+                        {[
+                            {
+                                label: "写真を選択",
+                                icon: "🖼️",
+                                action: () => { setShowAvatarSheet(false); fileInputRef.current?.click(); },
+                                danger: false,
+                            },
+                            ...(avatarUrl ? [{
+                                label: "写真を削除",
+                                icon: "🗑️",
+                                action: handleDeleteAvatar,
+                                danger: true,
+                            }] : []),
+                            {
+                                label: "キャンセル",
+                                icon: null,
+                                action: () => setShowAvatarSheet(false),
+                                danger: false,
+                                cancel: true,
+                            },
+                        ].map(({ label, icon, action, danger, cancel }, i, arr) => (
+                            <button
+                                key={label}
+                                type="button"
+                                onClick={action}
+                                style={{
+                                    width: "100%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 12,
+                                    padding: "16px 20px",
+                                    background: "none",
+                                    border: "none",
+                                    borderTop: i > 0 ? "1px solid var(--border2)" : "none",
+                                    color: danger ? "#EF4444" : cancel ? "var(--text2)" : "var(--text)",
+                                    fontSize: cancel ? 14 : 15,
+                                    fontWeight: cancel ? 700 : 800,
+                                    textAlign: "left",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                {icon && <span style={{ fontSize: 18, width: 24, textAlign: "center" }}>{icon}</span>}
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
         </>
     );
 }
