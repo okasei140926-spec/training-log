@@ -1,5 +1,5 @@
 // src/components/friends/RankingSection.jsx
-import React from "react";
+import React, { useState } from "react";
 import RankAvatar from "./RankAvatar";
 
 const getRankAccentColor = (rankIndex) => {
@@ -34,7 +34,18 @@ function RankingSection({
     podiumOrder,
     setSelectedBig3Entry,
     compactRankingRows,
+    removeFriend,
 }) {
+    const [removingId, setRemovingId] = useState(null);
+
+    const handleRemoveFriend = async (entry) => {
+        const confirmed = window.confirm(`${entry.name} をフレンドから削除しますか？`);
+        if (!confirmed) return;
+        setRemovingId(entry.id);
+        await removeFriend(entry.id);
+        setRemovingId(null);
+    };
+
     return (
         <>
             <div
@@ -265,7 +276,7 @@ function RankingSection({
                                         style={{
                                             minHeight: 52,
                                             display: "grid",
-                                            gridTemplateColumns: "38px minmax(0, 1fr) auto",
+                                            gridTemplateColumns: entry.isMe ? "38px minmax(0, 1fr) auto" : "38px minmax(0, 1fr) auto 28px",
                                             alignItems: "center",
                                             gap: 8,
                                             padding: "7px 10px",
@@ -302,6 +313,30 @@ function RankingSection({
                                         <div style={{ fontSize: 16, fontWeight: 950, color: "var(--text)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                                             {activeRanking.metricLabel(entry)}
                                         </div>
+                                        {!entry.isMe && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveFriend(entry)}
+                                                disabled={removingId === entry.id}
+                                                style={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    width: 28,
+                                                    height: 28,
+                                                    borderRadius: 8,
+                                                    border: "none",
+                                                    background: "transparent",
+                                                    color: "var(--text3)",
+                                                    fontSize: 16,
+                                                    cursor: "pointer",
+                                                    padding: 0,
+                                                    opacity: removingId === entry.id ? 0.4 : 1,
+                                                }}
+                                            >
+                                                ···
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             })}

@@ -1937,6 +1937,28 @@ export function useFriendsData({
     const podiumOrder = [topThreeRanking[1], topThreeRanking[0], topThreeRanking[2]].filter(Boolean);
     const compactRankingRows = rankingTab === "big3" ? activeRanking.data.slice(3) : activeRanking.data;
 
+    const removeFriend = useCallback(async (friendId) => {
+        if (!user?.id || !friendId) return false;
+        const { error } = await supabase
+            .from("friendships")
+            .delete()
+            .or(
+                `and(requester_id.eq.${user.id},receiver_id.eq.${friendId}),and(requester_id.eq.${friendId},receiver_id.eq.${user.id})`
+            );
+        if (error) {
+            console.error("[friends] removeFriend failed", error);
+            return false;
+        }
+        setFriendIds((prev) => prev.filter((id) => id !== friendId));
+        setFriends((prev) => prev.filter((f) => f.id !== friendId));
+        FRIENDS_SCREEN_CACHE.friendsData = {
+            ...FRIENDS_SCREEN_CACHE.friendsData,
+            friendIds: (FRIENDS_SCREEN_CACHE.friendsData.friendIds || []).filter((id) => id !== friendId),
+            friends: (FRIENDS_SCREEN_CACHE.friendsData.friends || []).filter((f) => f.id !== friendId),
+        };
+        return true;
+    }, [user?.id]);
+
     return {
         // State
         friends,
@@ -1967,6 +1989,7 @@ export function useFriendsData({
         formatSessionSetDisplay,
         getDisplayUsername,
         showActivityFeedStatusMessage,
+        removeFriend,
         // Computed/derived data
         visibleActivityFeed,
         groupedActivityFeed,
