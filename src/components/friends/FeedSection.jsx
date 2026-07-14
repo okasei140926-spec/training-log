@@ -42,22 +42,54 @@ function FeedSection({
     const fileInputRef = useRef(null);
     const [showAvatarSheet, setShowAvatarSheet] = useState(false);
 
+    // Supabase Storage のパスを publicUrl から逆引きする
+    const getStoragePathFromUrl = (url) => {
+        if (!url) return null;
+        try {
+            const marker = "/object/public/avatars1/";
+            const idx = url.indexOf(marker);
+            if (idx === -1) return null;
+            return decodeURIComponent(url.slice(idx + marker.length).split("?")[0]);
+        } catch {
+            return null;
+        }
+    };
+
     const handleAvatarFileChange = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const ext = file.name.split(".").pop();
-        const path = `${user.id}.${ext}`;
-        await supabase.storage.from("avatars1").upload(path, file, { upsert: true });
-        const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(path);
+        const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+        // タイムスタンプをパスに含めてキャッシュを無効化
+        const newPath = `${user.id}-${Date.now()}.${ext}`;
+        const oldPath = getStoragePathFromUrl(avatarUrl);
+
+        const { error } = await supabase.storage.from("avatars1").upload(newPath, file, { upsert: false });
+        if (error) {
+            console.error("[avatar] upload failed", error);
+            e.target.value = "";
+            return;
+        }
+
+        const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(newPath);
         await supabase.from("profiles").update({ avatar1_url: publicUrl }).eq("id", user.id);
         setAvatarUrl(publicUrl);
         e.target.value = "";
+
+        // 古いファイルをStorageから削除（失敗しても無視）
+        if (oldPath) {
+            supabase.storage.from("avatars1").remove([oldPath]).catch(() => {});
+        }
     };
 
     const handleDeleteAvatar = async () => {
+        const oldPath = getStoragePathFromUrl(avatarUrl);
         await supabase.from("profiles").update({ avatar1_url: null }).eq("id", user.id);
         setAvatarUrl(null);
         setShowAvatarSheet(false);
+        // Storageのファイルも削除（失敗しても無視）
+        if (oldPath) {
+            supabase.storage.from("avatars1").remove([oldPath]).catch(() => {});
+        }
     };
 
     return (
