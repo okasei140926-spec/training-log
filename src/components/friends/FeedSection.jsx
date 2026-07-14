@@ -41,6 +41,8 @@ function FeedSection({
 }) {
     const fileInputRef = useRef(null);
     const [showAvatarSheet, setShowAvatarSheet] = useState(false);
+    const [avatarDeleteError, setAvatarDeleteError] = useState("");
+    const [avatarDeleteBusy, setAvatarDeleteBusy] = useState(false);
 
     // Supabase Storage のパスを publicUrl から逆引きする
     const getStoragePathFromUrl = (url) => {
@@ -82,13 +84,28 @@ function FeedSection({
     };
 
     const handleDeleteAvatar = async () => {
-        const oldPath = getStoragePathFromUrl(avatarUrl);
-        await supabase.from("profiles").update({ avatar1_url: null }).eq("id", user.id);
-        setAvatarUrl(null);
-        setShowAvatarSheet(false);
-        // Storageのファイルも削除（失敗しても無視）
-        if (oldPath) {
-            supabase.storage.from("avatars1").remove([oldPath]).catch(() => {});
+        if (!window.confirm("プロフィール写真を削除しますか？")) return;
+        setAvatarDeleteError("");
+        setAvatarDeleteBusy(true);
+        try {
+            const oldPath = getStoragePathFromUrl(avatarUrl);
+            const { error: dbError } = await supabase
+                .from("profiles")
+                .update({ avatar1_url: null })
+                .eq("id", user.id);
+            if (dbError) throw dbError;
+            // DB更新成功後にstateとUIを更新
+            setAvatarUrl(null);
+            setShowAvatarSheet(false);
+            // Storageのファイル削除（失敗してもDB/stateは既に更新済みなので無視）
+            if (oldPath) {
+                supabase.storage.from("avatars1").remove([oldPath]).catch(() => {});
+            }
+        } catch (err) {
+            console.error("[avatar] delete failed", err);
+            setAvatarDeleteError("削除に失敗しました。もう一度お試しください。");
+        } finally {
+            setAvatarDeleteBusy(false);
         }
     };
 
@@ -529,31 +546,46 @@ function FeedSection({
                             boxShadow: "0 24px 60px rgba(0,0,0,0.32)",
                         }}
                     >
+                        {avatarDeleteError && (
+                            <div style={{
+                                padding: "12px 20px",
+                                fontSize: 12,
+                                color: "#EF4444",
+                                background: "rgba(239,68,68,0.08)",
+                                borderBottom: "1px solid var(--border2)",
+                            }}>
+                                {avatarDeleteError}
+                            </div>
+                        )}
                         {[
                             {
                                 label: "写真を選択",
                                 icon: "🖼️",
                                 action: () => { setShowAvatarSheet(false); fileInputRef.current?.click(); },
                                 danger: false,
+                                disabled: avatarDeleteBusy,
                             },
                             ...(avatarUrl ? [{
-                                label: "写真を削除",
+                                label: avatarDeleteBusy ? "削除中…" : "写真を削除",
                                 icon: "🗑️",
                                 action: handleDeleteAvatar,
                                 danger: true,
+                                disabled: avatarDeleteBusy,
                             }] : []),
                             {
                                 label: "キャンセル",
                                 icon: null,
-                                action: () => setShowAvatarSheet(false),
+                                action: () => { setAvatarDeleteError(""); setShowAvatarSheet(false); },
                                 danger: false,
                                 cancel: true,
+                                disabled: avatarDeleteBusy,
                             },
-                        ].map(({ label, icon, action, danger, cancel }, i, arr) => (
+                        ].map(({ label, icon, action, danger, cancel, disabled }, i) => (
                             <button
                                 key={label}
                                 type="button"
                                 onClick={action}
+                                disabled={disabled}
                                 style={{
                                     width: "100%",
                                     display: "flex",
@@ -563,11 +595,12 @@ function FeedSection({
                                     background: "none",
                                     border: "none",
                                     borderTop: i > 0 ? "1px solid var(--border2)" : "none",
-                                    color: danger ? "#EF4444" : cancel ? "var(--text2)" : "var(--text)",
+                                    color: disabled ? "var(--text3)" : danger ? "#EF4444" : cancel ? "var(--text2)" : "var(--text)",
                                     fontSize: cancel ? 14 : 15,
                                     fontWeight: cancel ? 700 : 800,
                                     textAlign: "left",
-                                    cursor: "pointer",
+                                    cursor: disabled ? "not-allowed" : "pointer",
+                                    opacity: disabled ? 0.6 : 1,
                                 }}
                             >
                                 {icon && <span style={{ fontSize: 18, width: 24, textAlign: "center" }}>{icon}</span>}
