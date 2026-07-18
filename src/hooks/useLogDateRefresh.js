@@ -261,6 +261,19 @@ export function useLogDateRefresh({
                         supabase: remoteMetrics,
                         localStorage: localMetrics,
                     });
+                    if (!localMetrics.hasWorkout) {
+                        // Remote and local both have no workout for this date.
+                        // The screen may still show stale data from a previously viewed date
+                        // because applyLogDraftState is blocked by date-mismatch when logDate
+                        // state lags behind during synchronous navigation. Clear it here.
+                        const emptyDraft = withDraftDateMeta(normalizedDate, {
+                            todayLabels: [],
+                            sessionEx: null,
+                            logData: {},
+                            exerciseUnits: {},
+                        }, { source: "empty_draft", hasUnsavedChanges: false });
+                        applyCurrentLogDraft(emptyDraft, { persist: false });
+                    }
                     return;
                 }
 
