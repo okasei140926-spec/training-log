@@ -288,7 +288,7 @@ const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
   const threeMonthsAgo = (() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 3);
-    return d.toISOString().slice(0, 10);
+    return formatDateKey(d); // local timezone (not toISOString which is UTC)
   })();
 
   let query = supabase
@@ -388,9 +388,10 @@ const summarizeWorkoutDay = (groupedHistory, dateKey) => {
 const getTargetDateKey = (message) => {
   const normalized = String(message || "");
   if (normalized.includes("昨日")) {
-    const date = new Date();
-    date.setDate(date.getDate() - 1);
-    return formatDateKey(date);
+    // Use local date parts to avoid UTC offset shifting the date (e.g. JST midnight = previous UTC day)
+    const todayKey = getTodayKey(); // "YYYY-MM-DD" in local timezone
+    const [y, m, d] = todayKey.split("-").map(Number);
+    return formatDateKey(new Date(y, m - 1, d - 1)); // local date constructor handles month/day rollover
   }
   if (normalized.includes("今日")) {
     return getTodayKey();
