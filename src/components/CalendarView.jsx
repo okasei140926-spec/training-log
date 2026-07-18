@@ -34,7 +34,7 @@ export default function CalendarView({
         exerciseBodyPartOverrides,
       });
       if (!dateLabelColors[sanitized.date]) dateLabelColors[sanitized.date] = [];
-      const color = label ? LABEL_COLORS[label] : "#4ade80";
+      const color = (label && LABEL_COLORS[label]) || "#4ade80";
       if (!dateLabelColors[sanitized.date].includes(color)) dateLabelColors[sanitized.date].push(color);
     });
   });
