@@ -200,6 +200,7 @@ export default function FriendsScreen({
                     setUsernameError={setUsernameError}
                     copied={copied}
                     handleCopyInvite={handleCopyInvite}
+                    removeFriend={removeFriend}
                 />
             )}
 

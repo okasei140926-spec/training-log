@@ -60,13 +60,15 @@ export function useLogDraftApplicator({
         const previousDisplayedExerciseNames = previousMetrics.exerciseNames;
         const restoredExerciseNames = restoredMetrics.exerciseNames;
         const incomingSource = normalizedDraft?.meta?.source || "unknown";
-        const dateMismatch = Boolean(screen === "log" && currentDate && incomingDate && incomingDate !== currentDate);
+        // explicit_date_nav: intentional user navigation between log dates — bypasses all guards
+        const isExplicitDateNav = incomingSource === "explicit_date_nav";
+        const dateMismatch = !isExplicitDateNav && Boolean(screen === "log" && currentDate && incomingDate && incomingDate !== currentDate);
         const regressionDetected = (
             lostExerciseNames.length > 0 ||
             restoredMetrics.exerciseCount < previousMetrics.exerciseCount ||
             restoredMetrics.setCount < previousMetrics.setCount
         );
-        const protectsCurrentLog = screen === "log" && currentDate && (!incomingDate || incomingDate === currentDate);
+        const protectsCurrentLog = !isExplicitDateNav && screen === "log" && currentDate && (!incomingDate || incomingDate === currentDate);
         const userMutationSource = new Set([
             "current_log_draft",
             "user_edit",

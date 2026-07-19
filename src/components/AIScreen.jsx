@@ -640,7 +640,7 @@ export default function AIScreen({
                     flex: 1,
                     minHeight: 0,
                     overflowY: "auto",
-                    padding: shouldShowProPaywall ? "8px 0 16px" : "8px 0 8px",
+                    padding: "8px 0 16px",
                     paddingTop: isInitialState ? `calc((${AI_VIEWPORT_HEIGHT} - 120px) * 0.28)` : "8px",
                     display: "flex",
                     flexDirection: "column",

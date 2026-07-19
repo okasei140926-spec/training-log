@@ -194,7 +194,7 @@ export function useHistoryHandlers({
 
         if (shouldUseLocalDraft) {
             const datedDraftForDate = withDraftDateMeta(requestedDate, draftForDate, {
-                source: draftForDate?.meta?.source || "draft_restore",
+                source: "explicit_date_nav",
                 hasUnsavedChanges: draftForDate?.meta?.hasUnsavedChanges ?? true,
             });
             console.warn("[restore] local draft selected for log date", {
@@ -233,7 +233,7 @@ export function useHistoryHandlers({
 
         if (shouldUseSavedWorkout) {
             const cleanSavedDraft = withDraftDateMeta(requestedDate, savedDraftForDate, {
-                source: "remote_supabase",
+                source: "explicit_date_nav",
                 remoteVerifiedAt: new Date().toISOString(),
                 hasUnsavedChanges: false,
             });
@@ -256,7 +256,7 @@ export function useHistoryHandlers({
                 });
             }
             const datedDraftForDate = withDraftDateMeta(requestedDate, draftForDate, {
-                source: draftForDate?.meta?.source || "local_draft",
+                source: "explicit_date_nav",
                 hasUnsavedChanges: draftForDate?.meta?.hasUnsavedChanges ?? true,
             });
             logCalendarOpen("localDraft", datedDraftForDate);
@@ -264,7 +264,7 @@ export function useHistoryHandlers({
             logRestoreDecision(requestedDate, savedDraftForDate, datedDraftForDate, datedDraftForDate, localDraftIsRicher && !hasSavedWorkout ? "local_draft_richer_than_saved" : "local_draft");
         } else {
             const emptyDraft = withDraftDateMeta(requestedDate, { todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {} }, {
-                source: "empty_draft",
+                source: "explicit_date_nav",
                 hasUnsavedChanges: false,
             });
             logCalendarOpen("emptyDraft", emptyDraft);

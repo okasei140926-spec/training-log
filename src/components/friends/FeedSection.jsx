@@ -38,9 +38,11 @@ function FeedSection({
     setUsernameError,
     copied,
     handleCopyInvite,
+    removeFriend,
 }) {
     const fileInputRef = useRef(null);
     const [showAvatarSheet, setShowAvatarSheet] = useState(false);
+    const [removingFeedId, setRemovingFeedId] = useState(null);
     const [avatarDeleteError, setAvatarDeleteError] = useState("");
     const [avatarDeleteBusy, setAvatarDeleteBusy] = useState(false);
 
@@ -263,6 +265,37 @@ function FeedSection({
                                         直近7日 {userGroup.activityDayCount}日記録
                                     </div>
                                 </div>
+                                    {userGroup.userId !== user?.id && removeFriend && (
+                                        <button
+                                            type="button"
+                                            disabled={removingFeedId === userGroup.userId}
+                                            onClick={async () => {
+                                                const confirmed = window.confirm(`${userGroup.userName} をフレンドから削除しますか？`);
+                                                if (!confirmed) return;
+                                                setRemovingFeedId(userGroup.userId);
+                                                await removeFriend(userGroup.userId);
+                                                setRemovingFeedId(null);
+                                            }}
+                                            style={{
+                                                flexShrink: 0,
+                                                width: 28,
+                                                height: 28,
+                                                borderRadius: 8,
+                                                border: "1px solid var(--border2)",
+                                                background: "var(--card2)",
+                                                color: removingFeedId === userGroup.userId ? "var(--text4)" : "var(--text3)",
+                                                fontSize: 14,
+                                                fontWeight: 900,
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                cursor: removingFeedId === userGroup.userId ? "not-allowed" : "pointer",
+                                                opacity: removingFeedId === userGroup.userId ? 0.5 : 1,
+                                            }}
+                                        >
+                                            ···
+                                        </button>
+                                    )}
                             </div>
 
                                 {userGroup.activityDayCount === 0 ? (
