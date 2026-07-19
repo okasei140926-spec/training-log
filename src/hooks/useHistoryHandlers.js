@@ -551,6 +551,18 @@ export function useHistoryHandlers({
         });
 
         setHistory(nextHistory);
+        const nextWorkoutsDataHistory = applyLocalHistoryDates(
+            workoutsDataHistoryRef.current || currentHistory,
+            nextHistory,
+            [normalizedTargetDate]
+        );
+        applyWorkoutsDataHistorySnapshot(nextWorkoutsDataHistory, {
+            allowRegression: true,
+            source: "workouts.data",
+            reason: "date_delete",
+            requestId: "delete-date",
+            workoutsHistory: nextHistory,
+        });
         queueWorkoutSessionSync(normalizedTargetDate);
         pendingWorkoutSessionSyncDatesRef.current.delete(normalizedTargetDate);
 

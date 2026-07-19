@@ -60,7 +60,7 @@ export function useWorkoutSession({ getTodayKey, user }) {
     }, [applyWorkoutTimerState]);
 
     const startWorkoutTimerIfNeeded = useCallback((targetDate, options = {}) => {
-        const { markAsActivity = true } = options;
+        const { markAsActivity = true, startIfNeeded = true } = options;
         const normalizedDate = String(targetDate || "").trim();
         if (!normalizedDate) return;
         if (normalizedDate !== getTodayKey()) return;
@@ -82,6 +82,11 @@ export function useWorkoutSession({ getTodayKey, user }) {
             return;
         }
 
+        // No active session: only start a new timer if explicitly requested.
+        // markWorkoutActivity calls with startIfNeeded: false so it never auto-starts
+        // after a deletion or background restore.
+        if (!startIfNeeded) return;
+
         applyWorkoutTimerState({
             startedAt: now,
             startedForDate: normalizedDate,
@@ -98,7 +103,9 @@ export function useWorkoutSession({ getTodayKey, user }) {
         const normalizedDate = String(targetDate || "").trim();
         if (!normalizedDate) return;
 
-        startWorkoutTimerIfNeeded(normalizedDate, { markAsActivity: true });
+        // startIfNeeded: false — only update lastActivityAt on an already-running timer.
+        // Starting a new timer is handled by explicit user actions (addExercise, applyAIPlan).
+        startWorkoutTimerIfNeeded(normalizedDate, { markAsActivity: true, startIfNeeded: false });
     }, [startWorkoutTimerIfNeeded]);
 
     useEffect(() => {
