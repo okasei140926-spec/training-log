@@ -1,3 +1,10 @@
+const fmtKg = (w) => {
+    if (w === "BW" || w === null || w === undefined) return null;
+    const n = Number(w);
+    if (!Number.isFinite(n)) return String(w);
+    return String(Math.round(n * 10) / 10);
+};
+
 export default function HistoryExerciseItem({
     name,
     count,
@@ -59,7 +66,7 @@ export default function HistoryExerciseItem({
                                 {i + 1}{" "}
                                 {s.weight === "BW"
                                     ? `自重 × ${s.reps}reps`
-                                    : `${s.weight}kg × ${s.reps}reps`}
+                                    : `${fmtKg(s.weight)}kg × ${s.reps}reps`}
                             </span>
 
                             <button

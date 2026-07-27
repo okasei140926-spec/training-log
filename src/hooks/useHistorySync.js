@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { BILLING_ENABLED } from "../constants/features";
 import { supabase } from "../utils/supabase";
 import {
     load,
@@ -22,7 +23,7 @@ const getThreeMonthsAgoKey = () => {
 // For free users: ensure sessionRangeStart is never earlier than 3 months ago.
 // "max(指定日, 3ヶ月前)" — if dateKey is already newer, keep it as-is.
 const clampStartForFreeTier = (dateKey, isPro) => {
-    if (isPro) return dateKey;
+    if (!BILLING_ENABLED || isPro) return dateKey;
     const limit = getThreeMonthsAgoKey();
     return dateKey >= limit ? dateKey : limit;
 };

@@ -13,6 +13,20 @@ import {
 } from "../utils/oauth";
 import { isInAppBrowser } from "../utils/invite";
 
+// ─── Apple Sign In helpers ────────────────────────────────────────────────────
+const generateNonce = () => {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map((b) => chars[b % chars.length]).join("");
+};
+
+const sha256Hex = async (str) => {
+  const data = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
 export default function Auth({ onClose, isDark }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -125,7 +139,10 @@ export default function Auth({ onClose, isDark }) {
     };
 
     const browserFinishedListener = await Browser.addListener("browserFinished", () => {
-      failWithMessage("cancelled");
+      // Delay to allow the custom URL scheme callback to be processed first.
+      // On iPad the URL callback and browserFinished can race; without delay
+      // failWithMessage fires before nativeOauthHandledRef is set to true.
+      window.setTimeout(() => failWithMessage("cancelled"), 800);
     });
 
     const appStateListener = await CapacitorApp.addListener("appStateChange", ({ isActive }) => {
@@ -192,6 +209,59 @@ export default function Auth({ onClose, isDark }) {
       return;
     }
 
+    // Native Apple Sign In via WKScriptMessageHandler (AppleSignInBridge.swift)
+    if (provider === "apple" && isNativeApp()) {
+      setError("");
+      setLoading(true);
+      setOauthLoadingProvider("apple");
+      try {
+        const rawNonce = generateNonce();
+        const hashedNonce = await sha256Hex(rawNonce);
+        console.log("[AppleSignIn] postMessage start");
+
+        const detail = await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            window.removeEventListener("appleSignInResult", handler);
+            reject(new Error("Apple Sign In timed out"));
+          }, 60000);
+          const handler = (e) => {
+            clearTimeout(timer);
+            window.removeEventListener("appleSignInResult", handler);
+            if (e.detail?.error) reject(new Error(e.detail.error));
+            else resolve(e.detail);
+          };
+          window.addEventListener("appleSignInResult", handler);
+          window.webkit.messageHandlers.appleSignIn.postMessage({ nonce: hashedNonce });
+        });
+
+        console.log("[AppleSignIn] result received", detail);
+        if (!detail?.identityToken) throw new Error("Apple Sign Inからtokenを取得できませんでした。");
+        const { error: signInError } = await supabase.auth.signInWithIdToken({
+          provider: "apple",
+          token: detail.identityToken,
+          nonce: rawNonce,
+        });
+        if (signInError) {
+          console.error("[AppleSignIn] signInWithIdToken error", signInError);
+          throw signInError;
+        }
+        console.log("[AppleSignIn] sign in success");
+        // onClose() triggered by supabase.auth.onAuthStateChange
+      } catch (e) {
+        if (e.message === "cancelled") {
+          setOauthLoadingProvider("");
+          setLoading(false);
+          return;
+        }
+        console.error("[AppleSignIn] error", e);
+        setError(getOAuthErrorMessage("apple", e));
+        setOauthLoadingProvider("");
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Web Apple Sign In: gate by env var (REACT_APP_ENABLE_APPLE_OAUTH)
     if (provider === "apple" && !isAppleOAuthEnabled()) {
       setError(getAppleOAuthDisabledMessage());
       setOauthLoadingProvider("");
@@ -370,11 +440,7 @@ export default function Auth({ onClose, isDark }) {
           opacity: loading || oauthLoadingProvider ? 0.7 : 1,
         }}
       >
-        {oauthLoadingProvider === "apple"
-          ? "Appleへ移動中..."
-          : isAppleOAuthEnabled()
-            ? "Appleで続行"
-            : "Appleで続行（準備中）"}
+        {oauthLoadingProvider === "apple" ? "Appleへ移動中..." : "Appleで続行"}
       </button>
       <button
         onClick={() => handleOAuth("google")}

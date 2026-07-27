@@ -13,6 +13,7 @@ import {
 } from "./utils/helpers";
 // useWorkoutLog → useWorkoutLogBridge
 import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
+import { BILLING_ENABLED } from "./constants/features";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
 // eslint-disable-next-line no-unused-vars
@@ -706,7 +707,7 @@ export default function GymApp() {
         const stripeStatus = params.get("stripe_checkout");
         const sessionId = params.get("session_id");
 
-        if (stripeStatus === "success" && sessionId) {
+        if (BILLING_ENABLED && stripeStatus === "success" && sessionId) {
             // Remove query params from URL without reloading
             const cleanUrl = window.location.pathname;
             window.history.replaceState({}, "", cleanUrl);
@@ -2722,7 +2723,7 @@ export default function GymApp() {
                     )}
 
                     {screen === "calendar" && (() => {
-                        const minCalendarYearMonth = isPro ? null : (() => {
+                        const minCalendarYearMonth = (!BILLING_ENABLED || isPro) ? null : (() => {
                             const d = new Date();
                             d.setMonth(d.getMonth() - 3);
                             return d.toISOString().slice(0, 7); // "YYYY-MM"

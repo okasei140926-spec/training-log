@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BILLING_ENABLED } from "../constants/features";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const formatConvDate = (isoStr) => {
@@ -422,7 +423,7 @@ export default function AIScreen({
         !aiLoad;
 
     const visibleMessages = isInitialState ? [] : aiMsgs;
-    const isAiLimitReached = !isPro && Number(aiRemaining) <= 0;
+    const isAiLimitReached = BILLING_ENABLED && !isPro && Number(aiRemaining) <= 0;
     const canSendMessage = !aiLoad && !isAiLimitReached;
     const shouldShowProPaywall = isAiLimitReached && !isProPaywallDismissed;
     const shouldShowCompactProNotice = isAiLimitReached;
@@ -563,9 +564,9 @@ export default function AIScreen({
                         fontWeight: 700,
                     }}
                 >
-                    {isPro
-                        ? "今日のAI相談 Pro 無制限"
-                        : `今日のAI相談 残り${aiRemaining}回 / ${dailyFreeAiLimit}回`}
+                    {BILLING_ENABLED
+                        ? (isPro ? "今日のAI相談 Pro 無制限" : `今日のAI相談 残り${aiRemaining}回 / ${dailyFreeAiLimit}回`)
+                        : "AIアシスタント"}
                 </div>
                 <div
                     style={{
@@ -594,7 +595,7 @@ export default function AIScreen({
                             開発用：Pro解除
                         </button>
                     )}
-                    {isPro && typeof onOpenStripePortal === "function" && (
+                    {BILLING_ENABLED && isPro && typeof onOpenStripePortal === "function" && (
                         <button
                             type="button"
                             onClick={onOpenStripePortal}
@@ -641,10 +642,9 @@ export default function AIScreen({
                     minHeight: 0,
                     overflowY: "auto",
                     padding: "8px 0 16px",
-                    paddingTop: isInitialState ? `calc((${AI_VIEWPORT_HEIGHT} - 120px) * 0.28)` : "8px",
                     display: "flex",
                     flexDirection: "column",
-                    justifyContent: "flex-start",
+                    justifyContent: isInitialState ? "center" : "flex-start",
                     gap: 8,
                     WebkitOverflowScrolling: "touch",
                 }}

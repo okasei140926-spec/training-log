@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import NotificationSettings from "../NotificationSettings";
+import { BILLING_ENABLED } from "../../constants/features";
 
 const isDevelopmentBuild = process.env.NODE_ENV !== "production";
 
@@ -509,7 +510,7 @@ export default function SettingsModal({
             }}
           >
             <div style={{ fontSize: 24, fontWeight: 900, color: "var(--text)", lineHeight: 1.2 }}>
-              {showProManager ? "Proプラン管理" : "設定"}
+              {BILLING_ENABLED && showProManager ? "Proプラン管理" : "設定"}
             </div>
             <button
               type="button"
@@ -528,7 +529,7 @@ export default function SettingsModal({
             </button>
           </div>
 
-          {showProManager ? proPlanManager : (
+          {BILLING_ENABLED && showProManager ? proPlanManager : (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
@@ -537,6 +538,7 @@ export default function SettingsModal({
               <NotificationSettings user={user} />
             </div>
 
+            {BILLING_ENABLED && (
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
                 Pro
@@ -569,6 +571,7 @@ export default function SettingsModal({
                 <div style={{ color: "var(--text3)", fontSize: 22, fontWeight: 900 }}>›</div>
               </button>
             </div>
+            )}
 
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>

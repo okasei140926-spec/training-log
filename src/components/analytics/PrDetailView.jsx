@@ -1,5 +1,5 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { PERIODS, formatDate, formatPrSetLabel } from "./analyticsUtils";
+import { PERIODS, formatDate, formatPrSetLabel, formatPrWeightValue } from "./analyticsUtils";
 
 export default function PrDetailView({
   selectedExercise,
@@ -34,7 +34,7 @@ export default function PrDetailView({
           {point.rawDate ? point.rawDate.slice(5).replace("-", "/") : point.date}
         </div>
         <div style={{ fontSize: 16, color: "var(--accent)", fontWeight: 900, lineHeight: 1.1 }}>
-          {point.weight}kg
+          {formatPrWeightValue(point.weight)}kg
         </div>
         {point.setLabel && (
           <div style={{ fontSize: 11, color: "var(--text2)", fontWeight: 700, marginTop: 4 }}>

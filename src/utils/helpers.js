@@ -615,9 +615,12 @@ export function dispW(kg, unit) {
   if (kg === "" || kg === undefined || kg === null) return "";
   const n = Number(kg);
   if (isNaN(n) || n === 0) return unit === "lbs" ? "" : String(n === 0 ? "" : n);
-  return unit === "lbs"
-    ? String(Math.round(n * KG_TO_LBS * 10) / 10)
-    : String(n);
+  if (unit === "lbs") {
+    return String(Math.round(n * KG_TO_LBS * 10) / 10);
+  }
+  // kg: 小数点以下1桁に丸める（例: 49.89512 → 49.9、50.0 → 50）
+  const rounded = Math.round(n * 10) / 10;
+  return String(rounded);
 }
 
 /** ユーザー入力（表示単位）を kg に変換して保存 */

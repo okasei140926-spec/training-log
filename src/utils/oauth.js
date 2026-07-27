@@ -61,5 +61,6 @@ export const getOAuthErrorMessage = (provider, error) => {
     return `${providerLabel}ログインが有効化されていません。設定を確認してください。`;
   }
 
-  return rawMessage;
+  // Don't surface raw technical error strings to users
+  return `${providerLabel}ログインに失敗しました。もう一度お試しください。`;
 };

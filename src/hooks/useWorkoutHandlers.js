@@ -102,6 +102,16 @@ export function useWorkoutHandlers({
                 filteredOut: false,
                 removedExerciseNames: [],
             });
+            // Even though the exercise is already in session, update muscleEx so it
+            // appears in the candidate list for this body part in future sessions.
+            const muscleExLabelForDup = label || getPrimaryDefaultBodyPartLabel(normalizedName);
+            if (muscleExLabelForDup) {
+                setMuscleEx((prev) => {
+                    const list = prev[muscleExLabelForDup] || [];
+                    if (list.find((e) => e.name === trimmed)) return prev;
+                    return { ...prev, [muscleExLabelForDup]: [...list, { id: Date.now(), name: trimmed }] };
+                });
+            }
             requestLogExerciseFocus(existingExercise);
             return;
         }

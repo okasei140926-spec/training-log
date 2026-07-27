@@ -26,6 +26,14 @@ export function useCustomExercises(user) {
         if (!user?.id || !name?.trim()) return;
         const trimmed = name.trim();
 
+        // Optimistic update: reflect immediately in UI without waiting for Supabase.
+        // Keyed by (name, body_part) to support the same exercise under multiple body parts.
+        const optimisticId = `opt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        setCustomExercises((prev) => {
+            if (prev.some((e) => e.name === trimmed && e.body_part === bodyPart)) return prev;
+            return [...prev, { id: optimisticId, name: trimmed, body_part: bodyPart, created_at: new Date().toISOString() }];
+        });
+
         const { data, error } = await supabase
             .from("custom_exercises")
             .upsert(
@@ -36,12 +44,16 @@ export function useCustomExercises(user) {
             .maybeSingle();
 
         if (!error && data) {
+            // Replace optimistic entry with confirmed server data
             setCustomExercises((prev) =>
-                prev.some((e) => e.name === trimmed)
-                    ? prev
-                    : [...prev, data]
+                prev.map((e) => e.id === optimisticId ? data : e)
             );
+        } else if (error) {
+            // Roll back optimistic entry on error
+            setCustomExercises((prev) => prev.filter((e) => e.id !== optimisticId));
         }
+        // If ignoreDuplicates hit (data === null, no error), keep the optimistic entry
+        // so the exercise is visible in the current session.
     }, [user?.id]);
 
     const bulkAddCustomExercises = useCallback(async (exercises) => {
