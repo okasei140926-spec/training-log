@@ -36,6 +36,7 @@ export default function HomeScreen({
     recordsLoading = false,
     historyRemoteReady = false,
     remoteLoadFailed = false,
+    onCopyExercises,
 }) {
     const renderStartedAt = getPerfNow();
     const [selectedSession, setSelectedSession] = useState(null);
@@ -604,6 +605,10 @@ export default function HomeScreen({
             <SessionModal
                 selectedSession={selectedSession}
                 onClose={() => setSelectedSession(null)}
+                onCopyExercises={onCopyExercises ? (exs) => {
+                    onCopyExercises(exs);
+                    setSelectedSession(null);
+                } : undefined}
             />
 
         </div>

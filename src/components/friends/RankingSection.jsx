@@ -74,13 +74,13 @@ function RankingSection({
                                 border: selected ? "1px solid rgba(255,255,255,0.8)" : "1px solid transparent",
                                 background: selected
                                     ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                                    : "rgba(255,255,255,0.58)",
+                                    : "var(--btn-secondary)",
                                 color: selected ? "#fff" : "var(--text2)",
                                 fontSize: 12,
                                 fontWeight: 900,
                                 boxShadow: selected
                                     ? "0 12px 24px rgba(18, 199, 194, 0.22), inset 0 1px 0 rgba(255,255,255,0.35)"
-                                    : "inset 0 1px 0 rgba(255,255,255,0.75)",
+                                    : "none",
                             }}
                         >
                             {tab.label}
@@ -96,7 +96,7 @@ function RankingSection({
                         gridTemplateColumns: "1fr auto",
                         alignItems: "center",
                         gap: 10,
-                        background: "linear-gradient(135deg, rgba(255,255,255,0.96), rgba(18, 199, 194, 0.08))",
+                        background: "var(--card)",
                         borderRadius: 18,
                         padding: "11px 13px",
                         marginBottom: 10,
@@ -179,7 +179,7 @@ function RankingSection({
                                         border: selected ? "1px solid rgba(255,255,255,0.8)" : "1px solid transparent",
                                         background: selected
                                             ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                                            : "rgba(255,255,255,0.66)",
+                                            : "var(--btn-secondary)",
                                         color: selected ? "#fff" : "var(--text2)",
                                         fontSize: 12,
                                         fontWeight: 900,
@@ -282,11 +282,11 @@ function RankingSection({
                                             padding: "7px 10px",
                                             borderRadius: 14,
                                             background: entry.isMe
-                                                ? "linear-gradient(90deg, rgba(18, 199, 194, 0.12), rgba(255,255,255,0.9))"
-                                                : "rgba(255,255,255,0.72)",
+                                                ? "linear-gradient(90deg, rgba(18, 199, 194, 0.14), var(--card2))"
+                                                : "var(--card2)",
                                             border: entry.isMe
-                                                ? "1px solid rgba(18, 199, 194, 0.24)"
-                                                : "1px solid rgba(217, 228, 239, 0.78)",
+                                                ? "1px solid rgba(18, 199, 194, 0.28)"
+                                                : "1px solid var(--border2)",
                                             boxShadow: index === 0 && rankingTab !== "big3" ? "0 10px 20px rgba(18, 199, 194, 0.12)" : "none",
                                             opacity: entry.value > 0 ? 1 : 0.72,
                                         }}

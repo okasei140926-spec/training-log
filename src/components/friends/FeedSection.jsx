@@ -39,6 +39,7 @@ function FeedSection({
     copied,
     handleCopyInvite,
     removeFriend,
+    onCopyExercises,
 }) {
     const fileInputRef = useRef(null);
     const [showAvatarSheet, setShowAvatarSheet] = useState(false);
@@ -461,6 +462,31 @@ function FeedSection({
                                                                     <div style={{ fontSize: 11, color: "var(--text3)" }}>
                                                                         更新中...
                                                                     </div>
+                                                                )}
+                                                                {onCopyExercises && dateGroup.detailedExercises?.length > 0 && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => onCopyExercises(
+                                                                            dateGroup.detailedExercises.map((item) => ({
+                                                                                name: item.exercise_name,
+                                                                                bodyPart: item.body_part || undefined,
+                                                                            }))
+                                                                        )}
+                                                                        style={{
+                                                                            display: "inline-flex",
+                                                                            alignItems: "center",
+                                                                            gap: 4,
+                                                                            padding: "9px 12px",
+                                                                            borderRadius: 14,
+                                                                            border: "1px solid rgba(18,199,194,0.25)",
+                                                                            background: "linear-gradient(135deg, rgba(18,199,194,0.12), rgba(74,222,128,0.10))",
+                                                                            color: "var(--accent)",
+                                                                            fontSize: 12,
+                                                                            fontWeight: 800,
+                                                                        }}
+                                                                    >
+                                                                        種目をコピー
+                                                                    </button>
                                                                 )}
                                                             </div>
                                                         )}

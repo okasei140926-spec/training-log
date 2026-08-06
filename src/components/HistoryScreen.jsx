@@ -135,6 +135,7 @@ export default function HistoryScreen({
   onOpenWorkoutDayShare,
   workoutDurationSecByDate = {},
   minCalendarYearMonth = null,
+  onCopyExercises,
 }) {
   const [editTarget, setEditTarget] = useState(null);
   const [showManualBestModal, setShowManualBestModal] = useState(false);
@@ -939,6 +940,29 @@ export default function HistoryScreen({
                 marginBottom: 4,
               }}
             >
+              {onCopyExercises && dayDetails.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCopyExercises(dayDetails.map((d) => ({ name: d.name })));
+                    setSelectedDate(null);
+                  }}
+                  style={{
+                    width: "100%",
+                    borderRadius: 18,
+                    padding: "15px 12px",
+                    fontSize: 14,
+                    fontWeight: 800,
+                    background: "linear-gradient(135deg, var(--accent), #4ADE80)",
+                    color: "#fff",
+                    border: "none",
+                    boxShadow: "0 8px 18px rgba(15,94,99,0.14)",
+                    marginBottom: 10,
+                  }}
+                >
+                  この日の種目をコピー
+                </button>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                 <button
                   type="button"

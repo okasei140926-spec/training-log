@@ -14,6 +14,7 @@ export default function FeedScreenView({
     setSessionEx,
     setLogData,
     setLogMode,
+    onCopyExercises,
 }) {
     return (
         <FriendsScreen
@@ -28,6 +29,7 @@ export default function FeedScreenView({
             onOpenRecord={() => setScreen("history")}
             onLogout={handleLogout}
 
+            onCopyExercises={onCopyExercises}
             onCopyMenu={(exs) => {
                 setSessionEx(exs.map(ex => ({ id: Date.now() + Math.random(), name: ex.name })));
                 setLogData(exs.reduce((acc, ex) => ({

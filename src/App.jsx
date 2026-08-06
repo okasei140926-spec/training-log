@@ -241,8 +241,8 @@ export default function GymApp() {
     const [showAuth, setShowAuth] = useState(false);
 
     useEffect(() => {
-        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 120);
-        const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 500);
+        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 1500);
+        const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 3000);
 
         return () => {
             window.clearTimeout(minTimerId);
@@ -642,7 +642,9 @@ export default function GymApp() {
     const [syncRetrying, setSyncRetrying] = useState(false);
     const [pendingDeleteUndo, setPendingDeleteUndo] = useState(null);
     const [accountActionBusy, setAccountActionBusy] = useState(false);
+    // eslint-disable-next-line no-unused-vars
     const [focusedLogSetInputId, setFocusedLogSetInputId] = useState(null);
+    // eslint-disable-next-line no-unused-vars
     const [isLogKeyboardOpen, setIsLogKeyboardOpen] = useState(false);
     const [logExerciseFocusRequest, setLogExerciseFocusRequest] = useState(null);
     const [lastActiveLogExerciseByDate, setLastActiveLogExerciseByDate] = useState(() =>
@@ -1759,6 +1761,17 @@ export default function GymApp() {
         renameCustomExercise,
     });
 
+    // Copy only exercise names from a past workout into today's session
+    const handleCopyExercisesToSession = (exerciseList) => {
+        if (!exerciseList?.length) return;
+        exerciseList.forEach((ex) => {
+            const name = typeof ex === "string" ? ex : ex.name;
+            const bodyPart = typeof ex === "object" ? ex.bodyPart : undefined;
+            if (name) addExToSession(name, bodyPart || null);
+        });
+        setScreen("log");
+    };
+
     const handleAddAiWorkoutPlanToLog = (rawPlan) => {
         const plan = normalizeWorkoutPlan(rawPlan);
         if (!plan.length) return;
@@ -2205,7 +2218,6 @@ export default function GymApp() {
         { id: "ai", icon: "🤖", label: "AI" },
     ];
     const shouldHideBottomNav =
-        (screen === "log" && (Boolean(focusedLogSetInputId) || isLogKeyboardOpen)) ||
         (screen === "ai" && (focusedAiChatInput || isAiKeyboardOpen));
     const showOfflineOnlyCard = !isOnline && ["feed", "ai"].includes(screen);
     const syncFailureDates = Object.keys(syncFailuresByDate);
@@ -2225,7 +2237,7 @@ export default function GymApp() {
         !dismissedSyncFailureSignaturesRef.current.has(syncFailureSignature);
     const showSplashScreen =
         !splashForceDone &&
-        !splashMinElapsed;
+        (!splashMinElapsed || !authReady);
     const timerMenuViewportWidth = typeof window !== "undefined" ? window.innerWidth : 430;
     const timerMenuWidth = Math.max(0, Math.min(timerMenuViewportWidth - 36, 398));
     const timerMenuRightLimit = Math.max(18, timerMenuViewportWidth - timerMenuWidth - 18);
@@ -2686,6 +2698,7 @@ export default function GymApp() {
                             setSessionEx={setSessionEx}
                             setLogData={setLogData}
                             setLogMode={setLogMode}
+                            onCopyExercises={handleCopyExercisesToSession}
                         />
                     )}
 
@@ -2712,13 +2725,14 @@ export default function GymApp() {
                             exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                             hiddenBodyParts={hiddenBodyParts}
                             onStartLog={() => {
-                                handleLogForDate(getTodayKey());
+                                handleLogForDate(workoutStartedForDate || getTodayKey());
                             }}
                             user={user}
                             workoutDurationSecByDate={savedWorkoutDurationSecByDate}
                             recordsLoading={Boolean(!authReady || (user?.id && !historyRemoteReady && !historyLoadError))}
                             historyRemoteReady={historyRemoteReady}
                             remoteLoadFailed={historyRemoteLoadFailedRef.current}
+                            onCopyExercises={handleCopyExercisesToSession}
                         />
                     )}
 
@@ -2751,6 +2765,7 @@ export default function GymApp() {
                                 setSummary={setSummary}
                                 openWorkoutDayShareModal={openWorkoutDayShareModal}
                                 minCalendarYearMonth={minCalendarYearMonth}
+                                onCopyExercises={handleCopyExercisesToSession}
                             />
                         );
                     })()}
@@ -2948,7 +2963,7 @@ export default function GymApp() {
                             });
                         };
                         if (nextScreen === "log") {
-                            handleLogForDate(getTodayKey());
+                            handleLogForDate(workoutStartedForDate || getTodayKey());
                             logNavigationApplied();
                             return;
                         }

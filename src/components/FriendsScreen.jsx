@@ -33,6 +33,7 @@ export default function FriendsScreen({
     onOpenRecord,
     mode = "all",
     deletedWorkoutDates = EMPTY_DELETED_WORKOUT_DATES,
+    onCopyExercises,
 }) {
     const [copied, setCopied] = useState(false);
     const [showEditName, setShowEditName] = useState(false);
@@ -201,6 +202,7 @@ export default function FriendsScreen({
                     copied={copied}
                     handleCopyInvite={handleCopyInvite}
                     removeFriend={removeFriend}
+                    onCopyExercises={onCopyExercises}
                 />
             )}
 

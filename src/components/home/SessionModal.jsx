@@ -12,7 +12,7 @@ const detailPill = {
     fontWeight: 900,
 };
 
-function SessionModal({ selectedSession, onClose }) {
+function SessionModal({ selectedSession, onClose, onCopyExercises }) {
     if (!selectedSession) return null;
 
     return (
@@ -76,6 +76,28 @@ function SessionModal({ selectedSession, onClose }) {
                         ×
                     </button>
                 </div>
+
+                {onCopyExercises && (selectedSession.exercises || []).length > 0 && (
+                    <button
+                        onClick={() => onCopyExercises(
+                            (selectedSession.exercises || []).map((ex) => ({ name: ex.name, bodyPart: ex.bodyPart }))
+                        )}
+                        style={{
+                            marginTop: 16,
+                            width: "100%",
+                            borderRadius: 18,
+                            padding: "14px 12px",
+                            fontSize: 14,
+                            fontWeight: 800,
+                            background: "linear-gradient(135deg, var(--accent), #4ADE80)",
+                            color: "#fff",
+                            border: "none",
+                            boxShadow: "0 8px 18px rgba(15,94,99,0.14)",
+                        }}
+                    >
+                        この日の種目をコピー
+                    </button>
+                )}
 
                 <div style={{ marginTop: 20, display: "grid", gap: 12 }}>
                     {(selectedSession.exercises || []).map((ex, idx) => (
