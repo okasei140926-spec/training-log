@@ -540,7 +540,7 @@ export default async function handler(req, res) {
   }
 
   if (!reservedUsage.allowed) {
-    return res.status(403).json({
+    return res.status(429).json({
       error: "今日の無料AI相談回数を使い切りました",
       aiUsage: reservedUsage,
     });
@@ -549,11 +549,21 @@ export default async function handler(req, res) {
   const { messages, coachContext } = requestBody;
   const safeContext = coachContext && typeof coachContext === "object" ? coachContext : {};
 
+  const avgDays = safeContext.avgTrainingDaysPerWeek;
+  const isActiveUser = safeContext.isActiveUser;
+  const experienceLevelInstruction = isActiveUser
+    ? `このユーザーは直近4週間の週平均トレーニング日数が${avgDays}日のアクティブなトレーニーです。初心者向けの基礎説明や「まずはこれだけでOK」のような入門的な表現は不要です。実績に基づいた具体的なアドバイスをしてください。`
+    : avgDays
+    ? `直近4週間の週平均トレーニング日数: ${avgDays}日。`
+    : "";
+
   const systemPrompt = `あなたは筋トレ記録アプリ PUMP のAI Coachです。ユーザーの実際の記録だけを元に、短く分かりやすく答えてください。
 
 モード: ${safeContext.mode || "general"}
 レベル: ${safeContext.level || "standard"}
 対象日: ${safeContext.targetDate || "指定なし"}
+${experienceLevelInstruction ? `\n${experienceLevelInstruction}` : ""}
+${safeContext.weeklyBodyPartContext ? `\n今週の部位別セット数（実績/目標）:\n${safeContext.weeklyBodyPartContext}` : ""}
 
 対象日の記録:
 ${safeContext.targetWorkoutContext || "対象日の記録はありません。"}
@@ -584,8 +594,6 @@ ${safeContext.exerciseHistoryContext || "種目別の過去記録はありませ
 - BIG3相談では、種目別の過去記録内の「BIG3/主要種目の過去記録」を最優先で確認し、ベンチ系・スクワット系・通常デッドリフト・RDL系バリエーションの記録を参照する
 - スクワット系やデッドリフト系バリエーションの記録がある場合は「記録がありません」と言わない
 - 通常デッドリフトとRDL/ルーマニアンデッドリフトは区別し、通常デッドリフトが無くRDLだけある場合は「通常デッドリフトの記録は見当たりませんが、RDLの記録があります」と伝える
-- 初心者モードでは、種目数を少なめにし、専門用語を減らし、「まずはこれだけでOKです」と分かる形にする
-- 初心者モードでは、1回の提案は最大3〜4種目、セット数も簡単にする
 - 高重量低repなどの表現は、必要な時だけやさしい言葉に言い換える
 - 自然な話し言葉で書く
 - メニューを提案する際は、種目ごとに改行して箇条書きで表示してください

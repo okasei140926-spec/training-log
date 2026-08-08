@@ -818,6 +818,8 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
   const isProRef = useRef(getIsPro());
   const revenueCatPlanRef = useRef(null);
   const activeConversationIdRef = useRef(null);
+  const weeklyBodyPartCountsRef = useRef(null);
+  const weeklySetTargetsRef = useRef(null);
   const [isPro, setIsPro] = useState(() => getIsPro());
   const [proPlan, setProPlan] = useState(null);
   const [aiConversations, setAiConversations] = useState([]);
@@ -831,6 +833,11 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
     aiUsageCountRef.current = usage.count;
     return usage.count;
   });
+
+  const updateWeeklyContext = useCallback((counts, targets) => {
+    weeklyBodyPartCountsRef.current = counts || null;
+    weeklySetTargetsRef.current = targets || null;
+  }, []);
 
   const setActiveConversationId = useCallback((conversationId) => {
     activeConversationIdRef.current = conversationId || null;
@@ -1624,19 +1631,42 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
           clientState: {
             isPro: currentIsPro,
           },
-          coachContext: {
-            mode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
-            level: mode.wantsBeginner ? "beginner" : mode.wantsAdvanced ? "advanced" : "standard",
-            source: contextSource,
-            readOnly: true,
-            appStateUpdated: false,
-            targetDate: targetDateKey || null,
-            targetWorkoutContext: buildWorkoutContextText(targetWorkoutSummary),
-            latestWorkoutContext: buildWorkoutContextText(latestWorkoutSummary),
-            recentSummaryContext: buildRecentSummaryText(requestGroupedHistory),
-            exerciseHistoryContext,
-            hasTargetWorkout: Boolean(targetWorkoutSummary),
-          },
+          coachContext: (() => {
+            // Training frequency over last 4 weeks
+            const now = new Date();
+            const d28ago = new Date(now); d28ago.setDate(d28ago.getDate() - 28);
+            const d28agoKey = formatDateKey(d28ago);
+            const workoutDaysIn4Weeks = Array.from(requestGroupedHistory.keys()).filter((d) => d >= d28agoKey).length;
+            const avgTrainingDaysPerWeek = (workoutDaysIn4Weeks / 4).toFixed(1);
+            const isActiveUser = workoutDaysIn4Weeks >= 8; // avg ≥2/week over 4 weeks
+
+            // Weekly body part set counts vs targets
+            const wCounts = weeklyBodyPartCountsRef.current;
+            const wTargets = weeklySetTargetsRef.current;
+            const weeklyBodyPartContext = wCounts
+              ? Object.entries(wCounts)
+                  .filter(([bp, count]) => count > 0 || (wTargets?.[bp] ?? 10) > 0)
+                  .map(([bp, count]) => `${bp}：${count}/${wTargets?.[bp] ?? 10}set`)
+                  .join("、") || null
+              : null;
+
+            return {
+              mode: mode.wantsAnalysis ? "analysis" : mode.wantsMenu ? "menu" : "general",
+              level: mode.wantsBeginner ? "beginner" : mode.wantsAdvanced ? "advanced" : "standard",
+              source: contextSource,
+              readOnly: true,
+              appStateUpdated: false,
+              targetDate: targetDateKey || null,
+              targetWorkoutContext: buildWorkoutContextText(targetWorkoutSummary),
+              latestWorkoutContext: buildWorkoutContextText(latestWorkoutSummary),
+              recentSummaryContext: buildRecentSummaryText(requestGroupedHistory),
+              exerciseHistoryContext,
+              hasTargetWorkout: Boolean(targetWorkoutSummary),
+              avgTrainingDaysPerWeek,
+              isActiveUser,
+              weeklyBodyPartContext,
+            };
+          })(),
         }),
       });
       const data = await readApiJson(res);
@@ -1655,11 +1685,9 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         const errorMessage =
           res.status === 401
             ? "ログインが必要です。"
-            : res.status === 403
-              ? "今日の無料AI相談回数を使い切りました。Pump ProでAI Coachを無制限に使えます。"
-              : res.status === 429
-                ? data?.error || "AI Coachの利用が集中しています。少し待ってからお試しください。"
-                : "通信に失敗しました。時間をおいて再試行してください。";
+            : (res.status === 429 || res.status === 403)
+              ? (data?.error || "今日の無料AI相談回数を使い切りました。")
+              : "通信に失敗しました。時間をおいて再試行してください。";
         setAiMsgs((p) => [...p, { role: "assistant", content: errorMessage }]);
         return;
       }
@@ -1760,5 +1788,6 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
     openAiConversation,
     startNewAiConversation,
     deleteAiConversation,
+    updateWeeklyContext,
   };
 }

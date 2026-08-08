@@ -9,7 +9,6 @@ import {
   BIG3_EXERCISES,
   sortByDateDesc,
   sortBodyPartLabels,
-  sortPrItemsByUsage,
   buildHistoryBestMap,
   buildManualBestMap,
   buildHistoryRecordMap,
@@ -28,6 +27,7 @@ export default function AnalyticsScreen({
   onOpenPhotoCompare,
   weekStartDay = "monday",
   weeklySetTargets = {},
+  setWeeklySetTargets,
   initialTab = "weekly",
 }) {
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
@@ -154,10 +154,32 @@ export default function AnalyticsScreen({
       return historyBest;
     }).filter(Boolean).map((item) => {
       const records = combinedRecordMap[item.key] || [];
+      const currentPrDate = item.date || "";
+      const recordsBeforePrDate = records.filter((r) => r.date && r.date < currentPrDate);
+      const prevBest1RM = recordsBeforePrDate.reduce((max, r) => Math.max(max, r.estimated1RM || 0), 0);
+      const prDiff = prevBest1RM > 0 ? item.estimated1RM - prevBest1RM : null;
+
+      const now = new Date();
+      const d21ago = new Date(now); d21ago.setDate(d21ago.getDate() - 21);
+      const d14ago = new Date(now); d14ago.setDate(d14ago.getDate() - 14);
+      const pad = (n) => String(n).padStart(2, "0");
+      const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const d21agoStr = toKey(d21ago);
+      const d14agoStr = toKey(d14ago);
+      const recentRecordCount = records.filter((r) => r.date >= d21agoStr).length;
+      const daysSincePr = currentPrDate ? Math.floor((now - new Date(`${currentPrDate}T00:00:00`)) / 86400000) : null;
+      const isNew = Boolean(currentPrDate && currentPrDate >= d14agoStr);
+      const stagnationWeeks = (daysSincePr !== null && daysSincePr >= 21 && recentRecordCount >= 3)
+        ? Math.floor(daysSincePr / 7)
+        : null;
+
       return {
         ...item,
         recordCount: records.length,
         latestRecordDate: records[0]?.date || item.date || null,
+        prDiff,
+        isNew,
+        stagnationWeeks,
       };
     });
 
@@ -166,8 +188,9 @@ export default function AnalyticsScreen({
       bodyPart,
       items: merged
         .filter((item) => item.bodyPart === bodyPart)
-        .sort(sortPrItemsByUsage),
+        .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
     }));
+    const allItemsSortedByDate = [...merged].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
     const big3 = BIG3_EXERCISES.map(({ key, label }) => {
       const match = merged
@@ -186,6 +209,7 @@ export default function AnalyticsScreen({
 
     return {
       groupedByBodyPart,
+      allItemsSortedByDate,
       big3,
       big3Total: big3.reduce((sum, item) => sum + item.estimated1RM, 0),
       itemMap,
@@ -196,12 +220,8 @@ export default function AnalyticsScreen({
 
   useEffect(() => {
     const labels = prData.groupedByBodyPart.map((group) => group.bodyPart);
-    if (!labels.length) {
-      setSelectedPrBodyPart(null);
-      return;
-    }
-
-    setSelectedPrBodyPart((prev) => (prev && labels.includes(prev) ? prev : labels[0]));
+    // null means "すべて" — keep it as a valid default
+    setSelectedPrBodyPart((prev) => (prev === null || labels.includes(prev)) ? prev : null);
   }, [prData.groupedByBodyPart]);
 
   const selectedRecords = useMemo(() => {
@@ -407,6 +427,7 @@ export default function AnalyticsScreen({
           exerciseBodyPartOverrides={exerciseBodyPartOverrides}
           weekStartDay={weekStartDay}
           weeklySetTargets={weeklySetTargets}
+          setWeeklySetTargets={setWeeklySetTargets}
         />
       )}
 

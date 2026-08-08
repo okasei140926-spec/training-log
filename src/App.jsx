@@ -14,6 +14,7 @@ import {
 // useWorkoutLog → useWorkoutLogBridge
 import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
 import { BILLING_ENABLED } from "./constants/features";
+import { buildWeeklyBodyPartSetCounts } from "./components/analytics/analyticsUtils";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
 // eslint-disable-next-line no-unused-vars
@@ -698,6 +699,7 @@ export default function GymApp() {
         loadAiConversations,
         activateStripeCheckoutSession,
         openStripePortal,
+        updateWeeklyContext,
     } = useAI({ loadConversationsOnMount: screen === "ai" });
 
     useEffect(() => {
@@ -1408,6 +1410,15 @@ export default function GymApp() {
         getCurrentWeekRangeForHomeSummary,
         shouldLogPerfDebug,
     });
+
+    const weeklyBodyPartCounts = useMemo(
+        () => buildWeeklyBodyPartSetCounts(canonicalDisplayHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides),
+        [canonicalDisplayHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides]
+    );
+
+    useEffect(() => {
+        updateWeeklyContext(weeklyBodyPartCounts, weeklySetTargets);
+    }, [weeklyBodyPartCounts, weeklySetTargets, updateWeeklyContext]);
 
     useEffect(() => {
         if (screen !== "history") return;
@@ -2708,6 +2719,7 @@ export default function GymApp() {
                             onOpenPhotoCompare={() => setScreen("photos")}
                             weekStartDay={weekStartDay}
                             weeklySetTargets={weeklySetTargets}
+                            setWeeklySetTargets={setWeeklySetTargets}
                             initialTab="weekly"
                         />
 
@@ -2817,6 +2829,8 @@ export default function GymApp() {
                             aiLoad={aiLoad}
                             aiEnd={aiEnd}
                             history={canonicalDisplayHistory}
+                            weeklyBodyPartCounts={weeklyBodyPartCounts}
+                            weeklySetTargets={weeklySetTargets}
                             isPro={isPro}
                             onStartPro={activatePumpPro}
                             onDeactivateProDev={deactivatePumpProDev}
@@ -2969,7 +2983,7 @@ export default function GymApp() {
                     showPrimary={pushStatus.support.supported && pushStatus.permission !== "denied"}
                 />
 
-                <SplashScreen visible={showSplashScreen} isDark={isDark} />
+                <SplashScreen visible={showSplashScreen} />
                 <Analytics />
             </div>
             {!shouldHideBottomNav && (

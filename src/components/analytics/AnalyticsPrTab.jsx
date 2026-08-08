@@ -4,62 +4,118 @@ export default function AnalyticsPrTab({
   prData,
   selectedPrBodyPart,
   setSelectedPrBodyPart,
-  selectedPrGroup,
   selectedExerciseKey,
   onSelectExercise,
 }) {
+  const groups = prData.groupedByBodyPart || [];
+  const hasData = groups.length > 0;
+
+  // Items to display: null = すべて
+  const displayItems =
+    selectedPrBodyPart === null
+      ? prData.allItemsSortedByDate || []
+      : (groups.find((g) => g.bodyPart === selectedPrBodyPart)?.items || []);
+
   return (
-    <>
-      <div style={{ background: "var(--card)", borderRadius: 22, padding: 18, border: "1px solid rgba(18, 199, 194, 0.10)", boxShadow: "var(--shadow-card)" }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{
+        background: "var(--card)",
+        borderRadius: 22,
+        padding: 18,
+        border: "1px solid rgba(18, 199, 194, 0.10)",
+        boxShadow: "var(--shadow-card)",
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", marginBottom: 14 }}>
           自己ベスト
         </div>
-        {prData.groupedByBodyPart.length > 0 ? (
+
+        {hasData ? (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
-              {prData.groupedByBodyPart.map((group) => (
-                <button
-                  key={group.bodyPart}
-                  type="button"
-                  onClick={() => setSelectedPrBodyPart(selectedPrBodyPart === group.bodyPart ? null : group.bodyPart)}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 14,
-                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                    background:
-                      selectedPrBodyPart === group.bodyPart
-                        ? "linear-gradient(135deg, rgba(15, 94, 99, 0.14), rgba(18, 199, 194, 0.12))"
-                        : "linear-gradient(180deg, var(--card2), var(--card))",
-                    color: "var(--text)",
-                    textAlign: "left",
-                    boxShadow:
-                      selectedPrBodyPart === group.bodyPart ? "0 10px 22px rgba(15, 94, 99, 0.10)" : "none",
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 900, color: selectedPrBodyPart === group.bodyPart ? "var(--accent)" : "var(--text)" }}>
+            {/* Horizontal filter chips */}
+            <div style={{
+              display: "flex",
+              gap: 8,
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+              marginBottom: 16,
+              paddingBottom: 4,
+            }}>
+              {/* "すべて" chip */}
+              <button
+                type="button"
+                onClick={() => setSelectedPrBodyPart(null)}
+                style={{
+                  flexShrink: 0,
+                  padding: "6px 14px",
+                  borderRadius: 999,
+                  border: selectedPrBodyPart === null
+                    ? "1.5px solid var(--accent)"
+                    : "1.5px solid rgba(130,150,155,0.25)",
+                  background: selectedPrBodyPart === null
+                    ? "rgba(18,199,194,0.12)"
+                    : "var(--card2)",
+                  color: selectedPrBodyPart === null ? "var(--accent)" : "var(--text2)",
+                  fontSize: 12,
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                すべて
+              </button>
+
+              {groups.map((group) => {
+                const isSelected = selectedPrBodyPart === group.bodyPart;
+                return (
+                  <button
+                    key={group.bodyPart}
+                    type="button"
+                    onClick={() => setSelectedPrBodyPart(isSelected ? null : group.bodyPart)}
+                    style={{
+                      flexShrink: 0,
+                      padding: "6px 14px",
+                      borderRadius: 999,
+                      border: isSelected
+                        ? "1.5px solid var(--accent)"
+                        : "1.5px solid rgba(130,150,155,0.25)",
+                      background: isSelected
+                        ? "rgba(18,199,194,0.12)"
+                        : "var(--card2)",
+                      color: isSelected ? "var(--accent)" : "var(--text2)",
+                      fontSize: 12,
+                      fontWeight: 900,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {group.bodyPart}
-                  </div>
-                  <div style={{ fontSize: 10, color: "var(--text2)", fontWeight: 700, marginTop: 2 }}>
-                    {group.items.length}種目
-                  </div>
-                </button>
-              ))}
+                    <span style={{ marginLeft: 4, fontSize: 10, opacity: 0.7 }}>
+                      {group.items.length}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            {selectedPrGroup && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {selectedPrGroup.items.map((item) => (
-                  <div key={item.key}>
-                    <PrCard
-                      item={item}
-                      hideEstimated1RM={true}
-                      selectedExerciseKey={selectedExerciseKey}
-                      onSelect={onSelectExercise}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* PR item list */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {displayItems.map((item) => (
+                <PrCard
+                  key={item.key}
+                  item={item}
+                  hideEstimated1RM={true}
+                  selectedExerciseKey={selectedExerciseKey}
+                  onSelect={onSelectExercise}
+                  showBodyPart={selectedPrBodyPart === null}
+                  prDiff={item.prDiff}
+                  isNew={item.isNew}
+                  stagnationWeeks={item.stagnationWeeks}
+                />
+              ))}
+              {displayItems.length === 0 && (
+                <div style={{ fontSize: 13, color: "var(--text2)" }}>種目がありません</div>
+              )}
+            </div>
           </>
         ) : (
           <div style={{ fontSize: 13, color: "var(--text2)" }}>
@@ -67,6 +123,6 @@ export default function AnalyticsPrTab({
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }

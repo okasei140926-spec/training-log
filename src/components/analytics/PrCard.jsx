@@ -1,6 +1,16 @@
 import { formatDate, formatPrSetLabel } from "./analyticsUtils";
 
-export default function PrCard({ item, compact = false, hideEstimated1RM = false, selectedExerciseKey, onSelect }) {
+export default function PrCard({
+  item,
+  compact = false,
+  hideEstimated1RM = false,
+  selectedExerciseKey,
+  onSelect,
+  showBodyPart = false,
+  prDiff,
+  isNew,
+  stagnationWeeks,
+}) {
   const isSelected = Boolean(item?.key && item.key === selectedExerciseKey);
   const sharedStyle = {
     width: "100%",
@@ -33,19 +43,58 @@ export default function PrCard({ item, compact = false, hideEstimated1RM = false
       style={sharedStyle}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 4 }}>
-        <div style={{ fontSize: compact ? 11 : 13, fontWeight: 700, color: "var(--text)" }}>
-          {item.displayName || item.name}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <div style={{ fontSize: compact ? 11 : 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {item.displayName || item.name}
+          </div>
+          {isNew && (
+            <span style={{
+              flexShrink: 0,
+              padding: "1px 6px",
+              borderRadius: 999,
+              background: "rgba(18,199,194,0.15)",
+              border: "1px solid rgba(18,199,194,0.35)",
+              color: "var(--accent)",
+              fontSize: 9,
+              fontWeight: 900,
+              letterSpacing: "0.04em",
+            }}>
+              NEW
+            </span>
+          )}
         </div>
         {!hideEstimated1RM && (
-          <div style={{ fontSize: compact ? 22 : 15, fontWeight: 800, color: "var(--text)" }}>
+          <div style={{ fontSize: compact ? 22 : 15, fontWeight: 800, color: "var(--text)", flexShrink: 0 }}>
             {item.estimated1RM}kg
           </div>
         )}
       </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12, color: "var(--text2)" }}>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", fontSize: 12, color: "var(--text2)" }}>
         <span>{formatPrSetLabel(item)}</span>
         {item.date && <span>{formatDate(item.date)}</span>}
-        {!compact && item.bodyPart && (
+
+        {prDiff != null && prDiff > 0 && (
+          <span style={{
+            padding: "1px 6px",
+            borderRadius: 999,
+            background: "rgba(85,216,158,0.12)",
+            border: "1px solid rgba(85,216,158,0.30)",
+            color: "#55D89E",
+            fontSize: 10,
+            fontWeight: 900,
+          }}>
+            +{prDiff}kg
+          </span>
+        )}
+
+        {stagnationWeeks != null && (
+          <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text3)" }}>
+            {stagnationWeeks}週停滞
+          </span>
+        )}
+
+        {(showBodyPart || !compact) && item.bodyPart && (
           <span style={{ padding: "0 6px", borderRadius: 999, background: "var(--info-soft)", border: "1px solid var(--info-border)", color: "var(--accent)", fontSize: 9, fontWeight: 700, lineHeight: 1.5 }}>
             {item.bodyPart}
           </span>

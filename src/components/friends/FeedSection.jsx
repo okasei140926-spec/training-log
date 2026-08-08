@@ -152,33 +152,31 @@ function FeedSection({
                     </div>
                 </div>
 
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                        <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
-                            新しい記録順に表示しています
-                        </div>
-                        {feedRefreshing && activityFeedAction === "refresh" && (
-                            <div style={{ fontSize: 10, color: "var(--text3)", fontWeight: 700 }}>
-                                更新中...
-                            </div>
-                        )}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700 }}>
+                        {(activityFeedLoading || feedRefreshing) && activityFeedAction === "refresh" ? "更新中..." : "新しい記録順"}
                     </div>
                     <button
                         type="button"
                         onClick={handleRefreshActivityFeed}
                         disabled={activityFeedLoading || feedRefreshing}
                         style={{
-                            padding: "10px 14px",
-                            borderRadius: 14,
+                            width: 34,
+                            height: 34,
+                            borderRadius: 10,
                             border: "1px solid var(--border2)",
                             background: "var(--card2)",
                             color: "var(--text2)",
-                            fontSize: 12,
-                            fontWeight: 800,
+                            fontSize: 16,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             flexShrink: 0,
+                            opacity: (activityFeedLoading || feedRefreshing) ? 0.5 : 1,
                         }}
+                        aria-label="更新"
                     >
-                        {(activityFeedLoading || feedRefreshing) && activityFeedAction === "refresh" ? "更新中..." : "更新"}
+                        ↻
                     </button>
                 </div>
 
@@ -364,11 +362,20 @@ function FeedSection({
                                                         cursor: "pointer",
                                                     }}
                                                 >
-                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                                        <span style={{ color: "var(--text2)", fontSize: 9, width: 10 }}>
+                                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                                                        <span style={{ color: "var(--text2)", fontSize: 9, width: 10, flexShrink: 0 }}>
                                                             {isExpanded ? "▼" : "▶"}
                                                         </span>
-                                                        <span>{formatFeedDateShort(dateGroup.date, today)}</span>
+                                                        <span style={{ flexShrink: 0 }}>{formatFeedDateShort(dateGroup.date, today)}</span>
+                                                        {!isExpanded && (() => {
+                                                            const summary = buildSessionSummary(dateGroup.detailedExercises);
+                                                            if (!summary) return null;
+                                                            return (
+                                                                <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                                    {[summary.bpText, summary.totalSets > 0 && `${summary.totalSets}set`, summary.volText].filter(Boolean).join("  ")}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </span>
                                                 </button>
 
@@ -673,12 +680,48 @@ function FeedSection({
     );
 }
 
+const DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
 const formatFeedDateShort = (workoutDate, todayKey) => {
     const normalizedDate = String(workoutDate || "").slice(0, 10);
     if (!normalizedDate) return "";
     if (todayKey && normalizedDate === String(todayKey).slice(0, 10)) return "今日";
-    const [, month = "", day = ""] = normalizedDate.split("-");
-    return `${month}-${day}`;
+    const d = new Date(`${normalizedDate}T00:00:00`);
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    const dow = DAY_LABELS[d.getDay()];
+    return `${month}/${day} (${dow})`;
+};
+
+const buildSessionSummary = (detailedExercises) => {
+    if (!detailedExercises?.length) return null;
+    // Body parts (deduplicated, max 3 shown)
+    const bpSeen = new Set();
+    const bpList = [];
+    for (const ex of detailedExercises) {
+        const bp = ex.body_part;
+        if (bp && !bpSeen.has(bp)) { bpSeen.add(bp); bpList.push(bp); }
+    }
+    // Total sets
+    const totalSets = detailedExercises.reduce((sum, ex) => sum + (Number(ex.set_count) || 0), 0);
+    // Total volume
+    let totalVolume = 0;
+    for (const ex of detailedExercises) {
+        if (Array.isArray(ex.sets) && ex.sets.length) {
+            for (const s of ex.sets) {
+                const w = Number(s.weight_kg ?? s.weight ?? 0);
+                const r = Number(s.reps ?? 0);
+                totalVolume += w * r;
+            }
+        } else {
+            totalVolume += Number(ex.max_weight || 0) * Number(ex.set_count || 0);
+        }
+    }
+    const bpText = bpList.slice(0, 3).join("・") + (bpList.length > 3 ? "…" : "");
+    const volText = totalVolume >= 1000
+        ? `${(totalVolume / 1000).toFixed(1)}t`
+        : totalVolume > 0 ? `${Math.round(totalVolume)}kg` : null;
+    return { bpText, totalSets, volText };
 };
 
 export default FeedSection;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export default function SplashScreen({ visible, isDark = true }) {
+export default function SplashScreen({ visible }) {
   const [mounted, setMounted] = useState(visible);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function SplashScreen({ visible, isDark = true }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: isDark ? "#0f0f0f" : "#F7FBFB",
+        background: "#F7FBFB",
         opacity: visible ? 1 : 0,
         transition: visible ? "none" : "opacity 220ms ease",
         pointerEvents: visible ? "auto" : "none",

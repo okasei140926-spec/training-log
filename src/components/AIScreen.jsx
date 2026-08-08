@@ -384,6 +384,74 @@ const WorkoutPlanConfirmModal = ({ plan, selectedMap, setSelectedMap, onClose, o
     );
 };
 
+const LimitReachedCard = ({ aiUsageCount, dailyFreeAiLimit, onOpenPro }) => (
+    <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        padding: "8px 10px",
+        borderRadius: 14,
+        background: "rgba(130,150,155,0.08)",
+        border: "1px solid rgba(130,150,155,0.18)",
+    }}>
+        <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 900, lineHeight: 1.35 }}>
+                本日のAI相談 {aiUsageCount}/{dailyFreeAiLimit} を使い切りました
+            </div>
+            <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.35 }}>
+                {onOpenPro ? "ProでAI Coachを無制限に使えます" : "明日 0:00 (JST) にリセットされます"}
+            </div>
+        </div>
+        {onOpenPro && (
+            <button
+                type="button"
+                onClick={onOpenPro}
+                className="pressable"
+                style={{
+                    flexShrink: 0,
+                    padding: "7px 10px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(18, 199, 194, 0.18)",
+                    background: "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))",
+                    color: "var(--text)",
+                    fontSize: 11,
+                    fontWeight: 900,
+                }}
+            >
+                Proを見る
+            </button>
+        )}
+    </div>
+);
+
+const TRACKED_BODY_PARTS = ["胸", "背中", "四頭", "ハム", "尻", "肩", "二頭", "三頭", "腹筋"];
+const DEFAULT_TARGET = 10;
+
+function buildTodaySuggestion(weeklyBodyPartCounts, weeklySetTargets) {
+    if (!weeklyBodyPartCounts || !weeklySetTargets) return null;
+    const parts = TRACKED_BODY_PARTS.map((bp) => ({
+        bp,
+        done: weeklyBodyPartCounts[bp] || 0,
+        target: weeklySetTargets[bp] ?? DEFAULT_TARGET,
+    })).filter((p) => p.target > 0);
+
+    if (!parts.length) return null;
+
+    const allAchieved = parts.every((p) => p.done >= p.target);
+    const behind = parts.filter((p) => p.done < p.target);
+
+    if (allAchieved) {
+        return { allAchieved: true, parts, behind: [] };
+    }
+    return { allAchieved: false, parts, behind };
+}
+
+function buildSuggestionPrompt(parts) {
+    const lines = parts.map((p) => `${p.bp}：${p.done}/${p.target}set`).join("、");
+    return `今週のセット数状況です。${lines}。目標に対して不足している部位を中心に、今日のトレーニングメニューを提案してください。`;
+}
+
 export default function AIScreen({
     aiMsgs,
     aiInput,
@@ -408,6 +476,8 @@ export default function AIScreen({
     onDeleteConversation,
     onLoadConversations,
     onOpenStripePortal,
+    weeklyBodyPartCounts,
+    weeklySetTargets,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
@@ -416,6 +486,8 @@ export default function AIScreen({
     const [isProPaywallDismissed, setIsProPaywallDismissed] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
 
+    const todaySuggestion = buildTodaySuggestion(weeklyBodyPartCounts, weeklySetTargets);
+
     const showDevProControls = process.env.NODE_ENV !== "production" && isPro && typeof onDeactivateProDev === "function";
     const isInitialState =
         aiMsgs.length === 1 &&
@@ -423,10 +495,13 @@ export default function AIScreen({
         !aiLoad;
 
     const visibleMessages = isInitialState ? [] : aiMsgs;
-    const isAiLimitReached = BILLING_ENABLED && !isPro && Number(aiRemaining) <= 0;
+    // 5/5以上でPro以外は制限（BILLING_ENABLEDに関わらず）
+    const isHardLimitReached = !isPro && Number(aiRemaining) <= 0;
+    // Pro paywall only shown when BILLING_ENABLED
+    const isAiLimitReached = isHardLimitReached;
     const canSendMessage = !aiLoad && !isAiLimitReached;
-    const shouldShowProPaywall = isAiLimitReached && !isProPaywallDismissed;
-    const shouldShowCompactProNotice = isAiLimitReached;
+    const shouldShowProPaywall = BILLING_ENABLED && isAiLimitReached && !isProPaywallDismissed;
+    const shouldShowLimitCard = isAiLimitReached;
 
     useEffect(() => {
         if (!isAiLimitReached) {
@@ -557,16 +632,20 @@ export default function AIScreen({
                         maxWidth: "100%",
                         padding: "6px 10px",
                         borderRadius: 999,
-                        background: "rgba(18, 199, 194, 0.08)",
-                        border: "1px solid rgba(18, 199, 194, 0.12)",
-                        color: "var(--text2)",
+                        background: isAiLimitReached
+                            ? "rgba(130,150,155,0.12)"
+                            : "rgba(18, 199, 194, 0.08)",
+                        border: isAiLimitReached
+                            ? "1px solid rgba(130,150,155,0.22)"
+                            : "1px solid rgba(18, 199, 194, 0.12)",
+                        color: isAiLimitReached ? "var(--text3)" : "var(--text2)",
                         fontSize: 11,
                         fontWeight: 700,
                     }}
                 >
-                    {BILLING_ENABLED
-                        ? (isPro ? "今日のAI相談 Pro 無制限" : `今日のAI相談 残り${aiRemaining}回 / ${dailyFreeAiLimit}回`)
-                        : "AIアシスタント"}
+                    {isPro
+                        ? "今日のAI相談 Pro 無制限"
+                        : `今日 ${aiUsageCount}/${dailyFreeAiLimit}`}
                 </div>
                 <div
                     style={{
@@ -676,6 +755,72 @@ export default function AIScreen({
                             + 新しい会話
                         </button>
                     </div>
+                )}
+
+                {isInitialState && todaySuggestion && (
+                    todaySuggestion.allAchieved ? (
+                        <div style={{
+                            background: "linear-gradient(135deg, rgba(85,216,158,0.12), rgba(18,199,194,0.08))",
+                            borderRadius: 18,
+                            border: "1px solid rgba(85,216,158,0.28)",
+                            padding: "14px 16px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                        }}>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: "#55D89E" }}>今週の目標、全達成！</div>
+                            <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
+                                すべての部位でセット目標を達成しています。素晴らしいトレーニングウィークでした！
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (!canSendMessage) return;
+                                const prompt = buildSuggestionPrompt(todaySuggestion.behind);
+                                sendAI(prompt);
+                            }}
+                            style={{
+                                background: "var(--card)",
+                                borderRadius: 18,
+                                border: "1px solid rgba(18, 199, 194, 0.14)",
+                                padding: "14px 16px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 8,
+                                textAlign: "left",
+                                cursor: canSendMessage ? "pointer" : "not-allowed",
+                                boxShadow: "var(--shadow-card)",
+                                opacity: canSendMessage ? 1 : 0.6,
+                            }}
+                        >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 1.2, color: "var(--text3)" }}>今日の提案</div>
+                                <div style={{ fontSize: 10, color: "var(--accent)", background: "rgba(18,199,194,0.10)", padding: "2px 7px", borderRadius: 999, fontWeight: 800 }}>タップで相談</div>
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                {todaySuggestion.behind.slice(0, 5).map((p) => (
+                                    <div key={p.bp} style={{
+                                        padding: "4px 9px",
+                                        borderRadius: 999,
+                                        background: "var(--card2)",
+                                        border: "1px solid rgba(130,150,155,0.20)",
+                                        fontSize: 11,
+                                        fontWeight: 800,
+                                        color: "var(--text2)",
+                                    }}>
+                                        {p.bp} {p.done}/{p.target}
+                                    </div>
+                                ))}
+                                {todaySuggestion.behind.length > 5 && (
+                                    <div style={{ fontSize: 11, color: "var(--text3)", padding: "4px 0", fontWeight: 700 }}>
+                                        +{todaySuggestion.behind.length - 5}
+                                    </div>
+                                )}
+                            </div>
+                        </button>
+                    )
                 )}
 
                 {isInitialState && (
@@ -869,45 +1014,12 @@ export default function AIScreen({
                         ↑
                     </button>
                 </div>
-                {shouldShowCompactProNotice && (
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 10,
-                            padding: "8px 10px",
-                            borderRadius: 14,
-                            background: "rgba(18, 199, 194, 0.07)",
-                            border: "1px solid rgba(18, 199, 194, 0.12)",
-                        }}
-                    >
-                        <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 900, lineHeight: 1.35 }}>
-                                無料相談は本日分を使い切りました
-                            </div>
-                            <div style={{ fontSize: 10, color: "var(--text3)", lineHeight: 1.35 }}>
-                                ProでAI Coachをもっと使えます
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={openProPaywall}
-                            className="pressable"
-                            style={{
-                                flexShrink: 0,
-                                padding: "7px 10px",
-                                borderRadius: 999,
-                                border: "1px solid rgba(18, 199, 194, 0.18)",
-                                background: "linear-gradient(135deg, rgba(18, 199, 194, 0.18), rgba(51, 225, 219, 0.12))",
-                                color: "var(--text)",
-                                fontSize: 11,
-                                fontWeight: 900,
-                            }}
-                        >
-                            Proを見る
-                        </button>
-                    </div>
+                {shouldShowLimitCard && (
+                    <LimitReachedCard
+                        aiUsageCount={aiUsageCount}
+                        dailyFreeAiLimit={dailyFreeAiLimit}
+                        onOpenPro={BILLING_ENABLED ? openProPaywall : null}
+                    />
                 )}
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
                     メニュー相談、記録分析、フォーム相談をそのまま聞けます。
