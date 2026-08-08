@@ -13,6 +13,7 @@ import {
 } from "./utils/helpers";
 // useWorkoutLog → useWorkoutLogBridge
 import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
+import { resolveRecordBodyPartLabel } from "./utils/bodyPartClassification";
 import { BILLING_ENABLED } from "./constants/features";
 import { buildWeeklyBodyPartSetCounts } from "./components/analytics/analyticsUtils";
 import { S, css } from "./utils/styles";
@@ -1794,9 +1795,15 @@ export default function GymApp() {
         exerciseList.forEach((ex) => {
             const name = typeof ex === "string" ? ex : ex.name;
             if (!name) return;
-            const bodyPart = (typeof ex === "object" ? ex.bodyPart : undefined) || nextLabels[0] || "その他";
+            const rawBodyPart = typeof ex === "object" ? (ex.bodyPart || ex.label) : undefined;
+            const resolvedBodyPart = resolveRecordBodyPartLabel(
+                { bodyPart: rawBodyPart },
+                name,
+                { muscleEx, exerciseBodyPartOverrides }
+            ) || nextLabels[0] || "その他";
+            console.log(`[copyExercises] ${name} → ${resolvedBodyPart}`);
             if (!nextSession.some((e) => e.name === name)) {
-                nextSession.push({ id: Date.now() + Math.floor(Math.random() * 100000), name, label: bodyPart, bodyPart });
+                nextSession.push({ id: Date.now() + Math.floor(Math.random() * 100000), name, label: resolvedBodyPart, bodyPart: resolvedBodyPart });
             }
             if (!nextLogData[name]) {
                 nextLogData[name] = makeDefaultDraftSets();
