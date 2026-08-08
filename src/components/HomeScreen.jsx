@@ -37,6 +37,9 @@ export default function HomeScreen({
     historyRemoteReady = false,
     remoteLoadFailed = false,
     onCopyExercises,
+    weekStartDay = "monday",
+    weeklySetTargets = {},
+    onNavigateToWeeklyAnalytics,
 }) {
     const renderStartedAt = getPerfNow();
     const [selectedSession, setSelectedSession] = useState(null);
@@ -51,7 +54,7 @@ export default function HomeScreen({
     const homeSnapshotLogSignatureRef = useRef("");
     const weeklyConsistencyLogSignatureRef = useRef("");
     const homeRenderStateLogSignatureRef = useRef("");
-    const week = getWeekRange();
+    const week = getWeekRange(weekStartDay);
     const weekKey = `${week.start}:${week.end}`;
     renderCountRef.current += 1;
 
@@ -312,6 +315,13 @@ export default function HomeScreen({
         return { thisVol: Math.round(thisVol), prevVol: Math.round(prevVol) };
     }, [homeMetricsReady, recordsLoading, allSessions]);
 
+    const isLateWeek = (() => {
+        const today = new Date();
+        const day = today.getDay(); // 0=Sun
+        const dayInWeek = weekStartDay === "sunday" ? day : (day === 0 ? 6 : day - 1);
+        return dayInWeek >= 3;
+    })();
+
     const weeklyDisplay = partsToShow
         .map(part => ({ part, sets: weeklySets[part] || 0 }))
         .filter(x => x.sets > 0);
@@ -464,17 +474,23 @@ export default function HomeScreen({
                 })()}
             </section>
 
-            <section style={{
-                borderRadius: 18,
-                padding: "17px 18px",
-                marginBottom: 14,
-                background: "var(--home-card)",
-                border: "1px solid var(--home-card-border)",
-                boxShadow: "var(--home-shadow)",
-            }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <section
+                onClick={onNavigateToWeeklyAnalytics}
+                style={{
+                    borderRadius: 18,
+                    padding: "17px 18px",
+                    marginBottom: 14,
+                    background: "var(--home-card)",
+                    border: "1px solid var(--home-card-border)",
+                    boxShadow: "var(--home-shadow)",
+                    cursor: onNavigateToWeeklyAnalytics ? "pointer" : "default",
+                }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
                     <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950, color: "var(--home-title)" }}>今週のトレーニング</h2>
-                    <span style={{ color: "var(--home-muted)", fontSize: 14, fontWeight: 850 }}>{week.label}</span>
+                    <span style={{ color: "var(--home-muted)", fontSize: 13, fontWeight: 850 }}>{week.label}</span>
+                    {onNavigateToWeeklyAnalytics && (
+                        <span style={{ marginLeft: "auto", color: "var(--accent)", fontSize: 13, fontWeight: 900 }}>分析 ›</span>
+                    )}
                 </div>
 
                 {recordsLoading ? (
@@ -487,27 +503,48 @@ export default function HomeScreen({
                         gridTemplateColumns: `repeat(${Math.min(Math.max(weeklyItems.length, 1), 8)}, minmax(0, 1fr))`,
                         gap: 0,
                     }}>
-                        {weeklyItems.map((x, index, arr) => (
-                        <button
-                            key={x.part}
-                            onClick={() => {
-                                const detail = collectWeeklyPartDetailFromSessions(weeklySessions, x.part);
-                                setSelectedWeeklyPart(detail);
-                            }}
-                            style={{
-                                textAlign: "center",
-                                border: "none",
-                                borderRight: index !== arr.length - 1 ? "1px solid var(--home-row-border)" : "none",
-                                padding: "0 5px",
-                                background: "transparent",
-                                cursor: "pointer",
-                            }}
-                        >
-                            <div style={{ fontSize: 14, color: "var(--home-text)", fontWeight: 900 }}>{x.part}</div>
-                            <div style={{ fontSize: 30, color: "var(--home-text)", fontWeight: 950, marginTop: 7, lineHeight: 1 }}>{x.sets}</div>
-                            <div style={{ fontSize: 13, color: "var(--home-muted)", fontWeight: 800, marginTop: 2 }}>set</div>
-                        </button>
-                        ))}
+                        {weeklyItems.map((x, index, arr) => {
+                            const target = weeklySetTargets[x.part] ?? 10;
+                            const ratio = target > 0 ? x.sets / target : 1;
+                            const partColor = ratio >= 1.0
+                                ? "#55D89E"
+                                : (ratio < 0.7 && isLateWeek)
+                                    ? "#F6A623"
+                                    : "var(--home-text)";
+                            return (
+                            <button
+                                key={x.part}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const detail = collectWeeklyPartDetailFromSessions(weeklySessions, x.part);
+                                    setSelectedWeeklyPart(detail);
+                                }}
+                                style={{
+                                    textAlign: "center",
+                                    border: "none",
+                                    borderRight: index !== arr.length - 1 ? "1px solid var(--home-row-border)" : "none",
+                                    padding: "0 5px 6px",
+                                    background: "transparent",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                <div style={{ fontSize: 12, color: partColor, fontWeight: 900 }}>{x.part}</div>
+                                <div style={{ fontSize: 24, color: partColor, fontWeight: 950, marginTop: 6, lineHeight: 1 }}>
+                                    {x.sets}
+                                    <span style={{ fontSize: 9, color: "var(--home-muted)", fontWeight: 800 }}>/{target}</span>
+                                </div>
+                                <div style={{ fontSize: 10, color: "var(--home-muted)", fontWeight: 800, marginTop: 1 }}>set</div>
+                                <div style={{ marginTop: 5, height: 3, borderRadius: 999, background: "rgba(130,150,155,0.20)", overflow: "hidden" }}>
+                                    <div style={{
+                                        height: "100%",
+                                        width: `${Math.min(ratio * 100, 100)}%`,
+                                        background: partColor,
+                                        borderRadius: 999,
+                                    }} />
+                                </div>
+                            </button>
+                            );
+                        })}
                     </div>
                 )}
                 {monthlyVolume && (

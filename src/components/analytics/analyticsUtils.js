@@ -672,3 +672,93 @@ export const buildChartTicks = (chartData = []) => {
     chartData[chartData.length - 1]?.date,
   ].filter(Boolean))];
 };
+
+// ─── Week aggregation helpers ────────────────────────────────────────────────
+
+function padDateKey(year, month, day) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function addDaysToKey(dateKey, n) {
+  const d = new Date(`${dateKey}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return padDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+
+export function getWeekStartKey(dateKey, weekStartDay = "monday") {
+  const d = new Date(`${dateKey}T00:00:00`);
+  const day = d.getDay(); // 0=Sun
+  const diff = weekStartDay === "sunday" ? -day : (day === 0 ? -6 : 1 - day);
+  const start = new Date(d);
+  start.setDate(d.getDate() + diff);
+  return padDateKey(start.getFullYear(), start.getMonth() + 1, start.getDate());
+}
+
+export function getCurrentWeekBoundaries(weekStartDay = "monday") {
+  const now = new Date();
+  const today = padDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const start = getWeekStartKey(today, weekStartDay);
+  const end = addDaysToKey(start, 6);
+  return { start, end };
+}
+
+function aggSetCount(record) {
+  return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true }).length;
+}
+
+export function buildWeeklyBodyPartSetCounts(history, weekStartDay = "monday", muscleEx = {}, exerciseBodyPartOverrides = {}) {
+  const { start, end } = getCurrentWeekBoundaries(weekStartDay);
+  const ctx = { muscleEx, exerciseBodyPartOverrides, hiddenSet: new Set() };
+  const map = {};
+  Object.entries(history || {}).forEach(([exName, records]) => {
+    (records || []).forEach((record) => {
+      if (!record.date || record.date < start || record.date > end) return;
+      const setCount = aggSetCount(record);
+      if (setCount <= 0) return;
+      const bp = resolveAnalyticsBodyPart(record, exName, ctx);
+      if (!bp) return;
+      map[bp] = (map[bp] || 0) + setCount;
+    });
+  });
+  return map;
+}
+
+export function buildEightWeekHeatmap(history, weekStartDay = "monday", muscleEx = {}, exerciseBodyPartOverrides = {}) {
+  const { start: currentWeekStart } = getCurrentWeekBoundaries(weekStartDay);
+  const ctx = { muscleEx, exerciseBodyPartOverrides, hiddenSet: new Set() };
+
+  const weeks = [];
+  for (let i = 7; i >= 0; i--) {
+    const weekStart = addDaysToKey(currentWeekStart, -7 * i);
+    const weekEnd = addDaysToKey(weekStart, 6);
+    weeks.push({ start: weekStart, end: weekEnd });
+  }
+
+  const weekDaySets = weeks.map(() => ({}));
+
+  Object.entries(history || {}).forEach(([exName, records]) => {
+    (records || []).forEach((record) => {
+      if (!record.date) return;
+      const setCount = aggSetCount(record);
+      if (setCount <= 0) return;
+      const bp = resolveAnalyticsBodyPart(record, exName, ctx);
+      if (!bp) return;
+
+      for (let i = 0; i < weeks.length; i++) {
+        if (record.date >= weeks[i].start && record.date <= weeks[i].end) {
+          if (!weekDaySets[i][bp]) weekDaySets[i][bp] = new Set();
+          weekDaySets[i][bp].add(record.date);
+          break;
+        }
+      }
+    });
+  });
+
+  return weeks.map((week, i) => ({
+    start: week.start,
+    end: week.end,
+    daysByBodyPart: Object.fromEntries(
+      Object.entries(weekDaySets[i]).map(([bp, days]) => [bp, days.size])
+    ),
+  }));
+}

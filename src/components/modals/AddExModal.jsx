@@ -84,7 +84,6 @@ export default function AddExModal({
     const tabLabels = visibleTabLabels.length ? visibleTabLabels : allTabLabels.slice(0, 1);
 
     useEffect(() => {
-        setTimeout(() => inputRef.current?.focus(), 50);
         if (isFree && tabLabels.length > 0) setActiveTab(tabLabels[0]);
         const body = document.body;
         const html = document.documentElement;
@@ -214,15 +213,6 @@ export default function AddExModal({
         clearLongPress();
     };
 
-    const handleTouchMoveCancel = (touch) => {
-        if (!touch) return;
-        const dx = Math.abs(touch.clientX - longPressRef.current.startX);
-        const dy = Math.abs(touch.clientY - longPressRef.current.startY);
-        if (dx > 10 || dy > 10) {
-            clearLongPress();
-        }
-    };
-
     const buildLongPressHandlers = ({ onTap, onLongPress }) => ({
         onClick: (e) => {
             if (longPressRef.current.triggered) {
@@ -233,13 +223,17 @@ export default function AddExModal({
             }
             onTap?.();
         },
-        onMouseDown: (e) => startLongPress(onLongPress, e),
-        onMouseUp: cancelLongPress,
-        onMouseLeave: cancelLongPress,
-        onTouchStart: (e) => startLongPress(onLongPress, e.touches[0]),
-        onTouchEnd: cancelLongPress,
-        onTouchCancel: cancelLongPress,
-        onTouchMove: (e) => handleTouchMoveCancel(e.touches[0]),
+        onPointerDown: (e) => startLongPress(onLongPress, e),
+        onPointerUp: cancelLongPress,
+        onPointerCancel: cancelLongPress,
+        onPointerLeave: cancelLongPress,
+        onPointerMove: (e) => {
+            const dx = Math.abs(e.clientX - longPressRef.current.startX);
+            const dy = Math.abs(e.clientY - longPressRef.current.startY);
+            if (dx > 10 || dy > 10) {
+                clearLongPress();
+            }
+        },
     });
 
     const hideSuggestion = (bodyPart, exerciseName) => {

@@ -340,7 +340,7 @@ export default function GymApp() {
     const [exerciseUnits, setExerciseUnits] = useState(() => loadDraftForDate(getTodayKey()).exerciseUnits);
 
     // eslint-disable-next-line no-unused-vars
-    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding } = useSettings();
+    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding, weekStartDay, setWeekStartDay, weeklySetTargets, setWeeklySetTargets } = useSettings();
     const appThemeClassName = isDark ? "app-shell" : "theme-light app-shell";
 
     const getExUnit = useCallback((name) => {
@@ -1764,11 +1764,42 @@ export default function GymApp() {
     // Copy only exercise names from a past workout into today's session
     const handleCopyExercisesToSession = (exerciseList) => {
         if (!exerciseList?.length) return;
+        const todayKey = getTodayKey();
+        // Save current draft before switching dates
+        const currentDraft = withDraftDateMeta(logDate, getCurrentLogDraftSnapshot(), {
+            source: latestLogDraftRef.current?.meta?.source || "current_log_snapshot",
+            hasUnsavedChanges: latestLogDraftRef.current?.meta?.hasUnsavedChanges ?? true,
+        });
+        if (hasDraftContent(currentDraft)) {
+            saveDraftForDate(logDate, currentDraft);
+        }
+        // Load today's draft as base
+        const todayDraft = logDate === todayKey ? currentDraft : loadDraftForDate(todayKey);
+        const nextSession = [...(Array.isArray(todayDraft.sessionEx) ? todayDraft.sessionEx : [])];
+        const nextLabels = [...(Array.isArray(todayDraft.todayLabels) ? todayDraft.todayLabels : [])];
+        const nextLogData = { ...(todayDraft.logData || {}) };
+        const nextUnits = { ...(todayDraft.exerciseUnits || {}) };
+        // Add each exercise to today's session
         exerciseList.forEach((ex) => {
             const name = typeof ex === "string" ? ex : ex.name;
-            const bodyPart = typeof ex === "object" ? ex.bodyPart : undefined;
-            if (name) addExToSession(name, bodyPart || null);
+            if (!name) return;
+            const bodyPart = (typeof ex === "object" ? ex.bodyPart : undefined) || nextLabels[0] || "その他";
+            if (!nextSession.some((e) => e.name === name)) {
+                nextSession.push({ id: Date.now() + Math.floor(Math.random() * 100000), name, label: bodyPart, bodyPart });
+            }
+            if (!nextLogData[name]) {
+                nextLogData[name] = makeDefaultDraftSets();
+            }
         });
+        markWorkoutContentChanged(todayKey, "exercise_copy", { explicitEdit: true });
+        saveDraftForDate(todayKey, { todayLabels: nextLabels, logData: nextLogData, sessionEx: nextSession, exerciseUnits: nextUnits });
+        setLogMode("today");
+        setLogDate(todayKey);
+        setTodayLabels(nextLabels);
+        setLogData(nextLogData);
+        setSessionEx(nextSession);
+        setExerciseUnits(nextUnits);
+        startWorkoutTimerIfNeeded(todayKey, { markAsActivity: true });
         setScreen("log");
     };
 
@@ -2675,6 +2706,9 @@ export default function GymApp() {
                             hiddenBodyParts={hiddenBodyParts}
                             exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                             onOpenPhotoCompare={() => setScreen("photos")}
+                            weekStartDay={weekStartDay}
+                            weeklySetTargets={weeklySetTargets}
+                            initialTab="weekly"
                         />
 
                     )}
@@ -2725,7 +2759,8 @@ export default function GymApp() {
                             exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                             hiddenBodyParts={hiddenBodyParts}
                             onStartLog={() => {
-                                handleLogForDate(workoutStartedForDate || getTodayKey());
+                                const activeDate = (workoutStartedForDate && !workoutIsFinished) ? workoutStartedForDate : null;
+                                handleLogForDate(activeDate || getTodayKey());
                             }}
                             user={user}
                             workoutDurationSecByDate={savedWorkoutDurationSecByDate}
@@ -2733,6 +2768,9 @@ export default function GymApp() {
                             historyRemoteReady={historyRemoteReady}
                             remoteLoadFailed={historyRemoteLoadFailedRef.current}
                             onCopyExercises={handleCopyExercisesToSession}
+                            weekStartDay={weekStartDay}
+                            weeklySetTargets={weeklySetTargets}
+                            onNavigateToWeeklyAnalytics={() => setScreen("analytics")}
                         />
                     )}
 
@@ -2893,6 +2931,10 @@ export default function GymApp() {
                         dailyFreeAiLimit={dailyFreeAiLimit}
                         aiUsageCount={aiUsageCount}
                         onForceSyncHistory={forceSyncLocalHistory}
+                        weekStartDay={weekStartDay}
+                        setWeekStartDay={setWeekStartDay}
+                        weeklySetTargets={weeklySetTargets}
+                        setWeeklySetTargets={setWeeklySetTargets}
                     />
                     {showAuth && (
                         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
@@ -2927,7 +2969,7 @@ export default function GymApp() {
                     showPrimary={pushStatus.support.supported && pushStatus.permission !== "denied"}
                 />
 
-                <SplashScreen visible={showSplashScreen} />
+                <SplashScreen visible={showSplashScreen} isDark={isDark} />
                 <Analytics />
             </div>
             {!shouldHideBottomNav && (
@@ -2963,7 +3005,8 @@ export default function GymApp() {
                             });
                         };
                         if (nextScreen === "log") {
-                            handleLogForDate(workoutStartedForDate || getTodayKey());
+                            const activeDate = (workoutStartedForDate && !workoutIsFinished) ? workoutStartedForDate : null;
+                            handleLogForDate(activeDate || getTodayKey());
                             logNavigationApplied();
                             return;
                         }

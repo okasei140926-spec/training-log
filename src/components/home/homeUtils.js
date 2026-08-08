@@ -141,10 +141,10 @@ export function resolveBodyPart(exName, muscleEx, overrides, record = null) {
     return key ? normalizeHomeBodyPart(FALLBACK_PART_MAP[key]) : "その他";
 }
 
-export function getWeekRange() {
+export function getWeekRange(weekStartDay = "monday") {
     const now = new Date();
     const day = now.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
+    const diff = weekStartDay === "sunday" ? -day : (day === 0 ? -6 : 1 - day);
     const mon = new Date(now);
     mon.setHours(0, 0, 0, 0);
     mon.setDate(now.getDate() + diff);
@@ -299,8 +299,8 @@ export function calcRecovery(history, bodyPart, muscleEx, overrides) {
     return { pct, status, lastDate };
 }
 
-export function collectWeeklySets(history, muscleEx, overrides) {
-    const { start, end } = getWeekRange();
+export function collectWeeklySets(history, muscleEx, overrides, weekStartDay = "monday") {
+    const { start, end } = getWeekRange(weekStartDay);
     const map = {};
 
     Object.entries(history || {}).forEach(([exName, records]) => {

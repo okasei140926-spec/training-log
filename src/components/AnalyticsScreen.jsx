@@ -1,23 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
-import { buildTrainingSummary } from "../utils/trainingSummary";
-import TrainingSummaryModal from "./modals/TrainingSummaryModal";
 import PrDetailView from "./analytics/PrDetailView";
-import AnalyticsTrendsTab from "./analytics/AnalyticsTrendsTab";
-import AnalyticsPartsTab from "./analytics/AnalyticsPartsTab";
-import OverviewMetricModal from "./analytics/OverviewMetricModal";
-import AnalyticsOverviewTab from "./analytics/AnalyticsOverviewTab";
 import AnalyticsPrTab from "./analytics/AnalyticsPrTab";
 import BodyPartPrModal from "./analytics/BodyPartPrModal";
+import WeeklyTab from "./analytics/WeeklyTab";
 import {
   debugLog,
   BIG3_EXERCISES,
-  formatDate,
-  getBodyPartDisplayLabel,
   sortByDateDesc,
   sortBodyPartLabels,
   sortPrItemsByUsage,
-  getBodyPartChartFill,
   buildHistoryBestMap,
   buildManualBestMap,
   buildHistoryRecordMap,
@@ -34,14 +26,13 @@ export default function AnalyticsScreen({
   hiddenBodyParts = [],
   exerciseBodyPartOverrides = {},
   onOpenPhotoCompare,
+  weekStartDay = "monday",
+  weeklySetTargets = {},
+  initialTab = "weekly",
 }) {
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
-  const [activeSummaryKey, setActiveSummaryKey] = useState(null);
-  const [overviewScope, setOverviewScope] = useState("this_week");
-  const [selectedTrendMonth, setSelectedTrendMonth] = useState(null);
-  const [activeAnalysisTab, setActiveAnalysisTab] = useState("overview");
-  const [selectedOverviewMetric, setSelectedOverviewMetric] = useState(null);
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState(initialTab);
   const [selectedPrBodyPart, setSelectedPrBodyPart] = useState(null);
   const [showAllBodyPartPr, setShowAllBodyPartPr] = useState(false);
   const screenScrollRef = useRef(null);
@@ -202,90 +193,7 @@ export default function AnalyticsScreen({
   }, [historyBestMap, manualBestMap, combinedRecordMap]);
 
   const selectedExercise = selectedExerciseKey ? prData.itemMap[selectedExerciseKey] || null : null;
-  const thisWeekSummary = useMemo(
-    () =>
-      buildTrainingSummary({
-        history,
-        period: "this_week",
-        muscleEx,
-        hiddenBodyParts,
-        exerciseBodyPartOverrides,
-      }),
-    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
-  );
-  const lastWeekSummary = useMemo(
-    () =>
-      buildTrainingSummary({
-        history,
-        period: "last_week",
-        muscleEx,
-        hiddenBodyParts,
-        exerciseBodyPartOverrides,
-      }),
-    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
-  );
-  const thisMonthSummary = useMemo(
-    () =>
-      buildTrainingSummary({
-        history,
-        period: "this_month",
-        muscleEx,
-        hiddenBodyParts,
-        exerciseBodyPartOverrides,
-      }),
-    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
-  );
-  const lastMonthSummary = useMemo(
-    () =>
-      buildTrainingSummary({
-        history,
-        period: "last_month",
-        muscleEx,
-        hiddenBodyParts,
-        exerciseBodyPartOverrides,
-      }),
-    [history, muscleEx, hiddenBodyParts, exerciseBodyPartOverrides]
-  );
-  const weeklySummary = useMemo(
-    () => ({
-      ...thisWeekSummary,
-      relatedSummaries: {
-        last_week: lastWeekSummary,
-      },
-    }),
-    [thisWeekSummary, lastWeekSummary]
-  );
-  const monthlySummary = useMemo(
-    () => ({
-      ...thisMonthSummary,
-      relatedSummaries: {
-        last_month: lastMonthSummary,
-      },
-    }),
-    [thisMonthSummary, lastMonthSummary]
-  );
-  const displayWeeklySummary = overviewScope === "last_week"
-    ? {
-        ...lastWeekSummary,
-        relatedSummaries: {
-          this_week: thisWeekSummary,
-        },
-      }
-    : weeklySummary;
-  const displayMonthlySummary = overviewScope === "last_month"
-    ? {
-        ...lastMonthSummary,
-        relatedSummaries: {
-          this_month: thisMonthSummary,
-        },
-      }
-    : monthlySummary;
-  const activeSummary =
-    activeSummaryKey === "weekly"
-      ? displayWeeklySummary
-      : activeSummaryKey === "monthly"
-        ? displayMonthlySummary
-        : null;
+
   useEffect(() => {
     const labels = prData.groupedByBodyPart.map((group) => group.bodyPart);
     if (!labels.length) {
@@ -314,122 +222,7 @@ export default function AnalyticsScreen({
     [selectedChartData]
   );
 
-  const overviewSummary =
-    overviewScope === "last_week"
-      ? lastWeekSummary
-      : overviewScope === "this_month"
-        ? thisMonthSummary
-        : overviewScope === "last_month"
-          ? lastMonthSummary
-          : thisWeekSummary;
   const selectedPrGroup = prData.groupedByBodyPart.find((group) => group.bodyPart === selectedPrBodyPart) || null;
-  const overviewBodyPartStats = overviewSummary?.bodyPartStats || [];
-  const overviewBodyPartChart = overviewBodyPartStats.map((item, index) => ({
-    label: getBodyPartDisplayLabel(item.bodyPart),
-    sets: item.sets,
-    fill: getBodyPartChartFill(index),
-  }));
-  const totalOverviewSets = overviewBodyPartStats.reduce((sum, item) => sum + item.sets, 0);
-  const overviewMetricDetails = useMemo(
-    () => ({
-      volume: {
-        title: "Volume詳細",
-        rangeLabel: overviewSummary.rangeLabel,
-        empty: overviewSummary.totalVolume <= 0,
-        summaryRows: [
-          { label: "合計", value: `${overviewSummary.totalVolume.toLocaleString("ja-JP")}kg` },
-          {
-            label: "平均",
-            value:
-              overviewSummary.workoutCount > 0
-                ? `${Math.round(overviewSummary.totalVolume / overviewSummary.workoutCount).toLocaleString("ja-JP")}kg / 回`
-                : "0kg / 回",
-          },
-        ],
-        sections: [
-          {
-            title: "日別",
-            items: (overviewSummary.dailyStats || []).slice().reverse().map((item) => ({
-              key: `day-${item.date}`,
-              title: formatDate(item.date),
-              meta: `${item.setCount}セット`,
-              value: `${item.volume.toLocaleString("ja-JP")}kg`,
-            })),
-          },
-          {
-            title: "種目別",
-            items: (overviewSummary.exerciseStats || []).slice(0, 8).map((item) => ({
-              key: `exercise-${item.key}`,
-              title: item.exerciseName,
-              meta: `${item.bodyPart}・${item.setCount}セット`,
-              value: `${Math.round(item.volume).toLocaleString("ja-JP")}kg`,
-            })),
-          },
-        ],
-      },
-      workouts: {
-        title: "トレーニング詳細",
-        rangeLabel: overviewSummary.rangeLabel,
-        empty: overviewSummary.workoutCount <= 0,
-        summaryRows: [
-          { label: "回数", value: `${overviewSummary.workoutCount}回` },
-          { label: "セット", value: `${overviewSummary.totalSets || 0}セット` },
-        ],
-        sections: [
-          {
-            title: "実施日",
-            items: (overviewSummary.dailyStats || []).slice().reverse().map((item) => ({
-              key: `workout-${item.date}`,
-              title: formatDate(item.date),
-              meta: `${item.bodyParts.join("・") || "未分類"} / ${item.setCount}セット`,
-              value: `${item.volume.toLocaleString("ja-JP")}kg`,
-            })),
-          },
-        ],
-      },
-      exercises: {
-        title: "種目数詳細",
-        rangeLabel: overviewSummary.rangeLabel,
-        empty: (overviewSummary.exerciseCount || 0) <= 0,
-        summaryRows: [
-          {
-            label: "合計種目数",
-            value: `${overviewSummary.exerciseCount || 0}種目`,
-          },
-        ],
-        sections: [
-          {
-            title: "部位別種目数",
-            items: (overviewSummary.exerciseCountByBodyPart || []).map((item) => ({
-              key: `exercise-body-part-${item.bodyPart}`,
-              title: item.bodyPart,
-              meta: `${item.count}種目`,
-              value: "",
-            })),
-          },
-        ],
-      },
-      sets: {
-        title: "セット数詳細",
-        rangeLabel: overviewSummary.rangeLabel,
-        empty: (overviewSummary.totalSets || 0) <= 0,
-        summaryRows: [{ label: "合計セット数", value: `${overviewSummary.totalSets || 0}セット` }],
-        sections: [
-          {
-            title: "種目別",
-            items: (overviewSummary.exerciseStats || []).map((item) => ({
-              key: `sets-${item.key}`,
-              title: item.exerciseName,
-              meta: `${item.bodyPart}・${Math.round(item.volume).toLocaleString("ja-JP")}kg`,
-              value: `${item.setCount}セット`,
-            })),
-          },
-        ],
-      },
-    }),
-    [overviewSummary]
-  );
-  const activeOverviewMetric = selectedOverviewMetric ? overviewMetricDetails[selectedOverviewMetric] || null : null;
 
   useEffect(() => {
     if (!showAllBodyPartPr) return undefined;
@@ -569,7 +362,7 @@ export default function AnalyticsScreen({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: 4,
           padding: 5,
           borderRadius: 16,
@@ -579,10 +372,8 @@ export default function AnalyticsScreen({
         }}
       >
         {[
-          { key: "overview", label: "概要" },
-          { key: "parts", label: "部位" },
+          { key: "weekly", label: "今週" },
           { key: "pr", label: "PR履歴" },
-          { key: "trends", label: "推移" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -596,13 +387,12 @@ export default function AnalyticsScreen({
                 ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
                 : "transparent",
               color: activeAnalysisTab === tab.key ? "#fff" : "var(--text2)",
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: 900,
               cursor: "pointer",
               boxShadow: activeAnalysisTab === tab.key
                 ? "0 10px 22px rgba(15, 94, 99, 0.13)"
                 : "none",
-              whiteSpace: "nowrap",
             }}
           >
             {tab.label}
@@ -610,33 +400,13 @@ export default function AnalyticsScreen({
         ))}
       </div>
 
-      {activeAnalysisTab === "parts" && (
-        <AnalyticsPartsTab
-          overviewScope={overviewScope}
-          setOverviewScope={setOverviewScope}
-          overviewSummary={overviewSummary}
-          overviewBodyPartStats={overviewBodyPartStats}
-        />
-      )}
-
-
-
-      {activeAnalysisTab === "trends" && (
-        <AnalyticsTrendsTab
+      {activeAnalysisTab === "weekly" && (
+        <WeeklyTab
           history={history}
-          selectedTrendMonth={selectedTrendMonth}
-          setSelectedTrendMonth={setSelectedTrendMonth}
-        />
-      )}
-      {activeAnalysisTab === "overview" && (
-        <AnalyticsOverviewTab
-          overviewScope={overviewScope}
-          setOverviewScope={setOverviewScope}
-          overviewSummary={overviewSummary}
-          totalOverviewSets={totalOverviewSets}
-          overviewBodyPartChart={overviewBodyPartChart}
-          setSelectedOverviewMetric={setSelectedOverviewMetric}
-          setActiveSummaryKey={setActiveSummaryKey}
+          muscleEx={muscleEx}
+          exerciseBodyPartOverrides={exerciseBodyPartOverrides}
+          weekStartDay={weekStartDay}
+          weeklySetTargets={weeklySetTargets}
         />
       )}
 
@@ -650,17 +420,6 @@ export default function AnalyticsScreen({
           onSelectExercise={handleSelectExercise}
         />
       )}
-
-      <TrainingSummaryModal
-        isOpen={Boolean(activeSummary)}
-        onClose={() => setActiveSummaryKey(null)}
-        summary={activeSummary}
-      />
-
-      <OverviewMetricModal
-        activeOverviewMetric={activeOverviewMetric}
-        onClose={() => setSelectedOverviewMetric(null)}
-      />
 
       {showAllBodyPartPr && (
         <BodyPartPrModal

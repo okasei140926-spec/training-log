@@ -29,6 +29,8 @@ const isNativePurchaseEnvironment = () => {
   return window.location?.protocol === "capacitor:";
 };
 
+const BODY_PARTS_FOR_TARGETS = ["胸", "背中", "四頭", "ハム", "尻", "肩", "二頭", "三頭", "腹筋"];
+
 export default function SettingsModal({
   isOpen,
   onClose,
@@ -47,6 +49,10 @@ export default function SettingsModal({
   dailyFreeAiLimit = 5,
   aiUsageCount = 0,
   onForceSyncHistory = null,
+  weekStartDay = "monday",
+  setWeekStartDay,
+  weeklySetTargets = {},
+  setWeeklySetTargets,
 }) {
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
   const [showProManager, setShowProManager] = useState(false);
@@ -642,6 +648,104 @@ export default function SettingsModal({
                     )}
                   </>
                 )}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
+                トレーニング設定
+              </div>
+              <div style={{
+                background: "var(--card)",
+                borderRadius: 20,
+                padding: 16,
+                border: "1px solid var(--border2)",
+                boxShadow: "var(--shadow-card)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+              }}>
+                {/* Week start day */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text2)", marginBottom: 8 }}>週の開始日</div>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 6,
+                    background: "var(--card2)",
+                    borderRadius: 14,
+                    padding: 4,
+                  }}>
+                    {[
+                      { value: "monday", label: "月曜日" },
+                      { value: "sunday", label: "日曜日" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setWeekStartDay?.(opt.value)}
+                        style={{
+                          padding: "9px 0",
+                          borderRadius: 11,
+                          border: "none",
+                          background: weekStartDay === opt.value
+                            ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                            : "transparent",
+                          color: weekStartDay === opt.value ? "#fff" : "var(--text2)",
+                          fontSize: 13,
+                          fontWeight: 900,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Weekly set targets */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text2)", marginBottom: 8 }}>週間セット目標</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {BODY_PARTS_FOR_TARGETS.map((bp) => {
+                      const target = weeklySetTargets[bp] ?? 10;
+                      return (
+                        <div key={bp} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text)", minWidth: 36 }}>{bp}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <button
+                              type="button"
+                              onClick={() => setWeeklySetTargets?.((prev) => ({ ...prev, [bp]: Math.max(1, (prev[bp] ?? 10) - 1) }))}
+                              style={{
+                                width: 32, height: 32, borderRadius: 999,
+                                border: "1px solid var(--border2)", background: "var(--card2)",
+                                color: "var(--text)", fontSize: 18, fontWeight: 900, cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              −
+                            </button>
+                            <span style={{ width: 28, textAlign: "center", fontSize: 14, fontWeight: 900, color: "var(--text)" }}>
+                              {target}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setWeeklySetTargets?.((prev) => ({ ...prev, [bp]: Math.min(50, (prev[bp] ?? 10) + 1) }))}
+                              style={{
+                                width: 32, height: 32, borderRadius: 999,
+                                border: "1px solid var(--border2)", background: "var(--card2)",
+                                color: "var(--text)", fontSize: 18, fontWeight: 900, cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -46,7 +46,7 @@
       html,
       body {
         margin: 0;
-        background: #f7fbfc;
+        background: #0f0f0f;
       }
 
       #initial-splash {
@@ -56,7 +56,16 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #f7fbfc;
+        background: #0f0f0f;
+      }
+
+      html.splash-light,
+      html.splash-light body {
+        background: #F7FBFB;
+      }
+
+      html.splash-light #initial-splash {
+        background: #F7FBFB;
       }
 
       #initial-splash img {
@@ -71,6 +80,14 @@
         to   { opacity: 1; transform: scale(1); }
       }
     </style>
+    <script>
+      try {
+        var isDark = JSON.parse(localStorage.getItem("isDark"));
+        if (isDark === false) {
+          document.documentElement.classList.add("splash-light");
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
