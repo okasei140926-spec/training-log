@@ -685,16 +685,17 @@ function addDaysToKey(dateKey, n) {
   return padDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
 }
 
-export function getWeekStartKey(dateKey, weekStartDay = "monday") {
+export function getWeekStartKey(dateKey, weekStartDay = 1) {
   const d = new Date(`${dateKey}T00:00:00`);
   const day = d.getDay(); // 0=Sun
-  const diff = weekStartDay === "sunday" ? -day : (day === 0 ? -6 : 1 - day);
+  const startDow = Number(weekStartDay); // 0=Sun, 1=Mon, ..., 6=Sat
+  const diff = (day - startDow + 7) % 7;
   const start = new Date(d);
-  start.setDate(d.getDate() + diff);
+  start.setDate(d.getDate() - diff);
   return padDateKey(start.getFullYear(), start.getMonth() + 1, start.getDate());
 }
 
-export function getCurrentWeekBoundaries(weekStartDay = "monday") {
+export function getCurrentWeekBoundaries(weekStartDay = 1) {
   const now = new Date();
   const today = padDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
   const start = getWeekStartKey(today, weekStartDay);
@@ -706,7 +707,7 @@ function aggSetCount(record) {
   return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true }).length;
 }
 
-export function buildWeeklyBodyPartSetCounts(history, weekStartDay = "monday", muscleEx = {}, exerciseBodyPartOverrides = {}) {
+export function buildWeeklyBodyPartSetCounts(history, weekStartDay = 1, muscleEx = {}, exerciseBodyPartOverrides = {}) {
   const { start, end } = getCurrentWeekBoundaries(weekStartDay);
   const ctx = { muscleEx, exerciseBodyPartOverrides, hiddenSet: new Set() };
   const map = {};
@@ -723,18 +724,21 @@ export function buildWeeklyBodyPartSetCounts(history, weekStartDay = "monday", m
   return map;
 }
 
-export function buildEightWeekHeatmap(history, weekStartDay = "monday", muscleEx = {}, exerciseBodyPartOverrides = {}) {
-  const { start: currentWeekStart } = getCurrentWeekBoundaries(weekStartDay);
+export function buildLastWeekComparison(history, weekStartDay = 1, muscleEx = {}, exerciseBodyPartOverrides = {}) {
+  const { start: thisWeekStart } = getCurrentWeekBoundaries(weekStartDay);
+  const thisWeekEnd = addDaysToKey(thisWeekStart, 6);
+  const lastWeekStart = addDaysToKey(thisWeekStart, -7);
+  const lastWeekEnd = addDaysToKey(lastWeekStart, 6);
+
+  const now = new Date();
+  const todayKey = padDateKey(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  const daysElapsed = Math.round(
+    (new Date(`${todayKey}T00:00:00`).getTime() - new Date(`${thisWeekStart}T00:00:00`).getTime()) / 86400000
+  ) + 1;
+
   const ctx = { muscleEx, exerciseBodyPartOverrides, hiddenSet: new Set() };
-
-  const weeks = [];
-  for (let i = 7; i >= 0; i--) {
-    const weekStart = addDaysToKey(currentWeekStart, -7 * i);
-    const weekEnd = addDaysToKey(weekStart, 6);
-    weeks.push({ start: weekStart, end: weekEnd });
-  }
-
-  const weekDaySets = weeks.map(() => ({}));
+  const thisWeek = {};
+  const lastWeek = {};
 
   Object.entries(history || {}).forEach(([exName, records]) => {
     (records || []).forEach((record) => {
@@ -743,22 +747,13 @@ export function buildEightWeekHeatmap(history, weekStartDay = "monday", muscleEx
       if (setCount <= 0) return;
       const bp = resolveAnalyticsBodyPart(record, exName, ctx);
       if (!bp) return;
-
-      for (let i = 0; i < weeks.length; i++) {
-        if (record.date >= weeks[i].start && record.date <= weeks[i].end) {
-          if (!weekDaySets[i][bp]) weekDaySets[i][bp] = new Set();
-          weekDaySets[i][bp].add(record.date);
-          break;
-        }
+      if (record.date >= thisWeekStart && record.date <= thisWeekEnd) {
+        thisWeek[bp] = (thisWeek[bp] || 0) + setCount;
+      } else if (record.date >= lastWeekStart && record.date <= lastWeekEnd) {
+        lastWeek[bp] = (lastWeek[bp] || 0) + setCount;
       }
     });
   });
 
-  return weeks.map((week, i) => ({
-    start: week.start,
-    end: week.end,
-    daysByBodyPart: Object.fromEntries(
-      Object.entries(weekDaySets[i]).map(([bp, days]) => [bp, days.size])
-    ),
-  }));
+  return { thisWeek, lastWeek, daysElapsed };
 }

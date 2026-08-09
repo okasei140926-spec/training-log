@@ -2,16 +2,17 @@ import { useMemo, useState } from "react";
 import {
   FIXED_BODY_PART_LABELS,
   buildWeeklyBodyPartSetCounts,
-  buildEightWeekHeatmap,
+  buildLastWeekComparison,
   getCurrentWeekBoundaries,
 } from "./analyticsUtils";
 
 const TRACKED_BODY_PARTS = FIXED_BODY_PART_LABELS.filter((bp) => bp !== "その他");
 
-function getCurrentWeekDayIndex(weekStartDay = "monday") {
+function getCurrentWeekDayIndex(weekStartDay = 1) {
   const today = new Date();
   const day = today.getDay(); // 0=Sun
-  return weekStartDay === "sunday" ? day : (day === 0 ? 6 : day - 1);
+  const startDow = Number(weekStartDay);
+  return (day - startDow + 7) % 7;
 }
 
 function getProgressColor(ratio, isLateWeek) {
@@ -20,28 +21,11 @@ function getProgressColor(ratio, isLateWeek) {
   return "var(--text2)";
 }
 
-function getHeatmapCellColor(days) {
-  if (days === 0) return "rgba(130,150,155,0.18)";
-  if (days === 1) return "rgba(18,199,194,0.42)";
-  return "rgba(18,199,194,0.88)";
-}
-
-function getHeatmapCellBorder(days, isCurrentWeek) {
-  if (isCurrentWeek) return "1.5px solid rgba(18,199,194,0.45)";
-  if (days === 0) return "1px solid rgba(130,150,155,0.30)";
-  return "1px solid transparent";
-}
-
-function getHeatmapNumberColor(days) {
-  if (days === 1) return "rgba(18,199,194,0.95)";
-  return "#fff";
-}
-
 export default function WeeklyTab({
   history,
   muscleEx = {},
   exerciseBodyPartOverrides = {},
-  weekStartDay = "monday",
+  weekStartDay = 1,
   weeklySetTargets = {},
   setWeeklySetTargets,
 }) {
@@ -71,8 +55,8 @@ export default function WeeklyTab({
     [history, weekStartDay, muscleEx, exerciseBodyPartOverrides]
   );
 
-  const heatmapData = useMemo(
-    () => buildEightWeekHeatmap(history, weekStartDay, muscleEx, exerciseBodyPartOverrides),
+  const comparison = useMemo(
+    () => buildLastWeekComparison(history, weekStartDay, muscleEx, exerciseBodyPartOverrides),
     [history, weekStartDay, muscleEx, exerciseBodyPartOverrides]
   );
 
@@ -80,8 +64,9 @@ export default function WeeklyTab({
     () => getCurrentWeekBoundaries(weekStartDay),
     [weekStartDay]
   );
+  void currentWeekStart;
 
-  // target=0 の部位は done≥1 のときだけ表示（グレー表示）
+  // target=0 の部位は done≥1 のときだけ表示
   const partsToShow = TRACKED_BODY_PARTS.filter((bp) => {
     const target = weeklySetTargets[bp] ?? 10;
     const done = weeklySetCounts[bp] || 0;
@@ -89,10 +74,20 @@ export default function WeeklyTab({
   });
   const displayParts = partsToShow.length ? partsToShow : TRACKED_BODY_PARTS;
 
+  // 先週比較：目標0部位除外 & 両週とも0は除外
+  const comparisonParts = displayParts.filter((bp) => {
+    const thisW = comparison.thisWeek[bp] || 0;
+    const lastW = comparison.lastWeek[bp] || 0;
+    return thisW > 0 || lastW > 0;
+  });
+
+  const daysElapsed = comparison.daysElapsed;
+  const isFullWeek = daysElapsed >= 7;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* Progress bars */}
+      {/* 今週のセット数 */}
       <div style={{
         background: "var(--card)",
         borderRadius: 20,
@@ -200,106 +195,52 @@ export default function WeeklyTab({
         </div>
       </div>
 
-      {/* 8-week heatmap */}
-      <div style={{
-        background: "var(--card)",
-        borderRadius: 20,
-        padding: "16px 18px",
-        border: "1px solid rgba(18, 199, 194, 0.10)",
-        boxShadow: "var(--shadow-soft)",
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 900, color: "var(--text2)", marginBottom: 14 }}>直近8週間の頻度</div>
-        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ minWidth: "max-content" }}>
-            {/* Week labels header */}
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 4, paddingLeft: 44 }}>
-              {heatmapData.map((week, i) => {
-                const isCurrentWeek = week.start === currentWeekStart;
-                const d = new Date(`${week.start}T00:00:00`);
-                const label = `${d.getMonth() + 1}/${d.getDate()}`;
-                const showLabel = i === 0 || i === 4 || i === 7;
-                return (
-                  <div key={week.start} style={{
-                    width: 28,
-                    textAlign: "center",
-                    fontSize: 10,
-                    fontWeight: isCurrentWeek ? 900 : 700,
-                    color: isCurrentWeek ? "var(--accent)" : "var(--text3)",
-                    marginRight: 3,
-                  }}>
-                    {showLabel ? label : ""}
-                  </div>
-                );
-              })}
+      {/* 先週との比較 */}
+      {comparisonParts.length > 0 && (
+        <div style={{
+          background: "var(--card)",
+          borderRadius: 20,
+          padding: "16px 18px",
+          border: "1px solid rgba(18, 199, 194, 0.10)",
+          boxShadow: "var(--shadow-soft)",
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 900, color: "var(--text2)", marginBottom: 4 }}>先週との比較</div>
+          {!isFullWeek && (
+            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text3)", marginBottom: 12 }}>
+              今週は{daysElapsed}日経過（先週は7日間の合計）
             </div>
+          )}
+          {isFullWeek && (
+            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text3)", marginBottom: 12 }}>
+              今週も7日経過
+            </div>
+          )}
 
-            {/* Body part rows */}
-            {TRACKED_BODY_PARTS.map((bp) => (
-              <div key={bp} style={{ display: "flex", alignItems: "center", marginBottom: 3 }}>
-                <div style={{
-                  width: 40,
-                  fontSize: 11,
-                  fontWeight: 800,
-                  color: "var(--text2)",
-                  flexShrink: 0,
-                }}>
-                  {bp}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {comparisonParts.map((bp) => {
+              const thisW = comparison.thisWeek[bp] || 0;
+              const lastW = comparison.lastWeek[bp] || 0;
+              const diff = thisW - lastW;
+              const isUp = diff > 0;
+              const isDown = diff < 0;
+              const diffColor = isUp ? "#55D89E" : isDown ? "#F6A623" : "var(--text3)";
+              const arrow = isUp ? "↑" : isDown ? "↓" : "→";
+
+              return (
+                <div key={bp} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: "var(--text)", minWidth: 40 }}>{bp}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text3)" }}>{lastW}</span>
+                  <span style={{ fontSize: 11, color: "var(--text3)" }}>→</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>{thisW}set</span>
+                  <span style={{ fontSize: 12, fontWeight: 900, color: diffColor, marginLeft: 2 }}>
+                    {diff === 0 ? "→" : `${arrow}${Math.abs(diff)}`}
+                  </span>
                 </div>
-                {heatmapData.map((week) => {
-                  const days = week.daysByBodyPart[bp] || 0;
-                  const isCurrentWeek = week.start === currentWeekStart;
-                  return (
-                    <div key={week.start} style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 5,
-                      background: getHeatmapCellColor(days),
-                      border: getHeatmapCellBorder(days, isCurrentWeek),
-                      marginRight: 3,
-                      flexShrink: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}>
-                      {days >= 1 && (
-                        <span style={{
-                          fontSize: 9,
-                          fontWeight: 900,
-                          color: getHeatmapNumberColor(days),
-                          lineHeight: 1,
-                        }}>
-                          {days}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
-
-        {/* Legend */}
-        <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 800 }}>トレーニング日数</span>
-          {[
-            { n: 0, label: "0日" },
-            { n: 1, label: "1日" },
-            { n: 2, label: "2日以上" },
-          ].map(({ n, label }) => (
-            <div key={n} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{
-                width: 11,
-                height: 11,
-                borderRadius: 3,
-                background: getHeatmapCellColor(n),
-                border: n === 0 ? "1px solid rgba(130,150,155,0.30)" : "none",
-              }} />
-              <span style={{ fontSize: 10, color: "var(--text3)", fontWeight: 800 }}>{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
