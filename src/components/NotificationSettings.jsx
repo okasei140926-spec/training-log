@@ -5,7 +5,6 @@ import {
   enablePushNotificationsForUser,
   getNotificationPermission,
   getPushSupportState,
-  isNativePlatform,
   syncPushSubscriptionState,
   unsubscribeFromPush,
 } from "../lib/pushNotifications";
