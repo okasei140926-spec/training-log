@@ -1,5 +1,10 @@
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "../utils/supabase";
 import { APP_VERSION } from "../appVersion";
+
+export function isNativePlatform() {
+  return Boolean(Capacitor?.isNativePlatform?.());
+}
 
 function isProbablyIOS() {
   if (typeof navigator === "undefined") return false;
@@ -23,6 +28,11 @@ function isStandaloneDisplayMode() {
 }
 
 export function getPushSupportState() {
+  // ネイティブ(Capacitor)環境ではWebプッシュ通知UIを表示しない
+  if (isNativePlatform()) {
+    return { supported: false, isNative: true, message: "" };
+  }
+
   if (typeof window === "undefined") {
     return { supported: false, message: "この環境では通知を利用できません。" };
   }

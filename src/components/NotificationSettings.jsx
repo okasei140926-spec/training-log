@@ -5,6 +5,7 @@ import {
   enablePushNotificationsForUser,
   getNotificationPermission,
   getPushSupportState,
+  isNativePlatform,
   syncPushSubscriptionState,
   unsubscribeFromPush,
 } from "../lib/pushNotifications";
@@ -47,6 +48,9 @@ export default function NotificationSettings({ user }) {
       isActive = false;
     };
   }, [support.supported, user?.id]);
+
+  // ネイティブアプリでは通知設定UIを表示しない（将来@capacitor/push-notificationsで差し替え予定）
+  if (support.isNative) return null;
 
   const handleEnable = async () => {
     if (busy) return;
