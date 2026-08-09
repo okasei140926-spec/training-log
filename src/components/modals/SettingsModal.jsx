@@ -668,38 +668,40 @@ export default function SettingsModal({
                 {/* Week start day */}
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text2)", marginBottom: 8 }}>週の開始日</div>
-                  <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 6,
-                    background: "var(--card2)",
-                    borderRadius: 14,
-                    padding: 4,
-                  }}>
+                  <div style={{ display: "flex", gap: 5 }}>
                     {[
-                      { value: "monday", label: "月曜日" },
-                      { value: "sunday", label: "日曜日" },
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setWeekStartDay?.(opt.value)}
-                        style={{
-                          padding: "9px 0",
-                          borderRadius: 11,
-                          border: "none",
-                          background: weekStartDay === opt.value
-                            ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                            : "transparent",
-                          color: weekStartDay === opt.value ? "#fff" : "var(--text2)",
-                          fontSize: 13,
-                          fontWeight: 900,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                      { value: 0, label: "日" },
+                      { value: 1, label: "月" },
+                      { value: 2, label: "火" },
+                      { value: 3, label: "水" },
+                      { value: 4, label: "木" },
+                      { value: 5, label: "金" },
+                      { value: 6, label: "土" },
+                    ].map((opt) => {
+                      const selected = Number(weekStartDay) === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setWeekStartDay?.(opt.value)}
+                          style={{
+                            flex: 1,
+                            padding: "9px 0",
+                            borderRadius: 11,
+                            border: selected ? "none" : "1px solid var(--border2)",
+                            background: selected
+                              ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
+                              : "var(--card2)",
+                            color: selected ? "#fff" : "var(--text2)",
+                            fontSize: 12,
+                            fontWeight: 900,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 

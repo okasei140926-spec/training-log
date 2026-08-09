@@ -141,22 +141,23 @@ export function resolveBodyPart(exName, muscleEx, overrides, record = null) {
     return key ? normalizeHomeBodyPart(FALLBACK_PART_MAP[key]) : "その他";
 }
 
-export function getWeekRange(weekStartDay = "monday") {
+export function getWeekRange(weekStartDay = 1) {
     const now = new Date();
     const day = now.getDay();
-    const diff = weekStartDay === "sunday" ? -day : (day === 0 ? -6 : 1 - day);
-    const mon = new Date(now);
-    mon.setHours(0, 0, 0, 0);
-    mon.setDate(now.getDate() + diff);
+    const startDow = Number(weekStartDay); // 0=Sun, 1=Mon, ..., 6=Sat
+    const diff = (day - startDow + 7) % 7;
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(now.getDate() - diff);
 
-    const sun = new Date(mon);
-    sun.setDate(mon.getDate() + 6);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
 
     const fmt = d => `${d.getMonth() + 1}/${d.getDate()}`;
     return {
-        label: `${fmt(mon)} - ${fmt(sun)}`,
-        start: formatDateKey(mon),
-        end: formatDateKey(sun),
+        label: `${fmt(start)} - ${fmt(end)}`,
+        start: formatDateKey(start),
+        end: formatDateKey(end),
     };
 }
 
@@ -299,7 +300,7 @@ export function calcRecovery(history, bodyPart, muscleEx, overrides) {
     return { pct, status, lastDate };
 }
 
-export function collectWeeklySets(history, muscleEx, overrides, weekStartDay = "monday") {
+export function collectWeeklySets(history, muscleEx, overrides, weekStartDay = 1) {
     const { start, end } = getWeekRange(weekStartDay);
     const map = {};
 
