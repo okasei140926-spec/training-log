@@ -1933,9 +1933,11 @@ export function useFriendsData({
 
     const profileInitial = getDisplayUsername(myUsername, { isMe: true })?.[0]?.toUpperCase() || "Y";
     const hasVisibleFeedUsers = groupedActivityFeed.length > 0;
-    const topThreeRanking = activeRanking.data.slice(0, 3);
+    const rankedRankingData = activeRanking.data.filter((e) => e.value > 0);
+    const unrankedRows = activeRanking.data.filter((e) => e.value === 0);
+    const topThreeRanking = rankedRankingData.slice(0, 3);
     const podiumOrder = [topThreeRanking[1], topThreeRanking[0], topThreeRanking[2]].filter(Boolean);
-    const compactRankingRows = rankingTab === "big3" ? activeRanking.data.slice(3) : activeRanking.data;
+    const compactRankingRows = rankingTab === "big3" ? rankedRankingData.slice(3) : rankedRankingData;
 
     const removeFriend = useCallback(async (friendId) => {
         if (!user?.id || !friendId) return false;
@@ -2007,6 +2009,7 @@ export function useFriendsData({
         topThreeRanking,
         podiumOrder,
         compactRankingRows,
+        unrankedRows,
         volumePeriodRange,
     };
 }

@@ -79,6 +79,7 @@ export default function FriendsScreen({
         topThreeRanking,
         podiumOrder,
         compactRankingRows,
+        unrankedRows,
         volumePeriodRange,
         removeFriend,
     } = useFriendsData({
@@ -221,6 +222,7 @@ export default function FriendsScreen({
                     podiumOrder={podiumOrder}
                     setSelectedBig3Entry={setSelectedBig3Entry}
                     compactRankingRows={compactRankingRows}
+                    unrankedRows={unrankedRows}
                     removeFriend={removeFriend}
                 />
             )}

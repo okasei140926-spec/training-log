@@ -34,6 +34,7 @@ function RankingSection({
     podiumOrder,
     setSelectedBig3Entry,
     compactRankingRows,
+    unrankedRows = [],
     removeFriend,
 }) {
     const [removingId, setRemovingId] = useState(null);
@@ -288,7 +289,6 @@ function RankingSection({
                                                 ? "1px solid rgba(18, 199, 194, 0.28)"
                                                 : "1px solid var(--border2)",
                                             boxShadow: index === 0 && rankingTab !== "big3" ? "0 10px 20px rgba(18, 199, 194, 0.12)" : "none",
-                                            opacity: entry.value > 0 ? 1 : 0.72,
                                         }}
                                     >
                                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -340,6 +340,77 @@ function RankingSection({
                                     </div>
                                 );
                             })}
+
+                            {/* 未記録セクション */}
+                            {unrankedRows.length > 0 && (
+                                <>
+                                    <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text3)", padding: "6px 4px 2px" }}>
+                                        未記録
+                                    </div>
+                                    {unrankedRows.map((entry) => (
+                                        <div
+                                            key={`unranked-${rankingTab}-${entry.id}`}
+                                            style={{
+                                                minHeight: 44,
+                                                display: "grid",
+                                                gridTemplateColumns: entry.isMe ? "38px minmax(0, 1fr) auto" : "38px minmax(0, 1fr) auto 28px",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                padding: "7px 10px",
+                                                borderRadius: 14,
+                                                background: entry.isMe
+                                                    ? "linear-gradient(90deg, rgba(18, 199, 194, 0.08), var(--card2))"
+                                                    : "var(--card2)",
+                                                border: entry.isMe
+                                                    ? "1px solid rgba(18, 199, 194, 0.18)"
+                                                    : "1px solid var(--border2)",
+                                                opacity: 0.6,
+                                            }}
+                                        >
+                                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                                <span style={{ fontSize: 13, fontWeight: 950, color: "var(--text3)", fontVariantNumeric: "tabular-nums" }}>
+                                                    −
+                                                </span>
+                                            </div>
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                                <RankAvatar entry={entry} size={30} />
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 950, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.2 }}>
+                                                        {entry.name}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", whiteSpace: "nowrap" }}>
+                                                未記録
+                                            </div>
+                                            {!entry.isMe && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveFriend(entry)}
+                                                    disabled={removingId === entry.id}
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        width: 28,
+                                                        height: 28,
+                                                        borderRadius: 8,
+                                                        border: "none",
+                                                        background: "transparent",
+                                                        color: "var(--text3)",
+                                                        fontSize: 16,
+                                                        cursor: "pointer",
+                                                        padding: 0,
+                                                        opacity: removingId === entry.id ? 0.4 : 1,
+                                                    }}
+                                                >
+                                                    ···
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </>
+                            )}
                         </div>
                     </>
                 )}
