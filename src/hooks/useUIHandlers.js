@@ -107,7 +107,7 @@ export function useUIHandlers({
             ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
             : 0;
         if (keyboardInset > 80) {
-            document.body?.setAttribute("data-log-set-input-active", "true");
+            // Keyboard still open — preserve existing attribute; don't set fresh.
             setIsLogKeyboardOpen(true);
             return;
         }

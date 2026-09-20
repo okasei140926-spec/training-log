@@ -566,13 +566,17 @@ ${experienceLevelInstruction ? `\n${experienceLevelInstruction}` : ""}
 ${safeContext.weeklyBodyPartContext ? `\n今週の部位別セット数（実績/目標）:\n${safeContext.weeklyBodyPartContext}` : ""}
 
 対象日の記録:
-${safeContext.targetWorkoutContext || "対象日の記録はありません。"}
+${safeContext.targetDate && !safeContext.hasTargetWorkout
+    ? `対象日（${safeContext.targetDate}）の記録はまだありません。この場合は「今日の記録はまだありません」と伝えてください。他の日の記録で代用しないでください。`
+    : (safeContext.targetWorkoutContext || "対象日の記録はありません。")}
 
 直近の記録要約:
 ${safeContext.recentSummaryContext || "最近の記録はありません。"}
 
 最新の記録:
-${safeContext.latestWorkoutContext || "最新の記録はありません。"}
+${safeContext.targetDate && !safeContext.hasTargetWorkout
+    ? "（対象日の記録分析のため省略）"
+    : (safeContext.latestWorkoutContext || "最新の記録はありません。")}
 
 種目別の過去記録:
 ${safeContext.exerciseHistoryContext || "種目別の過去記録はありません。"}

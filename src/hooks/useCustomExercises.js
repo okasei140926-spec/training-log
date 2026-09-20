@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../utils/supabase";
+import { inferEquipment } from "../utils/equipmentTypes";
 
 /**
  * Supabase の custom_exercises テーブルからユーザーのカスタム種目を管理する。
@@ -14,7 +15,7 @@ export function useCustomExercises(user) {
         if (!user?.id) return;
         supabase
             .from("custom_exercises")
-            .select("id, name, body_part, created_at")
+            .select("id, name, body_part, equipment, created_at")
             .eq("user_id", user.id)
             .order("created_at", { ascending: true })
             .then(({ data, error }) => {
@@ -22,25 +23,26 @@ export function useCustomExercises(user) {
             });
     }, [user?.id]);
 
-    const addCustomExercise = useCallback(async (name, bodyPart) => {
+    const addCustomExercise = useCallback(async (name, bodyPart, equipment = null) => {
         if (!user?.id || !name?.trim()) return;
         const trimmed = name.trim();
+        const resolvedEquipment = equipment || inferEquipment(trimmed);
 
         // Optimistic update: reflect immediately in UI without waiting for Supabase.
         // Keyed by (name, body_part) to support the same exercise under multiple body parts.
         const optimisticId = `opt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
         setCustomExercises((prev) => {
             if (prev.some((e) => e.name === trimmed && e.body_part === bodyPart)) return prev;
-            return [...prev, { id: optimisticId, name: trimmed, body_part: bodyPart, created_at: new Date().toISOString() }];
+            return [...prev, { id: optimisticId, name: trimmed, body_part: bodyPart, equipment: resolvedEquipment, created_at: new Date().toISOString() }];
         });
 
         const { data, error } = await supabase
             .from("custom_exercises")
             .upsert(
-                { user_id: user.id, name: trimmed, body_part: bodyPart },
+                { user_id: user.id, name: trimmed, body_part: bodyPart, equipment: resolvedEquipment },
                 { onConflict: "user_id,name", ignoreDuplicates: true }
             )
-            .select("id, name, body_part, created_at")
+            .select("id, name, body_part, equipment, created_at")
             .maybeSingle();
 
         if (!error && data) {
@@ -101,15 +103,27 @@ export function useCustomExercises(user) {
     }, [user?.id]);
 
     // AddExModal の muscleEx と同じ形式: { bodyPart: [{id, name}] }
-    const customExercisesByBodyPart = customExercises.reduce((acc, ex) => {
-        if (!acc[ex.body_part]) acc[ex.body_part] = [];
-        acc[ex.body_part].push({ id: ex.id, name: ex.name });
-        return acc;
-    }, {});
+    const customExercisesByBodyPart = useMemo(() =>
+        customExercises.reduce((acc, ex) => {
+            if (!acc[ex.body_part]) acc[ex.body_part] = [];
+            acc[ex.body_part].push({ id: ex.id, name: ex.name });
+            return acc;
+        }, {}),
+    [customExercises]);
+
+    // { exerciseName: equipmentType } — used by strength score
+    const customEquipmentMap = useMemo(() =>
+        Object.fromEntries(
+            customExercises
+                .filter((e) => e.equipment)
+                .map((e) => [e.name, e.equipment])
+        ),
+    [customExercises]);
 
     return {
         customExercises,
         customExercisesByBodyPart,
+        customEquipmentMap,
         addCustomExercise,
         bulkAddCustomExercises,
         renameCustomExercise,

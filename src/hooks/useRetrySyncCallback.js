@@ -96,7 +96,12 @@ export function useRetrySyncCallback({
                         });
 
                         if (!retryAllowed) {
-                            throw new Error("[sync retry] blocked destructive overwrite");
+                            // Save guard blocked because remote already has more data than local.
+                            // Remote is in a good state — clear the failure so the banner doesn't
+                            // loop forever.
+                            pendingWorkoutContentChangeDatesRef.current.delete(date);
+                            clearSyncFailure(date);
+                            continue;
                         }
 
                         const rowSyncResults = await syncWorkoutRowsForDates(

@@ -3,7 +3,7 @@ import { getBig3ExerciseKey } from "../utils/exerciseName";
 import PrDetailView from "./analytics/PrDetailView";
 import AnalyticsPrTab from "./analytics/AnalyticsPrTab";
 import BodyPartPrModal from "./analytics/BodyPartPrModal";
-import WeeklyTab from "./analytics/WeeklyTab";
+import GrowthScreen from "./GrowthScreen";
 import {
   debugLog,
   BIG3_EXERCISES,
@@ -28,7 +28,16 @@ export default function AnalyticsScreen({
   weekStartDay = "monday",
   weeklySetTargets = {},
   setWeeklySetTargets,
-  initialTab = "weekly",
+  initialTab = "growth",
+  // Growth tab props
+  bodyWeightKg,
+  bodyWeightUpdatedAt,
+  onSaveBodyWeight,
+  onSaveGender,
+  gender,
+  customEquipmentMap,
+  isPro = false,
+  onAskWhyStagnant,
 }) {
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
@@ -160,16 +169,36 @@ export default function AnalyticsScreen({
       const prDiff = prevBest1RM > 0 ? item.estimated1RM - prevBest1RM : null;
 
       const now = new Date();
-      const d21ago = new Date(now); d21ago.setDate(d21ago.getDate() - 21);
+      const d28ago = new Date(now); d28ago.setDate(d28ago.getDate() - 28);
       const d14ago = new Date(now); d14ago.setDate(d14ago.getDate() - 14);
       const pad = (n) => String(n).padStart(2, "0");
       const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-      const d21agoStr = toKey(d21ago);
+      const d28agoStr = toKey(d28ago);
       const d14agoStr = toKey(d14ago);
-      const recentRecordCount = records.filter((r) => r.date >= d21agoStr).length;
-      const daysSincePr = currentPrDate ? Math.floor((now - new Date(`${currentPrDate}T00:00:00`)) / 86400000) : null;
-      const isNew = Boolean(currentPrDate && currentPrDate >= d14agoStr);
-      const stagnationWeeks = (daysSincePr !== null && daysSincePr >= 21 && recentRecordCount >= 3)
+
+      // Progressive PR detection: weight up OR same-weight reps up counts as PR
+      const sortedAsc = [...records].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+      let maxW = -Infinity;
+      const maxRepsByW = {};
+      let lastProgressivePrDate = null;
+      for (const rec of sortedAsc) {
+        const w = Number(rec.weight || 0);
+        const r = Number(rec.reps || 0);
+        if (w <= 0 || r <= 0) continue;
+        const wKey = String(Math.round(w * 100));
+        const isWeightPR = w > maxW;
+        const isRepsPR = !isWeightPR && (maxRepsByW[wKey] == null || r > maxRepsByW[wKey]);
+        if (isWeightPR || isRepsPR) lastProgressivePrDate = rec.date;
+        if (w > maxW) maxW = w;
+        if (maxRepsByW[wKey] == null || r > maxRepsByW[wKey]) maxRepsByW[wKey] = r;
+      }
+      // Fall back to e1RM-based PR date if no progressive PR found
+      const effectivePrDate = lastProgressivePrDate || currentPrDate;
+
+      const recentRecordCount = records.filter((r) => r.date >= d28agoStr).length;
+      const daysSincePr = effectivePrDate ? Math.floor((now - new Date(`${effectivePrDate}T00:00:00`)) / 86400000) : null;
+      const isNew = Boolean(effectivePrDate && effectivePrDate >= d14agoStr);
+      const stagnationWeeks = (daysSincePr !== null && daysSincePr >= 21 && recentRecordCount >= 2)
         ? Math.floor(daysSincePr / 7)
         : null;
 
@@ -392,7 +421,7 @@ export default function AnalyticsScreen({
         }}
       >
         {[
-          { key: "weekly", label: "今週" },
+          { key: "growth", label: "成長" },
           { key: "pr", label: "PR履歴" },
         ].map((tab) => (
           <button
@@ -420,14 +449,20 @@ export default function AnalyticsScreen({
         ))}
       </div>
 
-      {activeAnalysisTab === "weekly" && (
-        <WeeklyTab
+      {activeAnalysisTab === "growth" && (
+        <GrowthScreen
           history={history}
           muscleEx={muscleEx}
           exerciseBodyPartOverrides={exerciseBodyPartOverrides}
-          weekStartDay={weekStartDay}
-          weeklySetTargets={weeklySetTargets}
-          setWeeklySetTargets={setWeeklySetTargets}
+          bodyWeightKg={bodyWeightKg}
+          bodyWeightUpdatedAt={bodyWeightUpdatedAt}
+          onSaveBodyWeight={onSaveBodyWeight}
+          onSaveGender={onSaveGender}
+          gender={gender}
+          customEquipmentMap={customEquipmentMap}
+          prData={prData}
+          isPro={isPro}
+          onAskWhyStagnant={onAskWhyStagnant}
         />
       )}
 

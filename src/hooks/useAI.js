@@ -23,7 +23,7 @@ const AI_PRO_STORAGE_KEY = "pump_pro_enabled";
 const AI_API_ORIGIN = process.env.REACT_APP_API_ORIGIN || "https://training-log-mu.vercel.app";
 const AI_WORKOUTS_SELECT_QUERY = "workouts.select(date,data).eq(user_id).order(date.asc).limit(150)";
 const AI_CONTEXT_CANONICAL_SOURCE = "workouts.data";
-const AI_HISTORY_CACHE_TTL_MS = 10 * 60 * 1000; // 10分
+const AI_HISTORY_CACHE_TTL_MS = 2 * 60 * 1000; // 2分（ワークアウト保存後のSync遅延を考慮）
 const _aiHistoryCache = new Map(); // key: `${userId}:${isPro}` → { result, fetchedAt }
 const INITIAL_AI_MESSAGE = {
   role: "assistant",
@@ -268,7 +268,7 @@ const logAiContextSnapshot = ({
   });
 };
 
-const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
+const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false, bypassCache = false) => {
   if (!userId) {
     return {
       source: "no-user",
@@ -280,7 +280,7 @@ const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false) => {
 
   const cacheKey = `${userId}:${isPro}`;
   const cached = _aiHistoryCache.get(cacheKey);
-  if (cached && Date.now() - cached.fetchedAt < AI_HISTORY_CACHE_TTL_MS) {
+  if (!bypassCache && cached && Date.now() - cached.fetchedAt < AI_HISTORY_CACHE_TTL_MS) {
     console.log("[AI history-limit] cache hit", { isPro, cacheAge: Date.now() - cached.fetchedAt });
     return cached.result;
   }
@@ -1538,7 +1538,9 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         return;
       }
 
-      const latestWorkoutFetch = await fetchLatestWorkoutHistoryForAI(session?.user?.id, currentIsPro);
+      // Bypass cache when querying today's workout (to avoid stale data from before the workout was synced)
+      const bypassCache = targetDateKey === getTodayKey();
+      const latestWorkoutFetch = await fetchLatestWorkoutHistoryForAI(session?.user?.id, currentIsPro, bypassCache);
       if (latestWorkoutFetch.error) {
         logAiContextSnapshot({
           source: latestWorkoutFetch.source,

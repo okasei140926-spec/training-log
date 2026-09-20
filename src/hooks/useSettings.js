@@ -15,7 +15,10 @@ function migrateWeekStartDay(raw) {
 export function useSettings() {
   const [isDark, setIsDark] = useState(() => load("isDark", true));
   const [unit, setUnit] = useState(() => load("unit", "kg"));
-  const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingDone", false));
+  // onboardingProfileDone: new 8-question flow (replaces legacy onboardingDone)
+  // Existing users who completed the old tutorial will NOT have this key set,
+  // so they'll see the new onboarding once after updating.
+  const [showOnboarding, setShowOnboarding] = useState(() => !load("onboardingProfileDone", false));
   const [weekStartDay, setWeekStartDay] = useState(() => migrateWeekStartDay(load("weekStartDay", 1)));
   const [weeklySetTargets, setWeeklySetTargets] = useState(() => ({
     ...DEFAULT_WEEKLY_SET_TARGETS,
@@ -28,7 +31,8 @@ export function useSettings() {
   useEffect(() => { save("weeklySetTargets", weeklySetTargets); }, [weeklySetTargets]);
 
   const completeOnboarding = () => {
-    save("onboardingDone", true);
+    save("onboardingProfileDone", true);
+    save("onboardingDone", true); // keep legacy key in sync
     setShowOnboarding(false);
   };
 

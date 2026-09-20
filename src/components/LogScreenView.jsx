@@ -59,6 +59,16 @@ export default function LogScreenView({
     lastActiveLogExerciseByDate,
     handleLogExerciseActiveChange,
     deleteAllHistoryForDate,
+    // AI plan banner
+    planDayInfo,
+    onLoadPlanDay,
+    onSelfMadeToday,
+    selfMadeConsecutiveCount,
+    aiPlanEnabled,
+    planBannerDismissedForDate,
+    onFinishWorkout,
+    onUnfinishWorkout,
+    isAiPlanDay = false,
 }) {
     return (
         <div
@@ -162,6 +172,15 @@ export default function LogScreenView({
                         resetSession={() => {
                             deleteAllHistoryForDate(logDate);
                         }}
+                        planDayInfo={planDayInfo}
+                        onLoadPlanDay={onLoadPlanDay}
+                        onSelfMadeToday={onSelfMadeToday}
+                        selfMadeConsecutiveCount={selfMadeConsecutiveCount}
+                        aiPlanEnabled={aiPlanEnabled}
+                        planBannerDismissedForDate={planBannerDismissedForDate}
+                        onFinishWorkout={onFinishWorkout}
+                        onUnfinishWorkout={onUnfinishWorkout}
+                        isAiPlanDay={isAiPlanDay}
                     />
                 );
             })()}

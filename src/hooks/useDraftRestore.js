@@ -106,6 +106,16 @@ export function useDraftRestore({
             return;
         }
 
+        // Current draft has unsaved in-memory changes that haven't flushed to localStorage yet
+        // (useWorkoutLog debounce is 350ms). Preserve the in-memory state.
+        if (
+            hasDraftContent(currentDraft) &&
+            Boolean(currentDraft.meta?.hasUnsavedChanges) &&
+            currentDraftSignature !== getWorkoutDraftSignature(localDraft)
+        ) {
+            return;
+        }
+
         const savedMetrics = getDraftMetricsForDate({
             exercises: savedDraftForDate.sessionEx,
             logData: savedDraftForDate.logData,

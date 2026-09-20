@@ -40,6 +40,10 @@ export default function HomeScreen({
     weekStartDay = "monday",
     weeklySetTargets = {},
     onNavigateToWeeklyAnalytics,
+    nextPlanDay = null,
+    aiPlanEnabled = true,
+    isTodayCompleted = false,
+    onStartNextPlanDay,
 }) {
     const renderStartedAt = getPerfNow();
     const [selectedSession, setSelectedSession] = useState(null);
@@ -473,6 +477,82 @@ export default function HomeScreen({
                     );
                 })()}
             </section>
+
+            {/* AIプラン次のメニューカード */}
+            {aiPlanEnabled && nextPlanDay && (() => {
+                const exCount = (nextPlanDay.bodyParts || []).reduce(
+                    (sum, bp) => sum + (muscleEx?.[bp]?.length || 0), 0
+                );
+                const bodyPartLabel = (nextPlanDay.bodyParts || []).join(" · ");
+
+                return (
+                    <button
+                        type="button"
+                        onClick={isTodayCompleted ? undefined : onStartNextPlanDay}
+                        style={{
+                            display: "block",
+                            width: "100%",
+                            textAlign: "left",
+                            borderRadius: 18,
+                            padding: "16px 18px",
+                            marginBottom: 14,
+                            background: isTodayCompleted
+                                ? "var(--home-card)"
+                                : "linear-gradient(135deg, rgba(15, 94, 99, 0.92), rgba(18, 169, 164, 0.82))",
+                            border: isTodayCompleted
+                                ? "1px solid var(--home-card-border)"
+                                : "1px solid rgba(18, 199, 194, 0.35)",
+                            boxShadow: isTodayCompleted
+                                ? "var(--home-shadow)"
+                                : "0 8px 24px rgba(15, 94, 99, 0.22)",
+                            cursor: isTodayCompleted ? "default" : "pointer",
+                            opacity: isTodayCompleted ? 0.72 : 1,
+                        }}
+                    >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                            <span style={{
+                                fontSize: 11,
+                                fontWeight: 750,
+                                letterSpacing: 0.5,
+                                color: isTodayCompleted ? "var(--home-muted)" : "rgba(255,255,255,0.75)",
+                                textTransform: "uppercase",
+                            }}>
+                                {isTodayCompleted ? "今日のメニュー" : "今日のメニュー"}
+                            </span>
+                            {isTodayCompleted ? (
+                                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--home-muted)" }}>✓ 完了済み</span>
+                            ) : (
+                                <span style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,0.90)" }}>開始する →</span>
+                            )}
+                        </div>
+                        <div style={{
+                            fontSize: 22,
+                            fontWeight: 950,
+                            color: isTodayCompleted ? "var(--home-title)" : "#fff",
+                            marginBottom: 6,
+                            letterSpacing: 0.2,
+                        }}>
+                            {nextPlanDay.label}
+                        </div>
+                        <div style={{
+                            fontSize: 13,
+                            color: isTodayCompleted ? "var(--home-muted)" : "rgba(255,255,255,0.78)",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                        }}>
+                            <span>{bodyPartLabel}</span>
+                            {exCount > 0 && (
+                                <>
+                                    <span style={{ opacity: 0.5 }}>·</span>
+                                    <span>{exCount}種目</span>
+                                </>
+                            )}
+                        </div>
+                    </button>
+                );
+            })()}
 
             <section
                 onClick={onNavigateToWeeklyAnalytics}

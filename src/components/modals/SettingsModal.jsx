@@ -1,6 +1,157 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import NotificationSettings from "../NotificationSettings";
 import { BILLING_ENABLED } from "../../constants/features";
+import { SPLIT_TYPE_DESCRIPTIONS } from "../../utils/generateOnboardingPlan";
+
+// ─── Profile field definitions ────────────────────────────────────────────────
+
+const PROFILE_FIELD_DEFS = [
+    {
+        id: "goal",
+        label: "目標",
+        type: "single",
+        resetsPlan: false,
+        options: [
+            { label: "体づくり・見た目改善", value: "体づくり" },
+            { label: "筋力アップ",           value: "筋力アップ" },
+            { label: "継続習慣・健康維持",   value: "継続習慣" },
+            { label: "ダイエット・減量",      value: "ダイエット" },
+        ],
+    },
+    {
+        id: "level",
+        label: "経験レベル",
+        type: "single",
+        resetsPlan: true,
+        options: [
+            { label: "初心者（1年未満）", value: "初心者" },
+            { label: "中級者（1〜3年）",  value: "中級者" },
+            { label: "上級者（3年以上）", value: "上級者" },
+        ],
+    },
+    {
+        id: "frequency",
+        label: "週の頻度",
+        type: "frequency",
+        resetsPlan: true,
+    },
+    {
+        id: "trainingYears",
+        label: "筋トレ歴",
+        type: "single",
+        resetsPlan: false,
+        options: [
+            { label: "1年未満", value: "1年未満" },
+            { label: "1〜3年",  value: "1〜3年" },
+            { label: "3〜5年",  value: "3〜5年" },
+            { label: "5年以上", value: "5年以上" },
+        ],
+    },
+    {
+        id: "preferredSplit",
+        label: "分割スタイル",
+        type: "single",
+        resetsPlan: true,
+        options: [
+            { label: "上半身 / 下半身",   value: "upper_lower", desc: SPLIT_TYPE_DESCRIPTIONS.upper_lower },
+            { label: "Push / Pull / Legs", value: "ppl",         desc: SPLIT_TYPE_DESCRIPTIONS.ppl },
+            { label: "部位別分割",         value: "body_part",   desc: SPLIT_TYPE_DESCRIPTIONS.body_part },
+            { label: "アーノルド分割",     value: "arnold",      desc: SPLIT_TYPE_DESCRIPTIONS.arnold },
+            { label: "全身法",             value: "fullbody",    desc: SPLIT_TYPE_DESCRIPTIONS.fullbody },
+            { label: "特に決めてない",     value: "none",        desc: SPLIT_TYPE_DESCRIPTIONS.none },
+            { label: "自分でカスタム →",  value: "custom", isCustomTrigger: true },
+        ],
+    },
+    {
+        id: "location",
+        label: "トレーニング場所",
+        type: "single",
+        resetsPlan: true,
+        options: [
+            { label: "ジム", value: "ジム" },
+            { label: "自宅", value: "自宅" },
+        ],
+    },
+    {
+        id: "hasDumbbells",
+        label: "ダンベルの有無",
+        type: "single",
+        resetsPlan: true,
+        showIf: (answers) => (answers?.location || "") === "自宅",
+        options: [
+            { label: "ある（ダンベルあり）", value: "ある" },
+            { label: "なし（自重のみ）",     value: "なし" },
+        ],
+    },
+    {
+        id: "gender",
+        label: "性別",
+        type: "single",
+        resetsPlan: false,
+        options: [
+            { label: "男性",           value: "男性" },
+            { label: "女性",           value: "女性" },
+            { label: "その他・回答しない", value: "その他" },
+        ],
+    },
+    {
+        id: "birthdate",
+        label: "生年月日",
+        type: "birthdate",
+        resetsPlan: false,
+    },
+    {
+        id: "bodyWeight",
+        label: "体重",
+        type: "bodyweight_input",
+        resetsPlan: false,
+    },
+];
+
+// Body parts available for custom split editor
+const CUSTOM_SPLIT_BODY_PARTS = [
+    "胸", "背中", "肩", "二頭", "三頭",
+    "四頭", "ハムストリングス", "尻", "腹筋",
+];
+
+// Short display labels for body part chips in editor
+const BP_CHIP_LABELS = {
+    "ハムストリングス": "ハム",
+};
+
+const CUSTOM_SPLIT_STORAGE_KEY = "customSplitSequence";
+
+function loadCustomSplitSequence() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(CUSTOM_SPLIT_STORAGE_KEY) || "null");
+        if (Array.isArray(stored) && stored.length > 0) return stored;
+    } catch {}
+    return null;
+}
+
+function formatProfileFieldValue(fieldDef, answers) {
+    const val = answers?.[fieldDef.id];
+    if (fieldDef.id === "bodyWeight") {
+        return val ? `${val}kg` : "未設定";
+    }
+    if (!val) return "未設定";
+    if (fieldDef.id === "birthdate") {
+        const parts = val.split("-");
+        if (parts.length === 3) return `${parts[0]}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日`;
+        return val;
+    }
+    if (fieldDef.id === "frequency") return `週${val}回`;
+    if (fieldDef.id === "preferredSplit" && val === "custom") {
+        const seq = loadCustomSplitSequence();
+        if (seq?.length) return `カスタム（${seq.length}分割）`;
+        return "自分でカスタム";
+    }
+    if (fieldDef.options) {
+        const opt = fieldDef.options.find(o => o.value === val);
+        return opt ? opt.label.replace(" →", "") : val;
+    }
+    return val;
+}
 
 const isDevelopmentBuild = process.env.NODE_ENV !== "production";
 
@@ -53,6 +204,12 @@ export default function SettingsModal({
   setWeekStartDay,
   weeklySetTargets = {},
   setWeeklySetTargets,
+  aiPlanEnabled = true,
+  onSetAiPlanEnabled,
+  onboardingAnswers = null,
+  onSaveProfileField,
+  onSaveBodyWeight,
+  onSaveCustomSplit,
 }) {
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
   const [showProManager, setShowProManager] = useState(false);
@@ -60,6 +217,17 @@ export default function SettingsModal({
   const [proActionBusy, setProActionBusy] = useState(false);
   const [proMessage, setProMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
+  const [profileEditorField, setProfileEditorField] = useState(null); // fieldDef being edited
+  const [profileEditorValue, setProfileEditorValue] = useState(null);
+  const [profileEditorBirthYear, setProfileEditorBirthYear] = useState("");
+  const [profileEditorBirthMonth, setProfileEditorBirthMonth] = useState("");
+  const [profileEditorBirthDay, setProfileEditorBirthDay] = useState("");
+  // Expanded description in ProfileFieldEditorSheet (option value or null)
+  const [editorExpandedDesc, setEditorExpandedDesc] = useState(null);
+  // Custom split editor state (shown inline within ProfileFieldEditorSheet)
+  const [showCustomSplitEditor, setShowCustomSplitEditor] = useState(false);
+  const [customDayCount, setCustomDayCount] = useState(3);
+  const [customDays, setCustomDays] = useState([]); // [{ label, bodyParts: Set }]
 
   const plan = proStatusData?.plan || proPlan || {
     isPro,
@@ -167,10 +335,112 @@ export default function SettingsModal({
       setShowProManager(false);
       setProMessage("");
       setSyncMessage("");
+      setProfileEditorField(null);
       return;
     }
     if (showProManager) refreshProStatus({ silent: true });
   }, [isOpen, showProManager, refreshProStatus]);
+
+  const openProfileEditor = (fieldDef) => {
+    const currentVal = onboardingAnswers?.[fieldDef.id] ?? null;
+    setProfileEditorField(fieldDef);
+    setProfileEditorValue(
+        fieldDef.type === "frequency" ? (currentVal || "3") :
+        fieldDef.type === "bodyweight_input" ? (currentVal || "") :
+        currentVal
+    );
+    if (fieldDef.type === "birthdate" && currentVal) {
+      const parts = currentVal.split("-");
+      setProfileEditorBirthYear(parts[0] || "");
+      setProfileEditorBirthMonth(parts[1] ? String(parseInt(parts[1], 10)) : "");
+      setProfileEditorBirthDay(parts[2] ? String(parseInt(parts[2], 10)) : "");
+    } else {
+      setProfileEditorBirthYear("");
+      setProfileEditorBirthMonth("");
+      setProfileEditorBirthDay("");
+    }
+  };
+
+  const closeProfileEditor = () => {
+    setProfileEditorField(null);
+    setShowCustomSplitEditor(false);
+    setEditorExpandedDesc(null);
+  };
+
+  const saveProfileEditorValue = () => {
+    if (!profileEditorField) return;
+    // Special handling for bodyweight_input
+    if (profileEditorField.type === "bodyweight_input") {
+      const n = Number(profileEditorValue);
+      if (n > 0) onSaveBodyWeight?.(n);
+      closeProfileEditor();
+      return;
+    }
+    if (!onSaveProfileField) return;
+    let val = profileEditorValue;
+    if (profileEditorField.type === "birthdate") {
+      const y = parseInt(profileEditorBirthYear, 10);
+      const m = parseInt(profileEditorBirthMonth, 10);
+      const d = parseInt(profileEditorBirthDay, 10);
+      if (!y || !m || !d) { closeProfileEditor(); return; }
+      val = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const testDate = new Date(val);
+      if (isNaN(testDate.getTime())) { closeProfileEditor(); return; }
+    }
+    if (val === null || val === undefined) { closeProfileEditor(); return; }
+    onSaveProfileField(profileEditorField.id, val);
+    closeProfileEditor();
+  };
+
+  // Build initial days array for custom split editor
+  const buildInitialCustomDays = (dayCount) => {
+    const existing = loadCustomSplitSequence();
+    if (existing?.length === dayCount) {
+      return existing.map(d => ({ label: d.label || "", bodyParts: new Set(d.bodyParts || []) }));
+    }
+    return Array.from({ length: dayCount }, (_, i) =>
+      existing?.[i]
+        ? { label: existing[i].label || "", bodyParts: new Set(existing[i].bodyParts || []) }
+        : { label: "", bodyParts: new Set() }
+    );
+  };
+
+  const openCustomSplitEditor = () => {
+    const existing = loadCustomSplitSequence();
+    const initialCount = existing?.length || 3;
+    setCustomDayCount(initialCount);
+    setCustomDays(buildInitialCustomDays(initialCount));
+    setShowCustomSplitEditor(true);
+  };
+
+  const handleCustomDayCountChange = (n) => {
+    setCustomDayCount(n);
+    setCustomDays(prev => {
+      const next = [...prev];
+      while (next.length < n) next.push({ label: "", bodyParts: new Set() });
+      return next.slice(0, n);
+    });
+  };
+
+  const toggleCustomBodyPart = (dayIdx, bp) => {
+    setCustomDays(prev => prev.map((d, i) => {
+      if (i !== dayIdx) return d;
+      const next = new Set(d.bodyParts);
+      if (next.has(bp)) next.delete(bp); else next.add(bp);
+      return { ...d, bodyParts: next };
+    }));
+  };
+
+  const saveCustomSplit = () => {
+    const sequence = customDays.map((d, i) => ({
+      label: d.label.trim() || `Day${i + 1}`,
+      bodyParts: [...d.bodyParts],
+    }));
+    onSaveCustomSplit?.(sequence);
+    closeProfileEditor();
+  };
+
+  const isCustomSplitValid = customDays.length > 0 && customDays.every(d => d.bodyParts.size > 0);
 
   if (!isOpen) return null;
 
@@ -665,6 +935,47 @@ export default function SettingsModal({
                 flexDirection: "column",
                 gap: 16,
               }}>
+                {/* AI plan toggle */}
+                {onSetAiPlanEnabled && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>AIプランの提案</div>
+                      <div style={{ fontSize: 11, color: "var(--text3)", marginTop: 2 }}>
+                        記録画面に次のメニューを表示する
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onSetAiPlanEnabled?.(!aiPlanEnabled)}
+                      style={{
+                        width: 44,
+                        height: 26,
+                        borderRadius: 13,
+                        border: "none",
+                        background: aiPlanEnabled
+                          ? "linear-gradient(135deg, var(--accent), var(--accent2))"
+                          : "var(--border2)",
+                        position: "relative",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        transition: "background 0.2s",
+                      }}
+                      aria-checked={aiPlanEnabled}
+                      role="switch"
+                    >
+                      <span style={{
+                        position: "absolute",
+                        top: 3, left: aiPlanEnabled ? 21 : 3,
+                        width: 20, height: 20,
+                        borderRadius: "50%",
+                        background: "#fff",
+                        transition: "left 0.2s",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                      }} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Week start day */}
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text2)", marginBottom: 8 }}>週の開始日</div>
@@ -748,6 +1059,46 @@ export default function SettingsModal({
                     })}
                   </div>
                 </div>
+
+                {/* Profile field rows */}
+                {onSaveProfileField && (
+                  <>
+                    <div style={{ height: 1, background: "var(--border2)", margin: "4px 0" }} />
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text2)", marginBottom: 4 }}>プロフィール</div>
+                    {PROFILE_FIELD_DEFS.filter(f => !f.showIf || f.showIf(onboardingAnswers)).map(fieldDef => (
+                      <button
+                        key={fieldDef.id}
+                        type="button"
+                        onClick={() => openProfileEditor(fieldDef)}
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          background: "none",
+                          border: "none",
+                          padding: "4px 0",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
+                          {fieldDef.label}
+                          {fieldDef.resetsPlan && (
+                            <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 5, fontWeight: 900 }}>
+                              AIプラン再構築
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 12, color: "var(--text3)" }}>
+                            {formatProfileFieldValue(fieldDef, onboardingAnswers)}
+                          </span>
+                          <span style={{ color: "var(--text3)", fontSize: 16 }}>›</span>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
 
@@ -767,6 +1118,25 @@ export default function SettingsModal({
                   gap: 10,
                 }}
               >
+                <div style={{ display: "flex", gap: 12, justifyContent: "center", paddingBottom: 4 }}>
+                  <a
+                    href="https://training-log-mu.vercel.app/privacy.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13, color: "var(--text3)", textDecoration: "underline" }}
+                  >
+                    プライバシーポリシー
+                  </a>
+                  <span style={{ color: "var(--text3)", fontSize: 13 }}>·</span>
+                  <a
+                    href="https://training-log-mu.vercel.app/privacy.html#利用規約"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13, color: "var(--text3)", textDecoration: "underline" }}
+                  >
+                    利用規約
+                  </a>
+                </div>
                 <button
                   type="button"
                   onClick={async () => {
@@ -812,6 +1182,430 @@ export default function SettingsModal({
           )}
         </div>
       </div>
+
+      {/* Profile field editor bottom sheet */}
+      {profileEditorField && (
+        <div
+          onClick={closeProfileEditor}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 401,
+            background: "rgba(15, 23, 42, 0.54)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            padding: "0 12px calc(12px + var(--safe-bottom, 0px))",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 430,
+              background: "var(--card-modal)",
+              borderRadius: "24px 24px 20px 20px",
+              border: "1px solid rgba(18, 199, 194, 0.12)",
+              boxShadow: "0 22px 44px rgba(15, 23, 42, 0.22)",
+              maxHeight: "80dvh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: "16px 18px 12px", borderBottom: "1px solid var(--border2)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {showCustomSplitEditor && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomSplitEditor(false)}
+                    style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 22, lineHeight: 1, padding: 0, cursor: "pointer" }}
+                  >
+                    ←
+                  </button>
+                )}
+                <div style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>
+                  {showCustomSplitEditor ? "カスタム分割を設定" : profileEditorField.label}
+                </div>
+              </div>
+              <button type="button" onClick={closeProfileEditor} style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 26, lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+              {/* ── Custom split editor ── */}
+              {showCustomSplitEditor ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, background: "rgba(18,199,194,0.08)", borderRadius: 10, padding: "7px 10px" }}>
+                    保存するとAIプランの進行がリセットされます
+                  </div>
+
+                  {/* Day count selector */}
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text2)", marginBottom: 8 }}>何分割？</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[2, 3, 4, 5, 6, 7].map(n => {
+                        const sel = customDayCount === n;
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => handleCustomDayCountChange(n)}
+                            style={{
+                              flex: 1,
+                              padding: "10px 0",
+                              borderRadius: 12,
+                              background: sel ? "linear-gradient(135deg, var(--accent), var(--accent2))" : "var(--card2)",
+                              border: sel ? "none" : "1px solid var(--border2)",
+                              color: sel ? "#fff" : "var(--text2)",
+                              fontSize: 14,
+                              fontWeight: 900,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Day cards */}
+                  {customDays.map((day, dayIdx) => (
+                    <div
+                      key={dayIdx}
+                      style={{
+                        background: "var(--card2)",
+                        borderRadius: 16,
+                        padding: 14,
+                        border: "1px solid var(--border2)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text3)", minWidth: 36 }}>
+                          Day{dayIdx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          placeholder={`Day${dayIdx + 1}`}
+                          value={day.label}
+                          onChange={e => setCustomDays(prev => prev.map((d, i) => i === dayIdx ? { ...d, label: e.target.value } : d))}
+                          style={{
+                            flex: 1,
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: "var(--card)",
+                            border: "1px solid var(--border2)",
+                            color: "var(--text)",
+                            fontSize: 13,
+                            fontWeight: 800,
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {CUSTOM_SPLIT_BODY_PARTS.map(bp => {
+                          const sel = day.bodyParts.has(bp);
+                          return (
+                            <button
+                              key={bp}
+                              type="button"
+                              onClick={() => toggleCustomBodyPart(dayIdx, bp)}
+                              style={{
+                                padding: "6px 11px",
+                                borderRadius: 999,
+                                background: sel ? "linear-gradient(135deg, var(--accent), var(--accent2))" : "var(--card)",
+                                border: sel ? "none" : "1px solid var(--border2)",
+                                color: sel ? "#fff" : "var(--text2)",
+                                fontSize: 12,
+                                fontWeight: 900,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {BP_CHIP_LABELS[bp] || bp}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {day.bodyParts.size === 0 && (
+                        <div style={{ fontSize: 11, color: "#EF4444", fontWeight: 800 }}>1つ以上選択してください</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {profileEditorField.resetsPlan && (
+                    <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, marginBottom: 12, background: "rgba(18,199,194,0.08)", borderRadius: 10, padding: "7px 10px" }}>
+                      この項目を変更するとAIプランの進行がリセットされます
+                    </div>
+                  )}
+
+                  {profileEditorField.type === "single" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {profileEditorField.options.map(opt => {
+                        if (opt.isCustomTrigger) {
+                          const isCurrentCustom = profileEditorValue === "custom";
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={openCustomSplitEditor}
+                              style={{
+                                width: "100%",
+                                padding: "13px 16px",
+                                borderRadius: 14,
+                                background: isCurrentCustom ? "rgba(18,199,194,0.12)" : "var(--card2)",
+                                border: isCurrentCustom ? "1px solid rgba(18,199,194,0.4)" : "1px solid var(--border2)",
+                                color: "var(--text)",
+                                fontSize: 14,
+                                fontWeight: 900,
+                                textAlign: "left",
+                                cursor: "pointer",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
+                            >
+                              <span>{opt.label}</span>
+                              {isCurrentCustom && (
+                                <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900 }}>
+                                  {loadCustomSplitSequence()?.length ? `${loadCustomSplitSequence()?.length}分割設定済み` : ""}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        }
+                        const selected = profileEditorValue === opt.value;
+                        const descOpen = editorExpandedDesc === opt.value;
+                        const hasDesc = Boolean(opt.desc);
+                        return (
+                          <div key={opt.value}>
+                            <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditorExpandedDesc(null);
+                                  setProfileEditorValue(opt.value);
+                                }}
+                                style={{
+                                  flex: 1,
+                                  padding: "13px 16px",
+                                  borderRadius: hasDesc ? "14px 0 0 14px" : 14,
+                                  background: selected ? "linear-gradient(135deg, var(--accent), var(--accent2))" : "var(--card2)",
+                                  border: selected ? "none" : "1px solid var(--border2)",
+                                  color: selected ? "#fff" : "var(--text)",
+                                  fontSize: 14,
+                                  fontWeight: 900,
+                                  textAlign: "left",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {opt.label}
+                              </button>
+                              {hasDesc && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditorExpandedDesc(descOpen ? null : opt.value);
+                                  }}
+                                  style={{
+                                    flexShrink: 0,
+                                    width: 40,
+                                    background: descOpen ? "rgba(18,199,194,0.18)" : selected ? "rgba(255,255,255,0.15)" : "var(--card)",
+                                    border: selected ? "none" : "1px solid var(--border2)",
+                                    borderLeft: "none",
+                                    borderRadius: "0 14px 14px 0",
+                                    color: descOpen ? "var(--accent)" : "var(--text3)",
+                                    fontSize: 14,
+                                    fontWeight: 900,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                  aria-label="詳しく見る"
+                                >
+                                  ?
+                                </button>
+                              )}
+                            </div>
+                            {descOpen && opt.desc && (
+                              <div style={{
+                                marginTop: 5,
+                                padding: "10px 13px",
+                                background: "rgba(18,199,194,0.06)",
+                                borderRadius: 11,
+                                border: "1px solid rgba(18,199,194,0.16)",
+                                fontSize: 12,
+                                color: "var(--text2)",
+                                lineHeight: 1.7,
+                              }}>
+                                {opt.desc}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {profileEditorField.type === "frequency" && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+                      {[1,2,3,4,5,6,7].map(n => {
+                        const selected = String(profileEditorValue) === String(n);
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setProfileEditorValue(String(n))}
+                            style={{
+                              padding: "12px 0",
+                              borderRadius: 12,
+                              background: selected ? "linear-gradient(135deg, var(--accent), var(--accent2))" : "var(--card2)",
+                              border: selected ? "none" : "1px solid var(--border2)",
+                              color: selected ? "#fff" : "var(--text2)",
+                              fontSize: 15,
+                              fontWeight: 900,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {n}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {profileEditorField.type === "birthdate" && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ flex: 2 }}>
+                        <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4, fontWeight: 800 }}>年</div>
+                        <input
+                          type="number"
+                          placeholder="1990"
+                          value={profileEditorBirthYear}
+                          onChange={e => setProfileEditorBirthYear(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "12px 10px",
+                            borderRadius: 12,
+                            background: "var(--card2)",
+                            border: "1px solid var(--border2)",
+                            color: "var(--text)",
+                            fontSize: 15,
+                            fontWeight: 900,
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4, fontWeight: 800 }}>月</div>
+                        <input
+                          type="number"
+                          placeholder="1"
+                          min="1" max="12"
+                          value={profileEditorBirthMonth}
+                          onChange={e => setProfileEditorBirthMonth(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "12px 10px",
+                            borderRadius: 12,
+                            background: "var(--card2)",
+                            border: "1px solid var(--border2)",
+                            color: "var(--text)",
+                            fontSize: 15,
+                            fontWeight: 900,
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 11, color: "var(--text3)", marginBottom: 4, fontWeight: 800 }}>日</div>
+                        <input
+                          type="number"
+                          placeholder="1"
+                          min="1" max="31"
+                          value={profileEditorBirthDay}
+                          onChange={e => setProfileEditorBirthDay(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "12px 10px",
+                            borderRadius: 12,
+                            background: "var(--card2)",
+                            border: "1px solid var(--border2)",
+                            color: "var(--text)",
+                            fontSize: 15,
+                            fontWeight: 900,
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {profileEditorField.type === "bodyweight_input" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="70"
+                        autoFocus
+                        value={profileEditorValue || ""}
+                        onChange={e => setProfileEditorValue(e.target.value)}
+                        style={{
+                          width: 100,
+                          padding: "12px 10px",
+                          borderRadius: 12,
+                          background: "var(--card2)",
+                          border: "1px solid var(--border2)",
+                          color: "var(--text)",
+                          fontSize: 22,
+                          fontWeight: 900,
+                          textAlign: "right",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text2)" }}>kg</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Save button */}
+            <div style={{ padding: "12px 18px calc(8px + var(--safe-bottom, 0px))", borderTop: "1px solid var(--border2)" }}>
+              <button
+                type="button"
+                onClick={showCustomSplitEditor ? saveCustomSplit : saveProfileEditorValue}
+                disabled={showCustomSplitEditor && !isCustomSplitValid}
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  borderRadius: 16,
+                  background: (showCustomSplitEditor && !isCustomSplitValid)
+                    ? "var(--card2)"
+                    : "linear-gradient(135deg, var(--accent), var(--accent2))",
+                  border: (showCustomSplitEditor && !isCustomSplitValid) ? "1px solid var(--border2)" : "none",
+                  color: (showCustomSplitEditor && !isCustomSplitValid) ? "var(--text3)" : "#fff",
+                  fontSize: 15,
+                  fontWeight: 950,
+                  boxShadow: (showCustomSplitEditor && !isCustomSplitValid) ? "none" : "var(--shadow-soft)",
+                  cursor: (showCustomSplitEditor && !isCustomSplitValid) ? "not-allowed" : "pointer",
+                }}
+              >
+                {showCustomSplitEditor ? "この分割で保存する" : "保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -272,7 +272,7 @@ export function useWorkoutLog({
       const prevDate = normalizeDateKey(prevDraft?.date || prevDraft?.meta?.date);
       const prevHash = getWorkoutDraftSnapshotHash(prevDraft);
       if (prevDate === normalizedDate && prevHash === externalHash) return prevDraft;
-      if (prevDate === normalizedDate && prevDraft?.meta?.hasUnsavedChanges) return prevDraft;
+      if (prevDate === normalizedDate && prevDraft?.meta?.hasUnsavedChanges && externalDraft?.meta?.source !== "explicit_date_nav") return prevDraft;
       lastMutationRef.current = null;
       return externalDraft;
     });
@@ -629,6 +629,28 @@ export function useWorkoutLog({
     );
   }, [mutateExercises]);
 
+  /**
+   * Directly update draft.todayLabels without going through the hasUnsavedChanges
+   * guard. Called before plan-day exercise mutations so that the next onDraftChange
+   * callback carries the correct labels to the App's bridge.
+   */
+  const setTodayLabels = useCallback((labels) => {
+    const normalized = Array.isArray(labels) ? labels : [];
+    setDraft((prevDraft) => {
+      if (JSON.stringify(prevDraft.todayLabels || []) === JSON.stringify(normalized)) return prevDraft;
+      return withWorkoutDraftMeta(normalizedDate, {
+        ...prevDraft,
+        todayLabels: normalized,
+      }, {
+        source: "today_labels_set",
+        hasUnsavedChanges: Boolean(prevDraft.meta?.hasUnsavedChanges),
+      });
+    });
+    // Mark as pending so onDraftChange fires even if no exercise mutation follows.
+    // Exercise mutations in the same batch will overwrite this with their own reason.
+    lastMutationRef.current = { reason: "today_labels_set", explicitEdit: false, explicitDelete: false };
+  }, [normalizedDate]);
+
   const api = useMemo(() => ({
     date: normalizedDate,
     draft,
@@ -644,6 +666,7 @@ export function useWorkoutLog({
     setWeightMode,
     reorderExercise,
     renameExercise,
+    setTodayLabels,
   }), [
     addExercise,
     addSet,
@@ -655,6 +678,7 @@ export function useWorkoutLog({
     reorderExercise,
     setField,
     setWeightMode,
+    setTodayLabels,
     splitDraft,
   ]);
 

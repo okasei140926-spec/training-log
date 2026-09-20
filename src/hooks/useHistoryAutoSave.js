@@ -192,6 +192,11 @@ export function useHistoryAutoSave({
 
                 const workoutSyncResults = await syncWorkoutRowsForDates(currentUserId, mergedHistory, syncDates);
                 if (workoutSyncResults.failedDates.length > 0) {
+                    // Clear pending content changes for failed dates so auto-save doesn't
+                    // retry them on every history change, causing an infinite loop.
+                    workoutSyncResults.failedDates.forEach((date) => {
+                        pendingWorkoutContentChangeDatesRef.current.delete(date);
+                    });
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
                 }
                 if (workoutSyncResults.skippedDates.length > 0) {

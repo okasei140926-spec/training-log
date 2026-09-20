@@ -167,8 +167,15 @@ export function useHistorySave({
                         : getEmptyWorkoutMetrics();
                     const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(workoutDate) || {};
                     const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
-                    if (!hasWorkoutForDate && !pendingChange.explicitDelete && !explicitEdit) {
-                        console.warn("[save guard] skip empty workout without explicit edit or delete intent", {
+                    if (!hasWorkoutForDate && !pendingChange.explicitDelete) {
+                        // No local exercises and no explicit delete intent — skip the save.
+                        // explicitEdit=true is intentionally NOT exempted: if data was lost
+                        // mid-session (debounce race / useDraftRestore overwrite), we must not
+                        // push an empty workout to Supabase.  The destructive-overwrite guard
+                        // below would have caught the remote-has-data case anyway; this handles
+                        // the remaining case (local empty AND remote empty) where the repository
+                        // itself throws "Refusing to save empty workout without explicit delete".
+                        console.warn("[save guard] skip empty workout (no local data, no explicit delete)", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
                             date: workoutDate,
@@ -176,9 +183,12 @@ export function useHistorySave({
                             remoteMetrics,
                             reason: pendingChange.reason || "missing local workout data",
                             explicitDelete: false,
-                            explicitEdit: false,
-                            safety: "avoid deleting Supabase data when history failed to load",
+                            explicitEdit,
+                            safety: "avoid Supabase save error / sync-failure banner for empty local draft",
                         });
+                        // Clear any pre-existing sync-failure banner for this date so it
+                        // does not remain visible after the empty-save was retried.
+                        clearSyncFailure(workoutDate);
                         results.skippedDates.push(workoutDate);
                         return;
                     }

@@ -40,6 +40,7 @@ import {
     buildBaseExercises,
     getExSetsHelper,
 } from "./utils/workoutHelpers";
+import { buildSessionExercisesForPlanDay, findBestMatchingPlanDayIndex, buildMuscleExFromAnswers } from "./utils/generateOnboardingPlan";
 // buildWorkoutSessionPayloadFromDraft → useWorkoutDaySummaryBuilder
 import WorkoutSessionShareModal from "./components/modals/WorkoutSessionShareModal";
 import SettingsModal from "./components/modals/SettingsModal";
@@ -73,6 +74,7 @@ import { useHistoryAutoSave } from "./hooks/useHistoryAutoSave";
 import { useRetrySyncCallback } from "./hooks/useRetrySyncCallback";
 import { usePersistCurrentLog } from "./hooks/usePersistCurrentLog";
 import { useWorkoutLogBridge } from "./hooks/useWorkoutLogBridge";
+import { useAiPlanProgress } from "./hooks/useAiPlanProgress";
 import { useWorkoutDaySummaryBuilder } from "./hooks/useWorkoutDaySummaryBuilder";
 import { useAccountActions } from "./hooks/useAccountActions";
 import { useWorkoutSyncHelpers } from "./hooks/useWorkoutSyncHelpers";
@@ -217,6 +219,15 @@ export default function GymApp() {
     const [splashMinElapsed, setSplashMinElapsed] = useState(false);
     const [splashForceDone, setSplashForceDone] = useState(false);
 
+    const [onboardingAnswers, setOnboardingAnswers] = useState(() => load("onboardingAnswers", null));
+    const [bodyWeightKg, setBodyWeightKg] = useState(() => {
+        const answers = load("onboardingAnswers", null);
+        const v = Number(answers?.bodyWeight);
+        return Number.isFinite(v) && v > 0 ? v : null;
+    });
+    const [bodyWeightUpdatedAt, setBodyWeightUpdatedAt] = useState(() =>
+        load("onboardingAnswers", null)?.bodyWeightUpdatedAt || null
+    );
     const [muscleEx, setMuscleEx] = useState(() => load("routineEx", {}));
     const [history, setHistory] = useState({});
     const [workoutsDataHistory, setWorkoutsDataHistory] = useState({});
@@ -269,6 +280,26 @@ export default function GymApp() {
         setShowPushPrompt,
         setPushPromptMessage,
     } = usePushNotifications({ user, screen, showAuth });
+
+    const {
+        progress: aiPlanProgress,
+        getNextPlanDay,
+        getPlanDayForDate,
+        markPlanDayCompleted,
+        markPlanDayCompletedAtIndex,
+        unmarkPlanDayCompleted,
+        resetPlanProgress,
+        selfMadeCount,
+        handleSelfMade,
+        handlePlanAccepted,
+        aiPlanEnabled,
+        setAiPlanEnabled,
+    } = useAiPlanProgress({ user });
+
+    // Track which date the AI plan banner was accepted (dismissed) for
+    const [planBannerDismissedForDate, setPlanBannerDismissedForDate] = useState(null);
+    // Ref to detect completion: set when user accepts AI plan for a date
+    const aiPlanActiveDateRef = useRef(null);
 
     useEffect(() => {
         if (screen === "friends") {
@@ -783,6 +814,163 @@ export default function GymApp() {
         historyRevisionRef.current += 1;
     }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // ── AIプラン自動完了: localStorage で「プラン受け入れ日」を管理 ──
+    const AI_PLAN_ACCEPTED_DATES_KEY = "aiPlanAcceptedDates";
+    const readAiPlanAcceptedDates = () => {
+        try { return JSON.parse(localStorage.getItem(AI_PLAN_ACCEPTED_DATES_KEY) || "{}"); }
+        catch { return {}; }
+    };
+    const markAiPlanAcceptedDate = (date) => {
+        try {
+            const dates = readAiPlanAcceptedDates();
+            dates[date] = true;
+            localStorage.setItem(AI_PLAN_ACCEPTED_DATES_KEY, JSON.stringify(dates));
+        } catch {}
+    };
+
+    // Track latest canonicalDisplayHistory for use in callbacks (handleFinishWorkout etc.)
+    const latestCanonicalHistoryRef = useRef({});
+
+    // Helper: get body parts that have valid sets recorded for a given date
+    const getRecordedBodyPartsForDate = (history, date) => {
+        const parts = new Set();
+        Object.values(history || {}).forEach((records) => {
+            const record = (records || []).find(r => r.date === date);
+            if (!record) return;
+            const bp = String(record?.bodyPart || record?.body_part || "").trim();
+            const hasValidSet = (record.sets || []).some(s => {
+                const reps = Number(s.reps);
+                if (!Number.isFinite(reps) || reps <= 0) return false;
+                if (s.weight === "BW") return true;
+                const weight = Number(s.weight);
+                return Number.isFinite(weight) && weight > 0;
+            });
+            if (bp && hasValidSet) parts.add(bp);
+        });
+        return [...parts];
+    };
+
+    // Finish-workout handler: marks AI plan day complete (if plan was accepted today)
+    const handleFinishWorkout = useCallback(() => {
+        console.log("[handleFinishWorkout] called, logDate =", logDate);
+
+        // First completion only: infer which cycle position matches today's recorded body parts
+        const isFirstCompletion = Object.keys(aiPlanProgress?.completedDates || {}).length === 0;
+        if (isFirstCompletion && aiPlanEnabled) {
+            const recordedParts = getRecordedBodyPartsForDate(latestCanonicalHistoryRef.current, logDate);
+            const sequence = aiPlanProgress?.sequence || [];
+            const matchedIdx = findBestMatchingPlanDayIndex(recordedParts, sequence);
+            if (matchedIdx >= 0) {
+                console.log("[handleFinishWorkout] first completion — inferred cycle index", matchedIdx, "for parts", recordedParts);
+                markPlanDayCompletedAtIndex(logDate, matchedIdx);
+            } else {
+                markPlanDayCompleted(logDate);
+            }
+        } else {
+            markPlanDayCompleted(logDate);
+        }
+
+        aiPlanActiveDateRef.current = null;
+        // Dismiss banner for today so it does not reappear until the next day
+        setPlanBannerDismissedForDate(logDate);
+        console.log("[handleFinishWorkout] markPlanDayCompleted called, banner dismissed for", logDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [markPlanDayCompleted, markPlanDayCompletedAtIndex, logDate, aiPlanEnabled, aiPlanProgress]);
+
+    const handleUnfinishWorkout = useCallback(() => {
+        console.log("[handleUnfinishWorkout] called, logDate =", logDate);
+        unmarkPlanDayCompleted(logDate);
+    }, [unmarkPlanDayCompleted, logDate]);
+
+    // Plan-affecting fields: changing any of these resets AI plan progress + rebuilds muscleEx
+    const PLAN_RESET_FIELDS = ["level", "frequency", "location", "hasDumbbells", "preferredSplit"];
+
+    const handleSaveProfileField = useCallback(async (fieldId, newValue) => {
+        // Merge into onboardingAnswers
+        const prevAnswers = load("onboardingAnswers", {}) || {};
+        const newAnswers = { ...prevAnswers, [fieldId]: newValue };
+        save("onboardingAnswers", newAnswers);
+        setOnboardingAnswers(newAnswers);
+
+        // Build Supabase update payload for this field
+        const colMap = {
+            goal:          "fitness_goal",
+            level:         "fitness_level",
+            frequency:     "workout_frequency",
+            trainingYears: "training_years",
+            preferredSplit: "preferred_split",
+            location:      "workout_location",
+            hasDumbbells:  "has_dumbbells",
+            gender:        "gender",
+            birthdate:     "birth_date",
+        };
+        const col = colMap[fieldId];
+        if (col && user?.id) {
+            let dbValue = newValue;
+            if (fieldId === "frequency") dbValue = parseInt(newValue, 10) || null;
+            if (fieldId === "hasDumbbells") dbValue = newValue === "ある";
+            try {
+                await supabase.from("profiles").upsert(
+                    { id: user.id, [col]: dbValue },
+                    { onConflict: "id" }
+                );
+            } catch (err) {
+                console.warn("[profileField] Supabase update failed:", err?.message);
+            }
+        }
+
+        // If plan-affecting field changed, reset plan progress and rebuild muscleEx
+        if (PLAN_RESET_FIELDS.includes(fieldId)) {
+            // For custom split, customSequence will be set via handleSaveCustomSplit instead
+            if (newValue !== "custom") {
+                resetPlanProgress(newAnswers);
+                const newMuscleEx = buildMuscleExFromAnswers(newAnswers);
+                setMuscleEx(newMuscleEx);
+                save("routineEx", newMuscleEx);
+            }
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, resetPlanProgress, setMuscleEx]);
+
+    const handleSaveBodyWeight = useCallback(async (kg) => {
+        const num = Number(kg);
+        if (!Number.isFinite(num) || num <= 0) return;
+        const now = new Date().toISOString();
+        const prevAnswers = load("onboardingAnswers", {}) || {};
+        const newAnswers = { ...prevAnswers, bodyWeight: String(num), bodyWeightUpdatedAt: now };
+        save("onboardingAnswers", newAnswers);
+        setOnboardingAnswers(newAnswers);
+        setBodyWeightKg(num);
+        setBodyWeightUpdatedAt(now);
+        if (user?.id) {
+            try {
+                await supabase.from("profiles").upsert(
+                    { id: user.id, body_weight_kg: num, weight_updated_at: now },
+                    { onConflict: "id" }
+                );
+            } catch (err) {
+                console.warn("[bodyWeight] Supabase update failed:", err?.message);
+            }
+        }
+    }, [user?.id]);
+
+
+    const handleSaveCustomSplit = useCallback((customSequence) => {
+        // Persist custom sequence independently (survives plan resets)
+        save("customSplitSequence", customSequence);
+        // Update onboardingAnswers.preferredSplit = "custom"
+        const prevAnswers = load("onboardingAnswers", {}) || {};
+        const newAnswers = { ...prevAnswers, preferredSplit: "custom" };
+        save("onboardingAnswers", newAnswers);
+        setOnboardingAnswers(newAnswers);
+        // Reset plan progress with new custom sequence
+        resetPlanProgress(newAnswers, customSequence);
+        const newMuscleEx = buildMuscleExFromAnswers(newAnswers);
+        setMuscleEx(newMuscleEx);
+        save("routineEx", newMuscleEx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [resetPlanProgress, setMuscleEx]);
+
     const { applyWorkoutsDataHistorySnapshot } = useWorkoutsDataHistorySync({        workoutsDataHistory,        workoutsDataHistoryRef,        user,        setWorkoutsDataHistory,    });
     const commitHistoryDeleteMarkers = useCallback((nextMarkers) => {
         const normalizedMarkers = normalizeHistoryDeleteMarkers(nextMarkers);
@@ -985,7 +1173,7 @@ export default function GymApp() {
         setShowAuth,
     });
 
-    const { customExercisesByBodyPart, addCustomExercise, bulkAddCustomExercises, renameCustomExercise } = useCustomExercises(user);
+    const { customExercisesByBodyPart, customEquipmentMap, addCustomExercise, bulkAddCustomExercises, renameCustomExercise } = useCustomExercises(user);
 
     const { fetchRemoteWorkoutRowsForDates, hasRemoteWorkoutForDate, buildLatestLocalHistoryForRetryDate, deleteRemoteWorkoutArtifactsForDate } = useWorkoutSyncHelpers({
         applyTrustedWorkoutRowsSnapshot,
@@ -1412,6 +1600,79 @@ export default function GymApp() {
         shouldLogPerfDebug,
     });
 
+    // Keep latestCanonicalHistoryRef in sync (used in handleFinishWorkout callback)
+    useEffect(() => {
+        latestCanonicalHistoryRef.current = canonicalDisplayHistory;
+    }, [canonicalDisplayHistory]);
+
+    // AIプラン自動完了: 対象部位で 2種目以上・4セット以上記録されたら完了とみなす
+    const AI_PLAN_AUTO_COMPLETE_MIN_SETS = 4;
+    const AI_PLAN_AUTO_COMPLETE_MIN_EXERCISES = 2;
+    useEffect(() => {
+        if (!aiPlanEnabled) return;
+        const today = new Date().toISOString().slice(0, 10);
+        if (!logDate || logDate !== today) return;
+
+        // AIプランを受け入れた日のみ対象（「自分で組む」は除外）
+        if (!readAiPlanAcceptedDates()[logDate]) return;
+
+        // 既に完了済みならスキップ（終了ボタン押し済みを含む）
+        const planDay = getPlanDayForDate(logDate);
+        if (!planDay || planDay.completed) return;
+
+        const targetBodyParts = new Set(planDay.bodyParts || []);
+        if (!targetBodyParts.size) return;
+
+        // 対象部位の有効セット数・種目数を集計
+        let totalSets = 0;
+        const exercisesWithSets = new Set();
+        const recordedBodyParts = new Set();
+
+        Object.entries(canonicalDisplayHistory).forEach(([exName, records]) => {
+            const record = (records || []).find((r) => r.date === logDate);
+            if (!record) return;
+
+            const bodyPart = String(record?.bodyPart || record?.body_part || "").trim();
+            if (!bodyPart || !targetBodyParts.has(bodyPart)) return;
+
+            const validSets = (record.sets || []).filter((s) => {
+                const reps = Number(s.reps);
+                if (!Number.isFinite(reps) || reps <= 0) return false;
+                if (s.weight === "BW") return true;
+                const weight = Number(s.weight);
+                return Number.isFinite(weight) && weight > 0;
+            });
+
+            if (validSets.length > 0) {
+                totalSets += validSets.length;
+                exercisesWithSets.add(exName);
+                recordedBodyParts.add(bodyPart);
+            }
+        });
+
+        if (totalSets >= AI_PLAN_AUTO_COMPLETE_MIN_SETS && exercisesWithSets.size >= AI_PLAN_AUTO_COMPLETE_MIN_EXERCISES) {
+            console.log("[aiPlan] auto-complete triggered", {
+                date: logDate,
+                totalSets,
+                exerciseCount: exercisesWithSets.size,
+            });
+
+            // First completion only: infer cycle position from recorded body parts
+            const isFirstCompletion = Object.keys(aiPlanProgress?.completedDates || {}).length === 0;
+            if (isFirstCompletion) {
+                const sequence = aiPlanProgress?.sequence || [];
+                const matchedIdx = findBestMatchingPlanDayIndex([...recordedBodyParts], sequence);
+                if (matchedIdx >= 0) {
+                    console.log("[aiPlan] first auto-complete — inferred cycle index", matchedIdx, "for parts", [...recordedBodyParts]);
+                    markPlanDayCompletedAtIndex(logDate, matchedIdx);
+                    return;
+                }
+            }
+            markPlanDayCompleted(logDate);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canonicalDisplayHistory, logDate, aiPlanEnabled, getPlanDayForDate, markPlanDayCompleted, markPlanDayCompletedAtIndex, aiPlanProgress]);
+
     const weeklyBodyPartCounts = useMemo(
         () => buildWeeklyBodyPartSetCounts(canonicalDisplayHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides),
         [canonicalDisplayHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides]
@@ -1573,7 +1834,12 @@ export default function GymApp() {
             (logData[ex.name] || []).some((s) => s.weight && s.reps)
         );
 
-        if (!hasAnyValidSet) return;
+        const normalizedLogDate = String(logDate || "").slice(0, 10);
+        const hasPendingExplicitDelete = Boolean(
+            pendingWorkoutContentChangeDatesRef.current.get(normalizedLogDate)?.explicitDelete
+        );
+
+        if (!hasAnyValidSet && !hasPendingExplicitDelete) return;
 
         const t = setTimeout(() => {
             persistCurrentLog();
@@ -1719,14 +1985,22 @@ export default function GymApp() {
                     ? activeElement.closest("[data-log-set-input='true']")
                     : null;
             setIsLogKeyboardOpen(keyboardOpen);
-            if (activeLogInput) {
+            if (keyboardOpen && activeLogInput) {
+                // Keyboard is open AND a set-input is focused — keep the attribute so the
+                // bottom nav stays hidden while the user is actively typing.
                 markLogSetInputActive(activeLogInput, false);
                 return;
             }
             if (keyboardOpen) {
-                document.body?.setAttribute("data-log-set-input-active", "true");
+                // Keyboard still open but no set-input focused — preserve existing state.
+                // Do NOT setAttribute here: visualViewport.scroll can give false-positive
+                // keyboardInset readings during normal page scroll on iOS Capacitor,
+                // which would incorrectly hide the bottom nav.
                 return;
             }
+            // Keyboard is closed — always clear the attribute even if an input element
+            // still technically has focus (e.g. user tapped the iOS "Done" button).
+            // The bottom nav must reappear whenever the keyboard is gone.
             document.body?.removeAttribute("data-log-set-input-active");
             setFocusedLogSetInputId(null);
         };
@@ -1809,14 +2083,20 @@ export default function GymApp() {
                 nextLogData[name] = makeDefaultDraftSets();
             }
         });
+        const newDraft = withDraftDateMeta(todayKey, {
+            todayLabels: nextLabels,
+            logData: nextLogData,
+            sessionEx: nextSession,
+            exerciseUnits: nextUnits,
+        }, {
+            source: "explicit_date_nav",
+            hasUnsavedChanges: true,
+        });
         markWorkoutContentChanged(todayKey, "exercise_copy", { explicitEdit: true });
-        saveDraftForDate(todayKey, { todayLabels: nextLabels, logData: nextLogData, sessionEx: nextSession, exerciseUnits: nextUnits });
+        saveDraftForDate(todayKey, newDraft);
         setLogMode("today");
         setLogDate(todayKey);
-        setTodayLabels(nextLabels);
-        setLogData(nextLogData);
-        setSessionEx(nextSession);
-        setExerciseUnits(nextUnits);
+        applyLogDraftState(newDraft); // updates latestLogDraftRef + all state; bypasses regression guard
         startWorkoutTimerIfNeeded(todayKey, { markAsActivity: true });
         setScreen("log");
     };
@@ -2251,7 +2531,7 @@ export default function GymApp() {
     // ─── Main render ──────────────────────────────────
     const headerTitle =
         screen === "log" ? "記録"
-            : screen === "analytics" ? "分析"
+            : screen === "analytics" ? "成長"
                 : screen === "photos" ? "写真比較"
                     : screen === "feed" ? "フィード"
                         : screen === "calendar" ? "カレンダー"
@@ -2261,7 +2541,7 @@ export default function GymApp() {
     const isRecording = false;
     const bottomTabs = [
         { id: "history", icon: "🏠", label: "ホーム" },
-        { id: "analytics", icon: "📊", label: "分析" },
+        { id: "analytics", icon: "📊", label: "成長" },
         { id: "log", icon: null, label: "" },
         { id: "feed", icon: "💬", label: "フィード" },
         { id: "ai", icon: "🤖", label: "AI" },
@@ -2713,6 +2993,36 @@ export default function GymApp() {
                             lastActiveLogExerciseByDate={lastActiveLogExerciseByDate}
                             handleLogExerciseActiveChange={handleLogExerciseActiveChange}
                             deleteAllHistoryForDate={deleteAllHistoryForDate}
+                            planDayInfo={aiPlanEnabled ? getPlanDayForDate(logDate) : null}
+                            onLoadPlanDay={(bodyParts) => {
+                                // 1. Update workoutLog's internal draft.todayLabels
+                                //    so onDraftChange later carries the correct labels.
+                                workoutLog.setTodayLabels(bodyParts);
+                                // 2. Immediately reflect in App state for UI (header color etc.)
+                                setTodayLabels(bodyParts);
+                                // 3. Replace session exercises with AI-plan priority selection.
+                                workoutLogExercises.forEach((ex) => removeEx(ex.name, ex.id));
+                                (() => {
+                                    let answers = null;
+                                    try { answers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
+                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: canonicalDisplayHistory })
+                                        .forEach((ex) => addExToSession(ex.name, ex.bodyPart));
+                                })();
+                                setPlanBannerDismissedForDate(logDate);
+                                handlePlanAccepted();
+                                aiPlanActiveDateRef.current = logDate;
+                                markAiPlanAcceptedDate(logDate);
+                            }}
+                            onSelfMadeToday={() => {
+                                setPlanBannerDismissedForDate(logDate);
+                                handleSelfMade();
+                            }}
+                            selfMadeConsecutiveCount={selfMadeCount}
+                            aiPlanEnabled={aiPlanEnabled}
+                            planBannerDismissedForDate={planBannerDismissedForDate}
+                            onFinishWorkout={handleFinishWorkout}
+                            onUnfinishWorkout={handleUnfinishWorkout}
+                            isAiPlanDay={Boolean(readAiPlanAcceptedDates()[logDate])}
                         />
                     )}
 
@@ -2727,7 +3037,33 @@ export default function GymApp() {
                             weekStartDay={weekStartDay}
                             weeklySetTargets={weeklySetTargets}
                             setWeeklySetTargets={setWeeklySetTargets}
-                            initialTab="weekly"
+                            bodyWeightKg={bodyWeightKg}
+                            bodyWeightUpdatedAt={bodyWeightUpdatedAt}
+                            onSaveBodyWeight={handleSaveBodyWeight}
+                            gender={onboardingAnswers?.gender || null}
+                            onSaveGender={(g) => handleSaveProfileField("gender", g)}
+                            customEquipmentMap={customEquipmentMap}
+                            isPro={isPro}
+                            initialTab="growth"
+                            onAskWhyStagnant={(exerciseName, recentRecords) => {
+                                const lines = (recentRecords || []).slice(0, 8).map((r) => {
+                                    const setsText = (r?.sets || [])
+                                        .filter((s) => {
+                                            const rep = Number(s?.reps);
+                                            if (rep <= 0) return false;
+                                            const w = s?.weight;
+                                            return w === "BW" || (Number.isFinite(Number(w)) && Number(w) > 0);
+                                        })
+                                        .map((s) => s?.weight === "BW" ? `自重×${s.reps}回` : `${s.weight}kg×${s.reps}回`)
+                                        .join(", ");
+                                    return `${r?.date || ""}: ${setsText || "記録なし"}`;
+                                }).join("\n");
+                                const prompt = `「${exerciseName}」が止まっています。直近の記録：\n${lines || "データなし"}\n\n原因と次の打ち手を教えてください。`;
+                                setAiInput("");
+                                setScreen("ai");
+                                // sendAI accepts overrideMsg — call after a tick so AIScreen mounts
+                                setTimeout(() => sendAI(prompt), 0);
+                            }}
                         />
 
                     )}
@@ -2790,6 +3126,29 @@ export default function GymApp() {
                             weekStartDay={weekStartDay}
                             weeklySetTargets={weeklySetTargets}
                             onNavigateToWeeklyAnalytics={() => setScreen("analytics")}
+                            nextPlanDay={aiPlanEnabled ? getNextPlanDay() : null}
+                            aiPlanEnabled={aiPlanEnabled}
+                            isTodayCompleted={Boolean(getPlanDayForDate(getTodayKey())?.completed)}
+                            onStartNextPlanDay={() => {
+                                const nextDay = getNextPlanDay();
+                                if (!nextDay) return;
+                                const todayKey = getTodayKey();
+                                const bodyParts = nextDay.bodyParts;
+                                workoutLog.setTodayLabels(bodyParts);
+                                setTodayLabels(bodyParts);
+                                workoutLogExercises.forEach((ex) => removeEx(ex.name, ex.id));
+                                (() => {
+                                    let answers = null;
+                                    try { answers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
+                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: canonicalDisplayHistory })
+                                        .forEach((ex) => addExToSession(ex.name, ex.bodyPart));
+                                })();
+                                setPlanBannerDismissedForDate(todayKey);
+                                handlePlanAccepted();
+                                aiPlanActiveDateRef.current = todayKey;
+                                markAiPlanAcceptedDate(todayKey);
+                                handleLogForDate(todayKey);
+                            }}
                         />
                     )}
 
@@ -2908,7 +3267,7 @@ export default function GymApp() {
 
                     {/* BottomNav moved outside app-shell to avoid maxWidth/margin containment */}
 
-                    {showOnboarding && <OnboardingOverlay onDone={() => completeOnboarding()} />}
+                    {showOnboarding && <OnboardingOverlay user={user} onDone={() => completeOnboarding()} />}
                     <WorkoutDaySummaryModal
                         isOpen={Boolean(summary)}
                         summary={summary}
@@ -2956,6 +3315,12 @@ export default function GymApp() {
                         setWeekStartDay={setWeekStartDay}
                         weeklySetTargets={weeklySetTargets}
                         setWeeklySetTargets={setWeeklySetTargets}
+                        aiPlanEnabled={aiPlanEnabled}
+                        onSetAiPlanEnabled={setAiPlanEnabled}
+                        onboardingAnswers={onboardingAnswers}
+                        onSaveProfileField={handleSaveProfileField}
+                        onSaveBodyWeight={handleSaveBodyWeight}
+                        onSaveCustomSplit={handleSaveCustomSplit}
                     />
                     {showAuth && (
                         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>

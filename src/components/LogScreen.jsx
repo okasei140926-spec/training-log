@@ -160,6 +160,99 @@ const convertKgValueForDisplayUnit = (valueKg, targetUnit) => {
     return 0;
 };
 
+// ── 次の種目サジェスト ──────────────────────────────────────────────────────────
+/**
+ * 過去の記録から「種目Aの直後に記録された種目B」の頻度マップを構築する。
+ * @returns {{ [nameA: string]: { [nameB: string]: number } }}
+ */
+const buildNextExerciseMap = (history) => {
+    const byDate = {};
+    Object.entries(history || {}).forEach(([name, records]) => {
+        (records || []).forEach((rec) => {
+            const date = String(rec?.date || "").slice(0, 10);
+            if (!date) return;
+            if (!byDate[date]) byDate[date] = [];
+            byDate[date].push({
+                name,
+                order: Number.isFinite(Number(rec?.order)) ? Number(rec.order) : Infinity,
+            });
+        });
+    });
+    const nextMap = {};
+    Object.values(byDate).forEach((exs) => {
+        const sorted = [...exs].sort((a, b) => a.order - b.order);
+        for (let i = 0; i < sorted.length - 1; i++) {
+            const a = sorted[i].name;
+            const b = sorted[i + 1].name;
+            if (a === b) continue;
+            if (!nextMap[a]) nextMap[a] = {};
+            nextMap[a][b] = (nextMap[a][b] || 0) + 1;
+        }
+    });
+    return nextMap;
+};
+
+// ── オートプログレッション（ダブルプログレッション法） ────────────────────────
+const PROG_REP_MAX = 12;   // この回数に達したら重量アップ
+const PROG_REP_MIN = 8;    // 重量アップ後の目標レップ数
+const PROG_WEIGHT_INC_KG = 2.5; // 重量アップ幅（kg）
+
+/**
+ * 前回のセット群からオートプログレッションの目標を計算する。
+ * @returns {{ weightDisplay: string, unit: string, reps: number } | null}
+ */
+const calcProgressionTarget = (prevSets, prevUnit, dispUnit) => {
+    if (!prevSets?.length) return null;
+    // 重量セット: 推定1RM（Epley式: weight×(1+reps/30)）最大を基準（同率は高重量優先）
+    // 自重セット: 最大回数を記録
+    // 判定: 重量セットが1件でもあれば重量ベース優先。重量セット0件かつ自重セットあり → 自重ベース
+    let refWKg = null;
+    let refReps = null;
+    let maxE1rm = -Infinity;
+    let maxBWReps = 0;
+
+    for (const s of prevSets) {
+        const wKgRaw = getSetStoredWeightKg(s, prevUnit || "kg");
+        const r = Number(s?.reps ?? 0);
+        if (r <= 0) continue;
+
+        if (wKgRaw === "BW") {
+            if (r > maxBWReps) maxBWReps = r;
+        } else if (Number.isFinite(Number(wKgRaw)) && Number(wKgRaw) > 0) {
+            const wKg = Number(wKgRaw);
+            const e1rm = wKg * (1 + r / 30);
+            if (e1rm > maxE1rm || (e1rm === maxE1rm && wKg > refWKg)) {
+                maxE1rm = e1rm;
+                refWKg = wKg;
+                refReps = r;
+            }
+        }
+    }
+
+    // 重量ベース
+    if (refWKg !== null) {
+        let targetWKg, targetReps;
+        if (refReps < PROG_REP_MAX) {
+            targetWKg = refWKg;
+            targetReps = refReps + 1;
+        } else {
+            targetWKg = refWKg + PROG_WEIGHT_INC_KG;
+            targetReps = PROG_REP_MIN;
+        }
+        const normalizedUnit = normalizeWeightUnit(dispUnit || "kg");
+        const targetWeightDisplay = formatConvertedWeight(convertKgValueForDisplayUnit(targetWKg, normalizedUnit));
+        const unitLabel = formatWeightUnit(normalizedUnit);
+        return { weightDisplay: targetWeightDisplay, unit: unitLabel, reps: targetReps };
+    }
+
+    // 自重ベース（最大回数 + 1）
+    if (maxBWReps > 0) {
+        return { weightDisplay: "自重", unit: "", reps: maxBWReps + 1 };
+    }
+
+    return null;
+};
+
 const DEFAULT_SET_COUNT = 3;
 
 const getLastMenuFromHistory = (historyMap, currentDate) => {
@@ -254,9 +347,30 @@ export default function LogScreen({
     onFocusExerciseHandled,
     lastActiveExercise,
     onActiveExerciseChange,
+    // AI plan banner
+    planDayInfo = null,
+    onLoadPlanDay,
+    onSelfMadeToday,
+    selfMadeConsecutiveCount = 0,
+    aiPlanEnabled = true,
+    planBannerDismissedForDate = null,
+    // Finish-workout button
+    onFinishWorkout,
+    onUnfinishWorkout,
+    isAiPlanDay = false,
 }) {
 
+    const COMPLETED_WORKOUT_DATES_KEY = "pump_completed_workout_dates";
+
+    const readCompletedDates = () => {
+        try { return JSON.parse(localStorage.getItem(COMPLETED_WORKOUT_DATES_KEY) || "{}"); }
+        catch { return {}; }
+    };
+
     const hasExercises = exercises.length > 0;
+    const [bannerExpanded, setBannerExpanded] = useState(false);
+    const [workoutFinished, setWorkoutFinished] = useState(() => Boolean(readCompletedDates()[logDate]));
+    const [showFinishSummary, setShowFinishSummary] = useState(false);
 
     const [memos, setMemos] = useState(() => {
         try { return JSON.parse(localStorage.getItem("pump_exercise_memos") || "{}"); }
@@ -273,6 +387,12 @@ export default function LogScreen({
             return next;
         });
     }, []);
+
+    // Sync workoutFinished state when logDate changes
+    useEffect(() => {
+        setWorkoutFinished(Boolean(readCompletedDates()[logDate]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [logDate]);
 
     const previousMenu = useMemo(
         () => getLastMenuFromHistory(history, logDate),
@@ -295,6 +415,8 @@ export default function LogScreen({
     const [showAdd, setShowAdd] = useState(false);
     const [addName, setAddName] = useState("");
     const [reorderMenuId, setReorderMenuId] = useState(null);
+    // 次の種目サジェスト：どの種目を基準にしたサジェストを閉じたか
+    const [dismissedSuggestForEx, setDismissedSuggestForEx] = useState(null);
 
 
     const [editingId, setEditingId] = useState(null);
@@ -398,7 +520,7 @@ export default function LogScreen({
         const sets = logData[ex.name] || getExSets(ex);
         return acc + sets.filter((s) => isCompletedWorkoutSet(s)).length;
     }, 0);
-    const { prCount, totalVolumeKg } = exercises.reduce((acc, ex) => {
+    const { prCount, totalVolumeKg, prExerciseNames } = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
 
@@ -431,8 +553,9 @@ export default function LogScreen({
         return {
             prCount: acc.prCount + (isPR ? 1 : 0),
             totalVolumeKg: acc.totalVolumeKg + exVolumeKg,
+            prExerciseNames: isPR ? [...acc.prExerciseNames, ex.name] : acc.prExerciseNames,
         };
-    }, { prCount: 0, totalVolumeKg: 0 });
+    }, { prCount: 0, totalVolumeKg: 0, prExerciseNames: [] });
     const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
     const shareDurationSec = Math.max(
         Math.floor(Number(workoutElapsedSec) || 0),
@@ -706,6 +829,100 @@ export default function LogScreen({
                 )}
             </div>
 
+            {/* AI Plan Banner */}
+            {aiPlanEnabled && planDayInfo && !planDayInfo.completed && planBannerDismissedForDate !== logDate && (() => {
+                const collapsed = selfMadeConsecutiveCount >= 3 && !bannerExpanded;
+                if (collapsed) {
+                    return (
+                        <button
+                            type="button"
+                            onClick={() => setBannerExpanded(true)}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                background: "rgba(18,199,194,0.07)",
+                                border: "1px solid rgba(18,199,194,0.18)",
+                                borderRadius: 12,
+                                padding: "8px 14px",
+                                color: "var(--accent)",
+                                fontSize: 13,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                alignSelf: "flex-start",
+                            }}
+                        >
+                            💡 AIプランを見る ›
+                        </button>
+                    );
+                }
+                return (
+                    <div style={{
+                        background: "rgba(18,199,194,0.07)",
+                        border: "1px solid rgba(18,199,194,0.18)",
+                        borderRadius: 16,
+                        padding: "14px 16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 10,
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 14 }}>💡</span>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--accent)", letterSpacing: 0.5 }}>
+                                今日のAIプラン
+                            </span>
+                        </div>
+                        <div>
+                            <span style={{ fontSize: 16, fontWeight: 900, color: "var(--text)" }}>
+                                {planDayInfo.label}
+                            </span>
+                            <span style={{ fontSize: 13, color: "var(--text2)", marginLeft: 8 }}>
+                                {(planDayInfo.bodyParts || []).join(" · ")}
+                            </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setBannerExpanded(false);
+                                    onLoadPlanDay?.(planDayInfo.bodyParts);
+                                }}
+                                style={{
+                                    background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                                    border: "none",
+                                    borderRadius: 12,
+                                    padding: "10px 18px",
+                                    color: "#fff",
+                                    fontSize: 13,
+                                    fontWeight: 800,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                このメニューで記録する
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setBannerExpanded(false);
+                                    onSelfMadeToday?.();
+                                }}
+                                style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "var(--text3)",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    padding: "10px 4px",
+                                }}
+                            >
+                                自分で組む ›
+                            </button>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Empty State */}
             {!hasExercises && (
                 <div style={{
@@ -766,6 +983,7 @@ export default function LogScreen({
                         const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
                         const displayUnit = getExerciseDisplayUnit(sets, exUnit);
+                        const progressionTarget = calcProgressionTarget(previousSets, previousUnit, displayUnit);
 
                         const completedSetEntries = sets.map((s) => {
                             const w = Number(getSetStoredWeightKg(s, exUnit));
@@ -994,6 +1212,25 @@ export default function LogScreen({
                                                         )}
                                                     </div>
                                                 )}
+                                                {/* オートプログレッション：今日のチャレンジ */}
+                                                {progressionTarget && (
+                                                    <div style={{
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        marginTop: 6,
+                                                        padding: "3px 9px",
+                                                        borderRadius: 999,
+                                                        background: "rgba(18,199,194,0.08)",
+                                                        border: "1px solid rgba(18,199,194,0.22)",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        color: "var(--accent)",
+                                                        opacity: 0.85,
+                                                        letterSpacing: 0.1,
+                                                    }}>
+                                                        🎯 今日のチャレンジ&nbsp;{progressionTarget.weightDisplay}{progressionTarget.unit} × {progressionTarget.reps}回
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
@@ -1184,11 +1421,257 @@ export default function LogScreen({
                 </SortableContext>
             </DndContext>
 
+            {/* 次の種目サジェスト（自分で組む日のみ、AIプラン中は非表示） */}
+            {!isAiPlanDay && exercises.length > 0 && (() => {
+                const lastEx = exercises[exercises.length - 1];
+                if (dismissedSuggestForEx === lastEx.name) return null;
+                const nextMap = buildNextExerciseMap(history || {});
+                const candidates = nextMap[lastEx.name] || {};
+                const currentExNames = new Set(exercises.map((e) => e.name));
+                const suggestions = Object.entries(candidates)
+                    .filter(([name]) => !currentExNames.has(name))
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 2)
+                    .map(([name]) => name);
+                if (suggestions.length === 0) return null;
+                return (
+                    <div style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        margin: "4px 0 12px",
+                        padding: "10px 12px",
+                        background: "rgba(18,199,194,0.05)",
+                        borderRadius: 14,
+                        border: "1px solid rgba(18,199,194,0.15)",
+                    }}>
+                        <span style={{ fontSize: 11, color: "var(--text3)", fontWeight: 700, flexShrink: 0 }}>
+                            次によくやる
+                        </span>
+                        {suggestions.map((name) => (
+                            <button
+                                key={name}
+                                type="button"
+                                onClick={() => {
+                                    onAddEx?.(name);
+                                }}
+                                style={{
+                                    padding: "7px 13px",
+                                    borderRadius: 999,
+                                    background: "rgba(18,199,194,0.10)",
+                                    border: "1px solid rgba(18,199,194,0.32)",
+                                    color: "var(--accent)",
+                                    fontSize: 13,
+                                    fontWeight: 800,
+                                    cursor: "pointer",
+                                    whiteSpace: "nowrap",
+                                }}
+                            >
+                                ＋ {name}
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setDismissedSuggestForEx(lastEx.name)}
+                            style={{
+                                marginLeft: "auto",
+                                padding: "4px 8px",
+                                borderRadius: 999,
+                                background: "none",
+                                border: "none",
+                                color: "var(--text3)",
+                                fontSize: 16,
+                                cursor: "pointer",
+                                lineHeight: 1,
+                                flexShrink: 0,
+                            }}
+                            aria-label="サジェストを閉じる"
+                        >
+                            ×
+                        </button>
+                    </div>
+                );
+            })()}
+
             {/* フローティング＋ボタン */}
             <button onClick={() => setShowAdd(true)}
                 style={{ position: "fixed", bottom: 154, left: 20, width: 54, height: 54, borderRadius: 27, background: "linear-gradient(135deg, rgba(15, 94, 99, 0.96), rgba(18, 169, 164, 0.90))", color: "#fff", fontSize: 28, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 20px rgba(15, 94, 99, 0.18)", border: "1px solid rgba(18, 199, 194, 0.40)", zIndex: 101 }}>
                 ＋
             </button>
+
+            {/* 終了ボタン（今日のログのみ表示） */}
+            {onFinishWorkout && logDate === new Date().toISOString().slice(0, 10) && (
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (workoutFinished) {
+                            // 終了状態を解除
+                            setWorkoutFinished(false);
+                            try {
+                                const dates = readCompletedDates();
+                                delete dates[logDate];
+                                localStorage.setItem(COMPLETED_WORKOUT_DATES_KEY, JSON.stringify(dates));
+                            } catch {}
+                            onUnfinishWorkout?.();
+                        } else {
+                            // 終了状態に設定
+                            console.log("[終了] onFinishWorkout fired, logDate =", logDate);
+                            onFinishWorkout();
+                            setWorkoutFinished(true);
+                            try {
+                                const dates = readCompletedDates();
+                                dates[logDate] = true;
+                                localStorage.setItem(COMPLETED_WORKOUT_DATES_KEY, JSON.stringify(dates));
+                            } catch {}
+                            setShowFinishSummary(true);
+                        }
+                    }}
+                    style={{
+                        position: "fixed",
+                        bottom: 154,
+                        right: 20,
+                        height: 54,
+                        minWidth: 54,
+                        padding: "0 20px",
+                        borderRadius: 27,
+                        background: "linear-gradient(135deg, rgba(15, 94, 99, 0.96), rgba(18, 169, 164, 0.90))",
+                        color: "#fff",
+                        fontSize: 13,
+                        fontWeight: 800,
+                        border: "1px solid rgba(18, 199, 194, 0.40)",
+                        boxShadow: "0 10px 20px rgba(15, 94, 99, 0.18)",
+                        zIndex: 101,
+                        cursor: "pointer",
+                        letterSpacing: 0.3,
+                        opacity: workoutFinished ? 0.85 : 1,
+                        transition: "opacity 0.2s",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                    }}
+                >
+                    {workoutFinished ? (
+                        <>
+                            <span style={{ fontSize: 15 }}>✓</span>
+                            <span>完了済み</span>
+                        </>
+                    ) : "終了"}
+                </button>
+            )}
+
+            {/* 終了後サマリーモーダル */}
+            {showFinishSummary && (() => {
+                const durationSec = shareDurationSec;
+                const h = Math.floor(durationSec / 3600);
+                const m = Math.floor((durationSec % 3600) / 60);
+                const durationStr = durationSec > 0
+                    ? (h > 0 ? `${h}時間${m}分` : `${m}分`)
+                    : "--";
+
+                return (
+                    <div
+                        style={{
+                            position: "fixed", inset: 0, zIndex: 500,
+                            background: "rgba(0,0,0,0.55)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            padding: "0 20px",
+                        }}
+                        onClick={() => setShowFinishSummary(false)}
+                    >
+                        <div
+                            style={{
+                                background: "var(--card)",
+                                borderRadius: 22,
+                                padding: "28px 22px 22px",
+                                maxWidth: 360,
+                                width: "100%",
+                                boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                            }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* タイトル */}
+                            <div style={{ textAlign: "center", marginBottom: 20 }}>
+                                <div style={{ fontSize: 26, marginBottom: 4 }}>💪</div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
+                                    トレーニング完了！
+                                </div>
+                            </div>
+
+                            {/* 統計カード */}
+                            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                                {[
+                                    { label: "セット数", value: setCount, unit: "セット" },
+                                    { label: "総ボリューム", value: formattedVolumeKg, unit: "kg" },
+                                    { label: "時間", value: durationStr, unit: "" },
+                                ].map(({ label, value, unit: u }) => (
+                                    <div
+                                        key={label}
+                                        style={{
+                                            flex: 1,
+                                            background: "var(--card2)",
+                                            borderRadius: 14,
+                                            padding: "12px 8px",
+                                            textAlign: "center",
+                                        }}
+                                    >
+                                        <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 600, marginBottom: 4 }}>
+                                            {label}
+                                        </div>
+                                        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
+                                            {value}
+                                        </div>
+                                        {u && (
+                                            <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
+                                                {u}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* PR更新セクション */}
+                            {prExerciseNames.length > 0 && (
+                                <div style={{
+                                    background: "linear-gradient(135deg, rgba(255,193,7,0.12), rgba(255,152,0,0.08))",
+                                    border: "1px solid rgba(255,193,7,0.3)",
+                                    borderRadius: 14,
+                                    padding: "12px 14px",
+                                    marginBottom: 18,
+                                }}>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: "#b8860b", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
+                                        🏆 自己ベスト更新
+                                    </div>
+                                    {prExerciseNames.map(name => (
+                                        <div key={name} style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, padding: "2px 0" }}>
+                                            {name} で自己ベスト更新！
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* 閉じるボタン */}
+                            <button
+                                onClick={() => setShowFinishSummary(false)}
+                                style={{
+                                    width: "100%",
+                                    height: 48,
+                                    borderRadius: 14,
+                                    background: "linear-gradient(135deg, rgba(15, 94, 99, 0.96), rgba(18, 169, 164, 0.90))",
+                                    color: "#fff",
+                                    fontSize: 15,
+                                    fontWeight: 800,
+                                    border: "none",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                閉じる
+                            </button>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {showAdd && (
                 <AddExModal

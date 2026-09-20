@@ -59,6 +59,7 @@ export function usePushNotifications({ user, screen, showAuth }) {
                     screen === "history" &&
                     !showAuth &&
                     !nextStatus.enabled &&
+                    !nextStatus.support?.isNative &&
                     laterDate !== todayStr;
 
                 setShowPushPrompt(shouldShow);
@@ -76,7 +77,7 @@ export function usePushNotifications({ user, screen, showAuth }) {
                     permission,
                     support,
                 });
-                setShowPushPrompt(screen === "history" && !showAuth && laterDate !== todayStr);
+                setShowPushPrompt(screen === "history" && !showAuth && !support.isNative && laterDate !== todayStr);
             }
         };
 
