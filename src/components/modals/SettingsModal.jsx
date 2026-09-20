@@ -1118,7 +1118,16 @@ export default function SettingsModal({
                   gap: 10,
                 }}
               >
-                <div style={{ display: "flex", gap: 12, justifyContent: "center", paddingBottom: 4 }}>
+                <div style={{ display: "flex", gap: 12, justifyContent: "center", paddingBottom: 4, flexWrap: "wrap" }}>
+                  <a
+                    href="https://training-log-mu.vercel.app/support.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 13, color: "var(--text3)", textDecoration: "underline" }}
+                  >
+                    サポート・お問い合わせ
+                  </a>
+                  <span style={{ color: "var(--text3)", fontSize: 13 }}>·</span>
                   <a
                     href="https://training-log-mu.vercel.app/privacy.html"
                     target="_blank"
