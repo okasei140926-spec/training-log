@@ -7,6 +7,22 @@ let configuredUserId = "";
 let customerInfoListenerId = "";
 let latestCustomerInfoListener = null;
 
+// Resolves when Purchases.configure() has successfully completed.
+// Functions that call RC APIs (getOfferings etc.) must await this first.
+let _rcConfiguredResolve = null;
+const _rcConfiguredPromise = new Promise((resolve) => {
+  _rcConfiguredResolve = resolve;
+});
+let _rcConfigured = false;
+
+const markRcConfigured = () => {
+  if (_rcConfigured) return;
+  _rcConfigured = true;
+  _rcConfiguredResolve?.();
+};
+
+const waitForRcConfigured = () => _rcConfiguredPromise;
+
 const getPlatform = () => {
   try {
     return Capacitor.getPlatform();
@@ -98,9 +114,11 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
         appUserID: userId,
       });
       configuredUserId = userId;
+      markRcConfigured();
     } else if (configuredUserId !== userId) {
       const loginResult = await Purchases.logIn({ appUserID: userId });
       configuredUserId = userId;
+      markRcConfigured();
       if (loginResult?.customerInfo) latestCustomerInfoListener?.(loginResult.customerInfo);
     }
 
@@ -143,6 +161,7 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
 };
 
 const getCurrentPackage = async () => {
+  await waitForRcConfigured();
   const offerings = await Purchases.getOfferings();
   const currentOffering = offerings?.current || Object.values(offerings?.all || {})[0] || null;
   return (
