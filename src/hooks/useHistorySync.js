@@ -984,7 +984,7 @@ export function useHistorySync({
         if (!["home", "calendar", "analytics", "log", "history"].includes(screen)) return;
         const trustedDisplayHistory = (workoutsDataHistory || {});
         const trustedHistoryMetrics = getHistoryOverallMetrics(trustedDisplayHistory);
-        if (trustedHistoryMetrics.setCount > 0 && !["analytics", "home", "log", "history"].includes(screen)) {
+        if (trustedHistoryMetrics.setCount > 0 && !["analytics", "home", "log", "history", "calendar"].includes(screen)) {
             console.log("[home fetch] display_history skipped; trustedHistory already available", {
                 env: getRuntimeEnvironmentLabel(),
                 user_id: user.id,
@@ -1017,14 +1017,12 @@ export function useHistorySync({
             displayHistoryRefreshRequestIdRef.current = requestId;
             const queryLabel = "display_history_refresh";
             const weekRange = getCurrentWeekRangeForHomeSummary();
-            const rawSessionRangeStart = screen === "calendar"
-                ? `${formatDateKey(new Date()).slice(0, 7)}-01`
-                : getDateDaysAgoKey(120);
+            const rawSessionRangeStart = getDateDaysAgoKey(
+                screen === "calendar" ? REMOTE_HISTORY_SESSION_LOOKBACK_DAYS : 120
+            );
             const sessionRangeStart = clampStartForFreeTier(rawSessionRangeStart, isPro);
-            const sessionRangeEnd = screen === "calendar"
-                ? `${getNextMonthPrefix(formatDateKey(new Date()).slice(0, 7))}-01`
-                : null;
-            const displayHistoryLimit = screen === "calendar" ? 80 : 180;
+            const sessionRangeEnd = null;
+            const displayHistoryLimit = screen === "calendar" ? REMOTE_HISTORY_SESSION_LIMIT : 180;
 
             try {
                 let workoutsQuery = supabase

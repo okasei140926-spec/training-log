@@ -16,6 +16,8 @@ export default function CalendarView({
   exerciseBodyPartOverrides = {},
   // Earliest navigable month as "YYYY-MM". null means no limit (Pro users).
   minYearMonth = null,
+  // Called with "YYYY-MM" when the user navigates to a different month.
+  onMonthChange = null,
 }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -51,21 +53,33 @@ export default function CalendarView({
 
   const prevMonth = () => {
     if (isAtMinMonth) return;
+    let nextYear = year;
+    let nextMonth_;
     if (month === 0) {
-      setYear((y) => y - 1);
-      setMonth(11);
+      nextYear = year - 1;
+      nextMonth_ = 11;
     } else {
-      setMonth((m) => m - 1);
+      nextMonth_ = month - 1;
     }
+    setYear(nextYear);
+    setMonth(nextMonth_);
+    const ym = `${nextYear}-${String(nextMonth_ + 1).padStart(2, "0")}`;
+    if (onMonthChange) onMonthChange(ym);
   };
 
   const nextMonth = () => {
+    let nextYear = year;
+    let nextMonth_;
     if (month === 11) {
-      setYear((y) => y + 1);
-      setMonth(0);
+      nextYear = year + 1;
+      nextMonth_ = 0;
     } else {
-      setMonth((m) => m + 1);
+      nextMonth_ = month + 1;
     }
+    setYear(nextYear);
+    setMonth(nextMonth_);
+    const ym = `${nextYear}-${String(nextMonth_ + 1).padStart(2, "0")}`;
+    if (onMonthChange) onMonthChange(ym);
   };
 
   const toStr = (d) =>

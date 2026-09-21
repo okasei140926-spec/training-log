@@ -10,6 +10,7 @@ import {
     mergeHistoryMaps,
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
+    buildHistoryFromWorkoutRows,
 } from "./utils/helpers";
 // useWorkoutLog → useWorkoutLogBridge
 import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
@@ -2491,6 +2492,61 @@ export default function GymApp() {
         removeHistoryDate,
     });
 
+    // ─── カレンダー月移動時の追加フェッチ ─────────────────
+    const fetchedCalendarMonthsRef = useRef(new Set());
+    const handleCalendarMonthChange = useCallback(async (yearMonth) => {
+        if (!user?.id || !yearMonth) return;
+        if (fetchedCalendarMonthsRef.current.has(yearMonth)) return;
+        fetchedCalendarMonthsRef.current.add(yearMonth);
+
+        const monthStart = `${yearMonth}-01`;
+        const [yStr, mStr] = yearMonth.split("-");
+        const y = Number(yStr);
+        const m = Number(mStr); // 1-indexed
+        const nextDate = new Date(y, m, 1); // m is next month index (0-indexed)
+        const nextMonthPrefix = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}`;
+        const monthEnd = `${nextMonthPrefix}-01`;
+
+        const fetchKey = `calendar_month:${user.id}:${yearMonth}`;
+        try {
+            const result = await runDedupeSupabaseFetch(
+                fetchKey,
+                async () => {
+                    const { data, error } = await supabase
+                        .from("workouts")
+                        .select("date, data")
+                        .eq("user_id", user.id)
+                        .gte("date", monthStart)
+                        .lt("date", monthEnd)
+                        .order("date", { ascending: true });
+                    if (error) throw error;
+                    return data || [];
+                },
+                { minIntervalMs: 60000, freshTtlMs: 300000, backoffMs: 30000 }
+            );
+            if (!result.skipped && (result.value || []).length > 0) {
+                applyTrustedWorkoutRowsSnapshot(result.value, { source: "calendar_month_fetch" });
+                const monthHistory = applyHistoryDeleteMarkers(
+                    buildHistoryFromWorkoutRows(result.value),
+                    getCurrentHistoryDeleteMarkers()
+                );
+                const monthDates = getValidWorkoutDatesFromHistory(monthHistory);
+                if (monthDates.length > 0) {
+                    const nextHistory = applyHistoryDeleteMarkers(
+                        applyLocalHistoryDates(latestHistoryRef.current || {}, monthHistory, monthDates),
+                        getCurrentHistoryDeleteMarkers()
+                    );
+                    setHistory(nextHistory);
+                    persistHistoryForUser(user.id, nextHistory);
+                }
+            }
+        } catch (e) {
+            console.error("[calendar] month fetch failed", { yearMonth, error: e?.message });
+        }
+    }, [user?.id, runDedupeSupabaseFetch, applyTrustedWorkoutRowsSnapshot, applyHistoryDeleteMarkers,
+        getCurrentHistoryDeleteMarkers, applyLocalHistoryDates, latestHistoryRef,
+        setHistory, persistHistoryForUser, getValidWorkoutDatesFromHistory]);
+
     // ─── 設定画面用 exercise 追加 ──────────────────────
     const openAddEx = (target) => { setAddTarget(target); setNewExName(""); setShowAddEx(true); };
 
@@ -3188,6 +3244,7 @@ export default function GymApp() {
                                 openWorkoutDayShareModal={openWorkoutDayShareModal}
                                 minCalendarYearMonth={minCalendarYearMonth}
                                 onCopyExercises={handleCopyExercisesToSession}
+                                onMonthChange={handleCalendarMonthChange}
                             />
                         );
                     })()}

@@ -24,6 +24,7 @@ export default function CalendarScreenView({
     openWorkoutDayShareModal,
     minCalendarYearMonth = null,
     onCopyExercises,
+    onMonthChange = null,
 }) {
     return (
         <HistoryScreen
@@ -64,6 +65,7 @@ export default function CalendarScreenView({
             }}
             onOpenWorkoutDayShare={openWorkoutDayShareModal}
             onCopyExercises={onCopyExercises}
+            onMonthChange={onMonthChange}
         />
     );
 }
