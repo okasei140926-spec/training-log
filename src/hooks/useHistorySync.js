@@ -4,7 +4,6 @@ import {
     load,
     save,
     buildHistoryFromWorkoutRows,
-    formatDateKey,
     getValidWorkoutDatesFromHistory,
 } from "../utils/helpers";
 

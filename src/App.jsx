@@ -2543,9 +2543,9 @@ export default function GymApp() {
         } catch (e) {
             console.error("[calendar] month fetch failed", { yearMonth, error: e?.message });
         }
-    }, [user?.id, runDedupeSupabaseFetch, applyTrustedWorkoutRowsSnapshot, applyHistoryDeleteMarkers,
+    }, [user?.id, runDedupeSupabaseFetch, applyTrustedWorkoutRowsSnapshot,
         getCurrentHistoryDeleteMarkers, applyLocalHistoryDates, latestHistoryRef,
-        setHistory, persistHistoryForUser, getValidWorkoutDatesFromHistory]);
+        setHistory]);
 
     // ─── 設定画面用 exercise 追加 ──────────────────────
     const openAddEx = (target) => { setAddTarget(target); setNewExName(""); setShowAddEx(true); };
