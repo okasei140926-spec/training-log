@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import NotificationSettings from "../NotificationSettings";
-import { BILLING_ENABLED } from "../../constants/features";
 import { SPLIT_TYPE_DESCRIPTIONS } from "../../utils/generateOnboardingPlan";
+
+const isNativeApp = () =>
+  typeof window !== "undefined" && window.location?.protocol === "capacitor:";
 
 // ─── Profile field definitions ────────────────────────────────────────────────
 
@@ -192,6 +194,7 @@ export default function SettingsModal({
   accountActionBusy = false,
   isPro = false,
   proPlan = null,
+  billingEnabled = false,
   onStartPro,
   onRestorePro,
   onDeactivateProDev,
@@ -596,7 +599,7 @@ export default function SettingsModal({
             gap: 10,
           }}
         >
-          {["AI Coach無制限", "重量設定の相談", "弱点部位の改善提案", "全期間データ閲覧（無料は直近3ヶ月）"].map((item) => (
+          {["AI Coach 無制限（無料は1日5回）", "AIが全期間のデータで分析・提案", "伸び悩む種目の原因をAIが診断"].map((item) => (
             <div key={item} style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text)", fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: "var(--accent)", fontWeight: 950 }}>✓</span>
               {item}
@@ -786,7 +789,7 @@ export default function SettingsModal({
             }}
           >
             <div style={{ fontSize: 24, fontWeight: 900, color: "var(--text)", lineHeight: 1.2 }}>
-              {BILLING_ENABLED && showProManager ? "Proプラン管理" : "設定"}
+              {billingEnabled && showProManager ? "Proプラン管理" : "設定"}
             </div>
             <button
               type="button"
@@ -805,7 +808,7 @@ export default function SettingsModal({
             </button>
           </div>
 
-          {BILLING_ENABLED && showProManager ? proPlanManager : (
+          {billingEnabled && showProManager ? proPlanManager : (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
@@ -814,7 +817,7 @@ export default function SettingsModal({
               <NotificationSettings user={user} />
             </div>
 
-            {BILLING_ENABLED && (
+            {billingEnabled && (
             <div>
               <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
                 Pro
@@ -1146,6 +1149,32 @@ export default function SettingsModal({
                     利用規約
                   </a>
                 </div>
+                {/* ネイティブ（iOS）のみ購入を復元ボタンを表示 — BILLING_ENABLEDに関わらず表示 */}
+                {isNativeApp() && onRestorePro && (
+                  <button
+                    type="button"
+                    onClick={restoreProStatus}
+                    disabled={proActionBusy}
+                    style={{
+                      width: "100%",
+                      padding: "13px 16px",
+                      borderRadius: 14,
+                      background: "var(--card2)",
+                      border: "1px solid var(--border2)",
+                      color: "var(--text)",
+                      fontSize: 14,
+                      fontWeight: 800,
+                      opacity: proActionBusy ? 0.65 : 1,
+                    }}
+                  >
+                    {proActionBusy ? "復元中..." : "購入を復元"}
+                  </button>
+                )}
+                {proMessage && isNativeApp() && !billingEnabled && (
+                  <div style={{ fontSize: 12, color: "var(--text3)", textAlign: "center" }}>
+                    {proMessage}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={async () => {

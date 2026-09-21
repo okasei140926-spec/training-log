@@ -14,7 +14,8 @@ import {
 // useWorkoutLog → useWorkoutLogBridge
 import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
 import { resolveRecordBodyPartLabel } from "./utils/bodyPartClassification";
-import { BILLING_ENABLED } from "./constants/features";
+import { BILLING_ENABLED, isBillingEnabled } from "./constants/features";
+import { getDefaultMonthlyPriceString } from "./lib/revenueCat";
 import { buildWeeklyBodyPartSetCounts } from "./components/analytics/analyticsUtils";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
@@ -733,6 +734,15 @@ export default function GymApp() {
         openStripePortal,
         updateWeeklyContext,
     } = useAI({ loadConversationsOnMount: screen === "ai" });
+
+    // Per-user billing flag: true when BILLING_ENABLED or user is in test list
+    const billingEnabled = isBillingEnabled(user?.id);
+
+    // Fetch localized price string from RevenueCat (native only, fallback ¥480/月)
+    const [priceString, setPriceString] = useState("¥480/月");
+    useEffect(() => {
+        getDefaultMonthlyPriceString("¥480/月").then(setPriceString).catch(() => {});
+    }, []);
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
@@ -3153,11 +3163,7 @@ export default function GymApp() {
                     )}
 
                     {screen === "calendar" && (() => {
-                        const minCalendarYearMonth = (!BILLING_ENABLED || isPro) ? null : (() => {
-                            const d = new Date();
-                            d.setMonth(d.getMonth() - 3);
-                            return d.toISOString().slice(0, 7); // "YYYY-MM"
-                        })();
+                        const minCalendarYearMonth = null; // 全ユーザー全期間閲覧可
                         return (
                             <CalendarScreenView
                                 canonicalDisplayHistory={canonicalDisplayHistory}
@@ -3199,7 +3205,10 @@ export default function GymApp() {
                             weeklySetTargets={weeklySetTargets}
                             isPro={isPro}
                             onStartPro={activatePumpPro}
+                            onRestorePro={restorePumpPro}
                             onDeactivateProDev={deactivatePumpProDev}
+                            billingEnabled={billingEnabled}
+                            priceString={priceString}
                             dailyFreeAiLimit={dailyFreeAiLimit}
                             aiUsageDate={aiUsageDate}
                             aiUsageCount={aiUsageCount}
@@ -3303,6 +3312,7 @@ export default function GymApp() {
                         accountActionBusy={accountActionBusy}
                         isPro={isPro}
                         proPlan={proPlan}
+                        billingEnabled={billingEnabled}
                         onStartPro={activatePumpPro}
                         onRestorePro={restorePumpPro}
                         onDeactivateProDev={deactivatePumpProDev}

@@ -3,6 +3,7 @@ import { getSuggestions, QUICK_LABELS, SUGGESTIONS } from "../../constants/sugge
 import { load, save } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import CustomBodyPartModal from "./CustomBodyPartModal";
+import { EQUIPMENT_LIST, EQUIPMENT_LABELS, inferEquipment } from "../../utils/equipmentTypes";
 
 // プリセットに存在しない種目名をワークアウト履歴から洗い出す
 const findNonPresetExercises = (history) => {
@@ -20,6 +21,12 @@ const findNonPresetExercises = (history) => {
     });
     return Array.from(found.values()).sort((a, b) => b.count - a.count);
 };
+
+// プリセット種目名 → 正しい部位の逆引きマップ（モジュールレベルで1回だけ構築）
+const PRESET_BODY_PART = {};
+Object.entries(SUGGESTIONS).forEach(([bp, names]) => {
+    names.forEach((name) => { PRESET_BODY_PART[name] = bp; });
+});
 
 const matchesActiveTab = (bodyPart, activeTab) => {
     if (!bodyPart || bodyPart === "その他") return false;
@@ -71,6 +78,7 @@ export default function AddExModal({
     const [showMigration, setShowMigration] = useState(false);
     const [migrationBusy, setMigrationBusy] = useState(false);
     const [migrationDone, setMigrationDone] = useState(false);
+    const [customEquipment, setCustomEquipment] = useState(null); // null = auto-inferred
 
     const nonPresetExercises = useMemo(
         () => findNonPresetExercises(history),
@@ -100,6 +108,9 @@ export default function AddExModal({
             overflow: html.style.overflow,
             overscrollBehavior: html.style.overscrollBehavior,
         };
+
+        // Clear log-set-input-active so the bottom nav stays visible while modal is open
+        document.body?.removeAttribute("data-log-set-input-active");
 
         body.style.overflow = "hidden";
         body.style.position = "fixed";
@@ -160,7 +171,18 @@ export default function AddExModal({
     const freeItems = (() => {
         if (!isFree || !activeTab) return [];
         const fixed = SUGGESTIONS[activeTab] || [];
-        const custom = (muscleEx[activeTab] || []).map(ex => ex.name);
+        const custom = (muscleEx[activeTab] || [])
+            .map(ex => ex.name)
+            .filter(name => {
+                // Supabaseに保存済みのカスタム種目は、保存時のbody_partでのみ表示する
+                // （muscleExには複数部位にまたがって記録される可能性があるため）
+                if (supabaseCustomNames.has(name)) {
+                    return (customExercisesByBodyPart[activeTab] || []).some(ex => ex.name === name);
+                }
+                const presetBp = PRESET_BODY_PART[name];
+                if (!presetBp) return true; // Supabase未登録のカスタム種目はmuscleExのキーを信頼
+                return matchesActiveTab(presetBp, activeTab); // プリセット種目は正しい部位か確認
+            });
         const fromManualBests = manualBests
             .filter((best) => matchesActiveTab(best?.body_part, activeTab))
             .map((best) => best.exercise_name)
@@ -319,10 +341,12 @@ export default function AddExModal({
     const handleManual = () => {
         if (!name.trim()) return;
         const trimmed = name.trim();
+        const equipment = customEquipment || inferEquipment(trimmed);
         onQuickAdd(trimmed, false, activeTab, { action: "manual_exercise_add" });
-        onSaveCustomExercise?.(trimmed, activeTab);
+        onSaveCustomExercise?.(trimmed, activeTab, equipment);
         setAdded(p => new Set([...p, trimmed]));
         setName("");
+        setCustomEquipment(null);
     };
 
     const SuggestionList = ({ items }) => (
@@ -471,10 +495,35 @@ export default function AddExModal({
                     <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 8, textTransform: "uppercase" }}>
                         リストにない種目
                     </div>
-                    <input ref={inputRef} value={name} onChange={e => setName(e.target.value)}
+                    <input ref={inputRef} value={name} onChange={e => { setName(e.target.value); setCustomEquipment(null); }}
                         onKeyDown={e => e.key === "Enter" && handleManual()}
                         placeholder="種目名を入力..."
-                        style={{ width: "100%", padding: "13px 15px", borderRadius: 12, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 16, marginBottom: 10, boxSizing: "border-box" }} />
+                        style={{ width: "100%", padding: "13px 15px", borderRadius: 12, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 16, marginBottom: 8, boxSizing: "border-box" }} />
+                    {/* 器具チップ */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                        {EQUIPMENT_LIST.map((eq) => {
+                            const active = (customEquipment || (name.trim() ? inferEquipment(name.trim()) : null)) === eq;
+                            return (
+                                <button
+                                    key={eq}
+                                    type="button"
+                                    onClick={() => setCustomEquipment(eq === customEquipment ? null : eq)}
+                                    style={{
+                                        padding: "5px 11px",
+                                        borderRadius: 999,
+                                        border: `1px solid ${active ? "rgba(18,199,194,0.6)" : "rgba(18,199,194,0.18)"}`,
+                                        background: active ? "rgba(18,199,194,0.14)" : "transparent",
+                                        color: active ? "var(--accent)" : "var(--text3)",
+                                        fontSize: 12,
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    {EQUIPMENT_LABELS[eq]}
+                                </button>
+                            );
+                        })}
+                    </div>
                     <div style={{ display: "flex", gap: 9 }}>
                         <button onClick={onClose} style={{ flex: 1, padding: "12px", borderRadius: 12, background: "var(--card2)", color: "var(--text2)", fontSize: 15, border: "none" }}>閉じる</button>
                         <button

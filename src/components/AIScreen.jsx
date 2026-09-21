@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { BILLING_ENABLED } from "../constants/features";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const formatConvDate = (isoStr) => {
@@ -50,7 +49,35 @@ const CompactBubble = ({ children, role }) => (
     </div>
 );
 
-const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit }) => (
+const ProPaywallCard = ({ onStartPro, onClose, onRestorePro, priceString = "¥480/月" }) => {
+    const [restoreBusy, setRestoreBusy] = useState(false);
+    const [restoreMsg, setRestoreMsg] = useState("");
+
+    const handleRestore = async () => {
+        if (!onRestorePro || restoreBusy) return;
+        setRestoreBusy(true);
+        setRestoreMsg("");
+        try {
+            const result = await onRestorePro();
+            if (result?.plan?.isPro) {
+                setRestoreMsg("購入を復元しました。");
+            } else {
+                setRestoreMsg("復元できる購入が見つかりませんでした。");
+            }
+        } catch {
+            setRestoreMsg("復元に失敗しました。");
+        } finally {
+            setRestoreBusy(false);
+        }
+    };
+
+    const PRO_FEATURES = [
+        { text: "AI Coach を何度でも相談できる", sub: "1日5回の制限なし" },
+        { text: "AIが全期間のデータで分析・提案", sub: "長期トレンドをもとにした的確なアドバイス" },
+        { text: "伸び悩む種目の原因をAIが診断", sub: "「なぜ伸びない？」で記録を深掘り" },
+    ];
+
+    return (
     <div
         style={{
             position: "relative",
@@ -59,19 +86,20 @@ const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit })
             maxWidth: 620,
             margin: "4px auto 0",
             boxSizing: "border-box",
-            padding: "15px 15px 14px",
+            padding: "20px 18px 16px",
             borderRadius: 22,
             background:
-                "radial-gradient(circle at 82% 10%, rgba(51, 225, 219, 0.30), transparent 34%), linear-gradient(145deg, rgba(8, 28, 32, 0.96), rgba(13, 63, 68, 0.92) 52%, rgba(18, 199, 194, 0.20))",
+                "radial-gradient(circle at 82% 10%, rgba(51, 225, 219, 0.28), transparent 34%), linear-gradient(145deg, rgba(8, 28, 32, 0.97), rgba(13, 63, 68, 0.94) 52%, rgba(18, 199, 194, 0.18))",
             border: "1px solid rgba(51, 225, 219, 0.28)",
             color: "var(--text)",
             boxShadow: "0 18px 38px rgba(15, 94, 99, 0.20)",
             display: "flex",
             flexDirection: "column",
-            gap: 12,
+            gap: 14,
         }}
     >
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.08), transparent 42%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.06), transparent 40%)", pointerEvents: "none" }} />
+        {/* 閉じるボタン */}
         <button
             type="button"
             aria-label="Pro案内を閉じる"
@@ -79,35 +107,35 @@ const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit })
             style={{
                 position: "absolute",
                 zIndex: 2,
-                top: 10,
-                right: 10,
-                width: 30,
-                height: 30,
+                top: 12,
+                right: 12,
+                width: 28,
+                height: 28,
                 borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.16)",
-                background: "rgba(8, 28, 32, 0.46)",
-                color: "rgba(255,255,255,0.84)",
-                fontSize: 20,
+                border: "1px solid rgba(255,255,255,0.14)",
+                background: "rgba(8, 28, 32, 0.50)",
+                color: "rgba(255,255,255,0.72)",
+                fontSize: 18,
                 lineHeight: 1,
                 fontWeight: 800,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 8px 18px rgba(0,0,0,0.14)",
             }}
         >
             ×
         </button>
+        {/* ヘッダー */}
         <div style={{ position: "relative", zIndex: 1, paddingRight: 34 }}>
             <div
                 style={{
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
-                    padding: "5px 9px",
+                    padding: "4px 9px",
                     borderRadius: 999,
-                    background: "rgba(51, 225, 219, 0.16)",
-                    border: "1px solid rgba(51, 225, 219, 0.28)",
+                    background: "rgba(51, 225, 219, 0.14)",
+                    border: "1px solid rgba(51, 225, 219, 0.26)",
                     color: "#A7FFFB",
                     fontSize: 10,
                     fontWeight: 900,
@@ -115,53 +143,28 @@ const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit })
                     marginBottom: 10,
                 }}
             >
-                AI COACH PRO
+                PUMP PRO
             </div>
-            <div style={{ fontSize: 21, fontWeight: 950, color: "#FFFFFF", lineHeight: 1.12, marginBottom: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 950, color: "#FFFFFF", lineHeight: 1.15, marginBottom: 6 }}>
                 AI Coachをもっと使う
             </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.78)", lineHeight: 1.65 }}>
-                無料相談は本日分を使い切りました。Pump Proなら、あなたの記録をもとにメニュー・重量・成長分析まで相談できます。
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.82)", lineHeight: 1.6 }}>
+                無料相談は本日分を使い切りました。Pump Proでできること：
             </div>
         </div>
-        <div style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-            {[
-                "AI Coach無制限",
-                "重量設定の相談",
-                "弱点部位の改善提案",
-                "全期間データ閲覧",
-            ].map((feature) => (
-                <div
-                    key={feature}
-                    style={{
-                        padding: "9px 10px",
-                        borderRadius: 12,
-                        background: "rgba(255,255,255,0.09)",
-                        border: "1px solid rgba(255,255,255,0.10)",
-                        color: "rgba(255,255,255,0.84)",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        lineHeight: 1.35,
-                    }}
-                >
-                    {feature}
+        {/* 特典リスト */}
+        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+            {PRO_FEATURES.map(({ text, sub }) => (
+                <div key={text} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <span style={{ color: "#33E1DB", fontSize: 14, fontWeight: 900, lineHeight: 1.5, flexShrink: 0 }}>✓</span>
+                    <div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "#FFFFFF", lineHeight: 1.4 }}>{text}</div>
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.68)", lineHeight: 1.4 }}>{sub}</div>
+                    </div>
                 </div>
             ))}
-            <div
-                style={{
-                    padding: "9px 10px",
-                    borderRadius: 12,
-                    background: "rgba(51, 225, 219, 0.18)",
-                    border: "1px solid rgba(51, 225, 219, 0.26)",
-                    color: "#FFFFFF",
-                    fontSize: 11,
-                    fontWeight: 900,
-                    lineHeight: 1.35,
-                }}
-            >
-                月額 ¥480
-            </div>
         </div>
+        {/* 購入ボタン */}
         <button
             type="button"
             onClick={onStartPro}
@@ -170,7 +173,7 @@ const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit })
                 position: "relative",
                 zIndex: 1,
                 width: "100%",
-                padding: "13px 14px",
+                padding: "14px 14px",
                 borderRadius: 18,
                 border: "none",
                 background: "linear-gradient(135deg, var(--accent), var(--accent2))",
@@ -180,27 +183,63 @@ const ProPaywallCard = ({ onStartPro, onClose, aiUsageCount, dailyFreeAiLimit })
                 boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
             }}
         >
-            Pump Proを始める
+            Pump Pro を始める — {priceString}（税込）
         </button>
-        <div
-            style={{
-                position: "relative",
-                zIndex: 1,
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 10,
-                color: "rgba(255,255,255,0.58)",
-                fontSize: 10,
-                fontWeight: 800,
-            }}
-        >
-            <span>今日の使用回数</span>
-            <span>{aiUsageCount}/{dailyFreeAiLimit}</span>
+        {/* Apple審査必須：自動更新の説明 */}
+        <div style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(255,255,255,0.70)", lineHeight: 1.65, textAlign: "center" }}>
+            {priceString}（税込）で1か月ごとに自動更新。更新日の24時間前までにキャンセルしない限り自動で更新されます。
+            管理・キャンセルは iOS 設定 → Apple ID → サブスクリプションから。
+        </div>
+        {/* Apple審査必須：復元ボタン */}
+        {onRestorePro && (
+            <button
+                type="button"
+                onClick={handleRestore}
+                disabled={restoreBusy}
+                style={{
+                    position: "relative",
+                    zIndex: 1,
+                    background: "none",
+                    border: "none",
+                    color: "rgba(255,255,255,0.68)",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textDecoration: "underline",
+                    opacity: restoreBusy ? 0.5 : 1,
+                }}
+            >
+                {restoreBusy ? "復元中..." : "購入を復元"}
+            </button>
+        )}
+        {restoreMsg ? (
+            <div style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "center" }}>
+                {restoreMsg}
+            </div>
+        ) : null}
+        {/* Apple審査必須：利用規約・プライバシーポリシーリンク */}
+        <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+            <a
+                href="https://training-log-mu.vercel.app/privacy.html#利用規約"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 10, color: "rgba(255,255,255,0.52)", textDecoration: "underline" }}
+            >
+                利用規約
+            </a>
+            <a
+                href="https://training-log-mu.vercel.app/privacy.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 10, color: "rgba(255,255,255,0.52)", textDecoration: "underline" }}
+            >
+                プライバシーポリシー
+            </a>
         </div>
     </div>
-);
+    );
+};
 
-const ProPaywallModal = ({ isOpen, onStartPro, onClose, aiUsageCount, dailyFreeAiLimit }) => {
+const ProPaywallModal = ({ isOpen, onStartPro, onClose, onRestorePro, priceString }) => {
     if (!isOpen) return null;
 
     return (
@@ -235,8 +274,8 @@ const ProPaywallModal = ({ isOpen, onStartPro, onClose, aiUsageCount, dailyFreeA
                 <ProPaywallCard
                     onStartPro={onStartPro}
                     onClose={onClose}
-                    aiUsageCount={aiUsageCount}
-                    dailyFreeAiLimit={dailyFreeAiLimit}
+                    onRestorePro={onRestorePro}
+                    priceString={priceString}
                 />
             </div>
         </div>
@@ -461,10 +500,13 @@ export default function AIScreen({
     aiEnd,
     isPro = false,
     onStartPro,
+    onRestorePro,
     onDeactivateProDev,
+    billingEnabled = false,
     dailyFreeAiLimit = 5,
     aiUsageCount = 0,
     aiRemaining,
+    priceString = "¥480/月",
     onAddWorkoutPlan,
     onInputFocusChange,
     aiConversations = [],
@@ -495,12 +537,12 @@ export default function AIScreen({
         !aiLoad;
 
     const visibleMessages = isInitialState ? [] : aiMsgs;
-    // 5/5以上でPro以外は制限（BILLING_ENABLEDに関わらず）
+    // 5/5以上でPro以外は制限（billingEnabledに関わらず）
     const isHardLimitReached = !isPro && Number(aiRemaining) <= 0;
-    // Pro paywall only shown when BILLING_ENABLED
+    // Pro paywall only shown when billingEnabled
     const isAiLimitReached = isHardLimitReached;
     const canSendMessage = !aiLoad && !isAiLimitReached;
-    const shouldShowProPaywall = BILLING_ENABLED && isAiLimitReached && !isProPaywallDismissed;
+    const shouldShowProPaywall = billingEnabled && isAiLimitReached && !isProPaywallDismissed;
     const shouldShowLimitCard = isAiLimitReached;
 
     useEffect(() => {
@@ -674,7 +716,7 @@ export default function AIScreen({
                             開発用：Pro解除
                         </button>
                     )}
-                    {BILLING_ENABLED && isPro && typeof onOpenStripePortal === "function" && (
+                    {billingEnabled && isPro && typeof onOpenStripePortal === "function" && (
                         <button
                             type="button"
                             onClick={onOpenStripePortal}
@@ -1018,7 +1060,7 @@ export default function AIScreen({
                     <LimitReachedCard
                         aiUsageCount={aiUsageCount}
                         dailyFreeAiLimit={dailyFreeAiLimit}
-                        onOpenPro={BILLING_ENABLED ? openProPaywall : null}
+                        onOpenPro={billingEnabled ? openProPaywall : null}
                     />
                 )}
                 <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
@@ -1030,8 +1072,8 @@ export default function AIScreen({
                 isOpen={shouldShowProPaywall}
                 onStartPro={handleStartPro}
                 onClose={closeProPaywall}
-                aiUsageCount={aiUsageCount}
-                dailyFreeAiLimit={dailyFreeAiLimit}
+                onRestorePro={onRestorePro}
+                priceString={priceString}
             />
 
             {pendingWorkoutPlan && (

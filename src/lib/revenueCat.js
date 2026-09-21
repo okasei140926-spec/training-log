@@ -153,6 +153,22 @@ const getCurrentPackage = async () => {
   );
 };
 
+/**
+ * Returns the localized price string for the default monthly package,
+ * e.g. "¥480/月". Falls back to the provided fallback string.
+ */
+export const getDefaultMonthlyPriceString = async (fallback = "¥480/月") => {
+  if (!isNativePlatform()) return fallback;
+  try {
+    const pkg = await getCurrentPackage();
+    const price = pkg?.product?.priceString;
+    if (price) return `${price}/月`;
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export const purchaseRevenueCatPro = async (user, onCustomerInfoUpdated) => {
   const configured = await configureRevenueCatForUser(user, onCustomerInfoUpdated);
   if (!configured.configured) return { success: false, ...configured };
