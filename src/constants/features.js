@@ -2,7 +2,7 @@
  * Feature flags.
  * Set BILLING_ENABLED = true when in-app purchase (RevenueCat/Stripe) is ready for production.
  */
-export const BILLING_ENABLED = false;
+export const BILLING_ENABLED = true;
 
 /**
  * Supabase user IDs that can see the billing flow even when BILLING_ENABLED = false.
