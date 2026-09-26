@@ -16,7 +16,6 @@ import {
 import { QUICK_LABELS, LABEL_COLORS } from "./constants/suggestions";
 import { resolveRecordBodyPartLabel } from "./utils/bodyPartClassification";
 import { BILLING_ENABLED, isBillingEnabled } from "./constants/features";
-import { getDefaultMonthlyPriceString } from "./lib/revenueCat";
 import { buildWeeklyBodyPartSetCounts } from "./components/analytics/analyticsUtils";
 import { S, css } from "./utils/styles";
 import { Analytics } from "@vercel/analytics/react";
@@ -738,12 +737,6 @@ export default function GymApp() {
 
     // Per-user billing flag: true when BILLING_ENABLED or user is in test list
     const billingEnabled = isBillingEnabled(user?.id);
-
-    // Fetch localized price string from RevenueCat (native only, fallback ¥480/月)
-    const [priceString, setPriceString] = useState("¥480/月");
-    useEffect(() => {
-        getDefaultMonthlyPriceString("¥480/月").then(setPriceString).catch(() => {});
-    }, []);
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
@@ -3265,7 +3258,6 @@ export default function GymApp() {
                             onRestorePro={restorePumpPro}
                             onDeactivateProDev={deactivatePumpProDev}
                             billingEnabled={billingEnabled}
-                            priceString={priceString}
                             dailyFreeAiLimit={dailyFreeAiLimit}
                             aiUsageDate={aiUsageDate}
                             aiUsageCount={aiUsageCount}

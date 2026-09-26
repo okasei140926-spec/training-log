@@ -174,18 +174,16 @@ const getCurrentPackage = async () => {
 
 /**
  * Returns the localized price string for the default monthly package,
- * e.g. "¥480/月". Falls back to the provided fallback string.
+ * e.g. "¥480". Throws if not on native or if no price is available.
+ * Callers should handle the error and show a retry UI instead of a
+ * hardcoded fallback price.
  */
-export const getDefaultMonthlyPriceString = async (fallback = "¥480/月") => {
-  if (!isNativePlatform()) return fallback;
-  try {
-    const pkg = await getCurrentPackage();
-    const price = pkg?.product?.priceString;
-    if (price) return `${price}/月`;
-    return fallback;
-  } catch {
-    return fallback;
-  }
+export const getRevenueCatPriceString = async () => {
+  if (!isNativePlatform()) throw new Error("not-native");
+  const pkg = await getCurrentPackage();
+  const price = pkg?.product?.priceString;
+  if (!price) throw new Error("no-price");
+  return price; // e.g. "¥480"
 };
 
 export const purchaseRevenueCatPro = async (user, onCustomerInfoUpdated) => {

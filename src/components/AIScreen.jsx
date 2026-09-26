@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { getRevenueCatPriceString } from "../lib/revenueCat";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const formatConvDate = (isoStr) => {
@@ -49,9 +50,19 @@ const CompactBubble = ({ children, role }) => (
     </div>
 );
 
-const ProPaywallCard = ({ onStartPro, onClose, onRestorePro, priceString = "¥480/月" }) => {
+const ProPaywallCard = ({ onStartPro, onClose, onRestorePro }) => {
     const [restoreBusy, setRestoreBusy] = useState(false);
     const [restoreMsg, setRestoreMsg] = useState("");
+    const [priceState, setPriceState] = useState({ price: null, loading: true, error: false });
+
+    const fetchPrice = useCallback(() => {
+        setPriceState({ price: null, loading: true, error: false });
+        getRevenueCatPriceString()
+            .then((price) => setPriceState({ price, loading: false, error: false }))
+            .catch(() => setPriceState({ price: null, loading: false, error: true }));
+    }, []);
+
+    useEffect(() => { fetchPrice(); }, [fetchPrice]);
 
     const handleRestore = async () => {
         if (!onRestorePro || restoreBusy) return;
@@ -165,31 +176,60 @@ const ProPaywallCard = ({ onStartPro, onClose, onRestorePro, priceString = "¥48
             ))}
         </div>
         {/* 購入ボタン */}
-        <button
-            type="button"
-            onClick={onStartPro}
-            className="pressable"
-            style={{
-                position: "relative",
-                zIndex: 1,
-                width: "100%",
-                padding: "14px 14px",
-                borderRadius: 18,
-                border: "none",
-                background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                color: "#fff",
-                fontSize: 15,
-                fontWeight: 900,
-                boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
-            }}
-        >
-            Pump Pro を始める — {priceString}（税込）
-        </button>
+        {priceState.error ? (
+            <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", marginBottom: 8 }}>
+                    価格を取得できませんでした
+                </div>
+                <button
+                    type="button"
+                    onClick={fetchPrice}
+                    style={{
+                        background: "none",
+                        border: "1px solid rgba(255,255,255,0.30)",
+                        color: "#fff",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        borderRadius: 10,
+                        padding: "6px 16px",
+                    }}
+                >
+                    再試行
+                </button>
+            </div>
+        ) : (
+            <button
+                type="button"
+                onClick={onStartPro}
+                disabled={priceState.loading}
+                className="pressable"
+                style={{
+                    position: "relative",
+                    zIndex: 1,
+                    width: "100%",
+                    padding: "14px 14px",
+                    borderRadius: 18,
+                    border: "none",
+                    background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                    color: "#fff",
+                    fontSize: 15,
+                    fontWeight: 900,
+                    boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
+                    opacity: priceState.loading ? 0.6 : 1,
+                }}
+            >
+                {priceState.loading
+                    ? "価格を取得中..."
+                    : `Pump Pro を始める — ${priceState.price}/月`}
+            </button>
+        )}
         {/* Apple審査必須：自動更新の説明 */}
-        <div style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(255,255,255,0.70)", lineHeight: 1.65, textAlign: "center" }}>
-            {priceString}（税込）で1か月ごとに自動更新。更新日の24時間前までにキャンセルしない限り自動で更新されます。
-            管理・キャンセルは iOS 設定 → Apple ID → サブスクリプションから。
-        </div>
+        {!priceState.loading && !priceState.error && priceState.price && (
+            <div style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(255,255,255,0.70)", lineHeight: 1.65, textAlign: "center" }}>
+                {priceState.price}/月で1か月ごとに自動更新。更新日の24時間前までにキャンセルしない限り自動で更新されます。
+                管理・キャンセルは iOS 設定 → Apple ID → サブスクリプションから。
+            </div>
+        )}
         {/* Apple審査必須：復元ボタン */}
         {onRestorePro && (
             <button
@@ -239,7 +279,7 @@ const ProPaywallCard = ({ onStartPro, onClose, onRestorePro, priceString = "¥48
     );
 };
 
-const ProPaywallModal = ({ isOpen, onStartPro, onClose, onRestorePro, priceString }) => {
+const ProPaywallModal = ({ isOpen, onStartPro, onClose, onRestorePro }) => {
     if (!isOpen) return null;
 
     return (
@@ -275,7 +315,6 @@ const ProPaywallModal = ({ isOpen, onStartPro, onClose, onRestorePro, priceStrin
                     onStartPro={onStartPro}
                     onClose={onClose}
                     onRestorePro={onRestorePro}
-                    priceString={priceString}
                 />
             </div>
         </div>
@@ -506,7 +545,6 @@ export default function AIScreen({
     dailyFreeAiLimit = 5,
     aiUsageCount = 0,
     aiRemaining,
-    priceString = "¥480/月",
     onAddWorkoutPlan,
     onInputFocusChange,
     aiConversations = [],
@@ -1073,7 +1111,6 @@ export default function AIScreen({
                 onStartPro={handleStartPro}
                 onClose={closeProPaywall}
                 onRestorePro={onRestorePro}
-                priceString={priceString}
             />
 
             {pendingWorkoutPlan && (
