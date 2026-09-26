@@ -1538,8 +1538,9 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         return;
       }
 
-      // Bypass cache when querying today's workout (to avoid stale data from before the workout was synced)
-      const bypassCache = targetDateKey === getTodayKey();
+      // Bypass cache for any date-specific query (today or yesterday) so stale cache
+      // never causes a different day's records to be analyzed.
+      const bypassCache = Boolean(targetDateKey);
       const latestWorkoutFetch = await fetchLatestWorkoutHistoryForAI(session?.user?.id, currentIsPro, bypassCache);
       if (latestWorkoutFetch.error) {
         logAiContextSnapshot({

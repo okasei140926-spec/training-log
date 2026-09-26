@@ -162,6 +162,27 @@ const convertKgValueForDisplayUnit = (valueKg, targetUnit) => {
 
 // ── 次の種目サジェスト ──────────────────────────────────────────────────────────
 /**
+ * 種目名の実際の部位を history と muscleEx から解決する。
+ * getPrev() の bodyPart 完全一致を通過させるために必要。
+ */
+const resolveExerciseBodyPartFromData = (name, history, muscleEx) => {
+    // 1. 最新の履歴レコードの bodyPart を使う（最も信頼性が高い）
+    const records = history?.[name];
+    if (records?.length) {
+        // records は日付順不定なので、bodyPart が取れる最初のものを使う
+        for (const rec of records) {
+            const bp = String(rec?.bodyPart || "").trim();
+            if (bp) return bp;
+        }
+    }
+    // 2. muscleEx を逆引き
+    for (const [bp, exs] of Object.entries(muscleEx || {})) {
+        if ((exs || []).some((e) => e.name === name)) return bp;
+    }
+    return null;
+};
+
+/**
  * 過去の記録から「種目Aの直後に記録された種目B」の頻度マップを構築する。
  * @returns {{ [nameA: string]: { [nameB: string]: number } }}
  */
@@ -1454,7 +1475,8 @@ export default function LogScreen({
                                 key={name}
                                 type="button"
                                 onClick={() => {
-                                    onAddEx?.(name);
+                                    const bodyPart = resolveExerciseBodyPartFromData(name, history, muscleEx);
+                                    onQuickAddEx?.(name, false, bodyPart, { action: "exercise_add" });
                                 }}
                                 style={{
                                     padding: "7px 13px",
