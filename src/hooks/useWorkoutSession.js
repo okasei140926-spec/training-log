@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { formatDateKey } from "../utils/helpers";
+import { App as CapApp } from "@capacitor/app";
 import {
     clearWorkoutTimerState,
     computeWorkoutDisplayElapsedSec,
@@ -139,7 +140,7 @@ export function useWorkoutSession({ getTodayKey, user }) {
         const timerId = window.setInterval(syncElapsed, 1000);
 
         // When returning from background, setInterval may have been paused.
-        // Re-sync immediately on visibility restore.
+        // Re-sync immediately on visibility restore (web) or Capacitor foreground.
         const onVisibilityChange = () => {
             if (document.visibilityState === "visible") {
                 syncElapsed();
@@ -147,9 +148,17 @@ export function useWorkoutSession({ getTodayKey, user }) {
         };
         document.addEventListener("visibilitychange", onVisibilityChange);
 
+        let capListenerHandle = null;
+        CapApp.addListener("appStateChange", ({ isActive }) => {
+            if (isActive) syncElapsed();
+        }).then((handle) => {
+            capListenerHandle = handle;
+        }).catch(() => {});
+
         return () => {
             window.clearInterval(timerId);
             document.removeEventListener("visibilitychange", onVisibilityChange);
+            capListenerHandle?.remove();
         };
     }, [
         workoutFinishedAt,

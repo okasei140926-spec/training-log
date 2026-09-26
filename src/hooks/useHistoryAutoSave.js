@@ -262,7 +262,7 @@ export function useHistoryAutoSave({
                                     workoutStartedAt &&
                                     workoutStartedForDate === date;
                                 const timing = shouldPersistWorkoutTiming
-                                    ? getWorkoutTimerPersistence(workoutTimerStateRef.current)
+                                    ? getWorkoutTimerPersistence(workoutTimerStateRef.current, Date.now())
                                     : null;
                                 const sessionResult = await syncWorkoutSessionSnapshot(currentUserId, mergedHistory, date, timing);
                                 if (sessionResult?.skipped) {

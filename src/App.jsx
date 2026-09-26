@@ -864,14 +864,13 @@ export default function GymApp() {
     const handleFinishWorkout = useCallback(() => {
         console.log("[handleFinishWorkout] called, logDate =", logDate);
 
-        // First completion only: infer which cycle position matches today's recorded body parts
-        const isFirstCompletion = Object.keys(aiPlanProgress?.completedDates || {}).length === 0;
-        if (isFirstCompletion && aiPlanEnabled) {
+        if (aiPlanEnabled) {
             const recordedParts = getRecordedBodyPartsForDate(latestCanonicalHistoryRef.current, logDate);
             const sequence = aiPlanProgress?.sequence || [];
+            const isFirstCompletion = Object.keys(aiPlanProgress?.completedDates || {}).length === 0;
             const matchedIdx = findBestMatchingPlanDayIndex(recordedParts, sequence);
             if (matchedIdx >= 0) {
-                console.log("[handleFinishWorkout] first completion — inferred cycle index", matchedIdx, "for parts", recordedParts);
+                console.log("[handleFinishWorkout] inferred cycle index", matchedIdx, "for parts", recordedParts, "(firstCompletion:", isFirstCompletion, ")");
                 markPlanDayCompletedAtIndex(logDate, matchedIdx);
             } else {
                 markPlanDayCompleted(logDate);

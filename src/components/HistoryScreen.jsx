@@ -194,7 +194,7 @@ export default function HistoryScreen({
       const storedWorkoutTimer = readWorkoutTimerState();
       const liveWorkoutTiming =
         storedWorkoutTimer.startedForDate === todayKey
-          ? getWorkoutTimerPersistence(storedWorkoutTimer)
+          ? getWorkoutTimerPersistence(storedWorkoutTimer, Date.now())
           : null;
 
       if (liveWorkoutTiming) {
@@ -241,7 +241,7 @@ export default function HistoryScreen({
       const storedWorkoutTimer = readWorkoutTimerState();
       const liveWorkoutTiming =
         storedWorkoutTimer.startedForDate === todayKey
-          ? getWorkoutTimerPersistence(storedWorkoutTimer)
+          ? getWorkoutTimerPersistence(storedWorkoutTimer, Date.now())
           : null;
 
       if (liveWorkoutTiming) {
