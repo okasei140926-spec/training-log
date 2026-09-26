@@ -60,7 +60,9 @@ export function useLogDateRefresh({
             // この effect が唯一の適用ルートになる。return だけだと画面が前の日付のデータを
             // 表示し続けるバグが発生する（今日の記録が消えたように見える）。
             const localDraft = loadDraftForDate(normalizedDate);
-            const hasContent = (
+            const draftDate = normalizeDraftDateKey(localDraft?.meta?.date || localDraft?.meta?.keyDate || "");
+            const draftDateMatches = !draftDate || draftDate === normalizedDate;
+            const hasContent = draftDateMatches && (
                 localDraft?.sessionEx !== null ||
                 Object.keys(localDraft?.logData || {}).length > 0 ||
                 Object.keys(localDraft?.exerciseUnits || {}).length > 0 ||
@@ -71,6 +73,11 @@ export function useLogDateRefresh({
                     source: localDraft?.meta?.source || "pending_draft_restore",
                     hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
                 }));
+            } else if (!hasContent) {
+                // No valid draft for this date — force clear any stale display
+                applyCurrentLogDraft(withDraftDateMeta(normalizedDate, {
+                    todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {},
+                }, { source: "explicit_date_nav", hasUnsavedChanges: false }), { persist: false });
             }
             return;
         }
@@ -271,7 +278,7 @@ export function useLogDateRefresh({
                             sessionEx: null,
                             logData: {},
                             exerciseUnits: {},
-                        }, { source: "empty_draft", hasUnsavedChanges: false });
+                        }, { source: "explicit_date_nav", hasUnsavedChanges: false });
                         applyCurrentLogDraft(emptyDraft, { persist: false });
                     }
                     return;

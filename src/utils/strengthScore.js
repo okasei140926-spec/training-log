@@ -9,6 +9,51 @@ import { EQUIPMENT_COEFFICIENTS, PRESET_EQUIPMENT, inferEquipment } from "./equi
 /** Score is computed from the last N weeks of history */
 export const SCORE_WEEK_WINDOW = 8;
 
+/** Weighted average weights for top-N exercises per category */
+export const SCORE_TOP_WEIGHTS = {
+    3: [0.50, 0.30, 0.20],
+    2: [0.60, 0.40],
+    1: [0.90],
+};
+
+/** Coefficient applied to single-joint exercises to prevent over-inflation */
+export const SINGLE_JOINT_COEFFICIENT = 0.9;
+
+/**
+ * Exercises classified as single-joint (isolation).
+ * Check this list first; if not found, fall through to keyword inference.
+ */
+export const SINGLE_JOINT_EXERCISES = new Set([
+    // Arm curls (二頭)
+    "アームカール", "バーベルカール", "ダンベルカール", "ハンマーカール",
+    "インクラインカール", "プリーチャーカール", "ケーブルカール",
+    // Triceps extensions (三頭) — push-downs and extensions only, not dips/close-grip
+    "トライセプスエクステンション", "ライイングエクステンション",
+    "トライセプスプッシュダウン", "オーバーヘッドエクステンション",
+    "スカルクラッシャー",
+    // Chest isolation
+    "ペックフライ", "チェストフライ", "ケーブルフライ",
+    // Shoulder isolation
+    "サイドレイズ", "ケーブルサイドレイズ", "リアデルトフライ", "フロントレイズ",
+    // Leg isolation
+    "レッグエクステンション", "シーテッドレッグカール", "ライイングレッグカール",
+    "ライイングハム", "レッグカール",
+    // Calf
+    "カーフレイズ", "シーテッドカーフレイズ",
+    // Back isolation
+    "フェイスプル",
+]);
+
+/**
+ * Infer single-joint from exercise name if not in the preset list.
+ */
+export function isSingleJointExercise(name) {
+    if (!name) return false;
+    if (SINGLE_JOINT_EXERCISES.has(name)) return true;
+    const n = String(name);
+    return /カール|エクステンション|レイズ|フライ|プッシュダウン|シュラッグ|カーフ/.test(n);
+}
+
 /** Body-part groups used for scoring (腹筋/尻 are excluded) */
 export const SCORE_CATEGORIES = ["胸", "背中", "脚", "肩", "腕"];
 
@@ -33,10 +78,10 @@ export const RANKS = ["初級", "中級", "上級", "エリート", "レジェ�
  */
 export const RANK_THRESHOLDS_MALE = {
     胸:  [0.75, 1.0,  1.5,  2.0],
-    背中: [0.75, 1.0,  1.25, 1.5],
-    脚:  [1.0,  1.5,  2.0,  2.5],
-    肩:  [0.5,  0.75, 1.0,  1.25],
-    腕:  [0.3,  0.45, 0.6,  0.75],
+    背中: [1.0,  1.25, 1.6,  2.0],
+    脚:  [1.25, 1.75, 2.25, 2.75],
+    肩:  [0.6,  0.85, 1.1,  1.4],
+    腕:  [0.5,  0.7,  0.95, 1.2],
 };
 
 /** Female thresholds = male × 0.6 */
@@ -166,65 +211,66 @@ export function calcStrengthRanks(
     const bwKg = (Number.isFinite(Number(bodyWeightKg)) && Number(bodyWeightKg) > 0)
         ? Number(bodyWeightKg) : null;
 
-    // Build: exerciseName → best (e1RM × coeff) over last 8 weeks
-    const exBestScore = {}; // { name: number }
-    const exCategory  = {}; // { name: scoreCategory }
+    // Map: category → Map<exName, bestScore>
+    const categoryExBest = {}; // { [category]: { [exName]: number } }
+    for (const cat of SCORE_CATEGORIES) {
+        categoryExBest[cat] = {};
+    }
 
     Object.entries(history || {}).forEach(([exName, records]) => {
-        // Resolve body part for this exercise
-        let rawBodyPart = null;
+        const equipment = resolveEquipment(exName, customEquipmentMap);
+        const sjCoeff = isSingleJointExercise(exName) ? SINGLE_JOINT_COEFFICIENT : 1.0;
+
+        // Resolve fallback category from exerciseBodyPartOverrides or muscleEx
+        let fallbackCategory = null;
         if (exerciseBodyPartOverrides?.[exName]) {
-            rawBodyPart = exerciseBodyPartOverrides[exName];
+            fallbackCategory = BODY_PART_TO_CATEGORY[exerciseBodyPartOverrides[exName]] || null;
         } else {
-            // Check muscleEx
             for (const [bp, exList] of Object.entries(muscleEx || {})) {
                 const inList = (exList || []).some((e) =>
                     (typeof e === "string" ? e : e?.name) === exName
                 );
-                if (inList) { rawBodyPart = bp; break; }
-            }
-            // Fall back: check records' bodyPart field
-            if (!rawBodyPart && records?.length) {
-                rawBodyPart = records[0]?.bodyPart || null;
+                if (inList) { fallbackCategory = BODY_PART_TO_CATEGORY[bp] || null; break; }
             }
         }
-
-        const category = rawBodyPart ? BODY_PART_TO_CATEGORY[rawBodyPart] : null;
-        if (!category) return; // excluded body part (腹筋, 尻, etc.)
-
-        const equipment = resolveEquipment(exName, customEquipmentMap);
-        let bestScore = 0;
 
         (records || []).forEach((rec) => {
             const date = String(rec?.date || "").slice(0, 10);
             if (!date || date < cutoffDate) return;
 
+            // Resolve category for THIS specific record
+            const recBodyPart = String(rec?.bodyPart || rec?.body_part || "").trim();
+            const recCategory = recBodyPart
+                ? (BODY_PART_TO_CATEGORY[recBodyPart] || null)
+                : fallbackCategory;
+            if (!recCategory) return;
+
+            let recBest = 0;
             (rec?.sets || []).forEach((set) => {
                 const r = Number(set?.reps ?? 0);
                 if (r <= 0) return;
                 const storedWeight = set?.weight ?? set?.storedWeight;
                 const effectiveKg = calcEffectiveWeightKg(storedWeight, equipment, bwKg);
                 if (effectiveKg === null) return;
-                const score = calcCappedE1RM(effectiveKg, r);
-                if (score > bestScore) bestScore = score;
+                const score = calcCappedE1RM(effectiveKg, r) * sjCoeff;
+                if (score > recBest) recBest = score;
             });
-        });
 
-        if (bestScore > 0) {
-            if ((exBestScore[exName] ?? 0) < bestScore) {
-                exBestScore[exName] = bestScore;
-                exCategory[exName]  = category;
+            if (recBest > 0) {
+                const prev = categoryExBest[recCategory][exName] ?? 0;
+                if (recBest > prev) {
+                    categoryExBest[recCategory][exName] = recBest;
+                }
             }
-        }
+        });
     });
 
-    // Group by category → top 3 exercises → average → ratio
+    // Group by category → top exercises → weighted average → ratio
     const result = {};
 
     for (const category of SCORE_CATEGORIES) {
-        const candidates = Object.entries(exBestScore)
-            .filter(([name]) => exCategory[name] === category)
-            .sort((a, b) => b[1] - a[1]);
+        const catMap = categoryExBest[category] || {};
+        const candidates = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
 
         if (candidates.length === 0) {
             result[category] = {
@@ -241,7 +287,8 @@ export function calcStrengthRanks(
         }
 
         const top3 = candidates.slice(0, 3);
-        const avgScore = top3.reduce((s, [, v]) => s + v, 0) / top3.length;
+        const weights = SCORE_TOP_WEIGHTS[top3.length] || SCORE_TOP_WEIGHTS[3];
+        const avgScore = top3.reduce((s, [, v], i) => s + v * weights[i], 0);
         const ratio = bwKg ? avgScore / bwKg : 0;
         const rankIndex = bwKg ? getRankIndex(ratio, category, genderKey) : 0;
         const rankLabel = bwKg ? RANKS[rankIndex] : "未計測";

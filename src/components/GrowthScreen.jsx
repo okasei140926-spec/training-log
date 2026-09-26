@@ -400,8 +400,8 @@ export default function GrowthScreen({
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     {SCORE_CATEGORIES.map((cat) => {
                         const catData = strengthResult.categories[cat];
-                        const { rankLabel, nextThresholdKg, radarValue, hasData, topExercises } = catData || {};
-                        const progressPct = Math.min(100, radarValue || 0);
+                        const { rankLabel, nextThresholdKg, radarValue, hasData, topExercises, rankIndex } = catData || {};
+                        const progressPct = rankIndex === 4 ? 100 : Math.min(100, radarValue || 0);
 
                         return (
                             <div key={cat}>
@@ -410,11 +410,15 @@ export default function GrowthScreen({
                                         <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{cat}</span>
                                         <RankBadge label={rankLabel || "未計測"} />
                                     </div>
-                                    {hasData && nextThresholdKg != null && (
+                                    {hasData && rankIndex === 4 ? (
+                                        <span style={{ fontSize: 11, color: "#FF7A35", fontWeight: 700 }}>
+                                            ✦ 最高ランク到達
+                                        </span>
+                                    ) : hasData && nextThresholdKg != null ? (
                                         <span style={{ fontSize: 11, color: "var(--text3)", fontWeight: 600 }}>
                                             次まで あと{nextThresholdKg}kg
                                         </span>
-                                    )}
+                                    ) : null}
                                 </div>
                                 {/* Progress bar */}
                                 <div style={{ height: 6, borderRadius: 999, background: "rgba(18,199,194,0.10)", overflow: "hidden" }}>
@@ -422,7 +426,10 @@ export default function GrowthScreen({
                                         height: "100%",
                                         width: `${progressPct}%`,
                                         borderRadius: 999,
-                                        background: "linear-gradient(90deg, var(--accent), #0F5E63)",
+                                        background: rankIndex === 4
+                                            ? "linear-gradient(90deg, var(--accent), #FF7A35)"
+                                            : "linear-gradient(90deg, var(--accent), #0F5E63)",
+                                        boxShadow: rankIndex === 4 ? "0 0 8px rgba(255,122,53,0.5)" : "none",
                                         transition: "width 0.6s ease",
                                     }} />
                                 </div>
