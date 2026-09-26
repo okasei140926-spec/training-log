@@ -1,4 +1,5 @@
 import LogScreen from "./LogScreen";
+import { formatDateKey } from "../utils/helpers";
 
 export default function LogScreenView({
     handleLogScreenInputPointerDownCapture,
@@ -101,7 +102,7 @@ export default function LogScreenView({
             }}
         >
             {(() => {
-                const todayKey = new Date().toISOString().slice(0, 10);
+                const todayKey = formatDateKey(new Date());
                 const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate && logDate === todayKey;
                 const displayedWorkoutTimerStatus = showCurrentLogWorkoutTimer
                     ? workoutTimerStatus

@@ -296,7 +296,7 @@ export function calcRecovery(history, bodyPart, muscleEx, overrides) {
         : pct >= 40 ? "tired"
         : "bad";
 
-    const lastDate = new Date(lastMs).toISOString().slice(0, 10);
+    const lastDate = formatDateKey(new Date(lastMs));
     return { pct, status, lastDate };
 }
 

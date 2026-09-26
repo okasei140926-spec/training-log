@@ -5,7 +5,7 @@ import {
     getPushSupportState,
     syncPushSubscriptionState,
 } from "../lib/pushNotifications";
-import { load, save } from "../utils/helpers";
+import { formatDateKey, load, save } from "../utils/helpers";
 import { PUSH_PROMPT_LATER_KEY } from "../utils/appHelpers";
 
 export function usePushNotifications({ user, screen, showAuth }) {
@@ -37,7 +37,7 @@ export function usePushNotifications({ user, screen, showAuth }) {
 
             const support = getPushSupportState();
             const permission = getNotificationPermission();
-            const todayStr = new Date().toISOString().split("T")[0];
+            const todayStr = formatDateKey(new Date());
             const laterDate = load(PUSH_PROMPT_LATER_KEY, "");
 
             try {

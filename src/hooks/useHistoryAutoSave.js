@@ -410,7 +410,7 @@ export function useHistoryAutoSave({
                     console.error("workout session cleanup failed", { error, userId: currentUserId });
                 }
 
-                const todayStr = new Date().toISOString().split("T")[0];
+                const todayStr = formatDateKey(new Date());
                 const shouldSendWorkoutNotification =
                     pendingWorkoutNotification &&
                     pendingWorkoutNotification.id === pendingWorkoutNotificationRef.current?.id &&

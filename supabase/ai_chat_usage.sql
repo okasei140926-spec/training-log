@@ -6,12 +6,18 @@ create table if not exists public.ai_chat_usage (
   primary key (user_id, usage_date)
 );
 
+-- NOTE: PK は (user_id, provider) 複合キー。
+-- pump_pro_subscriptions_v2.sql で ALTER 済み。
+-- 新規環境向けの CREATE IF NOT EXISTS は複合PK 版で記載する。
 create table if not exists public.pump_pro_subscriptions (
-  user_id uuid primary key references public.profiles(id) on delete cascade,
-  active boolean not null default false,
-  provider text,
-  expires_at timestamptz,
-  updated_at timestamptz not null default now()
+  user_id                uuid        not null references public.profiles(id) on delete cascade,
+  provider               text        not null,
+  active                 boolean     not null default false,
+  expires_at             timestamptz,
+  updated_at             timestamptz not null default now(),
+  stripe_customer_id     text,
+  stripe_subscription_id text,
+  primary key (user_id, provider)
 );
 
 alter table public.ai_chat_usage enable row level security;

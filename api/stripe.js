@@ -72,6 +72,7 @@ async function handleCreateCheckout(req, res) {
     .from("pump_pro_subscriptions")
     .select("stripe_customer_id, active")
     .eq("user_id", user.id)
+    .eq("provider", "stripe")
     .maybeSingle();
 
   if (subscription?.active) {
@@ -92,12 +93,12 @@ async function handleCreateCheckout(req, res) {
       .upsert(
         {
           user_id: user.id,
+          provider: "stripe",
           stripe_customer_id: stripeCustomerId,
           active: false,
-          provider: "stripe",
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "user_id" }
+        { onConflict: "user_id,provider" }
       );
   }
 
@@ -160,14 +161,14 @@ async function handleActivate(req, res) {
     .upsert(
       {
         user_id: user.id,
-        active: true,
         provider: "stripe",
+        active: true,
         stripe_customer_id: stripeCustomerId || null,
         stripe_subscription_id: stripeSubscriptionId || null,
         expires_at: expiresAt,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id" }
+      { onConflict: "user_id,provider" }
     );
 
   if (upsertError) {
@@ -210,6 +211,7 @@ async function handlePortal(req, res) {
     .from("pump_pro_subscriptions")
     .select("stripe_customer_id")
     .eq("user_id", user.id)
+    .eq("provider", "stripe")
     .maybeSingle();
 
   const stripeCustomerId = subscription?.stripe_customer_id;
@@ -255,14 +257,14 @@ const handleSubscriptionChange = async (stripe, sub, isDeleted = false) => {
     .upsert(
       {
         user_id: userId,
-        active,
         provider: "stripe",
+        active,
         stripe_customer_id: sub.customer,
         stripe_subscription_id: sub.id,
         expires_at: expiresAt,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id" }
+      { onConflict: "user_id,provider" }
     );
 
   if (error) console.error("stripe-webhook: upsert failed", error);

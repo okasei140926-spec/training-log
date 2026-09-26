@@ -382,16 +382,16 @@ async function getPumpProStatus(user) {
   const userId = user?.id;
   const tableName = "pump_pro_subscriptions";
   const conditions = { user_id: userId };
+  // 複数プロバイダー行を取得し、いずれかが active かつ有効期限内なら Pro
   const { data, error } = await adminSupabase
     .from(tableName)
-    .select("active, expires_at")
-    .eq("user_id", userId)
-    .maybeSingle();
+    .select("active, expires_at, provider")
+    .eq("user_id", userId);
 
   logSupabaseUsageStep("pump pro status lookup", {
     user,
     tableName,
-    action: "select active, expires_at",
+    action: "select active, expires_at, provider",
     conditions,
     data,
     error,
@@ -405,9 +405,12 @@ async function getPumpProStatus(user) {
     );
   }
 
-  const expiresAt = data?.expires_at ? new Date(data.expires_at).getTime() : null;
-  const isNotExpired = !expiresAt || expiresAt > Date.now();
-  return Boolean(data?.active && isNotExpired);
+  const now = Date.now();
+  return (data || []).some((row) => {
+    if (row?.active !== true) return false;
+    const expiresAt = row?.expires_at ? new Date(row.expires_at).getTime() : null;
+    return !expiresAt || expiresAt > now;
+  });
 }
 
 async function refundAiChatUsage(userId, usageDate) {
@@ -559,6 +562,7 @@ export default async function handler(req, res) {
 
   const systemPrompt = `あなたは筋トレ記録アプリ PUMP のAI Coachです。ユーザーの実際の記録だけを元に、短く分かりやすく答えてください。
 
+今日（日本時間）: ${usageDate}
 モード: ${safeContext.mode || "general"}
 レベル: ${safeContext.level || "standard"}
 対象日: ${safeContext.targetDate || "指定なし"}
@@ -567,7 +571,7 @@ ${safeContext.weeklyBodyPartContext ? `\n今週の部位別セット数（実績
 
 対象日の記録:
 ${safeContext.targetDate && !safeContext.hasTargetWorkout
-    ? `対象日（${safeContext.targetDate}）の記録はまだありません。この場合は「今日の記録はまだありません」と伝えてください。他の日の記録で代用しないでください。`
+    ? `対象日（${safeContext.targetDate}）の記録はまだありません。「${safeContext.targetDate}の記録は見つかりませんでした」と伝えてください。他の日の記録で代用しないでください。`
     : (safeContext.targetWorkoutContext || "対象日の記録はありません。")}
 
 直近の記録要約:

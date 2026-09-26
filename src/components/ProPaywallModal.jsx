@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { getRevenueCatPriceString } from "../lib/revenueCat";
 
 export const PAYWALL_CONTENT = {
@@ -27,15 +27,38 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
     const [restoreBusy, setRestoreBusy] = useState(false);
     const [restoreMsg, setRestoreMsg] = useState("");
     const [priceState, setPriceState] = useState({ price: null, loading: true, error: false });
+    const retryTimerRef = useRef(null);
+    const retryCountRef = useRef(0);
 
     const fetchPrice = useCallback(() => {
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         setPriceState({ price: null, loading: true, error: false });
         getRevenueCatPriceString()
-            .then((price) => setPriceState({ price, loading: false, error: false }))
-            .catch(() => setPriceState({ price: null, loading: false, error: true }));
+            .then((price) => {
+                retryCountRef.current = 0;
+                setPriceState({ price, loading: false, error: false });
+            })
+            .catch(() => {
+                const attempt = retryCountRef.current;
+                setPriceState({ price: null, loading: false, error: true });
+                // Auto-retry up to 2 times with 6s / 12s delay
+                if (attempt < 2) {
+                    retryCountRef.current = attempt + 1;
+                    const delay = (attempt + 1) * 6000;
+                    retryTimerRef.current = setTimeout(() => {
+                        fetchPrice();
+                    }, delay);
+                }
+            });
     }, []);
 
-    useEffect(() => { fetchPrice(); }, [fetchPrice]);
+    useEffect(() => {
+        retryCountRef.current = 0;
+        fetchPrice();
+        return () => {
+            if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        };
+    }, [fetchPrice]);
 
     const handleRestore = async () => {
         if (!onRestorePro || restoreBusy) return;
@@ -150,7 +173,7 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                     </div>
                     <button
                         type="button"
-                        onClick={fetchPrice}
+                        onClick={() => { retryCountRef.current = 0; fetchPrice(); }}
                         style={{
                             background: "none",
                             border: "1px solid rgba(255,255,255,0.30)",

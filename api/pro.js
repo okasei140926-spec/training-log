@@ -48,21 +48,45 @@ const authenticateUser = async (req) => {
   return { user };
 };
 
-const buildPlanState = (subscription) => {
-  const expiresAt = subscription?.expires_at || null;
-  const expiresAtMs = expiresAt ? Date.parse(expiresAt) : NaN;
-  const isWithinPaidPeriod = Number.isFinite(expiresAtMs) && expiresAtMs > Date.now();
-  const isActive = subscription?.active === true;
+// 複数プロバイダー行の配列を受け取り、いずれかが active なら Pro と判定する
+const buildPlanState = (rows) => {
+  const now = Date.now();
+  const list = Array.isArray(rows) ? rows : (rows ? [rows] : []);
 
-  if (isActive) {
-    return { isPro: true, status: "pro", label: "Pro", renewalStopped: false, expiresAt };
+  // active = true かつ有効期限内の行を探す（いずれか1つでも Pro）
+  const activeRow = list.find((r) => {
+    if (r.active !== true) return false;
+    const ms = r.expires_at ? Date.parse(r.expires_at) : NaN;
+    return isNaN(ms) || ms > now; // expires_at が null/未来 なら有効
+  });
+
+  if (activeRow) {
+    return {
+      isPro: true,
+      status: "pro",
+      label: "Pro",
+      renewalStopped: false,
+      expiresAt: activeRow.expires_at || null,
+    };
   }
 
-  if (isWithinPaidPeriod) {
-    return { isPro: true, status: "canceled_active", label: "Pro解約済み", renewalStopped: true, expiresAt };
+  // active = false だが expires_at がまだ未来（解約後の残存期間）
+  const withinPaidRow = list.find((r) => {
+    const ms = r.expires_at ? Date.parse(r.expires_at) : NaN;
+    return Number.isFinite(ms) && ms > now;
+  });
+
+  if (withinPaidRow) {
+    return {
+      isPro: true,
+      status: "canceled_active",
+      label: "Pro解約済み",
+      renewalStopped: true,
+      expiresAt: withinPaidRow.expires_at,
+    };
   }
 
-  return { isPro: false, status: "free", label: "Free", renewalStopped: false, expiresAt };
+  return { isPro: false, status: "free", label: "Free", renewalStopped: false, expiresAt: null };
 };
 
 // GET /api/pro  — pro-status
@@ -70,11 +94,10 @@ async function handleStatus(req, res) {
   const { user, error: authError } = await authenticateUser(req);
   if (authError || !user) return res.status(401).json({ error: authError });
 
-  const { data: subscription, error: subscriptionError } = await adminSupabase
+  const { data: subscriptions, error: subscriptionError } = await adminSupabase
     .from("pump_pro_subscriptions")
     .select("active, provider, expires_at, updated_at")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .eq("user_id", user.id);
 
   if (subscriptionError) {
     console.error("pro status lookup failed", subscriptionError);
@@ -91,7 +114,7 @@ async function handleStatus(req, res) {
 
   const dailyLimit = 5;
   const usageCount = Number(usageRow?.usage_count || 0);
-  const plan = buildPlanState(subscription);
+  const plan = buildPlanState(subscriptions || []);
 
   return res.status(200).json({
     success: true,
@@ -120,12 +143,12 @@ async function handleActivateDev(req, res) {
     .upsert(
       {
         user_id: user.id,
-        active: true,
         provider: "dev",
+        active: true,
         expires_at: null,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id" }
+      { onConflict: "user_id,provider" }
     );
 
   if (upsertError) {
@@ -168,12 +191,12 @@ async function handleDeactivateDev(req, res) {
     .upsert(
       {
         user_id: user.id,
-        active: false,
         provider: "dev",
+        active: false,
         expires_at: nowIso,
         updated_at: nowIso,
       },
-      { onConflict: "user_id" }
+      { onConflict: "user_id,provider" }
     );
 
   if (upsertError) {

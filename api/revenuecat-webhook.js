@@ -88,12 +88,15 @@ export default async function handler(req, res) {
     .upsert(
       {
         user_id: appUserId,
-        active: isActive,
         provider: "revenuecat",
+        active: isActive,
         expires_at: expiresAt,
         updated_at: new Date().toISOString(),
+        // stripe 固有カラムは RevenueCat 行には不要
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
       },
-      { onConflict: "user_id" }
+      { onConflict: "user_id,provider" }
     );
 
   if (error) {

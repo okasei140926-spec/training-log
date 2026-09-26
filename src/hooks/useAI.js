@@ -7,6 +7,7 @@ import {
 } from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
 import { supabase } from "../utils/supabase";
+import { fetchWorkoutRowsForAI } from "../features/workout/workoutRepository";
 import { extractWorkoutPlanFromText, normalizeWorkoutPlan } from "../utils/aiWorkoutPlan";
 import {
   buildRevenueCatPlan,
@@ -21,8 +22,8 @@ const AI_DAILY_LIMIT = 5;
 const AI_USAGE_STORAGE_KEY = "ai_usage_state";
 const AI_PRO_STORAGE_KEY = "pump_pro_enabled";
 const AI_API_ORIGIN = process.env.REACT_APP_API_ORIGIN || "https://training-log-mu.vercel.app";
-const AI_WORKOUTS_SELECT_QUERY = "workouts.select(date,data).eq(user_id).order(date.asc).limit(150)";
-const AI_CONTEXT_CANONICAL_SOURCE = "workouts.data";
+const AI_WORKOUTS_SELECT_QUERY = "workouts+workout_exercises+workout_sets.select(id,date,data+normalized).eq(user_id).order(date.desc).limit(150)";
+const AI_CONTEXT_CANONICAL_SOURCE = "workouts.data+normalized";
 const AI_HISTORY_CACHE_TTL_MS = 2 * 60 * 1000; // 2分（ワークアウト保存後のSync遅延を考慮）
 const _aiHistoryCache = new Map(); // key: `${userId}:${isPro}` → { result, fetchedAt }
 const INITIAL_AI_MESSAGE = {
@@ -291,44 +292,37 @@ const fetchLatestWorkoutHistoryForAI = async (userId, isPro = false, bypassCache
     return formatDateKey(d); // local timezone (not toISOString which is UTC)
   })();
 
-  let query = supabase
-    .from("workouts")
-    .select("date,data")
-    .eq("user_id", userId)
-    .order("date", { ascending: true })
-    .limit(150);
-
-  if (!isPro) {
-    query = query.gte("date", threeMonthsAgo);
-  }
-
   console.log("[AI history-limit]", {
     isPro,
     dateFilter: isPro ? "none (Pro: full history)" : threeMonthsAgo,
     limit: 150,
   });
 
-  const { data, error } = await query;
+  const { rows: data, error } = await fetchWorkoutRowsForAI({
+    userId,
+    isPro,
+    threeMonthsAgoKey: threeMonthsAgo,
+    limit: 150,
+    supabase,
+  });
 
   if (error) {
-    console.error("[AI Coach context] workouts.data fetch failed", {
+    console.error("[AI Coach context] workouts fetch failed", {
       source: AI_CONTEXT_CANONICAL_SOURCE,
       environment: getAiEnvironment(),
       user_id: userId,
-      table: "workouts",
       query: AI_WORKOUTS_SELECT_QUERY,
       errorCode: error?.code || null,
       errorMessage: error?.message || null,
       errorDetails: error?.details || null,
       errorHint: error?.hint || null,
-      responseData: data || null,
       readOnly: true,
       appHistoryStateUpdated: false,
     });
     return {
-      source: "workouts.data.fetch_failed",
+      source: "workouts.fetch_failed",
       history: {},
-      rows: data || [],
+      rows: [],
       error,
     };
   }
@@ -395,6 +389,18 @@ const getTargetDateKey = (message) => {
   }
   if (normalized.includes("今日")) {
     return getTodayKey();
+  }
+  // 「9/24の記録」「9月24日」などの特定日付パース（M/D または M月D日 形式）
+  const slashMatch = normalized.match(/(\d{1,2})\/(\d{1,2})/);
+  const kanjiMatch = !slashMatch && normalized.match(/(\d{1,2})月(\d{1,2})日/);
+  const dateMatch = slashMatch || kanjiMatch;
+  if (dateMatch) {
+    const currentYear = new Date().getFullYear();
+    const month = parseInt(dateMatch[1], 10);
+    const day = parseInt(dateMatch[2], 10);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return formatDateKey(new Date(currentYear, month - 1, day));
+    }
   }
   return "";
 };

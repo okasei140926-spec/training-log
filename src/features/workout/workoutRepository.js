@@ -166,6 +166,81 @@ async function fetchNormalizedWorkoutRow(supabase, userId, date) {
   };
 }
 
+// ─── AI用: JSONB + 正規化テーブル両対応のバルク取得 ──────────────────────────
+// workouts.data が null の行（新フォーマット）は workout_exercises/workout_sets から
+// data を再構築して返す。常に新しい順で最大 limit 件。
+export async function fetchWorkoutRowsForAI({
+  userId,
+  isPro = false,
+  threeMonthsAgoKey = "",
+  limit = 150,
+  supabase = defaultSupabase,
+} = {}) {
+  if (!userId) return { rows: [], error: null };
+
+  // Step 1: workouts テーブルから id/date/data を取得（新しい順）
+  let query = supabase
+    .from("workouts")
+    .select("id,date,data")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .limit(limit);
+
+  if (!isPro && threeMonthsAgoKey) {
+    query = query.gte("date", threeMonthsAgoKey);
+  }
+
+  const { data: workoutRows, error } = await query;
+  if (error) return { rows: [], error };
+
+  const rows = workoutRows || [];
+
+  // Step 2: data が null/非オブジェクト の行を正規化テーブルから再構築
+  const needNormalized = rows.filter(
+    (r) => !r.data || typeof r.data !== "object" || Array.isArray(r.data)
+  );
+
+  if (needNormalized.length === 0) return { rows, error: null };
+
+  const normalizedIds = needNormalized.map((r) => r.id).filter(Boolean);
+
+  const { data: exercises } = await supabase
+    .from("workout_exercises")
+    .select("id,workout_id,exercise_name,body_part,display_order")
+    .in("workout_id", normalizedIds);
+
+  if (!exercises || exercises.length === 0) return { rows, error: null };
+
+  const exerciseIds = exercises.map((e) => e.id);
+  const { data: sets } = await supabase
+    .from("workout_sets")
+    .select("id,exercise_id,set_number,weight,reps,unit,display_weight,display_unit")
+    .in("exercise_id", exerciseIds);
+
+  // workout_id → exercises のマップ
+  const exercisesByWorkoutId = {};
+  for (const ex of exercises) {
+    if (!exercisesByWorkoutId[ex.workout_id]) exercisesByWorkoutId[ex.workout_id] = [];
+    exercisesByWorkoutId[ex.workout_id].push(ex);
+  }
+
+  const normalizedIdSet = new Set(normalizedIds);
+  const reconstructed = rows.map((row) => {
+    if (!normalizedIdSet.has(row.id)) return row;
+    return {
+      id: row.id,
+      date: row.date,
+      data: buildDataFromNormalizedRows(
+        exercisesByWorkoutId[row.id] || [],
+        sets || [],
+        row.date,
+      ),
+    };
+  });
+
+  return { rows: reconstructed, error: null };
+}
+
 export async function fetchWorkoutRows({
   userId,
   fromDate = "",

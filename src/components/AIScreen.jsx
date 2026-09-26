@@ -406,23 +406,25 @@ export default function AIScreen({
                             ? "今日のAI相談 Pro 無制限"
                             : `今日 ${aiUsageCount}/${dailyFreeAiLimit}`}
                     </div>
-                    {/* Entry ①: Pro unlimited link when billing enabled and not Pro and not at limit */}
-                    {billingEnabled && !isPro && !isHardLimitReached && (
+                    {/* Entry ①: Pro unlimited pill button — hidden when Entry② banner is visible */}
+                    {billingEnabled && !isPro && !isHardLimitReached && !(Number(aiRemaining) <= 2 && Number(aiRemaining) > 0) && (
                         <button
                             type="button"
                             onClick={() => onOpenPaywall?.("general")}
                             style={{
-                                background: "none",
+                                background: "linear-gradient(135deg, var(--accent), var(--accent2, var(--accent)))",
                                 border: "none",
-                                padding: 0,
-                                color: "var(--accent)",
+                                padding: "4px 10px",
+                                borderRadius: 999,
+                                color: "#fff",
                                 fontSize: 11,
                                 fontWeight: 800,
                                 cursor: "pointer",
                                 whiteSpace: "nowrap",
+                                letterSpacing: 0.2,
                             }}
                         >
-                            Proで無制限 →
+                            ✦ Proで無制限
                         </button>
                     )}
                 </div>
@@ -793,27 +795,32 @@ export default function AIScreen({
                         ↑
                     </button>
                 </div>
-                {/* Entry ②: warn when 1 use left */}
-                {billingEnabled && !isPro && Number(aiRemaining) === 1 && !isAiLimitReached && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
-                        <span>あと1回で本日分の相談は終わりです</span>
-                        <button
-                            type="button"
-                            onClick={() => onOpenPaywall?.("general")}
-                            style={{
-                                background: "none",
-                                border: "none",
-                                padding: 0,
-                                color: "var(--accent)",
-                                fontSize: 11,
-                                fontWeight: 800,
-                                cursor: "pointer",
-                                whiteSpace: "nowrap",
-                            }}
-                        >
-                            Proなら無制限
-                        </button>
-                    </div>
+                {/* Entry ②: banner when 2 or fewer uses remain */}
+                {billingEnabled && !isPro && Number(aiRemaining) <= 2 && Number(aiRemaining) > 0 && !isAiLimitReached && (
+                    <button
+                        type="button"
+                        onClick={() => onOpenPaywall?.("general")}
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            width: "100%",
+                            padding: "8px 12px",
+                            borderRadius: 10,
+                            background: "rgba(var(--accent-rgb, 99, 102, 241), 0.08)",
+                            border: "1px solid rgba(var(--accent-rgb, 99, 102, 241), 0.2)",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "var(--accent)",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        <span style={{ color: "var(--text2)", fontWeight: 600 }}>あと{aiRemaining}回</span>
+                        <span style={{ color: "var(--text3)", fontWeight: 400 }}>·</span>
+                        <span>Proなら無制限 →</span>
+                    </button>
                 )}
                 {shouldShowLimitCard && (
                     <LimitReachedCard
@@ -822,7 +829,7 @@ export default function AIScreen({
                         onOpenPro={billingEnabled ? () => onOpenPaywall?.("ai_limit") : null}
                     />
                 )}
-                {!shouldShowLimitCard && !(billingEnabled && !isPro && Number(aiRemaining) === 1) && (
+                {!shouldShowLimitCard && !(billingEnabled && !isPro && Number(aiRemaining) <= 2 && Number(aiRemaining) > 0) && (
                     <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
                         メニュー相談、記録分析、フォーム相談をそのまま聞けます。
                     </div>

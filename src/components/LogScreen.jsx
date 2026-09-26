@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { calc1RM, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
+import { calc1RM, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -1523,7 +1523,7 @@ export default function LogScreen({
             </button>
 
             {/* 終了ボタン（今日のログのみ表示） */}
-            {onFinishWorkout && logDate === new Date().toISOString().slice(0, 10) && (
+            {onFinishWorkout && logDate === formatDateKey(new Date()) && (
                 <button
                     type="button"
                     onClick={() => {

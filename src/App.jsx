@@ -1620,7 +1620,7 @@ export default function GymApp() {
     const AI_PLAN_AUTO_COMPLETE_MIN_EXERCISES = 2;
     useEffect(() => {
         if (!aiPlanEnabled) return;
-        const today = new Date().toISOString().slice(0, 10);
+        const today = formatDateKey(new Date());
         if (!logDate || logDate !== today) return;
 
         // AIプランを受け入れた日のみ対象（「自分で組む」は除外）

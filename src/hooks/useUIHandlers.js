@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { save } from "../utils/helpers";
+import { formatDateKey, save } from "../utils/helpers";
 
 const PUSH_PROMPT_LATER_KEY = "pushPromptLaterDate";
 
@@ -72,7 +72,7 @@ export function useUIHandlers({
 
     // ── Push Prompt ───────────────────────────────────────
     const dismissPushPromptForToday = useCallback(() => {
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = formatDateKey(new Date());
         save(PUSH_PROMPT_LATER_KEY, todayStr);
         setShowPushPrompt(false);
         setPushPromptMessage("");
