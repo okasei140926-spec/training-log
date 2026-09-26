@@ -196,6 +196,7 @@ export default function SettingsModal({
   proPlan = null,
   billingEnabled = false,
   onStartPro,
+  onOpenPaywall,
   onRestorePro,
   onDeactivateProDev,
   onRefreshProStatus,
@@ -611,7 +612,7 @@ export default function SettingsModal({
           {!plan.isPro && (
             <button
               type="button"
-              onClick={handleUpgrade}
+              onClick={onOpenPaywall ? () => onOpenPaywall("general") : handleUpgrade}
               disabled={proActionBusy}
               style={{
                 width: "100%",

@@ -255,8 +255,16 @@ export default function GrowthScreen({
     prData,
     isPro = false,
     onAskWhyStagnant,
+    billingEnabled = false,
+    onOpenPaywall,
 }) {
     const [editingWeight, setEditingWeight] = useState(false);
+    const [proCardDismissed, setProCardDismissed] = useState(() => {
+        try {
+            const val = localStorage.getItem("growth_pro_card_dismissed_until");
+            return val ? Date.now() < Number(val) : false;
+        } catch { return false; }
+    });
 
     const genderNorm = gender === "女性" ? "female" : "male";
 
@@ -465,8 +473,10 @@ export default function GrowthScreen({
                                             </div>
                                             <button
                                                 onClick={() => {
-                                                    if (!canAsk) return;
-                                                    // Look up history for this exercise by name (try displayName first, then name)
+                                                    if (!canAsk) {
+                                                        if (billingEnabled) onOpenPaywall?.("stagnation");
+                                                        return;
+                                                    }
                                                     const exName = item.displayName || item.name;
                                                     const exRecords = (
                                                         history?.[exName] ||
@@ -481,12 +491,12 @@ export default function GrowthScreen({
                                                 style={{
                                                     padding: "7px 12px",
                                                     borderRadius: 999,
-                                                    border: `1px solid ${canAsk ? "rgba(249,115,22,0.45)" : "var(--border)"}`,
-                                                    background: canAsk ? "rgba(249,115,22,0.08)" : "transparent",
-                                                    color: canAsk ? "#f97316" : "var(--text4)",
+                                                    border: `1px solid ${canAsk ? "rgba(249,115,22,0.45)" : "rgba(18,199,194,0.28)"}`,
+                                                    background: canAsk ? "rgba(249,115,22,0.08)" : "rgba(18,199,194,0.08)",
+                                                    color: canAsk ? "#f97316" : "var(--accent)",
                                                     fontSize: 11,
                                                     fontWeight: 800,
-                                                    cursor: canAsk ? "pointer" : "default",
+                                                    cursor: "pointer",
                                                     whiteSpace: "nowrap",
                                                 }}
                                             >
@@ -498,6 +508,74 @@ export default function GrowthScreen({
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Entry ④: Pro promo card at bottom of growth tab */}
+            {billingEnabled && !isPro && !proCardDismissed && (
+                <div
+                    style={{
+                        position: "relative",
+                        background: "linear-gradient(145deg, rgba(18,199,194,0.12), var(--card) 60%)",
+                        borderRadius: 20,
+                        padding: "16px 16px 14px",
+                        border: "1px solid rgba(18,199,194,0.22)",
+                        boxShadow: "var(--shadow-card)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 10,
+                    }}
+                >
+                    <button
+                        type="button"
+                        aria-label="閉じる"
+                        onClick={() => {
+                            const until = Date.now() + 7 * 24 * 60 * 60 * 1000;
+                            try { localStorage.setItem("growth_pro_card_dismissed_until", String(until)); } catch {}
+                            setProCardDismissed(true);
+                        }}
+                        style={{
+                            position: "absolute",
+                            top: 10,
+                            right: 10,
+                            background: "none",
+                            border: "none",
+                            color: "var(--text3)",
+                            fontSize: 18,
+                            lineHeight: 1,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            padding: "2px 6px",
+                        }}
+                    >
+                        ×
+                    </button>
+                    <div style={{ paddingRight: 28 }}>
+                        <div style={{ fontSize: 10, fontWeight: 900, color: "var(--accent)", letterSpacing: 1.4, marginBottom: 4 }}>PUMP PRO</div>
+                        <div style={{ fontSize: 16, fontWeight: 950, color: "var(--text)", lineHeight: 1.2, marginBottom: 4 }}>
+                            記録から、次の一手まで。
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
+                            AI Coachを無制限に・伸び悩みの診断・全期間データ分析
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => onOpenPaywall?.("general")}
+                        className="pressable"
+                        style={{
+                            padding: "11px 14px",
+                            borderRadius: 14,
+                            border: "none",
+                            background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                            color: "#fff",
+                            fontSize: 13,
+                            fontWeight: 900,
+                            boxShadow: "0 8px 18px rgba(18,199,194,0.22)",
+                        }}
+                    >
+                        Pump Pro を見る →
+                    </button>
                 </div>
             )}
         </div>

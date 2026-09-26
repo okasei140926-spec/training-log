@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { getRevenueCatPriceString } from "../lib/revenueCat";
+import { useRef, useState } from "react";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 const formatConvDate = (isoStr) => {
@@ -20,10 +19,6 @@ const AI_SUGGESTIONS = [
     { label: "肩メニュー作成", prompt: "肩メニューを作成して" },
 ];
 
-const isNativePurchaseEnvironment = () => {
-    if (typeof window === "undefined") return false;
-    return window.location?.protocol === "capacitor:";
-};
 
 const CompactBubble = ({ children, role }) => (
     <div style={{ display: "flex", justifyContent: role === "user" ? "flex-end" : "flex-start" }}>
@@ -50,276 +45,6 @@ const CompactBubble = ({ children, role }) => (
     </div>
 );
 
-const ProPaywallCard = ({ onStartPro, onClose, onRestorePro }) => {
-    const [restoreBusy, setRestoreBusy] = useState(false);
-    const [restoreMsg, setRestoreMsg] = useState("");
-    const [priceState, setPriceState] = useState({ price: null, loading: true, error: false });
-
-    const fetchPrice = useCallback(() => {
-        setPriceState({ price: null, loading: true, error: false });
-        getRevenueCatPriceString()
-            .then((price) => setPriceState({ price, loading: false, error: false }))
-            .catch(() => setPriceState({ price: null, loading: false, error: true }));
-    }, []);
-
-    useEffect(() => { fetchPrice(); }, [fetchPrice]);
-
-    const handleRestore = async () => {
-        if (!onRestorePro || restoreBusy) return;
-        setRestoreBusy(true);
-        setRestoreMsg("");
-        try {
-            const result = await onRestorePro();
-            if (result?.plan?.isPro) {
-                setRestoreMsg("購入を復元しました。");
-            } else {
-                setRestoreMsg("復元できる購入が見つかりませんでした。");
-            }
-        } catch {
-            setRestoreMsg("復元に失敗しました。");
-        } finally {
-            setRestoreBusy(false);
-        }
-    };
-
-    const PRO_FEATURES = [
-        { text: "AI Coach を何度でも相談できる", sub: "1日5回の制限なし" },
-        { text: "AIが全期間のデータで分析・提案", sub: "長期トレンドをもとにした的確なアドバイス" },
-        { text: "伸び悩む種目の原因をAIが診断", sub: "「なぜ伸びない？」で記録を深掘り" },
-    ];
-
-    return (
-    <div
-        style={{
-            position: "relative",
-            overflow: "hidden",
-            width: "100%",
-            maxWidth: 620,
-            margin: "4px auto 0",
-            boxSizing: "border-box",
-            padding: "20px 18px 16px",
-            borderRadius: 22,
-            background:
-                "radial-gradient(circle at 82% 10%, rgba(51, 225, 219, 0.28), transparent 34%), linear-gradient(145deg, rgba(8, 28, 32, 0.97), rgba(13, 63, 68, 0.94) 52%, rgba(18, 199, 194, 0.18))",
-            border: "1px solid rgba(51, 225, 219, 0.28)",
-            color: "var(--text)",
-            boxShadow: "0 18px 38px rgba(15, 94, 99, 0.20)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
-        }}
-    >
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.06), transparent 40%)", pointerEvents: "none" }} />
-        {/* 閉じるボタン */}
-        <button
-            type="button"
-            aria-label="Pro案内を閉じる"
-            onClick={onClose}
-            style={{
-                position: "absolute",
-                zIndex: 2,
-                top: 12,
-                right: 12,
-                width: 28,
-                height: 28,
-                borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.14)",
-                background: "rgba(8, 28, 32, 0.50)",
-                color: "rgba(255,255,255,0.72)",
-                fontSize: 18,
-                lineHeight: 1,
-                fontWeight: 800,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-            }}
-        >
-            ×
-        </button>
-        {/* ヘッダー */}
-        <div style={{ position: "relative", zIndex: 1, paddingRight: 34 }}>
-            <div
-                style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "4px 9px",
-                    borderRadius: 999,
-                    background: "rgba(51, 225, 219, 0.14)",
-                    border: "1px solid rgba(51, 225, 219, 0.26)",
-                    color: "#A7FFFB",
-                    fontSize: 10,
-                    fontWeight: 900,
-                    letterSpacing: 1.2,
-                    marginBottom: 10,
-                }}
-            >
-                PUMP PRO
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 950, color: "#FFFFFF", lineHeight: 1.15, marginBottom: 6 }}>
-                AI Coachをもっと使う
-            </div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.82)", lineHeight: 1.6 }}>
-                無料相談は本日分を使い切りました。Pump Proでできること：
-            </div>
-        </div>
-        {/* 特典リスト */}
-        <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-            {PRO_FEATURES.map(({ text, sub }) => (
-                <div key={text} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                    <span style={{ color: "#33E1DB", fontSize: 14, fontWeight: 900, lineHeight: 1.5, flexShrink: 0 }}>✓</span>
-                    <div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#FFFFFF", lineHeight: 1.4 }}>{text}</div>
-                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.68)", lineHeight: 1.4 }}>{sub}</div>
-                    </div>
-                </div>
-            ))}
-        </div>
-        {/* 購入ボタン */}
-        {priceState.error ? (
-            <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", marginBottom: 8 }}>
-                    価格を取得できませんでした
-                </div>
-                <button
-                    type="button"
-                    onClick={fetchPrice}
-                    style={{
-                        background: "none",
-                        border: "1px solid rgba(255,255,255,0.30)",
-                        color: "#fff",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        borderRadius: 10,
-                        padding: "6px 16px",
-                    }}
-                >
-                    再試行
-                </button>
-            </div>
-        ) : (
-            <button
-                type="button"
-                onClick={onStartPro}
-                disabled={priceState.loading}
-                className="pressable"
-                style={{
-                    position: "relative",
-                    zIndex: 1,
-                    width: "100%",
-                    padding: "14px 14px",
-                    borderRadius: 18,
-                    border: "none",
-                    background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                    color: "#fff",
-                    fontSize: 15,
-                    fontWeight: 900,
-                    boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
-                    opacity: priceState.loading ? 0.6 : 1,
-                }}
-            >
-                {priceState.loading
-                    ? "価格を取得中..."
-                    : `Pump Pro を始める — ${priceState.price}/月`}
-            </button>
-        )}
-        {/* Apple審査必須：自動更新の説明 */}
-        {!priceState.loading && !priceState.error && priceState.price && (
-            <div style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(255,255,255,0.70)", lineHeight: 1.65, textAlign: "center" }}>
-                {priceState.price}/月で1か月ごとに自動更新。更新日の24時間前までにキャンセルしない限り自動で更新されます。
-                管理・キャンセルは iOS 設定 → Apple ID → サブスクリプションから。
-            </div>
-        )}
-        {/* Apple審査必須：復元ボタン */}
-        {onRestorePro && (
-            <button
-                type="button"
-                onClick={handleRestore}
-                disabled={restoreBusy}
-                style={{
-                    position: "relative",
-                    zIndex: 1,
-                    background: "none",
-                    border: "none",
-                    color: "rgba(255,255,255,0.68)",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    textDecoration: "underline",
-                    opacity: restoreBusy ? 0.5 : 1,
-                }}
-            >
-                {restoreBusy ? "復元中..." : "購入を復元"}
-            </button>
-        )}
-        {restoreMsg ? (
-            <div style={{ position: "relative", zIndex: 1, fontSize: 11, color: "rgba(255,255,255,0.75)", textAlign: "center" }}>
-                {restoreMsg}
-            </div>
-        ) : null}
-        {/* Apple審査必須：利用規約・プライバシーポリシーリンク */}
-        <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
-            <a
-                href="https://training-log-mu.vercel.app/privacy.html#利用規約"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontSize: 10, color: "rgba(255,255,255,0.52)", textDecoration: "underline" }}
-            >
-                利用規約
-            </a>
-            <a
-                href="https://training-log-mu.vercel.app/privacy.html"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontSize: 10, color: "rgba(255,255,255,0.52)", textDecoration: "underline" }}
-            >
-                プライバシーポリシー
-            </a>
-        </div>
-    </div>
-    );
-};
-
-const ProPaywallModal = ({ isOpen, onStartPro, onClose, onRestorePro }) => {
-    if (!isOpen) return null;
-
-    return (
-        <div
-            role="dialog"
-            aria-modal="true"
-            onClick={onClose}
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 900,
-                background: "rgba(5, 16, 18, 0.54)",
-                backdropFilter: "blur(8px)",
-                WebkitBackdropFilter: "blur(8px)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "calc(18px + var(--safe-top)) 16px calc(18px + var(--safe-bottom))",
-                boxSizing: "border-box",
-            }}
-        >
-            <div
-                onClick={(event) => event.stopPropagation()}
-                style={{
-                    width: "min(620px, 100%)",
-                    maxHeight: "calc(100svh - var(--safe-top) - var(--safe-bottom) - 36px)",
-                    overflowY: "auto",
-                    WebkitOverflowScrolling: "touch",
-                    borderRadius: 24,
-                }}
-            >
-                <ProPaywallCard
-                    onStartPro={onStartPro}
-                    onClose={onClose}
-                    onRestorePro={onRestorePro}
-                />
-            </div>
-        </div>
-    );
-};
 
 const formatWorkoutPlanItem = (item) => {
     const setCount = Array.isArray(item?.sets) ? item.sets.length : 0;
@@ -538,8 +263,6 @@ export default function AIScreen({
     aiLoad,
     aiEnd,
     isPro = false,
-    onStartPro,
-    onRestorePro,
     onDeactivateProDev,
     billingEnabled = false,
     dailyFreeAiLimit = 5,
@@ -558,12 +281,12 @@ export default function AIScreen({
     onOpenStripePortal,
     weeklyBodyPartCounts,
     weeklySetTargets,
+    onOpenPaywall,
 }) {
     const inputRef = useRef(null);
     const [activeQuickAction, setActiveQuickAction] = useState("");
     const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
     const [selectedWorkoutPlanMap, setSelectedWorkoutPlanMap] = useState({});
-    const [isProPaywallDismissed, setIsProPaywallDismissed] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
 
     const todaySuggestion = buildTodaySuggestion(weeklyBodyPartCounts, weeklySetTargets);
@@ -575,57 +298,14 @@ export default function AIScreen({
         !aiLoad;
 
     const visibleMessages = isInitialState ? [] : aiMsgs;
-    // 5/5以上でPro以外は制限（billingEnabledに関わらず）
     const isHardLimitReached = !isPro && Number(aiRemaining) <= 0;
-    // Pro paywall only shown when billingEnabled
     const isAiLimitReached = isHardLimitReached;
     const canSendMessage = !aiLoad && !isAiLimitReached;
-    const shouldShowProPaywall = billingEnabled && isAiLimitReached && !isProPaywallDismissed;
     const shouldShowLimitCard = isAiLimitReached;
-
-    useEffect(() => {
-        if (!isAiLimitReached) {
-            setIsProPaywallDismissed(false);
-        }
-    }, [isAiLimitReached]);
-
-    const handleStartPro = async () => {
-        try {
-            const didStart = await onStartPro?.();
-            if (didStart) {
-                setIsProPaywallDismissed(false);
-                if (typeof window !== "undefined") {
-                    window.alert?.("Pump Proを有効にしました。");
-                }
-                return;
-            }
-
-            if (typeof window !== "undefined") {
-                window.alert?.(
-                    isNativePurchaseEnvironment()
-                        ? "購入を完了できませんでした。キャンセルされた場合、課金は発生していません。"
-                        : "Pump ProはiOSアプリ版で購入できます。TestFlightまたはホーム画面に追加したアプリ版からお試しください。"
-                );
-            }
-        } catch (error) {
-            console.error("Pump Pro start failed", error);
-            if (typeof window !== "undefined") {
-                window.alert?.("購入を完了できませんでした。キャンセルされた場合、課金は発生していません。");
-            }
-        }
-    };
-
-    const openProPaywall = () => {
-        setIsProPaywallDismissed(false);
-    };
-
-    const closeProPaywall = () => {
-        setIsProPaywallDismissed(true);
-    };
 
     const handleSend = (overrideMsg) => {
         if (isAiLimitReached) {
-            openProPaywall();
+            if (billingEnabled) onOpenPaywall?.("ai_limit");
             return;
         }
         if (!canSendMessage) return;
@@ -706,26 +386,45 @@ export default function AIScreen({
                     flexWrap: "wrap",
                 }}
             >
-                <div
-                    style={{
-                        flex: "0 1 auto",
-                        maxWidth: "100%",
-                        padding: "6px 10px",
-                        borderRadius: 999,
-                        background: isAiLimitReached
-                            ? "rgba(130,150,155,0.12)"
-                            : "rgba(18, 199, 194, 0.08)",
-                        border: isAiLimitReached
-                            ? "1px solid rgba(130,150,155,0.22)"
-                            : "1px solid rgba(18, 199, 194, 0.12)",
-                        color: isAiLimitReached ? "var(--text3)" : "var(--text2)",
-                        fontSize: 11,
-                        fontWeight: 700,
-                    }}
-                >
-                    {isPro
-                        ? "今日のAI相談 Pro 無制限"
-                        : `今日 ${aiUsageCount}/${dailyFreeAiLimit}`}
+                <div style={{ display: "flex", alignItems: "center", gap: 7, flex: "0 1 auto", maxWidth: "100%" }}>
+                    <div
+                        style={{
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            background: isAiLimitReached
+                                ? "rgba(130,150,155,0.12)"
+                                : "rgba(18, 199, 194, 0.08)",
+                            border: isAiLimitReached
+                                ? "1px solid rgba(130,150,155,0.22)"
+                                : "1px solid rgba(18, 199, 194, 0.12)",
+                            color: isAiLimitReached ? "var(--text3)" : "var(--text2)",
+                            fontSize: 11,
+                            fontWeight: 700,
+                        }}
+                    >
+                        {isPro
+                            ? "今日のAI相談 Pro 無制限"
+                            : `今日 ${aiUsageCount}/${dailyFreeAiLimit}`}
+                    </div>
+                    {/* Entry ①: Pro unlimited link when billing enabled and not Pro and not at limit */}
+                    {billingEnabled && !isPro && !isHardLimitReached && (
+                        <button
+                            type="button"
+                            onClick={() => onOpenPaywall?.("general")}
+                            style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                color: "var(--accent)",
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            Proで無制限 →
+                        </button>
+                    )}
                 </div>
                 <div
                     style={{
@@ -1094,24 +793,41 @@ export default function AIScreen({
                         ↑
                     </button>
                 </div>
+                {/* Entry ②: warn when 1 use left */}
+                {billingEnabled && !isPro && Number(aiRemaining) === 1 && !isAiLimitReached && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
+                        <span>あと1回で本日分の相談は終わりです</span>
+                        <button
+                            type="button"
+                            onClick={() => onOpenPaywall?.("general")}
+                            style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                color: "var(--accent)",
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            Proなら無制限
+                        </button>
+                    </div>
+                )}
                 {shouldShowLimitCard && (
                     <LimitReachedCard
                         aiUsageCount={aiUsageCount}
                         dailyFreeAiLimit={dailyFreeAiLimit}
-                        onOpenPro={billingEnabled ? openProPaywall : null}
+                        onOpenPro={billingEnabled ? () => onOpenPaywall?.("ai_limit") : null}
                     />
                 )}
-                <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
-                    メニュー相談、記録分析、フォーム相談をそのまま聞けます。
-                </div>
+                {!shouldShowLimitCard && !(billingEnabled && !isPro && Number(aiRemaining) === 1) && (
+                    <div style={{ fontSize: 11, color: "var(--text3)", padding: "0 2px" }}>
+                        メニュー相談、記録分析、フォーム相談をそのまま聞けます。
+                    </div>
+                )}
             </div>
-
-            <ProPaywallModal
-                isOpen={shouldShowProPaywall}
-                onStartPro={handleStartPro}
-                onClose={closeProPaywall}
-                onRestorePro={onRestorePro}
-            />
 
             {pendingWorkoutPlan && (
                 <WorkoutPlanConfirmModal

@@ -38,6 +38,8 @@ export default function AnalyticsScreen({
   customEquipmentMap,
   isPro = false,
   onAskWhyStagnant,
+  billingEnabled = false,
+  onOpenPaywall,
 }) {
   const [selectedExerciseKey, setSelectedExerciseKey] = useState(null);
   const [period, setPeriod] = useState(90);
@@ -463,6 +465,8 @@ export default function AnalyticsScreen({
           prData={prData}
           isPro={isPro}
           onAskWhyStagnant={onAskWhyStagnant}
+          billingEnabled={billingEnabled}
+          onOpenPaywall={onOpenPaywall}
         />
       )}
 

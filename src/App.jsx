@@ -35,6 +35,7 @@ import PushPromptModal from "./components/PushPromptModal";
 import SplashScreen from "./components/SplashScreen";
 
 import AddExModal from "./components/modals/AddExModal";
+import { ProPaywallModal } from "./components/ProPaywallModal";
 import WorkoutDaySummaryModal from "./components/modals/WorkoutDaySummaryModal";
 import OnboardingOverlay from "./components/OnboardingOverlay";
 import {
@@ -737,6 +738,11 @@ export default function GymApp() {
 
     // Per-user billing flag: true when BILLING_ENABLED or user is in test list
     const billingEnabled = isBillingEnabled(user?.id);
+
+    // Global paywall modal state — source string (e.g. "ai_limit", "stagnation", "general") or null (closed)
+    const [paywallSource, setPaywallSource] = useState(null);
+    const openPaywall = useCallback((source) => setPaywallSource(source || "general"), []);
+    const closePaywall = useCallback(() => setPaywallSource(null), []);
 
     useEffect(() => {
         latestUserIdRef.current = user?.id ?? null;
@@ -3103,6 +3109,8 @@ export default function GymApp() {
                             onSaveGender={(g) => handleSaveProfileField("gender", g)}
                             customEquipmentMap={customEquipmentMap}
                             isPro={isPro}
+                            billingEnabled={billingEnabled}
+                            onOpenPaywall={billingEnabled ? openPaywall : null}
                             initialTab="growth"
                             onAskWhyStagnant={(exerciseName, recentRecords) => {
                                 const lines = (recentRecords || []).slice(0, 8).map((r) => {
@@ -3254,8 +3262,6 @@ export default function GymApp() {
                             weeklyBodyPartCounts={weeklyBodyPartCounts}
                             weeklySetTargets={weeklySetTargets}
                             isPro={isPro}
-                            onStartPro={activatePumpPro}
-                            onRestorePro={restorePumpPro}
                             onDeactivateProDev={deactivatePumpProDev}
                             billingEnabled={billingEnabled}
                             dailyFreeAiLimit={dailyFreeAiLimit}
@@ -3273,6 +3279,7 @@ export default function GymApp() {
                             onAddWorkoutPlan={handleAddAiWorkoutPlanToLog}
                             onInputFocusChange={handleAiInputFocusChange}
                             onOpenStripePortal={openStripePortal}
+                            onOpenPaywall={billingEnabled ? openPaywall : null}
                         />
                     )}
 
@@ -3363,6 +3370,7 @@ export default function GymApp() {
                         proPlan={proPlan}
                         billingEnabled={billingEnabled}
                         onStartPro={activatePumpPro}
+                        onOpenPaywall={billingEnabled ? openPaywall : null}
                         onRestorePro={restorePumpPro}
                         onDeactivateProDev={deactivatePumpProDev}
                         onRefreshProStatus={refreshPumpProStatus}
@@ -3387,6 +3395,15 @@ export default function GymApp() {
                         </div>
                     )}
                 </Suspense>
+
+                {/* Global Pro paywall modal — shown from any entry point */}
+                <ProPaywallModal
+                    isOpen={Boolean(paywallSource)}
+                    source={paywallSource || "general"}
+                    onStartPro={activatePumpPro}
+                    onClose={closePaywall}
+                    onRestorePro={restorePumpPro}
+                />
 
                 <PushPromptModal
                     isOpen={showPushPrompt}
