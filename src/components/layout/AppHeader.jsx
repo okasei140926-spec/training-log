@@ -13,7 +13,7 @@ export default function AppHeader({
     onOpenCalendar,
 }) {
     return (
-        <div style={S.header}>
+        <div data-app-header="true" style={S.header}>
             <div>
                 <div style={S.appLabel}>PUMP</div>
                 <div style={S.headerTitle}>{title}</div>

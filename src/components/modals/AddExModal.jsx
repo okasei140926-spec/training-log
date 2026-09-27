@@ -79,6 +79,7 @@ export default function AddExModal({
     const [migrationBusy, setMigrationBusy] = useState(false);
     const [migrationDone, setMigrationDone] = useState(false);
     const [customEquipment, setCustomEquipment] = useState(null); // null = auto-inferred
+    const [showManualAdd, setShowManualAdd] = useState(false);
 
     const nonPresetExercises = useMemo(
         () => findNonPresetExercises(history),
@@ -347,6 +348,7 @@ export default function AddExModal({
         setAdded(p => new Set([...p, trimmed]));
         setName("");
         setCustomEquipment(null);
+        setShowManualAdd(false);
     };
 
     const SuggestionList = ({ items }) => (
@@ -490,64 +492,96 @@ export default function AddExModal({
                     ))}
                 </div>
 
-                {/* 入力欄＋ボタン（固定） */}
+                {/* 入力欄＋ボタン（折りたたみ式） */}
                 <div style={{ flexShrink: 0, paddingBottom: "calc(24px + var(--safe-bottom, 0px))", paddingTop: 6, background: "var(--card-modal)" }}>
-                    <div style={{ fontSize: 11, color: "var(--text2)", letterSpacing: 2, marginBottom: 8, textTransform: "uppercase" }}>
-                        リストにない種目
-                    </div>
-                    <input ref={inputRef} value={name} onChange={e => { setName(e.target.value); setCustomEquipment(null); }}
-                        onKeyDown={e => e.key === "Enter" && handleManual()}
-                        placeholder="種目名を入力..."
-                        style={{ width: "100%", padding: "13px 15px", borderRadius: 12, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 16, marginBottom: 8, boxSizing: "border-box" }} />
-                    {/* 器具チップ */}
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                        {EQUIPMENT_LIST.map((eq) => {
-                            const active = (customEquipment || (name.trim() ? inferEquipment(name.trim()) : null)) === eq;
-                            return (
+                    {/* 折りたたみトグル */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (showManualAdd) { setName(""); setCustomEquipment(null); }
+                            setShowManualAdd(v => !v);
+                        }}
+                        style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            borderRadius: 12,
+                            border: showManualAdd
+                                ? "1px solid rgba(18,199,194,0.3)"
+                                : "1px dashed rgba(18,199,194,0.28)",
+                            background: showManualAdd ? "rgba(18,199,194,0.06)" : "transparent",
+                            color: "var(--text3)",
+                            fontSize: 13,
+                            fontWeight: 700,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: showManualAdd ? 8 : 0,
+                        }}
+                    >
+                        <span>＋ リストにない種目を追加</span>
+                        <span style={{ fontSize: 10, opacity: 0.7 }}>{showManualAdd ? "▲" : "▼"}</span>
+                    </button>
+
+                    {/* 展開コンテンツ */}
+                    {showManualAdd && (
+                        <>
+                            {/* カード：入力 + 器具選択 */}
+                            <div style={{ background: "var(--card2)", borderRadius: 14, border: "1px solid var(--border2)", padding: "12px 12px 10px", marginBottom: 8 }}>
+                                <input ref={inputRef} value={name} onChange={e => { setName(e.target.value); setCustomEquipment(null); }}
+                                    onKeyDown={e => e.key === "Enter" && handleManual()}
+                                    placeholder="種目名を入力..."
+                                    autoFocus
+                                    style={{ width: "100%", padding: "11px 13px", borderRadius: 10, background: "var(--card-modal)", border: "1px solid var(--border2)", color: "var(--text)", fontSize: 15, marginBottom: 10, boxSizing: "border-box" }} />
+                                <div style={{ fontSize: 10, color: "var(--text3)", fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>器具</div>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", opacity: name.trim() ? 1 : 0.38, pointerEvents: name.trim() ? "auto" : "none", transition: "opacity 0.15s" }}>
+                                    {EQUIPMENT_LIST.map((eq) => {
+                                        const active = (customEquipment || (name.trim() ? inferEquipment(name.trim()) : null)) === eq;
+                                        return (
+                                            <button
+                                                key={eq}
+                                                type="button"
+                                                onClick={() => setCustomEquipment(eq === customEquipment ? null : eq)}
+                                                style={{
+                                                    padding: "5px 11px",
+                                                    borderRadius: 999,
+                                                    border: `1px solid ${active ? "rgba(18,199,194,0.6)" : "rgba(18,199,194,0.18)"}`,
+                                                    background: active ? "rgba(18,199,194,0.14)" : "transparent",
+                                                    color: active ? "var(--accent)" : "var(--text3)",
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                {EQUIPMENT_LABELS[eq]}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 9 }}>
+                                <button onClick={onClose} style={{ flex: 1, padding: "12px", borderRadius: 12, background: "var(--card2)", color: "var(--text2)", fontSize: 15, border: "none" }}>閉じる</button>
                                 <button
-                                    key={eq}
-                                    type="button"
-                                    onClick={() => setCustomEquipment(eq === customEquipment ? null : eq)}
+                                    onClick={handleManual}
+                                    disabled={!name.trim()}
                                     style={{
-                                        padding: "5px 11px",
-                                        borderRadius: 999,
-                                        border: `1px solid ${active ? "rgba(18,199,194,0.6)" : "rgba(18,199,194,0.18)"}`,
-                                        background: active ? "rgba(18,199,194,0.14)" : "transparent",
-                                        color: active ? "var(--accent)" : "var(--text3)",
-                                        fontSize: 12,
-                                        fontWeight: 700,
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    {EQUIPMENT_LABELS[eq]}
+                                        flex: 2,
+                                        padding: "12px",
+                                        borderRadius: 12,
+                                        fontSize: 15,
+                                        fontWeight: 800,
+                                        border: "none",
+                                        background: name.trim()
+                                            ? "linear-gradient(135deg, #0F5E63 0%, #12C7C2 100%)"
+                                            : "rgba(18, 199, 194, 0.12)",
+                                        color: name.trim() ? "#FFFFFF" : "rgba(15, 94, 99, 0.45)",
+                                        boxShadow: name.trim() ? "0 10px 22px rgba(18, 199, 194, 0.22)" : "none",
+                                        opacity: name.trim() ? 1 : 0.9,
+                                    }}>
+                                    手動で追加
                                 </button>
-                            );
-                        })}
-                    </div>
-                    <div style={{ display: "flex", gap: 9 }}>
-                        <button onClick={onClose} style={{ flex: 1, padding: "12px", borderRadius: 12, background: "var(--card2)", color: "var(--text2)", fontSize: 15, border: "none" }}>閉じる</button>
-                        <button
-                            onClick={handleManual}
-                            disabled={!name.trim()}
-                            style={{
-                                flex: 2,
-                                padding: "12px",
-                                borderRadius: 12,
-                                fontSize: 15,
-                                fontWeight: 800,
-                                border: "none",
-                                background: name.trim()
-                                    ? "linear-gradient(135deg, #0F5E63 0%, #12C7C2 100%)"
-                                    : "rgba(18, 199, 194, 0.12)",
-                                color: name.trim() ? "#FFFFFF" : "rgba(15, 94, 99, 0.45)",
-                                boxShadow: name.trim()
-                                    ? "0 10px 22px rgba(18, 199, 194, 0.22)"
-                                    : "none",
-                                opacity: name.trim() ? 1 : 0.9
-                            }}>
-                            手動で追加
-                        </button>
-                    </div>
+                            </div>
+                        </>
+                    )}
 
                     {/* マイグレーション：過去の手動種目を一括登録 */}
                     {onBulkSaveCustomExercises && nonPresetExercises.length > 0 && !migrationDone && (

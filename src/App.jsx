@@ -1738,9 +1738,11 @@ export default function GymApp() {
 
         // Timer start trigger: reps > 0 is sufficient (weight is not required).
         // This ensures the timer starts as soon as the user inputs the first rep count.
+        // Sort by name so that exercise reordering does NOT change the signature —
+        // only set content (reps added/removed) should trigger the timer.
         const activitySignature = JSON.stringify(
             exercises
-                .map((ex, index) => {
+                .map((ex) => {
                     const repsOnlySets = (logData[ex.name] || []).filter((set) => {
                         const reps = Number(set.reps ?? set.rep);
                         return Number.isFinite(reps) && reps > 0;
@@ -1750,13 +1752,13 @@ export default function GymApp() {
 
                     return {
                         name: ex.name,
-                        order: index,
                         sets: repsOnlySets.map((set) => ({
                             reps: Number(set.reps ?? set.rep),
                         })),
                     };
                 })
                 .filter(Boolean)
+                .sort((a, b) => a.name.localeCompare(b.name, "ja"))
         );
 
         if (previousWorkoutActivityDateRef.current !== logDate) {

@@ -88,6 +88,11 @@ export function useWorkoutSession({ getTodayKey, user }) {
         // after a deletion or background restore.
         if (!startIfNeeded) return;
 
+        // Never restart a session that was already explicitly finished for today.
+        // This prevents reordering, editing, or other draft mutations from resurrecting
+        // a completed workout and overwriting the saved duration.
+        if (currentState?.isFinished && currentState.startedForDate === normalizedDate) return;
+
         applyWorkoutTimerState({
             startedAt: now,
             startedForDate: normalizedDate,

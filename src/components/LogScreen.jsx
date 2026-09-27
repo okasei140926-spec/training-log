@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { calc1RM, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
@@ -54,6 +54,30 @@ function SortableExerciseItem({ id, children }) {
 
 const roundTo1Decimal = (value) => Math.round(Number(value || 0) * 10) / 10;
 const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
+
+/**
+ * sets を kg 数値に正規化した doneSets を返す共通関数。
+ *
+ * `weight` を kg 数値に変換しつつ、元の表示重量を `displayWeight` に保存する。
+ * これにより `sanitizeWorkoutSet` が lb 種目を二重変換するバグを防ぐ:
+ *   - lb 種目は weightMode:"lbs" を保持したまま weight を kg 値に変えると、
+ *     sanitizeWorkoutSet が hasDisplayWeightValue=false → set.weight を lb とみなして
+ *     再変換してしまう。
+ *   - displayWeight に元の lb 値を残すことで hasDisplayWeightValue=true となり
+ *     正しく変換される。
+ */
+const buildNormalizedDoneSets = (sets, exUnit) =>
+    sets.map((s) => {
+        const w = Number(getSetStoredWeightKg(s, exUnit));
+        const r = Number(s.reps);
+        if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) return null;
+        return {
+            ...s,
+            weight: w,
+            displayWeight: s.displayWeight ?? s.weight,
+            displayUnit: getSetDisplayUnit(s, exUnit),
+        };
+    }).filter(Boolean);
 
 const getPreviousRecordSets = (record) => {
     const sets = getRecordSourceSets(record);
@@ -448,6 +472,9 @@ export default function LogScreen({
     const previousExerciseIdsRef = useRef(exercises.map((ex) => ex.id));
     const firstAddedDuringAddModalRef = useRef(null);
     const exerciseCardRefs = useRef(new Map());
+    const summaryCardRef = useRef(null);
+    const [summaryCompact, setSummaryCompact] = useState(false);
+    const [compactBarTop, setCompactBarTop] = useState(0);
     const [pendingScrollExerciseId, setPendingScrollExerciseId] = useState(null);
     const compactIconButtonStyle = {
         width: 34,
@@ -561,14 +588,7 @@ export default function LogScreen({
         const sets = logData[ex.name] || getExSets(ex);
         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
 
-        const doneSets = sets.filter((s) => {
-            const w = Number(getSetStoredWeightKg(s, exUnit));
-            const r = Number(s.reps);
-            return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
-        }).map((s) => ({
-            ...s,
-            weight: getSetStoredWeightKg(s, exUnit),
-        }));
+        const doneSets = buildNormalizedDoneSets(sets, exUnit);
 
         const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
         const prSets = pr?.sets?.filter((s) => {
@@ -698,6 +718,38 @@ export default function LogScreen({
         if (!showAdd) firstAddedDuringAddModalRef.current = null;
     }, [showAdd]);
 
+    // AppHeader の高さを計測して compactBarTop に反映する。
+    // CSS カスタムプロパティ経由ではなく JS state で管理することで
+    // Capacitor iOS (WKWebView) でも確実に正しい top 値を使えるようにする。
+    useLayoutEffect(() => {
+        const measure = () => {
+            const el = document.querySelector('[data-app-header="true"]');
+            if (el) setCompactBarTop(el.getBoundingClientRect().height);
+        };
+        measure();
+    }, []);
+
+    useEffect(() => {
+        const el = document.querySelector('[data-app-header="true"]');
+        if (!el) return;
+        const ro = new ResizeObserver(() => {
+            setCompactBarTop(el.getBoundingClientRect().height);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    useEffect(() => {
+        const el = summaryCardRef.current;
+        if (!el) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => setSummaryCompact(!entry.isIntersecting),
+            { threshold: 0 }
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
     const hasEditedSets = useCallback((exercise) => {
         const sets = logData[exercise.name] || getExSets(exercise);
         return (sets || []).some((set) => {
@@ -801,9 +853,88 @@ export default function LogScreen({
         onQuickAddEx(name, remove, labelOverride, options);
     };
 
+    const compactElapsedLabel = (() => {
+        const s = Math.max(0, Math.floor(Number(workoutElapsedSec) || 0));
+        const m = Math.floor(s / 60);
+        const h = Math.floor(m / 60);
+        const p = (v) => String(v).padStart(2, "0");
+        if (workoutTimerStatus === "finished") return h > 0 ? `${h}時間${m % 60}分` : `${m}分`;
+        return h > 0 ? `${h}:${p(m % 60)}:${p(s % 60)}` : `${p(m)}:${p(s % 60)}`;
+    })();
+
     return (
+        <>
+        {/* Compact summary bar — fixed, slides in when summary card scrolls off screen */}
+        {(() => {
+            // 部位別セット数: 元の順序を保ちつつ最大3部位表示し、残りは +N
+            const visibleBodyParts = setCountByBodyPart.slice(0, 3);
+            const hiddenBodyPartCount = setCountByBodyPart.length - visibleBodyParts.length;
+            return (
+                <div
+                    aria-hidden={!summaryCompact}
+                    style={{
+                        position: "fixed",
+                        top: compactBarTop,
+                        left: 0,
+                        right: 0,
+                        zIndex: 45,
+                        height: 44,
+                        background: "var(--nav-bg)",
+                        backdropFilter: "blur(20px)",
+                        WebkitBackdropFilter: "blur(20px)",
+                        borderBottom: "1px solid rgba(18, 199, 194, 0.12)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity: summaryCompact ? 1 : 0,
+                        pointerEvents: summaryCompact ? "auto" : "none",
+                        transform: summaryCompact ? "translateY(0)" : "translateY(-6px)",
+                        transition: "opacity 0.2s ease, transform 0.2s ease",
+                    }}
+                >
+                    <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        width: "100%",
+                        maxWidth: 430,
+                        padding: "0 18px",
+                        overflow: "hidden",
+                        boxSizing: "border-box",
+                    }}>
+                        {(workoutTimerStatus !== "idle" || workoutElapsedSec > 0) && (
+                            <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", color: workoutTimerStatus === "finished" ? "var(--text2)" : "var(--accent)", flexShrink: 0 }}>
+                                {workoutTimerStatus === "finished" ? "✅" : "⏱"} {compactElapsedLabel}
+                            </span>
+                        )}
+                        {visibleBodyParts.map((item, idx) => (
+                            <React.Fragment key={item.bodyPart}>
+                                {idx > 0 && <span style={{ color: "var(--text4)", fontSize: 11, flexShrink: 0 }}>／</span>}
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                                    {item.bodyPart} {item.count}
+                                </span>
+                            </React.Fragment>
+                        ))}
+                        {hiddenBodyPartCount > 0 && (
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text3)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                                +{hiddenBodyPartCount}
+                            </span>
+                        )}
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", whiteSpace: "nowrap", flexShrink: 0, marginLeft: "auto" }}>
+                            {formattedVolumeKg}kg
+                        </span>
+                        {prCount > 0 && (
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                                PR {prCount}件
+                            </span>
+                        )}
+                    </div>
+                </div>
+            );
+        })()}
+
         <div className="fade-in" style={{ ...S.page, paddingBottom: "calc(var(--bottom-nav-clearance) + 56px)" }}>
-            <div style={{ ...S.subtleCard, padding: "12px 14px" }}>
+            <div ref={summaryCardRef} style={{ ...S.subtleCard, padding: "12px 14px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                         <div style={{ minWidth: 0 }}>
@@ -1023,23 +1154,12 @@ export default function LogScreen({
                         const displayUnit = getExerciseDisplayUnit(sets, exUnit);
                         const progressionTarget = calcProgressionTarget(previousSets, previousUnit, displayUnit);
 
-                        const completedSetEntries = sets.map((s) => {
-                            const w = Number(getSetStoredWeightKg(s, exUnit));
-                            const r = Number(s.reps);
-                            if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) return null;
-                            const normalizedSet = {
-                                ...s,
-                                weight: w,
-                                displayWeight: s.displayWeight ?? s.weight,
-                                displayUnit: getSetDisplayUnit(s, exUnit),
-                            };
-                            return {
-                                sourceSet: s,
-                                normalizedSet,
-                                rm: calc1RM([normalizedSet]),
-                            };
-                        }).filter(Boolean);
-                        const doneSets = completedSetEntries.map((entry) => entry.normalizedSet);
+                        const doneSets = buildNormalizedDoneSets(sets, exUnit);
+                        const completedSetEntries = doneSets.map((normalizedSet) => ({
+                            sourceSet: normalizedSet,
+                            normalizedSet,
+                            rm: calc1RM([normalizedSet]),
+                        }));
                         const currentTopSetEntry = completedSetEntries.reduce((best, entry) => {
                             if (!best || entry.rm > best.rm) return entry;
                             return best;
@@ -1120,83 +1240,39 @@ export default function LogScreen({
                                                     </div>
                                                 </div>
 
-                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
-                                                        }}
-                                                        style={{
-                                                            ...compactIconButtonStyle,
-                                                            color: "var(--text3)",
-                                                        }}
-                                                        aria-label="並べ替え"
-                                                    >
-                                                        ⋮⋮
-                                                    </button>
+                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                                                    {reorderMenuId === ex.id ? (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => moveExerciseByOffset(ex.id, -1)}
+                                                                disabled={i === 0}
+                                                                style={{ ...compactIconButtonStyle, color: i === 0 ? "var(--text4)" : "var(--text2)", fontSize: 14 }}
+                                                                aria-label="上へ"
+                                                            >↑</button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => moveExerciseByOffset(ex.id, 1)}
+                                                                disabled={i === exercises.length - 1}
+                                                                style={{ ...compactIconButtonStyle, color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)", fontSize: 14 }}
+                                                                aria-label="下へ"
+                                                            >↓</button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setReorderMenuId(null)}
+                                                                style={{ ...compactTextButtonStyle, color: "var(--accent)", borderColor: "var(--accent)" }}
+                                                            >完了</button>
+                                                        </>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setReorderMenuId((prev) => (prev === ex.id ? null : ex.id))}
+                                                            style={{ ...compactIconButtonStyle, color: "var(--text3)" }}
+                                                            aria-label="並べ替え"
+                                                        >⋮⋮</button>
+                                                    )}
                                                 </div>
                                             </div>
-                                            {reorderMenuId === ex.id && (
-                                                <div
-                                                    style={{
-                                                        marginTop: -4,
-                                                        marginBottom: 12,
-                                                        display: "flex",
-                                                        gap: 8,
-                                                        justifyContent: "flex-end",
-                                                    }}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => moveExerciseByOffset(ex.id, -1)}
-                                                        disabled={i === 0}
-                                                        style={{
-                                                            padding: "7px 10px",
-                                                            borderRadius: 10,
-                                                            border: `1px solid ${softBorderColor}`,
-                                                            background: subActionBg,
-                                                            color: i === 0 ? "var(--text4)" : "var(--text2)",
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                        }}
-                                                    >
-                                                        上へ
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => moveExerciseByOffset(ex.id, 1)}
-                                                        disabled={i === exercises.length - 1}
-                                                        style={{
-                                                            padding: "7px 10px",
-                                                            borderRadius: 10,
-                                                            border: `1px solid ${softBorderColor}`,
-                                                            background: subActionBg,
-                                                            color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)",
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                        }}
-                                                    >
-                                                        下へ
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setReorderMenuId(null)}
-                                                        style={{
-                                                            padding: "7px 10px",
-                                                            borderRadius: 10,
-                                                            border: `1px solid ${softBorderColor}`,
-                                                            background: subActionBg,
-                                                            color: "var(--text3)",
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                        }}
-                                                    >
-                                                        閉じる
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     )}
                                 </SortableExerciseItem>
@@ -1275,99 +1351,64 @@ export default function LogScreen({
                                             </div>
 
                                             <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
-                                                    }}
-                                                    style={{
-                                                        ...compactIconButtonStyle,
-                                                    }}
-                                                    aria-label="並べ替え"
-                                                >
-                                                    ⋮⋮
-                                                </button>
-
-                                                <button
-                                                    onPointerDown={(e) => e.stopPropagation()}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setHistoryTarget(ex.name);
-                                                    }}
-                                                    style={compactTextButtonStyle}
-                                                >
-                                                    履歴
-                                                </button>
-                                                <button
-                                                    onPointerDown={(e) => e.stopPropagation()}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setMemoOpenId(id => id === ex.id ? null : ex.id);
-                                                    }}
-                                                    style={{
-                                                        ...compactTextButtonStyle,
-                                                        color: memos[ex.name] ? "var(--accent)" : "var(--text2)",
-                                                        borderColor: memos[ex.name] ? "var(--accent)" : softBorderColor,
-                                                    }}
-                                                >
-                                                    メモ
-                                                </button>
-                                                <button onClick={() => removeEx(ex.id, ex.name)} style={{ ...compactIconButtonStyle, color: "var(--text2)", borderColor: softBorderColor }}>×</button>
+                                                {reorderMenuId === ex.id ? (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); moveExerciseByOffset(ex.id, -1); }}
+                                                            disabled={i === 0}
+                                                            style={{ ...compactIconButtonStyle, color: i === 0 ? "var(--text4)" : "var(--text2)", fontSize: 14 }}
+                                                            aria-label="上へ"
+                                                        >↑</button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); moveExerciseByOffset(ex.id, 1); }}
+                                                            disabled={i === exercises.length - 1}
+                                                            style={{ ...compactIconButtonStyle, color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)", fontSize: 14 }}
+                                                            aria-label="下へ"
+                                                        >↓</button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); setReorderMenuId(null); }}
+                                                            style={{ ...compactTextButtonStyle, color: "var(--accent)", borderColor: "var(--accent)" }}
+                                                        >完了</button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setReorderMenuId((prev) => (prev === ex.id ? null : ex.id));
+                                                            }}
+                                                            style={{ ...compactIconButtonStyle }}
+                                                            aria-label="並べ替え"
+                                                        >⋮⋮</button>
+                                                        <button
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setHistoryTarget(ex.name);
+                                                            }}
+                                                            style={compactTextButtonStyle}
+                                                        >履歴</button>
+                                                        <button
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setMemoOpenId(id => id === ex.id ? null : ex.id);
+                                                            }}
+                                                            style={{
+                                                                ...compactTextButtonStyle,
+                                                                color: memos[ex.name] ? "var(--accent)" : "var(--text2)",
+                                                                borderColor: memos[ex.name] ? "var(--accent)" : softBorderColor,
+                                                            }}
+                                                        >メモ</button>
+                                                        <button onClick={() => removeEx(ex.id, ex.name)} style={{ ...compactIconButtonStyle, color: "var(--text2)", borderColor: softBorderColor }}>×</button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
-
-                                        {reorderMenuId === ex.id && (
-                                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 10 }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => moveExerciseByOffset(ex.id, -1)}
-                                                    disabled={i === 0}
-                                                    style={{
-                                                        padding: "7px 10px",
-                                                        borderRadius: 10,
-                                                        border: `1px solid ${softBorderColor}`,
-                                                        background: subActionBg,
-                                                        color: i === 0 ? "var(--text4)" : "var(--text2)",
-                                                        fontSize: 12,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    上へ
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => moveExerciseByOffset(ex.id, 1)}
-                                                    disabled={i === exercises.length - 1}
-                                                    style={{
-                                                        padding: "7px 10px",
-                                                        borderRadius: 10,
-                                                        border: `1px solid ${softBorderColor}`,
-                                                        background: subActionBg,
-                                                        color: i === exercises.length - 1 ? "var(--text4)" : "var(--text2)",
-                                                        fontSize: 12,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    下へ
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setReorderMenuId(null)}
-                                                    style={{
-                                                        padding: "7px 10px",
-                                                        borderRadius: 10,
-                                                        border: `1px solid ${softBorderColor}`,
-                                                        background: subActionBg,
-                                                        color: "var(--text3)",
-                                                        fontSize: 12,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    閉じる
-                                                </button>
-                                            </div>
-                                        )}
 
                                         {sets.map((set, idx) => (
                                             <SetRow
@@ -1698,5 +1739,6 @@ export default function LogScreen({
             )}
 
         </div>
+        </>
     );
 }
