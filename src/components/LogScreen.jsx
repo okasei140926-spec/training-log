@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { calc1RM, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
@@ -474,7 +474,6 @@ export default function LogScreen({
     const exerciseCardRefs = useRef(new Map());
     const summaryCardRef = useRef(null);
     const [summaryCompact, setSummaryCompact] = useState(false);
-    const [compactBarTop, setCompactBarTop] = useState(0);
     const [pendingScrollExerciseId, setPendingScrollExerciseId] = useState(null);
     const compactIconButtonStyle = {
         width: 34,
@@ -718,26 +717,6 @@ export default function LogScreen({
         if (!showAdd) firstAddedDuringAddModalRef.current = null;
     }, [showAdd]);
 
-    // AppHeader の高さを計測して compactBarTop に反映する。
-    // CSS カスタムプロパティ経由ではなく JS state で管理することで
-    // Capacitor iOS (WKWebView) でも確実に正しい top 値を使えるようにする。
-    useLayoutEffect(() => {
-        const measure = () => {
-            const el = document.querySelector('[data-app-header="true"]');
-            if (el) setCompactBarTop(el.getBoundingClientRect().height);
-        };
-        measure();
-    }, []);
-
-    useEffect(() => {
-        const el = document.querySelector('[data-app-header="true"]');
-        if (!el) return;
-        const ro = new ResizeObserver(() => {
-            setCompactBarTop(el.getBoundingClientRect().height);
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, []);
 
     useEffect(() => {
         const el = summaryCardRef.current;
@@ -874,7 +853,7 @@ export default function LogScreen({
                     aria-hidden={!summaryCompact}
                     style={{
                         position: "fixed",
-                        top: compactBarTop,
+                        top: "var(--app-header-height)",
                         left: 0,
                         right: 0,
                         zIndex: 45,

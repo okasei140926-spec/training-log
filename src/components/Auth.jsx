@@ -37,6 +37,9 @@ export default function Auth({ onClose, isDark }) {
   const [sent, setSent] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [oauthLoadingProvider, setOauthLoadingProvider] = useState("");
+  const [spinnerVisible, setSpinnerVisible] = useState(false);
+  const spinnerHideTimerRef = useRef(null);
+  const spinnerStartRef = useRef(0);
   const oauthTimeoutRef = useRef(null);
   const oauthResumeCheckTimeoutRef = useRef(null);
   const oauthStartedAtRef = useRef(0);
@@ -70,6 +73,21 @@ export default function Auth({ onClose, isDark }) {
     stopNativeOAuthWatchers();
     clearOauthPendingState(nextError);
   }, [clearOauthPendingState, stopNativeOAuthWatchers]);
+
+  // Show spinner with a minimum display duration of 350ms to avoid a flash on fast connections.
+  useEffect(() => {
+    const isActive = loading || !!oauthLoadingProvider;
+    if (isActive) {
+      clearTimeout(spinnerHideTimerRef.current);
+      spinnerStartRef.current = Date.now();
+      setSpinnerVisible(true);
+    } else {
+      const elapsed = Date.now() - spinnerStartRef.current;
+      const delay = Math.max(0, 350 - elapsed);
+      spinnerHideTimerRef.current = setTimeout(() => setSpinnerVisible(false), delay);
+    }
+    return () => clearTimeout(spinnerHideTimerRef.current);
+  }, [loading, oauthLoadingProvider]);
 
   const bg = isDark ? "#1a1a1a" : "#fff";
   const text = isDark ? "#fff" : "#000";
@@ -318,6 +336,21 @@ export default function Auth({ onClose, isDark }) {
     window.setTimeout(() => setCopiedLink(false), 1800);
   };
 
+  const Spinner = ({ light = true }) => (
+    <span style={{
+      display: "inline-block",
+      width: 14,
+      height: 14,
+      border: `2px solid ${light ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.18)"}`,
+      borderTopColor: light ? "#fff" : "#000",
+      borderRadius: "50%",
+      animation: "authSpin 0.65s linear infinite",
+      verticalAlign: "middle",
+      marginRight: 7,
+      flexShrink: 0,
+    }} />
+  );
+
   const inputStyle = {
     display: "block", width: "100%", marginBottom: 12,
     padding: "14px 16px", borderRadius: 12, fontSize: 16,
@@ -374,7 +407,8 @@ export default function Auth({ onClose, isDark }) {
           <p style={{ color: sub, marginBottom: 24, fontSize: 14 }}>登録したメールアドレスを入力してください。パスワード再設定用のリンクを送ります。</p>
           <input placeholder="メールアドレス" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} />
           {error && <p style={{ color: "red", marginBottom: 12, fontSize: 14 }}>{error}</p>}
-          <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.7 : 1 }}>
+          <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {spinnerVisible && loading && <Spinner />}
             {loading ? "送信中..." : "リセットメールを送る"}
           </button>
         </div>
@@ -421,7 +455,8 @@ export default function Auth({ onClose, isDark }) {
           )}
         </div>
       )}
-      <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, marginBottom: 12, opacity: loading ? 0.7 : 1 }}>
+      <button onClick={handleSubmit} disabled={loading} style={{ ...btnStyle, marginBottom: 12, opacity: loading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {spinnerVisible && loading && <Spinner />}
         {loading ? "処理中..." : mode === "login" ? "ログイン" : "登録する"}
       </button>
       <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0 14px" }}>
@@ -438,8 +473,12 @@ export default function Auth({ onClose, isDark }) {
           border: `1px solid ${text}`,
           color: bg,
           opacity: loading || oauthLoadingProvider ? 0.7 : 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
+        {spinnerVisible && oauthLoadingProvider === "apple" && <Spinner light={isDark} />}
         {oauthLoadingProvider === "apple" ? "Appleへ移動中..." : "Appleで続行"}
       </button>
       <button
@@ -451,8 +490,12 @@ export default function Auth({ onClose, isDark }) {
           border: `1px solid ${border}`,
           color: text,
           opacity: loading || oauthLoadingProvider ? 0.7 : 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
+        {spinnerVisible && oauthLoadingProvider === "google" && <Spinner light={isDark} />}
         {oauthLoadingProvider === "google" ? "Googleへ移動中..." : "Googleで続行"}
       </button>
       {mode === "login" && (

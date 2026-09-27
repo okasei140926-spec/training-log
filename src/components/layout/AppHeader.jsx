@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { S } from "../../utils/styles";
 
 export default function AppHeader({
@@ -12,8 +13,28 @@ export default function AppHeader({
     showCalendarButton = false,
     onOpenCalendar,
 }) {
+    const headerRef = useRef(null);
+
+    // position: fixed なので ResizeObserver はスクロール中にトリガーされない。
+    // 正確なヘッダー高さを CSS 変数に反映し、コンテンツの paddingTop と
+    // コンパクトバーの top 位置の両方に使う。
+    useEffect(() => {
+        const el = headerRef.current;
+        if (!el) return;
+        const update = () => {
+            document.documentElement.style.setProperty(
+                "--app-header-height",
+                `${el.getBoundingClientRect().height}px`
+            );
+        };
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
     return (
-        <div data-app-header="true" style={S.header}>
+        <div ref={headerRef} data-app-header="true" style={S.header}>
             <div>
                 <div style={S.appLabel}>PUMP</div>
                 <div style={S.headerTitle}>{title}</div>
