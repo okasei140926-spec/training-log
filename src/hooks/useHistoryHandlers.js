@@ -75,6 +75,7 @@ export function useHistoryHandlers({
     applyLocalHistoryDates,
     buildHistoryRecordDeleteKey,
     removeHistoryDate,
+    onDeleteDateClearCompletion,
 }) {
     const handleLogForDate = (dateStr) => {
         const requestedDate = normalizeDraftDateKey(dateStr);
@@ -193,6 +194,31 @@ export function useHistoryHandlers({
         });
 
         if (shouldUseLocalDraft) {
+            // Zombie check: a draft that claims hasUnsavedChanges:true but was NOT written
+            // by an actual useWorkoutLog user-edit (source "useWorkoutLog:*") is a zombie —
+            // stale restore labels ("autosave_draft", "active_local_recording_restore", …).
+            // Exception: isActiveLocalRecording means the timer is running right now on this
+            // exact date, so we must always preserve it.
+            const isGenuineUnsaved = isActiveLocalRecording || isUnsavedUserWorkoutDraft(draftForDate);
+            if (!isGenuineUnsaved) {
+                clearDraftForDate(requestedDate);
+                const zombieEmptyDraft = withDraftDateMeta(requestedDate, {
+                    todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {},
+                }, { source: "explicit_date_nav", hasUnsavedChanges: false });
+                console.log("[restore] zombie draft cleared on calendar open", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user?.id || null,
+                    date: requestedDate,
+                    source: draftForDate?.meta?.source || null,
+                    localSetCount: localMetrics.setCount,
+                });
+                logCalendarOpen("emptyDraft", zombieEmptyDraft);
+                applyLogDraftState(zombieEmptyDraft);
+                logRestoreDecision(requestedDate, savedDraftForDate, draftForDate, { sessionEx: [] }, "zombie_draft_cleared");
+                setScreen("log");
+                return;
+            }
+
             const datedDraftForDate = withDraftDateMeta(requestedDate, draftForDate, {
                 source: "explicit_date_nav",
                 hasUnsavedChanges: draftForDate?.meta?.hasUnsavedChanges ?? true,
@@ -245,7 +271,7 @@ export function useHistoryHandlers({
             return;
         }
 
-        if (hasDraftContent(draftForDate)) {
+        if (hasDraftContent(draftForDate) && localDraftHasUnsavedChanges) {
             if (localDraftIsRicher && !hasSavedWorkout) {
                 console.warn("[restore] using richer local draft for date", {
                     env: getRuntimeEnvironmentLabel(),
@@ -267,6 +293,19 @@ export function useHistoryHandlers({
                 source: "explicit_date_nav",
                 hasUnsavedChanges: false,
             });
+            if (hasDraftContent(draftForDate) && !localDraftHasUnsavedChanges) {
+                // Phantom draft: has content but no unsaved changes and no remote data.
+                // Fully remove it from storage (keys deleted, not overwritten) so it
+                // cannot resurface via loadDraftForDate on any subsequent visit.
+                clearDraftForDate(requestedDate);
+                console.log("[restore] phantom draft cleared from storage", {
+                    env: getRuntimeEnvironmentLabel(),
+                    user_id: user?.id || null,
+                    date: requestedDate,
+                    source: draftForDate?.meta?.source || null,
+                    localSetCount: localMetrics.setCount,
+                });
+            }
             logCalendarOpen("emptyDraft", emptyDraft);
             applyLogDraftState(emptyDraft);
             logRestoreDecision(requestedDate, savedDraftForDate, draftForDate, { sessionEx: [] }, "empty");
@@ -582,6 +621,17 @@ export function useHistoryHandlers({
         if (summary?.date === normalizedTargetDate) setSummary(null);
         if (workoutDayShareTarget?.workoutDate === normalizedTargetDate) setWorkoutDayShareTarget(null);
         if (workoutStartedForDate === normalizedTargetDate) resetWorkoutElapsedTimer();
+
+        // 完了状態を解除（pump_completed_workout_dates + AIプラン completedDates）
+        try {
+            const COMPLETED_KEY = "pump_completed_workout_dates";
+            const stored = JSON.parse(localStorage.getItem(COMPLETED_KEY) || "{}");
+            if (stored[normalizedTargetDate]) {
+                delete stored[normalizedTargetDate];
+                localStorage.setItem(COMPLETED_KEY, JSON.stringify(stored));
+            }
+        } catch {}
+        onDeleteDateClearCompletion?.(normalizedTargetDate);
 
         const remoteDelete = () => {
             if (!user?.id) return;

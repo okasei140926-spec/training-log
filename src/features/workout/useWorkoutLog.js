@@ -301,6 +301,19 @@ export function useWorkoutLog({
     if (!draft?.meta?.hasUnsavedChanges) return undefined;
     if (lastSavedHashRef.current === draftHash) return undefined;
 
+    // Stale-closure guard: draft.date doesn't match normalizedDate → old content would be
+    // written to the new date's key. Skip until the draft state catches up.
+    const draftDate = normalizeDateKey(draft?.date || draft?.meta?.date);
+    if (draftDate && draftDate !== normalizedDate) {
+      logger?.warn?.("[workout log] blocked stale-date persist", {
+        action: "stale_closure_write_blocked",
+        draftDate,
+        normalizedDate,
+        source: draft?.meta?.source || null,
+      });
+      return undefined;
+    }
+
     const timeoutId = window.setTimeout(() => {
       const split = splitExercisesForApp(draft.exercises || [], draft.exerciseUnits || {});
       const draftToPersist = {

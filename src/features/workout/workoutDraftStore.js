@@ -168,6 +168,22 @@ export function saveWorkoutDraft(date, draft, {
   const store = getStorage(storage);
   if (!store || !normalizedDate) return false;
 
+  // Pre-overwrite validation: check the original payload date BEFORE withWorkoutDraftMeta
+  // stamps normalizedDate on top of it — otherwise validation is toothless.
+  const originalPayloadDate = normalizeDateKey(draft?.date || draft?.meta?.date);
+  if (originalPayloadDate && originalPayloadDate !== normalizedDate) {
+    logger?.warn?.("[workout draft] blocked stale-date draft save", {
+      action: "stale_closure_write_blocked",
+      keyDate: normalizedDate,
+      payloadDate: originalPayloadDate,
+      selectedDate: normalizedDate,
+      accepted: false,
+      rejectedReason: "payload date does not match key date",
+      source: draft?.meta?.source || null,
+    });
+    return false;
+  }
+
   const nextDraft = withWorkoutDraftMeta(normalizedDate, draft, draft?.meta || {});
   const validation = validateWorkoutDraftDate(normalizedDate, nextDraft);
   if (!validation.accepted) {

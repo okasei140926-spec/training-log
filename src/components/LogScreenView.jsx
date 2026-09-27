@@ -103,13 +103,16 @@ export default function LogScreenView({
         >
             {(() => {
                 const todayKey = formatDateKey(new Date());
-                const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate && logDate === todayKey;
+                const isToday = logDate === todayKey;
+                const showCurrentLogWorkoutTimer = workoutStartedForDate === logDate && isToday;
+                // For past dates: only show timer if there's a saved duration; hide if 0.
+                const pastSavedSec = isToday ? 0 : (savedWorkoutDurationSecByDate[logDate] || 0);
                 const displayedWorkoutTimerStatus = showCurrentLogWorkoutTimer
                     ? workoutTimerStatus
-                    : "idle";
+                    : (pastSavedSec > 0 ? "finished" : "idle");
                 const displayedWorkoutElapsedSec = showCurrentLogWorkoutTimer
                     ? workoutElapsedSec
-                    : (savedWorkoutDurationSecByDate[logDate] || 0);
+                    : pastSavedSec;
 
                 return (
                     <LogScreen

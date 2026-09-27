@@ -9,7 +9,6 @@ import {
     hasValidWorkoutOnDate,
     mergeHistoryMaps,
     sanitizeHistoryRecord,
-    sanitizeWorkoutSets,
     buildHistoryFromWorkoutRows,
 } from "./utils/helpers";
 // useWorkoutLog → useWorkoutLogBridge
@@ -125,7 +124,6 @@ import {
     getRawDraftSetMetrics,
     HISTORY_OWNER_KEY,
     getRuntimeEnvironmentLabel,
-    getSetDisplayUnit,
     getSetEditSummary,
     getSetEditUnit,
     getUserHistoryCacheKey,
@@ -162,7 +160,6 @@ import {
     shouldLogPerfDebug,
     shouldPreserveRawDraftOverIncoming,
     sortTrustedRowsByDate,
-    storeSetWeightForUnit,
     withDraftDateMeta,
     withDraftMeta,
 } from "./utils/appHelpers";
@@ -644,7 +641,6 @@ export default function GymApp() {
         resetWorkoutElapsedTimer,
         finishWorkoutTimer,
         startWorkoutTimerIfNeeded,
-        markWorkoutActivity,
     } = useWorkoutSession({ getTodayKey, user });
 
     const touchStartX = useRef(null);
@@ -1451,6 +1447,11 @@ export default function GymApp() {
         });
 
         if (!hasDraftContent(draft)) return;
+        // Don't re-save drafts that are already clean/verified (hasUnsavedChanges: false).
+        // These are written by the save or restore path that produced them; the auto-save
+        // must not re-write them, because that would recreate phantom drafts after they
+        // have been deleted.
+        if ((draft.meta?.hasUnsavedChanges ?? true) === false) return;
 
         const draftSignature = JSON.stringify({
             date: normalizedDate,
@@ -1580,6 +1581,7 @@ export default function GymApp() {
         setLogData,
         setSessionEx,
         setExerciseUnits,
+        startWorkoutTimerIfNeeded,
     });
 
     const getWorkoutLogExUnit = useCallback((name) => (
@@ -1734,28 +1736,23 @@ export default function GymApp() {
     useEffect(() => {
         if (screen !== "log") return;
 
+        // Timer start trigger: reps > 0 is sufficient (weight is not required).
+        // This ensures the timer starts as soon as the user inputs the first rep count.
         const activitySignature = JSON.stringify(
             exercises
                 .map((ex, index) => {
-                    const exUnit = getExUnit(ex.name);
-                    const validSets = sanitizeWorkoutSets(
-                        (logData[ex.name] || []).map((set) => ({
-                            ...set,
-                            weight: storeSetWeightForUnit(set, exUnit),
-                            displayWeight: set.weight,
-                            displayUnit: getSetDisplayUnit(set, exUnit),
-                        })),
-                        { allowBodyweight: true }
-                    );
+                    const repsOnlySets = (logData[ex.name] || []).filter((set) => {
+                        const reps = Number(set.reps ?? set.rep);
+                        return Number.isFinite(reps) && reps > 0;
+                    });
 
-                    if (!validSets.length) return null;
+                    if (!repsOnlySets.length) return null;
 
                     return {
                         name: ex.name,
                         order: index,
-                        sets: validSets.map((set) => ({
-                            weight: set.weight === "BW" ? "BW" : Number(set.weight),
-                            reps: Number(set.reps),
+                        sets: repsOnlySets.map((set) => ({
+                            reps: Number(set.reps ?? set.rep),
                         })),
                     };
                 })
@@ -1764,7 +1761,14 @@ export default function GymApp() {
 
         if (previousWorkoutActivityDateRef.current !== logDate) {
             previousWorkoutActivityDateRef.current = logDate;
-            previousWorkoutActivitySignatureRef.current = activitySignature;
+            // Always reset to "[]" on date change so the first valid-reps input on this date
+            // is detected as a change from empty — even if the draft was already loaded.
+            previousWorkoutActivitySignatureRef.current = "[]";
+            // On initial load or date switch: if valid sets already exist for today,
+            // resume or start the timer. startWorkoutTimerIfNeeded guards non-today dates internally.
+            if (activitySignature !== "[]") {
+                startWorkoutTimerIfNeeded(logDate, { markAsActivity: false });
+            }
             return;
         }
 
@@ -1772,26 +1776,26 @@ export default function GymApp() {
             activitySignature !== "[]" &&
             activitySignature !== previousWorkoutActivitySignatureRef.current
         ) {
-            markWorkoutActivity(logDate);
+            // Use startWorkoutTimerIfNeeded so entering the first set starts the timer.
+            // markWorkoutActivity had startIfNeeded: false and never started a new timer.
+            startWorkoutTimerIfNeeded(logDate, { markAsActivity: true });
         }
 
         previousWorkoutActivitySignatureRef.current = activitySignature;
-    }, [screen, exercises, logData, getExUnit, logDate, markWorkoutActivity]);
+    }, [screen, exercises, logData, getExUnit, logDate, startWorkoutTimerIfNeeded]);
 
     useEffect(() => {
-        const hasValidDraftWorkout = exercises.some((ex) => {
-            const exUnit = getExUnit(ex.name);
-            const validSets = sanitizeWorkoutSets(
-                (logData[ex.name] || []).map((set) => ({
-                    ...set,
-                    weight: storeSetWeightForUnit(set, exUnit),
-                    displayWeight: set.weight,
-                    displayUnit: getSetDisplayUnit(set, exUnit),
-                })),
-                { allowBodyweight: true }
-            );
-            return validSets.length > 0;
-        });
+        // Use workoutLogExercises/workoutLogData (from useWorkoutLog's internal state)
+        // instead of App.jsx's exercises/logData. The latter are updated one render later
+        // via setLogData/setSessionEx in handleWorkoutLogDraftChange, causing a stale-state
+        // delay where hasValidDraftWorkout is false when the timer first starts.
+        // workoutLogData is already fresh by the time workoutStartedForDate changes.
+        const hasValidDraftWorkout = workoutLogExercises.some((ex) =>
+            (workoutLogData[ex.name] || []).some((set) => {
+                const reps = Number(set.reps ?? set.rep);
+                return Number.isFinite(reps) && reps > 0;
+            })
+        );
 
         const hasValidSavedWorkout = hasValidWorkoutOnDate(history, logDate);
 
@@ -1804,7 +1808,7 @@ export default function GymApp() {
             previousWorkoutActivitySignatureRef.current = "[]";
             previousWorkoutActivityDateRef.current = logDate;
         }
-    }, [exercises, getExUnit, history, logData, logDate, resetWorkoutElapsedTimer, workoutStartedForDate]);
+    }, [workoutLogExercises, workoutLogData, history, logDate, resetWorkoutElapsedTimer, workoutStartedForDate]);
 
     // useEffectより前に定義
     const { persistCurrentLog } = usePersistCurrentLog({
@@ -2408,6 +2412,7 @@ export default function GymApp() {
         loadDraftForDate,
         markWorkoutContentChanged,
         saveDraftForDate,
+        clearDraftForDate,
         setHistory,
         setHistoryLoadError,
     });
@@ -2488,6 +2493,7 @@ export default function GymApp() {
         applyLocalHistoryDates,
         buildHistoryRecordDeleteKey,
         removeHistoryDate,
+        onDeleteDateClearCompletion: unmarkPlanDayCompleted,
     });
 
     // ─── カレンダー月移動時の追加フェッチ ─────────────────
@@ -3057,7 +3063,7 @@ export default function GymApp() {
                             lastActiveLogExerciseByDate={lastActiveLogExerciseByDate}
                             handleLogExerciseActiveChange={handleLogExerciseActiveChange}
                             deleteAllHistoryForDate={deleteAllHistoryForDate}
-                            planDayInfo={aiPlanEnabled ? getPlanDayForDate(logDate) : null}
+                            planDayInfo={aiPlanEnabled && logDate === getTodayKey() ? getPlanDayForDate(logDate) : null}
                             onLoadPlanDay={(bodyParts) => {
                                 // 1. Update workoutLog's internal draft.todayLabels
                                 //    so onDraftChange later carries the correct labels.

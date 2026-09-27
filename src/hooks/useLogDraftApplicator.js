@@ -181,8 +181,27 @@ export function useLogDraftApplicator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [exerciseUnits, hasDraftContent, logData, logDate, screen, sessionEx, todayLabels, user?.id]);
 
-    const applyCurrentLogDraft = useCallback((draft, { persist = true } = {}) => {
-        const datedDraft = withDraftDateMeta(logDate, draft, {
+    const applyCurrentLogDraft = useCallback((draft, { persist = true, forDate = null } = {}) => {
+        const currentLogDate = normalizeDraftDateKey(logDate);
+        const targetDate = normalizeDraftDateKey(forDate || logDate);
+
+        // Stale-closure guard: the caller's forDate no longer matches the current logDate,
+        // meaning this callback was invoked from an async that started before the user
+        // navigated to a different date. Block both the display update and the storage
+        // write to prevent cross-date contamination.
+        if (forDate && targetDate !== currentLogDate) {
+            console.warn("[applyCurrentLogDraft] blocked stale-closure write", {
+                action: "stale_closure_write_blocked",
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                forDate: targetDate,
+                currentLogDate,
+                source: draft?.meta?.source || null,
+            });
+            return null;
+        }
+
+        const datedDraft = withDraftDateMeta(targetDate, draft, {
             source: draft?.meta?.source || "current_log_draft",
             hasUnsavedChanges: draft?.meta?.hasUnsavedChanges ?? true,
             remoteVerifiedAt: draft?.meta?.remoteVerifiedAt ?? null,
@@ -190,7 +209,7 @@ export function useLogDraftApplicator({
         const normalizedDraft = applyLogDraftState(datedDraft);
         if (persist) {
             const draftSignature = JSON.stringify({
-                date: normalizeDraftDateKey(logDate),
+                date: targetDate,
                 content: getWorkoutDraftSignature(normalizedDraft),
                 metaSource: normalizedDraft.meta?.source || null,
                 hasUnsavedChanges: normalizedDraft.meta?.hasUnsavedChanges ?? null,
@@ -198,7 +217,7 @@ export function useLogDraftApplicator({
             });
             if (lastAutosavedDraftSignatureRef.current !== draftSignature) {
                 lastAutosavedDraftSignatureRef.current = draftSignature;
-                saveDraftForDate(logDate, normalizedDraft);
+                saveDraftForDate(targetDate, normalizedDraft);
             }
         }
         return normalizedDraft;

@@ -25,6 +25,7 @@ export function useWorkoutLogBridge({
     setLogData,
     setSessionEx,
     setExerciseUnits,
+    startWorkoutTimerIfNeeded,
 }) {
     const handleWorkoutLogDraftChange = useCallback((nextDraft, mutation = {}) => {
         const normalizedDate = normalizeDraftDateKey(nextDraft?.date || logDate);
@@ -84,6 +85,21 @@ export function useWorkoutLogBridge({
                 explicitEdit: Boolean(mutation.explicitEdit),
                 details: mutation.details || null,
             });
+        }
+
+        // Start the workout timer as soon as any set has reps > 0.
+        // handleWorkoutLogDraftChange fires immediately (no debounce), so the timer
+        // starts at the moment the user types the first rep count.
+        if (startWorkoutTimerIfNeeded) {
+            const hasValidReps = Object.values(normalizedDraft.logData || {}).some((sets) =>
+                (sets || []).some((s) => {
+                    const reps = Number(s.reps ?? s.rep);
+                    return Number.isFinite(reps) && reps > 0;
+                })
+            );
+            if (hasValidReps) {
+                startWorkoutTimerIfNeeded(normalizedDate, { markAsActivity: true });
+            }
         }
 
         const explicitEdit = isExplicitWorkoutEditChange({

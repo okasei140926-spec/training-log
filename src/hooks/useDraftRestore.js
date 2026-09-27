@@ -197,7 +197,7 @@ export function useDraftRestore({
                 source: localDraft?.meta?.source || "draft_restore",
                 hasUnsavedChanges: true,
             });
-            applyCurrentLogDraft(datedLocalDraft);
+            applyCurrentLogDraft(datedLocalDraft, { forDate: normalizedLogDate });
             markWorkoutContentChanged(normalizedLogDate, localDraftEditReason || "local_unsaved_draft_restore", { explicitEdit: true });
             logRestoreDecision(normalizedLogDate, savedDraftForDate, datedLocalDraft, datedLocalDraft, "local_unsaved_draft");
             return;
@@ -222,7 +222,7 @@ export function useDraftRestore({
                 source: localDraft?.meta?.source || "draft_restore",
                 hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
             });
-            applyCurrentLogDraft(datedLocalDraft);
+            applyCurrentLogDraft(datedLocalDraft, { forDate: normalizedLogDate });
             logRestoreDecision(normalizedLogDate, savedDraftForDate, datedLocalDraft, datedLocalDraft, "local_draft_richer_than_saved");
             return;
         }
@@ -232,7 +232,7 @@ export function useDraftRestore({
             remoteVerifiedAt: new Date().toISOString(),
             hasUnsavedChanges: false,
         });
-        applyCurrentLogDraft(cleanSavedDraft);
+        applyCurrentLogDraft(cleanSavedDraft, { forDate: normalizedLogDate });
         logRestoreDecision(normalizedLogDate, cleanSavedDraft, localDraft, cleanSavedDraft, "supabase_saved_workout_refresh");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [

@@ -18,12 +18,7 @@ const getEntrySets = (entry) => (Array.isArray(entry?.sets) ? entry.sets.filter(
 
 const isValidSet = (set) => {
   const reps = Number(set?.reps);
-  if (!Number.isFinite(reps) || reps <= 0) return false;
-
-  if (set?.weight === "BW") return true;
-
-  const weight = Number(set?.weight);
-  return Number.isFinite(weight) && weight > 0;
+  return Number.isFinite(reps) && reps > 0;
 };
 
 const getEntryValidSetCount = (entry) => {

@@ -1028,7 +1028,14 @@ export default function HistoryScreen({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onLogForDate(selectedDate)}
+                  onClick={() => {
+                    const targetDate = selectedDate;
+                    // Reset overflow immediately (iOS WebView: overflow:hidden on body
+                    // can freeze touch events even after the component unmounts)
+                    document.body.style.overflow = "";
+                    setSelectedDate(null);
+                    onLogForDate(targetDate);
+                  }}
                   style={{
                     width: "100%",
                     borderRadius: 18,

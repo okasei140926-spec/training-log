@@ -144,15 +144,19 @@ export function useDraftStore() {
     const saveDraftForDate = useCallback((dateStr, draft) => {
         const normalizedDate = normalizeDraftDateKey(dateStr);
         if (!normalizedDate) return false;
+        // Capture the original payload date BEFORE any overwrite for a clean second-line defence.
+        // applyCurrentLogDraft's forDate guard is the first line; this catches any direct caller
+        // that passes mismatched data (e.g. wrong date stamped on the draft by another path).
         const validation = getDraftDateValidation(normalizedDate, draft, normalizedDate);
         if (!validation.accepted) {
-            console.warn("[save] blocked date-mismatched draft persistence", {
-                action: "draft_restore_date_check",
+            console.warn("[save] blocked stale-closure draft write", {
+                action: "stale_closure_write_blocked",
                 keyDate: validation.keyDate,
                 payloadDate: validation.payloadDate || null,
                 selectedDate: validation.selectedDate,
                 accepted: false,
                 rejectedReason: validation.rejectedReason,
+                source: draft?.meta?.source || null,
             });
             return false;
         }

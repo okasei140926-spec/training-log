@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
@@ -47,9 +47,14 @@ export function useLogDateRefresh({
     loadDraftForDate,
     markWorkoutContentChanged,
     saveDraftForDate,
+    clearDraftForDate,
     setHistory,
     setHistoryLoadError,
 }) {
+    // Tracks the last timestamp at which a phantom draft was cleared per date,
+    // so we can suppress duplicate log entries and avoid clearing the same date
+    // twice within a short window even if the effect fires multiple times rapidly.
+    const lastPhantomClearedRef = useRef({});
     useEffect(() => {
         if (screen !== "log" || !user?.id || !historySyncReady || !logDate) return;
         const normalizedDate = String(logDate || "").slice(0, 10);
@@ -69,15 +74,19 @@ export function useLogDateRefresh({
                 (localDraft?.todayLabels || []).length > 0
             );
             if (hasContent) {
+                // persist:false — the draft is already in localStorage; re-saving via
+                // applyCurrentLogDraft(persist=true) would let a stale regression-guard
+                // return value overwrite the new date's key with old content.
+                // forDate: ensures the stale-closure guard fires if logDate has changed.
                 applyCurrentLogDraft(withDraftDateMeta(normalizedDate, localDraft, {
                     source: localDraft?.meta?.source || "pending_draft_restore",
                     hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
-                }));
+                }), { persist: false, forDate: normalizedDate });
             } else if (!hasContent) {
                 // No valid draft for this date — force clear any stale display
                 applyCurrentLogDraft(withDraftDateMeta(normalizedDate, {
                     todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {},
-                }, { source: "explicit_date_nav", hasUnsavedChanges: false }), { persist: false });
+                }, { source: "explicit_date_nav", hasUnsavedChanges: false }), { persist: false, forDate: normalizedDate });
             }
             return;
         }
@@ -268,18 +277,48 @@ export function useLogDateRefresh({
                         supabase: remoteMetrics,
                         localStorage: localMetrics,
                     });
-                    if (!localMetrics.hasWorkout) {
-                        // Remote and local both have no workout for this date.
-                        // The screen may still show stale data from a previously viewed date
-                        // because applyLogDraftState is blocked by date-mismatch when logDate
-                        // state lags behind during synchronous navigation. Clear it here.
-                        const emptyDraft = withDraftDateMeta(normalizedDate, {
-                            todayLabels: [],
-                            sessionEx: null,
-                            logData: {},
-                            exerciseUnits: {},
-                        }, { source: "explicit_date_nav", hasUnsavedChanges: false });
-                        applyCurrentLogDraft(emptyDraft, { persist: false });
+                    const localHasUnsavedChanges = Boolean(localDraft?.meta?.hasUnsavedChanges);
+                    // A "zombie draft" claims hasUnsavedChanges:true but was NOT written by a real
+                    // user edit (useWorkoutLog:* source). Sources like "autosave_draft",
+                    // "active_local_recording_restore", "pending_draft_restore" are not genuine
+                    // user edits and should be treated like phantoms when Supabase is empty.
+                    const isZombieDraft = localHasUnsavedChanges && !isUnsavedUserWorkoutDraft(localDraft);
+                    const emptyDraft = withDraftDateMeta(normalizedDate, {
+                        todayLabels: [],
+                        sessionEx: null,
+                        logData: {},
+                        exerciseUnits: {},
+                    }, { source: "explicit_date_nav", hasUnsavedChanges: false });
+
+                    if (!localMetrics.hasWorkout || (localMetrics.hasWorkout && (!localHasUnsavedChanges || isZombieDraft))) {
+                        // Remote is empty and local has no workout, a phantom (no unsaved flag),
+                        // or a zombie (unsaved flag but not from real user editing).
+                        // Clear storage and show empty screen.
+                        if (localMetrics.hasWorkout) {
+                            const now = Date.now();
+                            const lastCleared = lastPhantomClearedRef.current[normalizedDate] || 0;
+                            const alreadyClearedRecently = now - lastCleared < 10_000;
+                            if (!alreadyClearedRecently) {
+                                lastPhantomClearedRef.current = {
+                                    ...lastPhantomClearedRef.current,
+                                    [normalizedDate]: now,
+                                };
+                                // Remove keys entirely (not just overwrite) so loadDraftForDate
+                                // cannot fall through to a stale legacy key.
+                                clearDraftForDate(normalizedDate);
+                                console.log(isZombieDraft
+                                    ? "[restore] zombie draft cleared from storage (date-refresh)"
+                                    : "[restore] phantom draft cleared from storage (date-refresh)", {
+                                    env: getRuntimeEnvironmentLabel(),
+                                    user_id: user.id,
+                                    date: normalizedDate,
+                                    source: localDraft?.meta?.source || null,
+                                    localSetCount: localMetrics.setCount,
+                                    isZombieDraft,
+                                });
+                            }
+                        }
+                        applyCurrentLogDraft(emptyDraft, { persist: false, forDate: normalizedDate });
                     }
                     return;
                 }
@@ -307,7 +346,7 @@ export function useLogDateRefresh({
                         overwrittenByRestore: false,
                         blockedReason: "local draft has unsaved user edit source",
                     });
-                    applyCurrentLogDraft(datedLocalDraft);
+                    applyCurrentLogDraft(datedLocalDraft, { forDate: normalizedDate });
                     markWorkoutContentChanged(normalizedDate, localDraftEditReason || "local_unsaved_draft_restore", { explicitEdit: true });
                     return;
                 }
@@ -417,7 +456,7 @@ export function useLogDateRefresh({
                         });
                     }
                 }
-                applyCurrentLogDraft(cleanSavedDraftForDate);
+                applyCurrentLogDraft(cleanSavedDraftForDate, { forDate: normalizedDate });
                 setHistoryLoadError("");
             } catch (error) {
                 console.warn("[restore] Supabase date refresh failed", {
@@ -443,6 +482,7 @@ export function useLogDateRefresh({
         applyLocalHistoryDates,
         applyCurrentLogDraft,
         buildSavedWorkoutDraftForDate,
+        clearDraftForDate,
         getExUnit,
         history,
         historySyncReady,

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { calc1RM, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, isCompletedWorkoutSet, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
+import { calc1RM, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -391,8 +391,6 @@ export default function LogScreen({
     const hasExercises = exercises.length > 0;
     const [bannerExpanded, setBannerExpanded] = useState(false);
     const [workoutFinished, setWorkoutFinished] = useState(() => Boolean(readCompletedDates()[logDate]));
-    const [showFinishSummary, setShowFinishSummary] = useState(false);
-
     const [memos, setMemos] = useState(() => {
         try { return JSON.parse(localStorage.getItem("pump_exercise_memos") || "{}"); }
         catch { return {}; }
@@ -539,9 +537,27 @@ export default function LogScreen({
 
     const setCount = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
-        return acc + sets.filter((s) => isCompletedWorkoutSet(s)).length;
+        return acc + sets.filter((s) => {
+            const reps = Number(s?.reps ?? s?.rep);
+            return Number.isFinite(reps) && reps > 0;
+        }).length;
     }, 0);
-    const { prCount, totalVolumeKg, prExerciseNames } = exercises.reduce((acc, ex) => {
+
+    // Auto-clear completed state when all sets are deleted
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+        if (!workoutFinished || setCount > 0) return;
+        setWorkoutFinished(false);
+        try {
+            const dates = readCompletedDates();
+            delete dates[logDate];
+            localStorage.setItem(COMPLETED_WORKOUT_DATES_KEY, JSON.stringify(dates));
+        } catch {}
+        onUnfinishWorkout?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [setCount, workoutFinished, logDate]);
+
+    const { prCount, totalVolumeKg } = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
 
@@ -574,9 +590,8 @@ export default function LogScreen({
         return {
             prCount: acc.prCount + (isPR ? 1 : 0),
             totalVolumeKg: acc.totalVolumeKg + exVolumeKg,
-            prExerciseNames: isPR ? [...acc.prExerciseNames, ex.name] : acc.prExerciseNames,
         };
-    }, { prCount: 0, totalVolumeKg: 0, prExerciseNames: [] });
+    }, { prCount: 0, totalVolumeKg: 0 });
     const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
     const shareDurationSec = Math.max(
         Math.floor(Number(workoutElapsedSec) || 0),
@@ -798,11 +813,13 @@ export default function LogScreen({
                             )}
                         </div>
                     </div>
-                    <WorkoutElapsedTimer
-                        elapsedSec={workoutElapsedSec}
-                        status={workoutTimerStatus}
-                        onClick={workoutTimerStatus === "active" ? () => setShowWorkoutTimerMenu(true) : undefined}
-                    />
+                    {(workoutTimerStatus !== "idle" || workoutElapsedSec > 0) && (
+                        <WorkoutElapsedTimer
+                            elapsedSec={workoutElapsedSec}
+                            status={workoutTimerStatus}
+                            onClick={workoutTimerStatus === "active" ? () => setShowWorkoutTimerMenu(true) : undefined}
+                        />
+                    )}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
                     {[
@@ -1064,7 +1081,10 @@ export default function LogScreen({
                                 : "";
 
                         if (i !== activeExIdx) {
-                            const doneSetsCount = sets.filter((s) => isCompletedWorkoutSet(s)).length;
+                            const doneSetsCount = sets.filter((s) => {
+                                    const reps = Number(s?.reps ?? s?.rep);
+                                    return Number.isFinite(reps) && reps > 0;
+                                }).length;
 
                             return (
                                 <SortableExerciseItem key={ex.id} id={ex.id}>
@@ -1540,13 +1560,13 @@ export default function LogScreen({
                             // 終了状態に設定
                             console.log("[終了] onFinishWorkout fired, logDate =", logDate);
                             onFinishWorkout();
+                            onFinishWorkoutTimer?.();
                             setWorkoutFinished(true);
                             try {
                                 const dates = readCompletedDates();
                                 dates[logDate] = true;
                                 localStorage.setItem(COMPLETED_WORKOUT_DATES_KEY, JSON.stringify(dates));
                             } catch {}
-                            setShowFinishSummary(true);
                         }
                     }}
                     style={{
@@ -1582,118 +1602,6 @@ export default function LogScreen({
                     ) : "終了"}
                 </button>
             )}
-
-            {/* 終了後サマリーモーダル */}
-            {showFinishSummary && (() => {
-                const durationSec = shareDurationSec;
-                const h = Math.floor(durationSec / 3600);
-                const m = Math.floor((durationSec % 3600) / 60);
-                const durationStr = durationSec > 0
-                    ? (h > 0 ? `${h}時間${m}分` : `${m}分`)
-                    : "--";
-
-                return (
-                    <div
-                        style={{
-                            position: "fixed", inset: 0, zIndex: 500,
-                            background: "rgba(0,0,0,0.55)",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            padding: "0 20px",
-                        }}
-                        onClick={() => setShowFinishSummary(false)}
-                    >
-                        <div
-                            style={{
-                                background: "var(--card)",
-                                borderRadius: 22,
-                                padding: "28px 22px 22px",
-                                maxWidth: 360,
-                                width: "100%",
-                                boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-                            }}
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* タイトル */}
-                            <div style={{ textAlign: "center", marginBottom: 20 }}>
-                                <div style={{ fontSize: 26, marginBottom: 4 }}>💪</div>
-                                <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-                                    トレーニング完了！
-                                </div>
-                            </div>
-
-                            {/* 統計カード */}
-                            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-                                {[
-                                    { label: "セット数", value: setCount, unit: "セット" },
-                                    { label: "総ボリューム", value: formattedVolumeKg, unit: "kg" },
-                                    { label: "時間", value: durationStr, unit: "" },
-                                ].map(({ label, value, unit: u }) => (
-                                    <div
-                                        key={label}
-                                        style={{
-                                            flex: 1,
-                                            background: "var(--card2)",
-                                            borderRadius: 14,
-                                            padding: "12px 8px",
-                                            textAlign: "center",
-                                        }}
-                                    >
-                                        <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 600, marginBottom: 4 }}>
-                                            {label}
-                                        </div>
-                                        <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", lineHeight: 1.1 }}>
-                                            {value}
-                                        </div>
-                                        {u && (
-                                            <div style={{ fontSize: 10, color: "var(--text3)", marginTop: 2 }}>
-                                                {u}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* PR更新セクション */}
-                            {prExerciseNames.length > 0 && (
-                                <div style={{
-                                    background: "linear-gradient(135deg, rgba(255,193,7,0.12), rgba(255,152,0,0.08))",
-                                    border: "1px solid rgba(255,193,7,0.3)",
-                                    borderRadius: 14,
-                                    padding: "12px 14px",
-                                    marginBottom: 18,
-                                }}>
-                                    <div style={{ fontSize: 12, fontWeight: 800, color: "#b8860b", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
-                                        🏆 自己ベスト更新
-                                    </div>
-                                    {prExerciseNames.map(name => (
-                                        <div key={name} style={{ fontSize: 13, color: "var(--text)", fontWeight: 600, padding: "2px 0" }}>
-                                            {name} で自己ベスト更新！
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* 閉じるボタン */}
-                            <button
-                                onClick={() => setShowFinishSummary(false)}
-                                style={{
-                                    width: "100%",
-                                    height: 48,
-                                    borderRadius: 14,
-                                    background: "linear-gradient(135deg, rgba(15, 94, 99, 0.96), rgba(18, 169, 164, 0.90))",
-                                    color: "#fff",
-                                    fontSize: 15,
-                                    fontWeight: 800,
-                                    border: "none",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                閉じる
-                            </button>
-                        </div>
-                    </div>
-                );
-            })()}
 
             {showAdd && (
                 <AddExModal
@@ -1764,51 +1672,27 @@ export default function LogScreen({
                         }}
                         onClick={(event) => event.stopPropagation()}
                     >
-                        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", marginBottom: 14 }}>
                             ワークアウト時間
                         </div>
-                        <div style={{ fontSize: 12, color: "var(--text3)", marginBottom: 14, lineHeight: 1.6 }}>
-                            ワークアウトを終了しますか？
-                            <br />
-                            この時間を今日のワークアウト時間として保存します。
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowWorkoutTimerMenu(false);
-                                }}
-                                style={{
-                                    padding: "12px 14px",
-                                    borderRadius: 14,
-                                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                                    background: "rgba(18, 199, 194, 0.03)",
-                                    color: "var(--text3)",
-                                    fontSize: 14,
-                                    fontWeight: 800,
-                                }}
-                            >
-                                キャンセル
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    onFinishWorkoutTimer?.();
-                                    setShowWorkoutTimerMenu(false);
-                                }}
-                                style={{
-                                    padding: "12px 14px",
-                                    borderRadius: 14,
-                                    border: "1px solid rgba(255, 146, 39, 0.18)",
-                                    background: "linear-gradient(180deg, rgba(255, 146, 39, 0.10), rgba(255, 146, 39, 0.04))",
-                                    color: "#8A4A12",
-                                    fontSize: 14,
-                                    fontWeight: 800,
-                                }}
-                            >
-                                終了する
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowWorkoutTimerMenu(false);
+                            }}
+                            style={{
+                                width: "100%",
+                                padding: "12px 14px",
+                                borderRadius: 14,
+                                border: "1px solid rgba(18, 199, 194, 0.12)",
+                                background: "rgba(18, 199, 194, 0.03)",
+                                color: "var(--text3)",
+                                fontSize: 14,
+                                fontWeight: 800,
+                            }}
+                        >
+                            閉じる
+                        </button>
                     </div>
                 </div>
             )}

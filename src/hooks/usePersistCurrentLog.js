@@ -56,8 +56,18 @@ export function usePersistCurrentLog({
         const latestDraftDate = normalizeDraftDateKey(
             latestDraftCandidate?.date
             || latestDraftCandidate?.meta?.date
-            || normalizedLogDate
         );
+        // If the latest draft ref belongs to a different date, it is a stale closure remnant.
+        // Do not fall back to normalizedLogDate — that would silently cross-contaminate dates.
+        if (latestDraftDate && latestDraftDate !== normalizedLogDate) {
+            console.warn("[persistCurrentLog] blocked stale-closure persist", {
+                action: "stale_closure_write_blocked",
+                latestDraftDate,
+                normalizedLogDate,
+                source: latestDraftCandidate?.meta?.source || null,
+            });
+            return;
+        }
         const useLatestDraft =
             latestDraftDate === normalizedLogDate
             && hasDraftContent(latestDraftCandidate);
