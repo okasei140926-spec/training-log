@@ -1,10 +1,40 @@
 import { useState } from "react";
-import { LABEL_COLORS } from "../constants/suggestions";
 import { resolveRecordedBodyPartLabel } from "../utils/bodyPartClassification";
 import {
   getValidWorkoutDatesFromHistory,
   sanitizeHistoryRecord,
 } from "../utils/helpers";
+
+// 6グループへの集約マッピング
+const CALENDAR_LEGEND = ["胸", "背中", "脚", "肩", "二頭", "三頭"];
+
+const CALENDAR_GROUP_COLORS = {
+  胸: "#FF5A5A",
+  背中: "#4D9FFF",
+  脚: "#FBBF24",
+  肩: "#4ECDC4",
+  二頭: "#A855F7",
+  三頭: "#F472B6",
+};
+
+// resolveRecordedBodyPartLabel の返却ラベル → カレンダーグループ
+const BODY_PART_TO_CALENDAR_GROUP = {
+  胸: "胸",
+  背中: "背中",
+  四頭: "脚",
+  ハム: "脚",
+  ハムストリングス: "脚",
+  尻: "脚",
+  臀部: "脚",
+  カーフ: "脚",
+  下腿: "脚",
+  脚: "脚",
+  下半身: "脚",
+  肩: "肩",
+  二頭: "二頭",
+  三頭: "三頭",
+  // 腹筋・その他 → undefined → 点を表示しない
+};
 
 const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -25,7 +55,8 @@ export default function CalendarView({
 
   const safeHistory = history || {};
 
-  const dateLabelColors = {};
+  // date → Set<グループ名>
+  const dateLabelGroupSets = {};
   Object.entries(safeHistory).forEach(([exName, recs]) => {
     (recs || []).forEach((r) => {
       const sanitized = sanitizeHistoryRecord(r, { allowBodyweight: true });
@@ -35,10 +66,18 @@ export default function CalendarView({
         hiddenBodyParts,
         exerciseBodyPartOverrides,
       });
-      if (!dateLabelColors[sanitized.date]) dateLabelColors[sanitized.date] = [];
-      const color = (label && LABEL_COLORS[label]) || "#4ade80";
-      if (!dateLabelColors[sanitized.date].includes(color)) dateLabelColors[sanitized.date].push(color);
+      const group = label ? BODY_PART_TO_CALENDAR_GROUP[label] : null;
+      if (!group) return;
+      if (!dateLabelGroupSets[sanitized.date]) dateLabelGroupSets[sanitized.date] = new Set();
+      dateLabelGroupSets[sanitized.date].add(group);
     });
+  });
+  // CALENDAR_LEGEND の順に並べた色配列に変換
+  const dateLabelColors = {};
+  Object.entries(dateLabelGroupSets).forEach(([date, groupSet]) => {
+    dateLabelColors[date] = CALENDAR_LEGEND
+      .filter((g) => groupSet.has(g))
+      .map((g) => CALENDAR_GROUP_COLORS[g]);
   });
 
   const trainedDates = new Set(getValidWorkoutDatesFromHistory(safeHistory));
@@ -132,7 +171,7 @@ export default function CalendarView({
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
         {cells.map((d, i) => {
           if (!d) return <div key={`e${i}`} />;
           const ds = toStr(d);
@@ -168,20 +207,28 @@ export default function CalendarView({
               </div>
 
               {worked ? (
-                <div style={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap", minHeight: 6 }}>
-                  {colors.slice(0, 3).map((col, ci) => (
+                <div style={{ display: "flex", gap: 1.5, justifyContent: "center", minHeight: 5 }}>
+                  {colors.map((col, ci) => (
                     <div
                       key={ci}
-                      style={{ width: 5, height: 5, borderRadius: "50%", background: isToday ? "#fff" : col }}
+                      style={{ width: 4, height: 4, borderRadius: "50%", background: isToday ? "rgba(255,255,255,0.85)" : col, flexShrink: 0 }}
                     />
                   ))}
                 </div>
               ) : (
-                <div style={{ width: 6, height: 6 }} />
+                <div style={{ height: 5 }} />
               )}
             </div>
           );
         })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "3px 10px", marginTop: 10 }}>
+        {CALENDAR_LEGEND.map((group) => (
+          <div key={group} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: CALENDAR_GROUP_COLORS[group], flexShrink: 0 }} />
+            <span style={{ fontSize: 9, color: "var(--text3)", fontWeight: 700 }}>{group}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

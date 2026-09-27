@@ -121,7 +121,9 @@ const formatShareSet = (set, index) => {
     }
 
     const unit = normalizeUnitLabel(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit);
-    return `${index + 1}. ${formatWeightValue(rawWeight)}${unit} × ${reps}`;
+    const weightNum = Number(rawWeight);
+    const kgWeight = unit === "lb" ? weightNum * 0.453592 : weightNum;
+    return `${index + 1}. ${formatWeightValue(kgWeight)}kg × ${reps}`;
 };
 
 const getExerciseDetails = (items) =>
@@ -138,6 +140,35 @@ const getExerciseDetails = (items) =>
             };
         })
         .filter(Boolean);
+
+// Estimate display width: CJK chars ≈ 1 unit, others ≈ 0.6 units
+const estimateCharWidth = (str) => {
+    let w = 0;
+    for (const ch of String(str || "")) {
+        w += ch >= "\u3000" && ch <= "\u9FFF" ? 1.0 : 0.6;
+    }
+    return w;
+};
+
+// Build exercise name line for 1:1 card fitting ~2 lines (≈68 width units at 9px/316px)
+const buildSquareExerciseNameLine = (names) => {
+    if (!names || !names.length) return "";
+    const sep = " · ";
+    const sepW = estimateCharWidth(sep);
+    const maxW = 68;
+    let line = "";
+    let lineW = 0;
+    for (let i = 0; i < names.length; i++) {
+        const nameW = estimateCharWidth(names[i]);
+        const addW = i === 0 ? nameW : sepW + nameW;
+        if (lineW + addW > maxW && i > 0) {
+            return line + `  他${names.length - i}種目`;
+        }
+        line = i === 0 ? names[i] : line + sep + names[i];
+        lineW += addW;
+    }
+    return line;
+};
 
 export default function WorkoutSessionShareModal({
     isOpen,
@@ -172,6 +203,13 @@ export default function WorkoutSessionShareModal({
         () => (isStory ? getExerciseDetails(items) : []),
         [isStory, items]
     );
+    const squareExerciseNames = useMemo(
+        () => !isStory
+            ? (items || []).map((item) => item.exercise_name || item.name).filter(Boolean)
+            : [],
+        [isStory, items]
+    );
+    const squareExerciseNameLine = buildSquareExerciseNameLine(squareExerciseNames);
     const exerciseDetailCount = exerciseDetails.length;
     const exerciseDetailSetCount = exerciseDetails.reduce((sum, item) => sum + item.sets.length, 0);
     const denseStoryMenu = isStory && (exerciseDetailCount >= 5 || exerciseDetailSetCount >= 13);
@@ -451,7 +489,7 @@ export default function WorkoutSessionShareModal({
                                     )}
 
                                     {isStory && exerciseDetails.length > 0 && (
-                                        <div style={{ flex: 1, minHeight: 0 }}>
+                                        <div>
                                             <div style={{ color: "rgba(255,255,255,0.34)", fontSize: denseStoryMenu ? 11 : 12, fontWeight: 800, marginBottom: denseStoryMenu ? 5 : 7 }}>
                                                 メニュー
                                             </div>
@@ -479,19 +517,38 @@ export default function WorkoutSessionShareModal({
                                     )}
 
                                     {!isStory && (
-                                        <div style={{ flex: 1, display: "flex", alignItems: "flex-end", minHeight: 0 }}>
-                                        {prLabel ? (
-                                            <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: isStory ? "12px 14px" : "8px 10px", fontSize: isStory ? 15 : 11, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                PR <span style={{ color: "#62caff", marginLeft: 4 }}>{prLabel}</span>
-                                            </div>
-                                        ) : (
-                                            <div />
-                                        )}
+                                        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 8, minHeight: 0 }}>
+                                            {bodyPartCards.length > 0 && (
+                                                <div style={{ display: "flex", gap: 20 }}>
+                                                    {bodyPartCards.map((item) => (
+                                                        <div key={item.bodyPart}>
+                                                            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.42)", fontWeight: 800, letterSpacing: 0.5 }}>
+                                                                {item.bodyPart}
+                                                            </div>
+                                                            <div style={{ fontSize: 30, fontWeight: 950, lineHeight: 1, letterSpacing: -1, color: "#fff", marginTop: 3 }}>
+                                                                {item.count}
+                                                            </div>
+                                                            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.32)", fontWeight: 800, marginTop: 3 }}>
+                                                                セット
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {squareExerciseNameLine && (
+                                                <div style={{ color: "rgba(255,255,255,0.36)", fontSize: 9, fontWeight: 800, lineHeight: 1.7 }}>
+                                                    {squareExerciseNameLine}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: isStory ? 22 : 12 }}>
-                                        <div style={{ color: "#62caff", fontSize: isStory ? 18 : 14, fontWeight: 950, lineHeight: 1 }}>
+                                    {isStory && exerciseDetails.length === 0 && (
+                                        <div style={{ flex: 1 }} />
+                                    )}
+
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: isStory && exerciseDetails.length > 0 ? 16 : isStory ? 22 : 12 }}>
+                                        <div style={{ color: "#12C7C2", fontSize: isStory ? 18 : 14, fontWeight: 950, lineHeight: 1 }}>
                                             Pump
                                         </div>
                                         <div style={{ color: "rgba(255,255,255,0.44)", fontSize: isStory ? 11 : 8, fontWeight: 900, letterSpacing: 3 }}>
