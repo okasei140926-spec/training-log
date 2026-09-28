@@ -200,6 +200,20 @@ export function useHistoryAutoSave({
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
                 }
                 if (workoutSyncResults.skippedDates.length > 0) {
+                    console.warn("[save] skipped dates: overwriting local history with remote data", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: currentUserId,
+                        skippedDates: workoutSyncResults.skippedDates,
+                        note: "save guard blocked Supabase write; local history for these dates is now replaced with remote data",
+                        localMetricsByDate: workoutSyncResults.skippedDates.reduce((acc, date) => ({
+                            ...acc,
+                            [date]: getHistoryMetricsForDate(mergedHistory, date),
+                        }), {}),
+                        remoteMetricsByDate: workoutSyncResults.skippedDates.reduce((acc, date) => ({
+                            ...acc,
+                            [date]: getHistoryMetricsForDate(remoteHistory, date),
+                        }), {}),
+                    });
                     mergedHistory = applyHistoryDeleteMarkers(
                         applyLocalHistoryDates(mergedHistory, remoteHistory, workoutSyncResults.skippedDates),
                         effectiveDeleteMarkers
@@ -446,7 +460,11 @@ export function useHistoryAutoSave({
                 }
             })
             .catch((error) => {
-                console.error("history sync save failed", error);
+                console.error("[save] history sync save failed", {
+                    env: getRuntimeEnvironmentLabel(),
+                    message: error?.message || String(error),
+                    pendingDates: Array.from(pendingWorkoutContentChangeDatesRef.current.keys()),
+                });
             });
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
