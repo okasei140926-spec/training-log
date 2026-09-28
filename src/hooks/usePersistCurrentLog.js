@@ -45,6 +45,7 @@ export function usePersistCurrentLog({
     getExUnit,
     getTodayKey,
     getDraftKey,
+    pendingSavePayloadsRef,
     setHistory,
 }) {
     const persistCurrentLog = useCallback(() => {
@@ -247,6 +248,24 @@ export function usePersistCurrentLog({
         });
         const draftSavedToLocalStorage = saveDraftForDate(normalizedLogDate, dirtyDraftForPersistence);
         latestLogDraftRef.current = dirtyDraftForPersistence;
+        // Store the fully-built history directly in pendingSavePayloadsRef.
+        // setHistory(updater) is async — the updater (which sets latestHistoryRef.current)
+        // only runs during React's render phase, which happens AFTER the Supabase reconcile
+        // fetch in useHistoryAutoSave resolves. By writing here synchronously we guarantee
+        // that syncWorkoutRowsForDates always sees the correct payload regardless of timing.
+        if (pendingSavePayloadsRef) {
+            const directPayloadForDate = buildDraftHistoryForDate({
+                baseHistory: latestHistoryRef.current || history || {},
+                workoutDate: normalizedLogDate,
+                exercises: saveExercises,
+                logData: saveLogData,
+                getExUnit: getSaveExUnit,
+                labels: saveLabels,
+                durationSec,
+                replaceDate: Boolean(pendingChange.explicitDelete),
+            });
+            pendingSavePayloadsRef.current.set(normalizedLogDate, directPayloadForDate);
+        }
         if (shouldLogPerfDebug() && explicitEdit && normalizedLogDate !== getTodayKey()) {
             console.log("[workout edit] past edit persistence debug", {
                 action: "past_edit_persistence_debug",
@@ -333,7 +352,7 @@ export function usePersistCurrentLog({
             return nextHistory;
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, history, logData, logDate, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
+    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, history, logData, logDate, pendingSavePayloadsRef, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
 
     return { persistCurrentLog };
 }

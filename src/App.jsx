@@ -1007,6 +1007,7 @@ export default function GymApp() {
     ), []);
 
     // Stable ref so onStartupUnsyncedLocalDates can be defined before markWorkoutContentChanged
+    const pendingSavePayloadsRef = useRef(new Map());
     const markWorkoutContentChangedRef = useRef(null);
     const onStartupUnsyncedLocalDates = useCallback((unsyncedDates) => {
         unsyncedDates.forEach((date) => {
@@ -1096,6 +1097,7 @@ export default function GymApp() {
     } = useHistorySave({
         pendingWorkoutContentChangeDatesRef,
         explicitWorkoutEditDatesRef,
+        pendingSavePayloadsRef,
         user,
         latestUserIdRef,
         applyTrustedWorkoutRowsSnapshot,
@@ -1130,6 +1132,58 @@ export default function GymApp() {
 
     // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it
     markWorkoutContentChangedRef.current = markWorkoutContentChanged;
+
+    // Rescue draft files that were written to localStorage but never synced to Supabase
+    // (meta.hasUnsavedChanges = true or meta.remoteVerifiedAt is empty).
+    // This handles the case where the app crashed / was force-quit before
+    // useHistoryAutoSave could complete the Supabase write.
+    const unsyncedDraftRescueRef = useRef(new Set());
+    useEffect(() => {
+        if (!user?.id || !historySyncReady) return;
+        if (unsyncedDraftRescueRef.current.has(user.id)) return;
+        unsyncedDraftRescueRef.current.add(user.id);
+
+        const unsyncedDates = [];
+        try {
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i);
+                if (!key?.startsWith("workoutDraft:")) continue;
+                const date = key.slice("workoutDraft:".length);
+                if (!date || date.length !== 10) continue;
+                const draft = loadDraftForDate(date);
+                if (!draft) continue;
+                const hasContent = (draft.sessionEx || draft.exercises || []).length > 0
+                    || Object.keys(draft.logData || {}).length > 0;
+                if (!hasContent) continue;
+                const isUnsynced = draft.meta?.hasUnsavedChanges === true
+                    || !draft.meta?.remoteVerifiedAt;
+                if (!isUnsynced) continue;
+                // Build history payload and inject it into pendingSavePayloadsRef so
+                // syncWorkoutRowsForDates can save it without waiting for persistCurrentLog
+                const directPayload = buildDraftHistoryForDate({
+                    baseHistory: latestHistoryRef.current || {},
+                    workoutDate: date,
+                    exercises: draft.sessionEx || draft.exercises || [],
+                    logData: draft.logData || {},
+                    getExUnit: (name) => draft.exerciseUnits?.[name] || getExUnit(name),
+                    labels: draft.todayLabels || [],
+                    durationSec: 0,
+                    replaceDate: false,
+                });
+                pendingSavePayloadsRef.current.set(date, directPayload);
+                unsyncedDates.push(date);
+            }
+        } catch (err) {
+            console.warn("[startup] unsynced draft scan failed", err);
+        }
+        if (unsyncedDates.length > 0) {
+            console.log("[startup] found unsynced drafts, queuing for rescue", { unsyncedDates });
+            unsyncedDates.forEach((date) => {
+                markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: true });
+            });
+            setForceSyncVersion((v) => v + 1);
+        }
+    }, [historySyncReady, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const {
         historySyncDiagnostic,
@@ -1837,6 +1891,7 @@ export default function GymApp() {
         getExUnit,
         getTodayKey,
         getDraftKey,
+        pendingSavePayloadsRef,
         setHistory,
     });
 

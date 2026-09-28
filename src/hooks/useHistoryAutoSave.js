@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import { fetchWorkoutRows as fetchWorkoutRowsFromRepository } from "../features/workout/workoutRepository";
 import { makeVerifiedWorkoutDraft as makeStoredVerifiedWorkoutDraft } from "../features/workout/workoutDraftStore";
@@ -75,6 +75,7 @@ export function useHistoryAutoSave({
     setSessionSyncVersion,
     forceSyncVersion,
 }) {
+    const heldRetryCountsRef = useRef({});
     useEffect(() => {
         if (!user || !historySyncReady) return;
         const currentUserId = user.id;
@@ -212,14 +213,36 @@ export function useHistoryAutoSave({
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
                 }
                 if (workoutSyncResults.heldDates?.length > 0) {
-                    // heldDates: explicit-edit dates where the draft hadn't been flushed yet.
-                    // The pending change is kept for retry on the next trigger. We must NOT
-                    // overwrite local history here — the in-progress local data is correct.
-                    console.warn("[save] held dates: pending change kept, local history preserved", {
-                        env: getRuntimeEnvironmentLabel(),
-                        user_id: currentUserId,
-                        heldDates: workoutSyncResults.heldDates,
-                        note: "explicit-edit date had empty merged history — draft not yet flushed. Will retry on next persistCurrentLog trigger.",
+                    workoutSyncResults.heldDates.forEach((date) => {
+                        const count = (heldRetryCountsRef.current[date] || 0) + 1;
+                        heldRetryCountsRef.current[date] = count;
+                        if (count >= 3) {
+                            // Draft never flushed to pendingSavePayloadsRef after 3 attempts.
+                            // Surface as a save failure so the sync-failure banner appears.
+                            console.error("[save] hold retry limit exceeded — surfacing as sync failure", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: currentUserId,
+                                date,
+                                count,
+                            });
+                            recordSyncFailure(date, new Error(`save stalled: draft not flushed after ${count} holds`), "hold_timeout");
+                            pendingWorkoutContentChangeDatesRef.current.delete(date);
+                            delete heldRetryCountsRef.current[date];
+                        } else {
+                            console.warn("[save] held date: pending change kept, local history preserved", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: currentUserId,
+                                date,
+                                holdCount: count,
+                                note: "explicit-edit date had empty merged history — draft not yet flushed. Will retry on next persistCurrentLog trigger.",
+                            });
+                        }
+                    });
+                    // Reset counts for dates that resolved (no longer held)
+                    Object.keys(heldRetryCountsRef.current).forEach((date) => {
+                        if (!workoutSyncResults.heldDates.includes(date)) {
+                            delete heldRetryCountsRef.current[date];
+                        }
                     });
                 }
                 if (workoutSyncResults.skippedDates.length > 0) {

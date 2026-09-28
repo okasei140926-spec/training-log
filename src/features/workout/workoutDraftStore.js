@@ -184,6 +184,29 @@ export function saveWorkoutDraft(date, draft, {
     return false;
   }
 
+  // Guard: do not overwrite a non-empty draft with empty content unless the
+  // caller explicitly wants to delete it (explicitDelete flag in meta).
+  // This prevents navigation / draft-restore races from silently wiping
+  // the user's in-progress workout data.
+  const existingRaw = safeParse(getStorage(storage)?.getItem(getWorkoutDraftKey(normalizedDate, prefix)), null);
+  const existingHasContent = Boolean(
+    existingRaw &&
+    ((existingRaw.exercises || []).length > 0 || Object.keys(existingRaw.logData || {}).length > 0)
+  );
+  const incomingHasContent = Boolean(
+    (draft?.exercises || draft?.sessionEx || []).length > 0 ||
+    Object.keys(draft?.logData || {}).length > 0
+  );
+  if (existingHasContent && !incomingHasContent && !draft?.meta?.explicitDelete) {
+    logger?.warn?.("[workout draft] blocked empty-content overwrite of non-empty draft", {
+      action: "draft_empty_overwrite_blocked",
+      keyDate: normalizedDate,
+      source: draft?.meta?.source || null,
+      reason: "incoming draft has no exercises/sets; existing draft has content",
+    });
+    return false;
+  }
+
   const nextDraft = withWorkoutDraftMeta(normalizedDate, draft, draft?.meta || {});
   const validation = validateWorkoutDraftDate(normalizedDate, nextDraft);
   if (!validation.accepted) {

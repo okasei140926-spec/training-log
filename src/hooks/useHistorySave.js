@@ -41,6 +41,7 @@ export function useHistorySave({
     getSetEditUnit,
     buildHistoryFromWorkoutSessionRows,
     describeHistoryRecordsForDate,
+    pendingSavePayloadsRef = null,
 }) {
     // ─── Refs ─────────────────────────────────────────────────────────────────
     // pendingWorkoutContentChangeDatesRef and explicitWorkoutEditDatesRef are
@@ -157,8 +158,15 @@ export function useHistorySave({
         await Promise.all(
             normalizedDates.map(async (workoutDate) => {
                 try {
-                    const hasWorkoutForDate = hasValidWorkoutOnDate(normalizedHistoryMap, workoutDate);
-                    const incomingMetrics = getHistoryMetricsForDate(normalizedHistoryMap, workoutDate);
+                    // Prefer the direct payload written synchronously by persistCurrentLog
+                    // over the async-updated normalizedHistoryMap (which comes from
+                    // latestHistoryRef.current and may not yet reflect the latest setHistory call).
+                    const directPayloadMap = pendingSavePayloadsRef?.current?.get(workoutDate) ?? null;
+                    const effectiveHistoryForDate = directPayloadMap != null
+                        ? { ...normalizedHistoryMap, ...directPayloadMap }
+                        : normalizedHistoryMap;
+                    const hasWorkoutForDate = hasValidWorkoutOnDate(effectiveHistoryForDate, workoutDate);
+                    const incomingMetrics = getHistoryMetricsForDate(effectiveHistoryForDate, workoutDate);
                     const {
                         row: existingWorkoutRow,
                         error: existingWorkoutError,
@@ -272,7 +280,7 @@ export function useHistorySave({
                             allowedReason: saveGuardDecision.allowedReason,
                         });
                     }
-                    const dateScopedHistoryForSave = applyPreferredHistoryDates({}, normalizedHistoryMap, [workoutDate]);
+                    const dateScopedHistoryForSave = applyPreferredHistoryDates({}, effectiveHistoryForDate, [workoutDate]);
 
                     console.log("[save] workouts.data before save", {
                         env: getRuntimeEnvironmentLabel(),
@@ -472,6 +480,7 @@ export function useHistorySave({
                     }
 
                     clearSyncFailure(workoutDate);
+                    pendingSavePayloadsRef?.current?.delete(workoutDate);
                     results.syncedDates.push(workoutDate);
                 } catch (error) {
                     recordSyncFailure(workoutDate, error, "workouts");
