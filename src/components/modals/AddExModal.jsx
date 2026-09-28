@@ -408,6 +408,8 @@ export default function AddExModal({
             onClick={onClose}>
             <div style={{
                 width: "100%",
+                maxWidth: 430,
+                margin: "0 auto",
                 background: "var(--card-modal)",
                 borderRadius: "20px 20px 0 0",
                 padding: "20px 18px 0 18px",

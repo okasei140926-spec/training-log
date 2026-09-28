@@ -21,7 +21,21 @@ const markRcConfigured = () => {
   _rcConfiguredResolve?.();
 };
 
-const waitForRcConfigured = () => _rcConfiguredPromise;
+// Rejects a promise after `ms` milliseconds with a labelled timeout error.
+// Used to prevent any RC SDK call from hanging the UI indefinitely.
+const withTimeout = (promise, ms, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}-timeout`)), ms)
+    ),
+  ]);
+
+// Waits for RC to be configured, but rejects after `ms` milliseconds.
+// This prevents getRevenueCatPriceString from hanging forever when
+// configureRevenueCatForUser has not completed (e.g. offline on launch).
+const waitForRcConfiguredWithTimeout = (ms = 10000) =>
+  withTimeout(_rcConfiguredPromise, ms, "rc-configure");
 
 const getPlatform = () => {
   try {
@@ -161,8 +175,10 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
 };
 
 const getCurrentPackage = async () => {
-  await waitForRcConfigured();
-  const offerings = await Purchases.getOfferings();
+  await waitForRcConfiguredWithTimeout(10000);
+  // getOfferings() queries StoreKit / App Store and can hang indefinitely
+  // if the store is unreachable (observed in reviewer environment).
+  const offerings = await withTimeout(Purchases.getOfferings(), 10000, "getOfferings");
   const currentOffering = offerings?.current || Object.values(offerings?.all || {})[0] || null;
   return (
     currentOffering?.monthly ||

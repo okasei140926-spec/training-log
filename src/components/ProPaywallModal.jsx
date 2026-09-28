@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState, useRef } from "react";
-import { getRevenueCatPriceString } from "../lib/revenueCat";
+import { getRevenueCatAvailability, getRevenueCatPriceString } from "../lib/revenueCat";
 
 export const PAYWALL_CONTENT = {
     ai_limit: {
@@ -26,39 +26,50 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
     const content = PAYWALL_CONTENT[source] || PAYWALL_CONTENT.general;
     const [restoreBusy, setRestoreBusy] = useState(false);
     const [restoreMsg, setRestoreMsg] = useState("");
-    const [priceState, setPriceState] = useState({ price: null, loading: true, error: false });
+    const [priceState, setPriceState] = useState({ price: null, loading: true, error: false, offline: false });
     const retryTimerRef = useRef(null);
     const retryCountRef = useRef(0);
 
+    // Check once on mount whether the billing SDK is available on this platform.
+    const isUnavailable = !getRevenueCatAvailability().native;
+
     const fetchPrice = useCallback(() => {
         if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-        setPriceState({ price: null, loading: true, error: false });
+        setPriceState({ price: null, loading: true, error: false, offline: false });
         getRevenueCatPriceString()
             .then((price) => {
                 retryCountRef.current = 0;
-                setPriceState({ price, loading: false, error: false });
+                setPriceState({ price, loading: false, error: false, offline: false });
             })
             .catch(() => {
                 const attempt = retryCountRef.current;
-                setPriceState({ price: null, loading: false, error: true });
-                // Auto-retry up to 2 times with 6s / 12s delay
+                const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+                // Auto-retry up to 2 times (6s / 12s). Keep loading: true during the wait
+                // so the UI stays seamless rather than flashing error → loading → error.
                 if (attempt < 2) {
                     retryCountRef.current = attempt + 1;
                     const delay = (attempt + 1) * 6000;
                     retryTimerRef.current = setTimeout(() => {
                         fetchPrice();
                     }, delay);
+                    // Show loading (not error) while waiting for the next attempt
+                    setPriceState({ price: null, loading: true, error: false, offline: isOffline });
+                } else {
+                    // All retries exhausted — show error so user can manually retry
+                    setPriceState({ price: null, loading: false, error: true, offline: isOffline });
                 }
             });
     }, []);
 
     useEffect(() => {
+        // Skip price fetch on non-native platforms (web browser, simulator without StoreKit).
+        if (isUnavailable) return undefined;
         retryCountRef.current = 0;
         fetchPrice();
         return () => {
             if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         };
-    }, [fetchPrice]);
+    }, [fetchPrice, isUnavailable]);
 
     const handleRestore = async () => {
         if (!onRestorePro || restoreBusy) return;
@@ -166,10 +177,17 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                 ))}
             </div>
             {/* 購入ボタン */}
-            {priceState.error ? (
+            {isUnavailable ? (
+                <div style={{ position: "relative", zIndex: 1, textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.68)", lineHeight: 1.7, padding: "4px 8px" }}>
+                    このデバイスでは購入手続きができません。<br />
+                    iOS アプリからご購入いただけます。
+                </div>
+            ) : priceState.error ? (
                 <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", marginBottom: 8 }}>
-                        価格を取得できませんでした
+                        {priceState.offline
+                            ? "オフラインのため価格を取得できません"
+                            : "価格を取得できませんでした"}
                     </div>
                     <button
                         type="button"
@@ -182,36 +200,44 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                             fontWeight: 700,
                             borderRadius: 10,
                             padding: "6px 16px",
+                            cursor: "pointer",
                         }}
                     >
                         再試行
                     </button>
                 </div>
             ) : (
-                <button
-                    type="button"
-                    onClick={onStartPro}
-                    disabled={priceState.loading}
-                    className="pressable"
-                    style={{
-                        position: "relative",
-                        zIndex: 1,
-                        width: "100%",
-                        padding: "14px 14px",
-                        borderRadius: 18,
-                        border: "none",
-                        background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                        color: "#fff",
-                        fontSize: 15,
-                        fontWeight: 900,
-                        boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
-                        opacity: priceState.loading ? 0.6 : 1,
-                    }}
-                >
-                    {priceState.loading
-                        ? "価格を取得中..."
-                        : `Pump Pro を始める — ${priceState.price}/月`}
-                </button>
+                <>
+                    {priceState.loading && priceState.offline && (
+                        <div style={{ position: "relative", zIndex: 1, textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.58)" }}>
+                            オフラインです。接続を確認しています...
+                        </div>
+                    )}
+                    <button
+                        type="button"
+                        onClick={onStartPro}
+                        disabled={priceState.loading}
+                        className="pressable"
+                        style={{
+                            position: "relative",
+                            zIndex: 1,
+                            width: "100%",
+                            padding: "14px 14px",
+                            borderRadius: 18,
+                            border: "none",
+                            background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                            color: "#fff",
+                            fontSize: 15,
+                            fontWeight: 900,
+                            boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
+                            opacity: priceState.loading ? 0.6 : 1,
+                        }}
+                    >
+                        {priceState.loading
+                            ? "価格を取得中..."
+                            : `Pump Pro を始める — ${priceState.price}/月`}
+                    </button>
+                </>
             )}
             {/* Apple審査必須：自動更新の説明 */}
             {!priceState.loading && !priceState.error && priceState.price && (
@@ -220,8 +246,8 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                     管理・キャンセルは iOS 設定 → Apple ID → サブスクリプションから。
                 </div>
             )}
-            {/* Apple審査必須：復元ボタン */}
-            {onRestorePro && (
+            {/* Apple審査必須：復元ボタン（非ネイティブでは表示しない） */}
+            {!isUnavailable && onRestorePro && (
                 <button
                     type="button"
                     onClick={handleRestore}
