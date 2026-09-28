@@ -50,6 +50,12 @@ export function useHistorySave({
     const historySaveQueueRef = useRef(Promise.resolve());
     const pendingWorkoutSessionSyncDatesRef = useRef(new Set());
     const syncFailuresByDateRef = useRef({});
+    // Write-rate limiter: stop runaway saves to the same date within a short window.
+    // Limit: 10 writes per date per 60 s.  Fires recordSyncFailure on breach so the
+    // "保存できませんでした" banner surfaces rather than hammering Supabase silently.
+    const writeRateRef = useRef({});
+    const WRITE_RATE_LIMIT = 10;
+    const WRITE_RATE_WINDOW_MS = 60_000;
 
     // ─── Callbacks ────────────────────────────────────────────────────────────
 
@@ -65,10 +71,16 @@ export function useHistorySave({
 
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
         const explicitEdit = Boolean(previous.explicitEdit || options.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(reason));
+        // explicitDelete: if the caller explicitly passes `false`, reset it (e.g. startup rescue,
+        // session-change triggers). Otherwise OR-merge so a queued delete is not lost by a
+        // concurrent non-delete markWorkoutContentChanged call for the same date.
+        const explicitDelete = options.explicitDelete === false
+            ? false
+            : Boolean(previous.explicitDelete || options.explicitDelete);
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
-            explicitDelete: Boolean(previous.explicitDelete || options.explicitDelete),
+            explicitDelete,
             explicitEdit,
             details: options.details || previous.details || null,
             updatedAt: new Date().toISOString(),
@@ -345,6 +357,31 @@ export function useHistorySave({
                             workoutsDataUpdated: false,
                             summaryJsonUpdated: false,
                         });
+                    }
+
+                    // Write-rate guard: abort if this date has been written too many
+                    // times in the last 60 s.  Prevents runaway loops from hammering
+                    // Supabase indefinitely and surfaces a banner to the user.
+                    const nowMs = Date.now();
+                    const rateEntry = writeRateRef.current[workoutDate] || { count: 0, windowStart: nowMs };
+                    if (nowMs - rateEntry.windowStart > WRITE_RATE_WINDOW_MS) {
+                        rateEntry.count = 0;
+                        rateEntry.windowStart = nowMs;
+                    }
+                    rateEntry.count += 1;
+                    writeRateRef.current[workoutDate] = rateEntry;
+                    if (rateEntry.count > WRITE_RATE_LIMIT) {
+                        const rateError = new Error(`write rate limit exceeded: ${rateEntry.count} writes in 60s for ${workoutDate}`);
+                        console.error("[save] write rate limit exceeded — stopping saves for this date", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            count: rateEntry.count,
+                            windowMs: WRITE_RATE_WINDOW_MS,
+                        });
+                        recordSyncFailure(workoutDate, rateError, "rate_limit");
+                        results.failedDates.push(workoutDate);
+                        return;
                     }
 
                     const repositorySaveResult = await saveWorkoutForDateInRepository({
