@@ -34,7 +34,9 @@ const withTimeout = (promise, ms, label) =>
 // Waits for RC to be configured, but rejects after `ms` milliseconds.
 // This prevents getRevenueCatPriceString from hanging forever when
 // configureRevenueCatForUser has not completed (e.g. offline on launch).
-const waitForRcConfiguredWithTimeout = (ms = 10000) =>
+// 5 s is sufficient for normal environments; the paywall has its own 12 s
+// absolute deadline that kicks in regardless of individual call timeouts.
+const waitForRcConfiguredWithTimeout = (ms = 5000) =>
   withTimeout(_rcConfiguredPromise, ms, "rc-configure");
 
 const getPlatform = () => {
@@ -178,7 +180,7 @@ const getCurrentPackage = async () => {
   await waitForRcConfiguredWithTimeout(10000);
   // getOfferings() queries StoreKit / App Store and can hang indefinitely
   // if the store is unreachable (observed in reviewer environment).
-  const offerings = await withTimeout(Purchases.getOfferings(), 10000, "getOfferings");
+  const offerings = await withTimeout(Purchases.getOfferings(), 5000, "getOfferings");
   const currentOffering = offerings?.current || Object.values(offerings?.all || {})[0] || null;
   return (
     currentOffering?.monthly ||
