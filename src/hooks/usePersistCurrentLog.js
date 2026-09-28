@@ -110,7 +110,7 @@ export function usePersistCurrentLog({
             getExUnit: getSaveExUnit,
             workoutDate: normalizedLogDate,
         });
-        const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || history || {}, normalizedLogDate);
+        const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || {}, normalizedLogDate);
         const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
         const saveGuardDecision = getWorkoutSaveGuardDecision({
             incomingMetrics,
@@ -255,7 +255,7 @@ export function usePersistCurrentLog({
         // that syncWorkoutRowsForDates always sees the correct payload regardless of timing.
         if (pendingSavePayloadsRef) {
             const directPayloadForDate = buildDraftHistoryForDate({
-                baseHistory: latestHistoryRef.current || history || {},
+                baseHistory: latestHistoryRef.current || {},
                 workoutDate: normalizedLogDate,
                 exercises: saveExercises,
                 logData: saveLogData,
@@ -351,8 +351,11 @@ export function usePersistCurrentLog({
             }
             return nextHistory;
         });
+    // `history` is intentionally excluded from deps — it's read via `latestHistoryRef.current`
+    // (kept in sync by App.jsx's useEffect). Including `history` would recreate `persistCurrentLog`
+    // on every setHistory call, which re-fires the auto-save useEffect and causes a write loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, history, logData, logDate, pendingSavePayloadsRef, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
+    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, logData, logDate, pendingSavePayloadsRef, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
 
     return { persistCurrentLog };
 }
