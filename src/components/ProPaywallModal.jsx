@@ -22,6 +22,14 @@ const PRO_FEATURES = [
     { text: "伸び悩む種目の原因をAIが診断", sub: "「なぜ伸びない？」で記録を深掘り" },
 ];
 
+// Per-call timeouts and absolute deadlines for auto vs manual-retry paths.
+// Auto: short timeouts so the paywall resolves quickly on bad networks.
+// Manual: longer timeouts since the user has explicitly asked to retry.
+const TIMEOUT_AUTO = 3000;
+const TIMEOUT_MANUAL = 5000;
+const DEADLINE_AUTO = 7000;
+const DEADLINE_MANUAL = 10000;
+
 export function ProPaywallCard({ source = "general", onStartPro, onClose, onRestorePro }) {
     const content = PAYWALL_CONTENT[source] || PAYWALL_CONTENT.general;
     const [restoreBusy, setRestoreBusy] = useState(false);
@@ -29,16 +37,15 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
     // retrying: true while the second (and final) automatic attempt is in flight
     const [priceState, setPriceState] = useState({ price: null, loading: true, error: false, offline: false, retrying: false });
     const retryCountRef = useRef(0);
-    // Absolute deadline: 12 s after the paywall opens (or after manual retry)
     const deadlineTimerRef = useRef(null);
 
     // Check once on mount whether the billing SDK is available on this platform.
     const isUnavailable = !getRevenueCatAvailability().native;
 
-    // Start (or restart) the 12 s absolute deadline.
+    // Start (or restart) the absolute deadline.
     // If the price has not been fetched successfully by the time it fires,
-    // force-transition to error so the UI never shows "loading" for > 12 s.
-    const startDeadline = useCallback(() => {
+    // force-transition to error so the UI never shows "loading" beyond the deadline.
+    const startDeadline = useCallback((deadlineMs) => {
         if (deadlineTimerRef.current) clearTimeout(deadlineTimerRef.current);
         deadlineTimerRef.current = setTimeout(() => {
             deadlineTimerRef.current = null;
@@ -47,13 +54,15 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                 const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
                 return { price: null, loading: false, error: true, offline: isOffline, retrying: false };
             });
-        }, 12000);
+        }, deadlineMs);
     }, []);
 
+    // timeoutMs is passed through to getRevenueCatPriceString so the auto and
+    // manual-retry paths use different per-call timeouts.
     const fetchPrice = useCallback((opts = {}) => {
-        const { isRetry = false } = opts;
+        const { isRetry = false, timeoutMs = TIMEOUT_AUTO } = opts;
         setPriceState({ price: null, loading: true, error: false, offline: false, retrying: isRetry });
-        getRevenueCatPriceString()
+        getRevenueCatPriceString(timeoutMs)
             .then((price) => {
                 // Success may arrive after the deadline fired — that's fine, show the price.
                 retryCountRef.current = 0;
@@ -63,9 +72,9 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                 const attempt = retryCountRef.current;
                 const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
                 if (attempt < 1) {
-                    // One immediate retry — no delay, no extra loading flash.
+                    // One immediate retry with the same timeout — no delay, no loading flash.
                     retryCountRef.current = attempt + 1;
-                    fetchPrice({ isRetry: true });
+                    fetchPrice({ isRetry: true, timeoutMs });
                 } else {
                     // Both attempts failed — show error; user can still press "再試行".
                     setPriceState({ price: null, loading: false, error: true, offline: isOffline, retrying: false });
@@ -77,18 +86,18 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
         // Skip price fetch on non-native platforms (web browser, simulator without StoreKit).
         if (isUnavailable) return undefined;
         retryCountRef.current = 0;
-        startDeadline();
-        fetchPrice();
+        startDeadline(DEADLINE_AUTO);
+        fetchPrice({ timeoutMs: TIMEOUT_AUTO });
         return () => {
             if (deadlineTimerRef.current) clearTimeout(deadlineTimerRef.current);
         };
     }, [fetchPrice, isUnavailable, startDeadline]);
 
-    // Manual retry resets the absolute deadline so the user gets a fresh 12 s window.
+    // Manual retry: reset deadline to the longer window so the user gets a fresh chance.
     const handleManualRetry = useCallback(() => {
         retryCountRef.current = 0;
-        startDeadline();
-        fetchPrice();
+        startDeadline(DEADLINE_MANUAL);
+        fetchPrice({ timeoutMs: TIMEOUT_MANUAL });
     }, [fetchPrice, startDeadline]);
 
     const handleRestore = async () => {
@@ -206,8 +215,8 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                 <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", marginBottom: 8 }}>
                         {priceState.offline
-                            ? "オフラインのため価格を取得できません"
-                            : "価格を取得できませんでした"}
+                            ? "オフラインのため価格を取得できません。接続を確認して再試行してください。"
+                            : "価格を取得できませんでした。通信環境をご確認のうえ、再試行してください。"}
                     </div>
                     <button
                         type="button"

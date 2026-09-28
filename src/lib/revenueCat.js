@@ -34,9 +34,8 @@ const withTimeout = (promise, ms, label) =>
 // Waits for RC to be configured, but rejects after `ms` milliseconds.
 // This prevents getRevenueCatPriceString from hanging forever when
 // configureRevenueCatForUser has not completed (e.g. offline on launch).
-// 5 s is sufficient for normal environments; the paywall has its own 12 s
-// absolute deadline that kicks in regardless of individual call timeouts.
-const waitForRcConfiguredWithTimeout = (ms = 5000) =>
+// Default is 3 s; callers may pass a longer value for manual-retry paths.
+const waitForRcConfiguredWithTimeout = (ms = 3000) =>
   withTimeout(_rcConfiguredPromise, ms, "rc-configure");
 
 const getPlatform = () => {
@@ -176,11 +175,14 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
   }
 };
 
-const getCurrentPackage = async () => {
-  await waitForRcConfiguredWithTimeout(10000);
+// timeoutMs controls both the configure-wait timeout and the getOfferings timeout.
+// Default 3 s keeps the initial paywall load snappy; pass a larger value for
+// manual retry paths where the user has explicitly indicated willingness to wait.
+const getCurrentPackage = async (timeoutMs = 3000) => {
+  await waitForRcConfiguredWithTimeout(timeoutMs);
   // getOfferings() queries StoreKit / App Store and can hang indefinitely
   // if the store is unreachable (observed in reviewer environment).
-  const offerings = await withTimeout(Purchases.getOfferings(), 5000, "getOfferings");
+  const offerings = await withTimeout(Purchases.getOfferings(), timeoutMs, "getOfferings");
   const currentOffering = offerings?.current || Object.values(offerings?.all || {})[0] || null;
   return (
     currentOffering?.monthly ||
@@ -195,10 +197,11 @@ const getCurrentPackage = async () => {
  * e.g. "¥480". Throws if not on native or if no price is available.
  * Callers should handle the error and show a retry UI instead of a
  * hardcoded fallback price.
+ * @param {number} [timeoutMs=3000] Per-call timeout passed to getCurrentPackage.
  */
-export const getRevenueCatPriceString = async () => {
+export const getRevenueCatPriceString = async (timeoutMs = 3000) => {
   if (!isNativePlatform()) throw new Error("not-native");
-  const pkg = await getCurrentPackage();
+  const pkg = await getCurrentPackage(timeoutMs);
   const price = pkg?.product?.priceString;
   if (!price) throw new Error("no-price");
   return price; // e.g. "¥480"
