@@ -140,6 +140,15 @@ export function useHistorySave({
             syncedDates: [],
             failedDates: [],
             skippedDates: [],
+            // heldDates: Supabase write skipped because local history is currently
+            // empty for an explicit-edit date. This happens when persistCurrentLog
+            // (400 ms debounce) hasn't fired yet and the in-progress set data hasn't
+            // been flushed to latestHistoryRef.current. Unlike skippedDates, held
+            // dates must NOT trigger a local-history overwrite — the local draft is
+            // the source of truth here, not the remote.  The pending change is kept
+            // so the next useHistoryAutoSave run (triggered by persistCurrentLog
+            // updating history) can retry with the complete local data.
+            heldDates: [],
             verifiedHistoryByDate: {},
         };
 
@@ -168,13 +177,31 @@ export function useHistorySave({
                     const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(workoutDate) || {};
                     const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
                     if (!hasWorkoutForDate && !pendingChange.explicitDelete) {
-                        // No local exercises and no explicit delete intent — skip the save.
-                        // explicitEdit=true is intentionally NOT exempted: if data was lost
-                        // mid-session (debounce race / useDraftRestore overwrite), we must not
-                        // push an empty workout to Supabase.  The destructive-overwrite guard
-                        // below would have caught the remote-has-data case anyway; this handles
-                        // the remaining case (local empty AND remote empty) where the repository
-                        // itself throws "Refusing to save empty workout without explicit delete".
+                        if (explicitEdit) {
+                            // Explicit edit (e.g. set_add, exercise_add) but the merged history
+                            // for this date is still empty. This means persistCurrentLog hasn't
+                            // flushed the in-progress draft to latestHistoryRef.current yet (the
+                            // 400 ms debounce races the Supabase fetch). Hold the date for retry:
+                            // the next useHistoryAutoSave run (triggered by persistCurrentLog
+                            // completing) will see the correct data and save successfully.
+                            // IMPORTANT: do NOT add to skippedDates — that would overwrite the
+                            // local draft with empty remote data, destroying the user's input.
+                            console.warn("[save guard] hold empty workout for retry (explicit edit, draft not yet flushed)", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: userId,
+                                date: workoutDate,
+                                localMetrics: incomingMetrics,
+                                remoteMetrics,
+                                reason: pendingChange.reason || "in-progress draft not yet in latestHistoryRef",
+                                explicitEdit,
+                                explicitDelete: false,
+                                safety: "keep pending change; next trigger will retry with flushed draft",
+                            });
+                            results.heldDates.push(workoutDate);
+                            return;
+                        }
+                        // Non-explicit empty workout — no user edit intent, nothing to save.
+                        // Clear any stale sync-failure banner for this date.
                         console.warn("[save guard] skip empty workout (no local data, no explicit delete)", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
@@ -186,8 +213,6 @@ export function useHistorySave({
                             explicitEdit,
                             safety: "avoid Supabase save error / sync-failure banner for empty local draft",
                         });
-                        // Clear any pre-existing sync-failure banner for this date so it
-                        // does not remain visible after the empty-save was retried.
                         clearSyncFailure(workoutDate);
                         results.skippedDates.push(workoutDate);
                         return;

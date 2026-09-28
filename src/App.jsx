@@ -1850,11 +1850,15 @@ export default function GymApp() {
         );
 
         const normalizedLogDate = String(logDate || "").slice(0, 10);
-        const hasPendingExplicitDelete = Boolean(
-            pendingWorkoutContentChangeDatesRef.current.get(normalizedLogDate)?.explicitDelete
-        );
+        const pendingChangeForDate = pendingWorkoutContentChangeDatesRef.current.get(normalizedLogDate);
+        const hasPendingExplicitDelete = Boolean(pendingChangeForDate?.explicitDelete);
+        // Also flush when the user has added exercises (but not yet filled in sets).
+        // Without this, exercise-only edits never call persistCurrentLog, so
+        // latestHistoryRef.current never gets the exercise data, and the save guard
+        // in syncWorkoutRowsForDates fires on the next useHistoryAutoSave run.
+        const hasPendingExplicitEdit = exercises.length > 0 && Boolean(pendingChangeForDate?.explicitEdit);
 
-        if (!hasAnyValidSet && !hasPendingExplicitDelete) return;
+        if (!hasAnyValidSet && !hasPendingExplicitDelete && !hasPendingExplicitEdit) return;
 
         const t = setTimeout(() => {
             persistCurrentLog();

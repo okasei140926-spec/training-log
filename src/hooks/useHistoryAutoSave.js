@@ -172,8 +172,19 @@ export function useHistoryAutoSave({
                     effectiveDeleteMarkers
                 );
                 const syncDates = [...new Set(pendingContentDates)];
+                // Re-read local history AFTER the async Supabase fetch.
+                // The 400 ms auto-save debounce (persistCurrentLog) can fire while the
+                // fetch is in progress and update latestHistoryRef.current.  Using a
+                // stale pre-fetch snapshot here is the root cause of the
+                // "[save guard] skip empty workout" false-positive: the user's just-
+                // entered set data is already in latestHistoryRef.current but was not
+                // captured in localHistorySnapshot (which was read before the fetch).
+                const postFetchLocalHistory = applyHistoryDeleteMarkers(
+                    mergeHistoryMaps(latestHistoryRef.current),
+                    effectiveDeleteMarkers
+                );
                 let mergedHistory = applyHistoryDeleteMarkers(
-                    applyLocalHistoryDates(remoteHistory, localHistorySnapshot, syncDates),
+                    applyLocalHistoryDates(remoteHistory, postFetchLocalHistory, syncDates),
                     effectiveDeleteMarkers
                 );
 
@@ -182,7 +193,8 @@ export function useHistoryAutoSave({
                     user_id: currentUserId,
                     dates: syncDates,
                     supabaseDates: getValidWorkoutDatesFromHistory(remoteHistory),
-                    localStorageDates: getValidWorkoutDatesFromHistory(localHistorySnapshot),
+                    localStorageDates: getValidWorkoutDatesFromHistory(postFetchLocalHistory),
+                    staleSnapshotDates: getValidWorkoutDatesFromHistory(localHistorySnapshot),
                     savingExerciseNames: syncDates.reduce((acc, date) => ({
                         ...acc,
                         [date]: getHistoryMetricsForDate(mergedHistory, date).exerciseNames,
@@ -198,6 +210,17 @@ export function useHistoryAutoSave({
                         pendingWorkoutContentChangeDatesRef.current.delete(date);
                     });
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
+                }
+                if (workoutSyncResults.heldDates?.length > 0) {
+                    // heldDates: explicit-edit dates where the draft hadn't been flushed yet.
+                    // The pending change is kept for retry on the next trigger. We must NOT
+                    // overwrite local history here — the in-progress local data is correct.
+                    console.warn("[save] held dates: pending change kept, local history preserved", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: currentUserId,
+                        heldDates: workoutSyncResults.heldDates,
+                        note: "explicit-edit date had empty merged history — draft not yet flushed. Will retry on next persistCurrentLog trigger.",
+                    });
                 }
                 if (workoutSyncResults.skippedDates.length > 0) {
                     console.warn("[save] skipped dates: overwriting local history with remote data", {
@@ -262,6 +285,7 @@ export function useHistoryAutoSave({
 
                 const sessionSyncDates = syncDates.filter(
                     (date) => !workoutSyncResults.skippedDates.includes(date)
+                        && !workoutSyncResults.heldDates?.includes(date)
                 );
                 const failedSessionSyncDates = new Set();
                 const skippedSessionSyncDates = new Set();
@@ -302,6 +326,10 @@ export function useHistoryAutoSave({
 
                 syncDates.forEach((date) => {
                     if (workoutSyncResults.skippedDates.includes(date)) {
+                        return;
+                    }
+                    if (workoutSyncResults.heldDates?.includes(date)) {
+                        // Keep the pending change so the next trigger retries with the flushed draft.
                         return;
                     }
                     const pendingAfterSave = pendingWorkoutContentChangeDatesRef.current.get(date);
@@ -460,10 +488,16 @@ export function useHistoryAutoSave({
                 }
             })
             .catch((error) => {
+                const failedPendingDates = Array.from(pendingWorkoutContentChangeDatesRef.current.keys());
                 console.error("[save] history sync save failed", {
                     env: getRuntimeEnvironmentLabel(),
                     message: error?.message || String(error),
-                    pendingDates: Array.from(pendingWorkoutContentChangeDatesRef.current.keys()),
+                    pendingDates: failedPendingDates,
+                });
+                // Surface the failure in the sync-failure banner so the user sees
+                // "保存できませんでした" rather than a silent data loss.
+                failedPendingDates.forEach((date) => {
+                    recordSyncFailure(date, error, "history_sync");
                 });
             });
     // eslint-disable-next-line react-hooks/exhaustive-deps
