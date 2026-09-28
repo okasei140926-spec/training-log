@@ -1143,6 +1143,11 @@ export default function GymApp() {
         if (unsyncedDraftRescueRef.current.has(user.id)) return;
         unsyncedDraftRescueRef.current.add(user.id);
 
+        // Only rescue drafts from the last 7 days.  Older drafts likely had
+        // remoteVerifiedAt missing for historical reasons (field was added later),
+        // not because they actually failed to sync; rescuing them would trigger a
+        // Supabase write storm on every app startup.
+        const rescueCutoff = getDateDaysAgoKey(7);
         const unsyncedDates = [];
         try {
             for (let i = 0; i < window.localStorage.length; i++) {
@@ -1150,13 +1155,17 @@ export default function GymApp() {
                 if (!key?.startsWith("workoutDraft:")) continue;
                 const date = key.slice("workoutDraft:".length);
                 if (!date || date.length !== 10) continue;
+                // Skip dates older than 7 days
+                if (date < rescueCutoff) continue;
                 const draft = loadDraftForDate(date);
                 if (!draft) continue;
                 const hasContent = (draft.sessionEx || draft.exercises || []).length > 0
                     || Object.keys(draft.logData || {}).length > 0;
                 if (!hasContent) continue;
-                const isUnsynced = draft.meta?.hasUnsavedChanges === true
-                    || !draft.meta?.remoteVerifiedAt;
+                // Only rescue drafts explicitly marked as having unsaved changes.
+                // Removing !remoteVerifiedAt: that flag can be absent on old drafts
+                // written before the field was introduced, causing spurious rescues.
+                const isUnsynced = draft.meta?.hasUnsavedChanges === true;
                 if (!isUnsynced) continue;
                 // Build history payload and inject it into pendingSavePayloadsRef so
                 // syncWorkoutRowsForDates can save it without waiting for persistCurrentLog
@@ -1177,9 +1186,11 @@ export default function GymApp() {
             console.warn("[startup] unsynced draft scan failed", err);
         }
         if (unsyncedDates.length > 0) {
-            console.log("[startup] found unsynced drafts, queuing for rescue", { unsyncedDates });
+            console.log("[startup] found unsynced drafts, queuing for rescue", { unsyncedDates, rescueCutoff });
             unsyncedDates.forEach((date) => {
-                markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: true });
+                // Pass explicitDelete: false so a stale explicitDelete:true from a
+                // previous session cannot be OR-merged and cause a false delete on rescue.
+                markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: true, explicitDelete: false });
             });
             setForceSyncVersion((v) => v + 1);
         }
