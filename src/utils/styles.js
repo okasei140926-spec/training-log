@@ -8,6 +8,7 @@ export const S = {
     margin: "0 auto",
     paddingTop: "var(--app-header-height)",
     paddingBottom: "var(--bottom-nav-scroll-padding)",
+    minHeight: "100dvh",
   },
   page: {
     padding: "18px 18px var(--bottom-nav-scroll-padding)",
@@ -101,7 +102,7 @@ export const css = `
     --bottom-nav-scroll-padding: calc(var(--bottom-nav-clearance) + 24px);
   }
   :root {
-    --bg: #0f0f0f;
+    --bg: var(--app-bg);
     --card: #1a1a1a;
     --card2: #242424;
     --card-modal: #1e1e1e;
@@ -141,7 +142,7 @@ export const css = `
     --home-shadow: 0 18px 40px rgba(0,0,0,0.42);
   }
   .theme-light {
-    --bg: #e2eaea;
+    --bg: var(--app-bg);
     --card: #ffffff;
     --card2: #f0f5f5;
     --card-modal: #ffffff;
