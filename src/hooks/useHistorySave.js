@@ -3,6 +3,7 @@ import { supabase } from "../utils/supabase";
 import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../utils/writeTrace";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
+    fetchWorkoutRowFromWorkoutsData,
     saveWorkoutForDate as saveWorkoutForDateInRepository,
 } from "../features/workout/workoutRepository";
 import { buildWorkoutSessionPayloadFromHistory } from "../utils/workoutSessions";
@@ -204,8 +205,17 @@ export function useHistorySave({
 
                     if (existingWorkoutError) throw existingWorkoutError;
 
-                    const remoteMetrics = existingWorkoutRow
-                        ? getHistoryMetricsForDate(existingWorkoutRow.data || {}, workoutDate, {
+                    // Fetch directly from workouts.data for guard comparisons.
+                    // fetchWorkoutRowForDate goes through normalized tables which may be
+                    // stale (deletes in workouts.data are not propagated to workout_exercises),
+                    // causing G2 to see deleted exercises as still present and block saves.
+                    const { row: remoteWorkoutsDataRow } = await fetchWorkoutRowFromWorkoutsData({
+                        userId,
+                        date: workoutDate,
+                    });
+
+                    const remoteMetrics = remoteWorkoutsDataRow
+                        ? getHistoryMetricsForDate(remoteWorkoutsDataRow.data || {}, workoutDate, {
                             updatedAt: null,
                         })
                         : getEmptyWorkoutMetrics();
@@ -476,7 +486,9 @@ export function useHistorySave({
                         userId,
                         date: workoutDate,
                         history: dateScopedHistoryForSave,
-                        remoteHistory: existingWorkoutRow?.data || {},
+                        // Use workouts.data directly — normalized tables may be stale for
+                        // deleted exercises, causing G2 to block legitimate delete saves.
+                        remoteHistory: remoteWorkoutsDataRow?.data || existingWorkoutRow?.data || {},
                         reason: pendingChange.reason,
                         explicitEdit,
                         explicitDelete: Boolean(pendingChange.explicitDelete),
