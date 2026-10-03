@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import {
     calc1RM,
+    countValidSets,
     hasMeaningfulPRIncrease,
     PR_UPDATE_TOLERANCE_KG,
     sanitizeWorkoutSets,
@@ -49,17 +50,16 @@ export function useWorkoutDaySummaryBuilder({
                 if (!exerciseName) return null;
 
                 const exUnit = typeof getExUnit === "function" ? getExUnit(exerciseName) : unit;
-                const sets = sanitizeWorkoutSets(
-                    (logData[exerciseName] || []).map((set) => ({
-                        ...set,
-                        weight: storeSetWeightForUnit(set, exUnit),
-                        displayWeight: set.weight,
-                        displayUnit: getSetDisplayUnit(set, exUnit),
-                    })),
-                    { allowBodyweight: true }
-                );
+                const rawSets = (logData[exerciseName] || []).map((set) => ({
+                    ...set,
+                    weight: storeSetWeightForUnit(set, exUnit),
+                    displayWeight: set.weight,
+                    displayUnit: getSetDisplayUnit(set, exUnit),
+                }));
+                const validSetCount = countValidSets(rawSets);
+                if (validSetCount === 0) return null;
 
-                if (!sets.length) return null;
+                const sets = sanitizeWorkoutSets(rawSets, { allowBodyweight: true });
 
                 const bodyPart = getExerciseRecordBodyPart(exercise, todayLabels[0] || null);
                 const volume = sets.reduce((sum, set) => {
@@ -96,7 +96,7 @@ export function useWorkoutDaySummaryBuilder({
                     name: exerciseName,
                     bodyPart,
                     sets,
-                    setCount: sets.length,
+                    setCount: validSetCount,
                     volume,
                     isPr,
                 };

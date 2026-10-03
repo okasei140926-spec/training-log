@@ -1,4 +1,4 @@
-import { calc1RM, getRecordSourceSets, sanitizeWorkoutSet, sanitizeWorkoutSets } from "../../utils/helpers";
+import { calc1RM, countValidSets, getRecordSourceSets, sanitizeWorkoutSet, sanitizeWorkoutSets } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import { buildBodyPartExerciseKey, normalizeBodyPartLabel, resolveRecordBodyPartLabel } from "../../utils/bodyPartClassification";
 
@@ -704,7 +704,7 @@ export function getCurrentWeekBoundaries(weekStartDay = 1) {
 }
 
 function aggSetCount(record) {
-  return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true }).length;
+  return countValidSets(getRecordSourceSets(record));
 }
 
 export function buildWeeklyBodyPartSetCounts(history, weekStartDay = 1, muscleEx = {}, exerciseBodyPartOverrides = {}) {

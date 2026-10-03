@@ -1,7 +1,9 @@
 import {
   PR_UPDATE_TOLERANCE_KG,
   calc1RM,
+  countValidSets,
   formatDateKey,
+  getRecordSourceSets,
   sanitizeHistoryRecord,
 } from "./helpers";
 import {
@@ -210,7 +212,7 @@ const buildEntries = ({
         bodyPart,
         date: sanitized.date,
         sets: sanitized.sets,
-        setCount: sanitized.sets.length,
+        setCount: countValidSets(getRecordSourceSets(record)),
         volume,
         bestRM,
         bestSet: getBestSetForEstimated1RM(sanitized.sets),

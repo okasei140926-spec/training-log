@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { calc1RM, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
+import { calc1RM, countValidSets, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -563,10 +563,7 @@ export default function LogScreen({
 
     const setCount = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
-        return acc + sets.filter((s) => {
-            const reps = Number(s?.reps ?? s?.rep);
-            return Number.isFinite(reps) && reps > 0;
-        }).length;
+        return acc + countValidSets(sets);
     }, 0);
 
     // Auto-clear completed state when all sets are deleted

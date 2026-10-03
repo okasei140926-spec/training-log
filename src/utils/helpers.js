@@ -140,6 +140,17 @@ export function sanitizeWorkoutSets(sets, options) {
     .filter(Boolean);
 }
 
+/**
+ * Counts sets where reps >= 1, regardless of weight.
+ * Single canonical definition used by all screens for display set counts.
+ */
+export function countValidSets(sets) {
+  return (Array.isArray(sets) ? sets : []).reduce((sum, s) => {
+    const reps = Number(s?.reps ?? s?.rep);
+    return sum + (Number.isFinite(reps) && reps >= 1 ? 1 : 0);
+  }, 0);
+}
+
 export function isCompletedWorkoutSet(set) {
   if (!set || typeof set !== "object") return false;
 

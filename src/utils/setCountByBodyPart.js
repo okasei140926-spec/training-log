@@ -3,6 +3,7 @@ import {
   BODY_PART_ENGLISH_LABELS,
 } from "./exerciseCountByBodyPart";
 import { normalizeBodyPartLabel } from "./bodyPartClassification";
+import { countValidSets } from "./helpers";
 
 const getBodyPartOrderIndex = (bodyPart) => {
   const index = BODY_PART_DISPLAY_ORDER.indexOf(bodyPart);
@@ -16,15 +17,10 @@ const getEntryBodyPart = (entry, fallbackBodyPart = "その他") => {
 
 const getEntrySets = (entry) => (Array.isArray(entry?.sets) ? entry.sets.filter(Boolean) : []);
 
-const isValidSet = (set) => {
-  const reps = Number(set?.reps);
-  return Number.isFinite(reps) && reps > 0;
-};
-
 const getEntryValidSetCount = (entry) => {
   const sets = getEntrySets(entry);
   if (sets.length > 0) {
-    return sets.reduce((sum, set) => sum + (isValidSet(set) ? 1 : 0), 0);
+    return countValidSets(sets);
   }
 
   const setCount = Number(entry?.setCount ?? entry?.set_count ?? 0);

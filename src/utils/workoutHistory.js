@@ -1,5 +1,7 @@
 import {
   buildHistoryFromWorkoutRowsWithScopes,
+  countValidSets,
+  getRecordSourceSets,
   getValidWorkoutDatesFromHistory,
   mergeHistoryMaps,
   sanitizeHistoryRecord,
@@ -46,7 +48,7 @@ export const getHistoryMetricsForDate = (historyMap, targetDate) => {
       if (!sets.length) return;
 
       exerciseNames.push(exerciseName);
-      setCount += sets.length;
+      setCount += countValidSets(getRecordSourceSets(record));
       volume += sets.reduce((sum, set) => {
         const weight = Number(set?.weight);
         const reps = Number(set?.reps);
