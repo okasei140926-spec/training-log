@@ -26,6 +26,20 @@ async function fetchWorkoutRowForDateFromStorage(supabase, userId, date) {
   return { row: data || null, error };
 }
 
+/**
+ * Public: fetch directly from workouts.data — never goes through normalized tables.
+ * Use for guard comparisons where normalized tables may be stale (e.g. deleted exercises
+ * that were not propagated to workout_exercises).
+ */
+export async function fetchWorkoutRowFromWorkoutsData({
+  userId,
+  date,
+  supabase: supabaseClient = defaultSupabase,
+} = {}) {
+  const normalizedDate = requireUserAndDate(userId, date);
+  return fetchWorkoutRowForDateFromStorage(supabaseClient, userId, normalizedDate);
+}
+
 // ─── New helper: save to workout_exercises + workout_sets ─────────────────────
 async function saveExercisesAndSets(supabase, workoutId, userId, date, historyForDate) {
   // historyForDate is like: { "Bench Press": [{date, bodyPart, order, sets:[...]}], ... }
@@ -475,11 +489,8 @@ export async function saveWorkoutForDate({
     }
   }
 
-  const verify = await fetchWorkoutRowForDate({
-    userId,
-    date: normalizedDate,
-    supabase,
-  });
+  // Read back from workouts.data directly (never normalized tables — they may be stale)
+  const verify = await fetchWorkoutRowForDateFromStorage(supabase, userId, normalizedDate);
   const verifiedHistory = verify.row?.data
     ? pickHistoryForDate(verify.row.data, normalizedDate)
     : {};
@@ -487,10 +498,12 @@ export async function saveWorkoutForDate({
   const savedNameSet = new Set((guard.localMetrics.exerciseNames || []).map((name) => String(name || "").trim()).filter(Boolean));
   const verifiedNameSet = new Set((verifiedMetrics.exerciseNames || []).map((name) => String(name || "").trim()).filter(Boolean));
   const lostExerciseNames = [...savedNameSet].filter((name) => !verifiedNameSet.has(name));
+  const exerciseCountMismatch = hasWorkout && verifiedMetrics.exerciseCount !== guard.localMetrics.exerciseCount;
   const verifyFailed = Boolean(
     verify.error ||
     (hasWorkout && (
       lostExerciseNames.length ||
+      exerciseCountMismatch ||
       verifiedMetrics.setCount < guard.localMetrics.setCount
     ))
   );
@@ -525,6 +538,7 @@ export async function saveWorkoutForDate({
     setCount: verifiedMetrics.setCount ?? null,
     extra: {
       lostExerciseNames,
+      exerciseCountMismatch,
       verifyFailed,
       savedExerciseCount: guard.localMetrics?.exerciseCount ?? null,
       savedSetCount: guard.localMetrics?.setCount ?? null,
