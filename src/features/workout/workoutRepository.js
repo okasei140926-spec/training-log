@@ -45,6 +45,23 @@ async function saveExercisesAndSets(supabase, workoutId, userId, date, historyFo
   // historyForDate is like: { "Bench Press": [{date, bodyPart, order, sets:[...]}], ... }
   const exerciseEntries = Object.entries(historyForDate || {});
 
+  // Delete exercises that are no longer in historyForDate.
+  // saveExercisesAndSets only upserts; without this delete, removed exercises
+  // remain in workout_exercises and cause stale 9-exercise reads when
+  // fetchNormalizedWorkoutRow is called after a delete write.
+  const currentExerciseNames = new Set(exerciseEntries.map(([name]) => name));
+  const { data: existingExercises } = await supabase
+    .from("workout_exercises")
+    .select("id, exercise_name")
+    .eq("workout_id", workoutId);
+  const toDeleteIds = (existingExercises || [])
+    .filter(ex => !currentExerciseNames.has(ex.exercise_name))
+    .map(ex => ex.id)
+    .filter(Boolean);
+  if (toDeleteIds.length > 0) {
+    await supabase.from("workout_exercises").delete().in("id", toDeleteIds);
+  }
+
   for (let displayOrder = 0; displayOrder < exerciseEntries.length; displayOrder++) {
     const [exerciseName, records] = exerciseEntries[displayOrder];
 
