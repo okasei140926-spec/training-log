@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../utils/supabase";
 import {
-    fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
+    fetchWorkoutRowFromWorkoutsData as fetchWorkoutRowForDateFromRepository,
 } from "../features/workout/workoutRepository";
 import { buildHistoryFromWorkoutRows, getValidWorkoutDatesFromHistory } from "../utils/helpers";
 import {
