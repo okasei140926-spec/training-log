@@ -524,8 +524,21 @@ export function buildHistoryFromWorkoutRowsWithScopes(rows) {
         const effectiveDate = recordDate || rowDate;
         if (!effectiveDate) return;
 
+        // Each Supabase row is upserted with ON CONFLICT (user_id, date), so every
+        // record inside a row belongs to that row's date.  A mismatch between
+        // record.date and row.date means the embedded date is stale (e.g. written by
+        // the stale-closure double-write bug).  In that case we trust row.date and put
+        // the record in exactHistory so it displays on the correct day.
+        // Legacy multi-date rows (older data formats) are preserved: if there is NO
+        // dedicated Supabase row for recordDate AND recordDate < rowDate, we still fall
+        // back to legacyHistory so the older exercise history isn't lost.
         if (rowDate && effectiveDate !== rowDate) {
+          // Put in legacyHistory — will be overridden by exactHistory for any date
+          // that has its own dedicated row.
           addWorkoutRowRecordToHistory(legacyHistory, exerciseName, record, effectiveDate, "legacy", rowMeta);
+          // Also add to exactHistory using rowDate so this row's content is always
+          // visible on the correct date even if record.date is wrong.
+          addWorkoutRowRecordToHistory(exactHistory, exerciseName, record, rowDate, "exact", rowMeta);
         } else {
           addWorkoutRowRecordToHistory(exactHistory, exerciseName, record, rowDate || effectiveDate, "exact", rowMeta);
         }
