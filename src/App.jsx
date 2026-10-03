@@ -1022,7 +1022,7 @@ export default function GymApp() {
     const markWorkoutContentChangedRef = useRef(null);
     const onStartupUnsyncedLocalDates = useCallback((unsyncedDates) => {
         unsyncedDates.forEach((date) => {
-            markWorkoutContentChangedRef.current?.(date, "startup_unsynced_local", { explicitEdit: true });
+            markWorkoutContentChangedRef.current?.(date, "startup_unsynced_local", { explicitEdit: false });
         });
         setForceSyncVersion((v) => v + 1);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
