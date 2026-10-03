@@ -105,6 +105,35 @@ export function usePersistCurrentLog({
         // before setSessionEx — so it always reflects the current intent regardless of
         // explicitDelete. Use it whenever the date matches.
         const useLatestDraft = latestDraftDate === normalizedLogDate;
+
+        // ■2/■3: Block writes where the latest draft originated from a remote restore
+        // (source:"remote_supabase") and no explicit user action is pending.
+        // Writing remote-origin data back to Supabase is at best a no-op and at worst
+        // a destructive write-back of stale normalized-table data.
+        if (
+            useLatestDraft &&
+            latestDraftCandidate?.meta?.source === "remote_supabase" &&
+            !pendingChange.explicitEdit &&
+            !pendingChange.explicitDelete
+        ) {
+            logWriteTrace("G6:remote-source-blocked", {
+                date: normalizedLogDate,
+                decision: "block",
+                reason: "latestDraftCandidate.source is remote_supabase with no explicit user action",
+                flags: { explicitEdit: false, explicitDelete: false, source: "remote_supabase" },
+                exerciseCount: wpCountExercises(latestDraftCandidate?.sessionEx),
+                setCount: wpCountSetsFromLogData(latestDraftCandidate?.logData),
+            });
+            console.warn("[persistCurrentLog] blocked remote_supabase write-back (no user action)", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || null,
+                date: normalizedLogDate,
+                reason: pendingChange.reason || null,
+                exerciseCount: wpCountExercises(latestDraftCandidate?.sessionEx),
+            });
+            return;
+        }
+
         // When useLatestDraft is true, treat latestDraftCandidate.sessionEx as the
         // single authoritative exercise list. Do NOT call normalizeLogDraftState here
         // because it internally calls mergeDraftExercisesWithLogData, which adds back
