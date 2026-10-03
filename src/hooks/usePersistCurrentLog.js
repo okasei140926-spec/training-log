@@ -342,7 +342,10 @@ export function usePersistCurrentLog({
         }
 
         const dirtyDraftForPersistence = withDraftDateMeta(normalizedLogDate, saveDraftSnapshot, {
-            source: pendingChange.reason || saveDraftSnapshot.meta?.source || "local_auto_persist",
+            // Never propagate a system source (e.g. "remote_supabase") as the intent of
+            // a user-triggered persist.  pendingChange.reason is always a user-action string
+            // (set by markWorkoutContentChanged) or "local_auto_persist" as fallback.
+            source: pendingChange.reason || "local_auto_persist",
             hasUnsavedChanges: true,
             updatedAt: pendingChange.updatedAt || saveDraftSnapshot.meta?.updatedAt || new Date().toISOString(),
             remoteVerifiedAt: saveDraftSnapshot.meta?.remoteVerifiedAt || null,

@@ -69,6 +69,10 @@ export const makeWorkoutDraftMeta = ({
   // guard in saveWorkoutDraft) can distinguish user actions from system auto-saves.
   explicitDelete = false,
   explicitEdit = false,
+  // Layer 2 fields (Stage 1 addition)
+  layerVersion = 2,
+  userEditedAt = null,  // timestamp (ms) of last user gesture; null for system writes
+  syncedAt = null,      // timestamp (ms) when this content was confirmed written to Supabase
 } = {}) => {
   const normalizedDate = normalizeDateKey(date);
   return {
@@ -80,6 +84,9 @@ export const makeWorkoutDraftMeta = ({
     hasUnsavedChanges: Boolean(hasUnsavedChanges),
     remoteVerifiedAt,
     updatedAt,
+    layerVersion,
+    userEditedAt,
+    syncedAt,
     ...(explicitDelete ? { explicitDelete: true } : {}),
     ...(explicitEdit ? { explicitEdit: true } : {}),
   };
@@ -186,6 +193,29 @@ export function saveWorkoutDraft(date, draft, {
   const normalizedDate = normalizeDateKey(date);
   const store = getStorage(storage);
   if (!store || !normalizedDate) return false;
+
+  // ─── One-way valve (原則2) ─────────────────────────────────────────────────
+  // Data stamped source:"remote_supabase" originated from a Supabase fetch and
+  // must never be written back into Layer 2 (the user's edit buffer).
+  // Display still works: callers apply the data to React state before calling
+  // saveWorkoutDraft, so the UI shows correctly even though localStorage is not
+  // updated.  On next app start, useLogDateRefresh re-fetches and re-applies.
+  if (draft?.meta?.source === "remote_supabase") {
+    logWriteTrace("valve:remote_supabase", {
+      date: normalizedDate,
+      decision: "block",
+      reason: "remote_supabase source rejected by one-way valve — Layer 2 must only hold user edits",
+      flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: "remote_supabase" },
+      exerciseCount: wpExCount(draft),
+      setCount: wpSetCount(draft),
+    });
+    logger?.warn?.("[workout draft] one-way valve: remote_supabase rejected", {
+      action: "one_way_valve",
+      keyDate: normalizedDate,
+      source: "remote_supabase",
+    });
+    return false;
+  }
 
   // Pre-overwrite validation: check the original payload date BEFORE withWorkoutDraftMeta
   // stamps normalizedDate on top of it — otherwise validation is toothless.
@@ -338,6 +368,7 @@ export function makeVerifiedWorkoutDraft(date, draft, {
     source: "save_verified",
     hasUnsavedChanges: false,
     remoteVerifiedAt,
+    syncedAt: Date.now(),
   });
 }
 
