@@ -77,6 +77,7 @@ import { usePersistCurrentLog } from "./hooks/usePersistCurrentLog";
 import { useWorkoutLogBridge } from "./hooks/useWorkoutLogBridge";
 import { useAiPlanProgress } from "./hooks/useAiPlanProgress";
 import { useWorkoutDaySummaryBuilder } from "./hooks/useWorkoutDaySummaryBuilder";
+import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData } from "./utils/writeTrace";
 import { useAccountActions } from "./hooks/useAccountActions";
 import { useWorkoutSyncHelpers } from "./hooks/useWorkoutSyncHelpers";
 import { useDraftStore } from "./hooks/useDraftStore";
@@ -368,6 +369,10 @@ export default function GymApp() {
     };
 
     const [logDate, setLogDate] = useState(() => getTodayKey());
+    // logDateRef is always the latest logDate — used wherever a useCallback/useEffect
+    // might capture a stale closure value of logDate between renders.
+    const logDateRef = useRef(getTodayKey());
+    useEffect(() => { logDateRef.current = logDate; }, [logDate]);
     const [, setLogMode] = useState("today");
     const [exerciseUnits, setExerciseUnits] = useState(() => loadDraftForDate(getTodayKey()).exerciseUnits);
 
@@ -396,7 +401,10 @@ export default function GymApp() {
 
     const { applyLogDraftState, applyCurrentLogDraft, setLogDataAndSaveDraft } = useLogDraftApplicator({        logDate,        screen,        exerciseUnits,        logData,        sessionEx,        todayLabels,        user,        latestLogDraftRef,        pendingWorkoutContentChangeDatesRef,        lastAppliedLogDataHashRef,        lastAutosavedDraftSignatureRef,        hasDraftContent,        saveDraftForDate,        getCurrentLogDraftSnapshot,        setTodayLabels,        setLogData,        setSessionEx,        setExerciseUnits,    });
     const markLogWorkoutContentChanged = useCallback((reason = "set_update", details = {}) => {
-        const normalizedDate = String(logDate || "").slice(0, 10);
+        // Use logDateRef.current to avoid stale-closure contamination: if logDate
+        // changes in state but this callback hasn't been recreated yet, the ref
+        // always holds the latest value.
+        const normalizedDate = String(logDateRef.current || "").slice(0, 10);
         if (!normalizedDate) return;
 
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
@@ -430,7 +438,10 @@ export default function GymApp() {
                 explicitEdit: true,
             });
         }
-    }, [logDate, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // logDate is intentionally excluded — we read it via logDateRef.current to avoid
+    // stale-closure contamination (marking pending changes for the wrong date).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]);
 
     const { saveLog } = useLogLogic({
         logData,
@@ -1149,16 +1160,43 @@ export default function GymApp() {
         // Supabase write storm on every app startup.
         const rescueCutoff = getDateDaysAgoKey(7);
         const unsyncedDates = [];
+        // Collect all date candidates from BOTH draft formats:
+        //   new format: workoutDraft:YYYY-MM-DD
+        //   old scoped: draft_logData_YYYY-MM-DD
+        // We deduplicate by date so each date is processed once.
+        const draftDateCandidates = new Set();
         try {
             for (let i = 0; i < window.localStorage.length; i++) {
-                const key = window.localStorage.key(i);
-                if (!key?.startsWith("workoutDraft:")) continue;
-                const date = key.slice("workoutDraft:".length);
-                if (!date || date.length !== 10) continue;
+                const lsKey = window.localStorage.key(i);
+                if (lsKey?.startsWith("workoutDraft:")) {
+                    const d = lsKey.slice("workoutDraft:".length);
+                    if (d && d.length === 10) draftDateCandidates.add(d);
+                } else if (lsKey?.startsWith("draft_logData_")) {
+                    const d = lsKey.slice("draft_logData_".length);
+                    if (d && d.length === 10) draftDateCandidates.add(d);
+                }
+            }
+        } catch { }
+        try {
+            for (const date of draftDateCandidates) {
                 // Skip dates older than 7 days
                 if (date < rescueCutoff) continue;
                 const draft = loadDraftForDate(date);
                 if (!draft) continue;
+                // Discard drafts whose embedded meta.date doesn't match the localStorage key.
+                // This can happen via stale-closure contamination: exercises from date A were
+                // written under date B's key.  These drafts must NOT be synced — they would
+                // overwrite correct remote data with wrong local data.
+                const draftMetaDate = normalizeDraftDateKey(draft.meta?.date || draft.date);
+                if (draftMetaDate && draftMetaDate !== date) {
+                    console.warn("[startup] discarding date-contaminated draft", {
+                        key: date,
+                        draftMetaDate,
+                        source: draft.meta?.source || null,
+                    });
+                    clearDraftForDate(date);
+                    continue;
+                }
                 const hasContent = (draft.sessionEx || draft.exercises || []).length > 0
                     || Object.keys(draft.logData || {}).length > 0;
                 if (!hasContent) continue;
@@ -1488,6 +1526,15 @@ export default function GymApp() {
         }
 
         const normalizedDate = String(logDate || "").slice(0, 10);
+        // Guard against cross-date contamination during intermediate renders:
+        // when logDate changes (e.g. date navigation), exercises / sessionEx may
+        // still reflect the previous date until applyLogDraftState / useLogDateRefresh
+        // fires.  If latestLogDraftRef belongs to a different date we are in that
+        // transient window — skip the save.
+        const latestDraftDate = normalizeDraftDateKey(
+            latestLogDraftRef.current?.date || latestLogDraftRef.current?.meta?.date
+        );
+        if (latestDraftDate && latestDraftDate !== normalizedDate) return;
         const pendingChange = normalizedDate
             ? pendingWorkoutContentChangeDatesRef.current.get(normalizedDate)
             : null;
@@ -1880,6 +1927,7 @@ export default function GymApp() {
     // useEffectより前に定義
     const { persistCurrentLog } = usePersistCurrentLog({
         logDate,
+        logDateRef,
         exercises,
         logData,
         todayLabels,
@@ -1924,6 +1972,27 @@ export default function GymApp() {
         // in syncWorkoutRowsForDates fires on the next useHistoryAutoSave run.
         const hasPendingExplicitEdit = exercises.length > 0 && Boolean(pendingChangeForDate?.explicitEdit);
 
+        logWriteTrace("A-2:debounce-gate", {
+            date: normalizedLogDate,
+            decision: (!hasAnyValidSet && !hasPendingExplicitDelete && !hasPendingExplicitEdit) ? "skip" : "pass",
+            reason: (!hasAnyValidSet && !hasPendingExplicitDelete && !hasPendingExplicitEdit)
+                ? "no valid sets, no pending explicit delete, no pending explicit edit"
+                : null,
+            flags: {
+                explicitEdit: Boolean(pendingChangeForDate?.explicitEdit),
+                explicitDelete: Boolean(pendingChangeForDate?.explicitDelete),
+                source: pendingChangeForDate?.reason || undefined,
+            },
+            exerciseCount: wpCountExercises(exercises),
+            setCount: wpCountSetsFromLogData(logData),
+            extra: {
+                hasAnyValidSet,
+                hasPendingExplicitDelete,
+                hasPendingExplicitEdit,
+                screen,
+                historySyncReady,
+            },
+        });
         if (!hasAnyValidSet && !hasPendingExplicitDelete && !hasPendingExplicitEdit) return;
 
         const t = setTimeout(() => {
@@ -2896,7 +2965,7 @@ export default function GymApp() {
                             gap: 12,
                         }}>
                             <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 900 }}>同期できていない記録があります</div>
+                                <div style={{ fontWeight: 900 }}>保存できませんでした</div>
                                 <div style={{ color: "var(--text2)", fontSize: 12 }}>
                                     {visibleSyncFailureDates.slice(0, 3).join(" / ")}
                                     {visibleSyncFailureDates.length > 3 ? ` ほか${visibleSyncFailureDates.length - 3}件` : ""}
