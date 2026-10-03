@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../utils/supabase";
+import { logWriteTrace } from "../utils/writeTrace";
 import { fetchWorkoutRows as fetchWorkoutRowsFromRepository } from "../features/workout/workoutRepository";
 import { makeVerifiedWorkoutDraft as makeStoredVerifiedWorkoutDraft } from "../features/workout/workoutDraftStore";
 import {
@@ -81,6 +82,19 @@ export function useHistoryAutoSave({
         const currentUserId = user.id;
         const pendingWorkoutNotification = pendingWorkoutNotificationRef.current;
         const pendingContentDates = Array.from(pendingWorkoutContentChangeDatesRef.current.keys());
+        if (pendingContentDates.length > 0) {
+            pendingContentDates.forEach((date) => {
+                const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(date) || {};
+                logWriteTrace("useHistoryAutoSave", {
+                    date,
+                    decision: "pass",
+                    reason: pendingChange.reason || null,
+                    flags: { explicitEdit: Boolean(pendingChange.explicitEdit), explicitDelete: Boolean(pendingChange.explicitDelete), source: pendingChange.reason },
+                    exerciseCount: null,
+                    setCount: null,
+                });
+            });
+        }
         if (historyRemoteLoadFailedRef.current) {
             console.warn("[save guard] skipped save because Supabase record load failed", {
                 env: getRuntimeEnvironmentLabel(),

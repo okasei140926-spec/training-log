@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData } from "../utils/writeTrace";
 import {
     buildDraftHistoryForDate,
     getDraftInputDebugSummary,
@@ -57,6 +58,15 @@ export function usePersistCurrentLog({
         const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedLogDate);
         if (!pendingChange) return;
 
+        logWriteTrace("persistCurrentLog", {
+            date: normalizedLogDate,
+            decision: "pass",
+            reason: pendingChange.reason || null,
+            flags: { explicitEdit: Boolean(pendingChange.explicitEdit), explicitDelete: Boolean(pendingChange.explicitDelete), source: pendingChange.reason },
+            exerciseCount: null,
+            setCount: null,
+        });
+
         const latestDraftCandidate = latestLogDraftRef.current || null;
         const latestDraftDate = normalizeDraftDateKey(
             latestDraftCandidate?.date
@@ -65,6 +75,15 @@ export function usePersistCurrentLog({
         // If the latest draft ref belongs to a different date, it is a stale closure remnant.
         // Do not fall back to normalizedLogDate — that would silently cross-contaminate dates.
         if (latestDraftDate && latestDraftDate !== normalizedLogDate) {
+            logWriteTrace("G6:stale-closure", {
+                date: normalizedLogDate,
+                decision: "block",
+                reason: "latestDraftRef.date does not match normalizedLogDate",
+                flags: { explicitEdit: Boolean(pendingChange.explicitEdit), explicitDelete: Boolean(pendingChange.explicitDelete), source: latestDraftCandidate?.meta?.source },
+                exerciseCount: wpCountExercises(latestDraftCandidate?.sessionEx ?? latestDraftCandidate?.exercises),
+                setCount: wpCountSetsFromLogData(latestDraftCandidate?.logData),
+                extra: { latestDraftDate, normalizedLogDate },
+            });
             console.warn("[persistCurrentLog] blocked stale-closure persist", {
                 action: "stale_closure_write_blocked",
                 latestDraftDate,
@@ -73,6 +92,15 @@ export function usePersistCurrentLog({
             });
             return;
         }
+        logWriteTrace("G6:stale-closure", {
+            date: normalizedLogDate,
+            decision: "pass",
+            reason: null,
+            flags: { explicitEdit: Boolean(pendingChange.explicitEdit), explicitDelete: Boolean(pendingChange.explicitDelete), source: latestDraftCandidate?.meta?.source },
+            exerciseCount: wpCountExercises(latestDraftCandidate?.sessionEx ?? latestDraftCandidate?.exercises),
+            setCount: wpCountSetsFromLogData(latestDraftCandidate?.logData),
+            extra: { latestDraftDate, normalizedLogDate },
+        });
         const useLatestDraft =
             // Explicit deletes must never use the stale draft: the draft still has the
             // deleted exercise(s), but `exercises` (closure) already reflects the removal.
@@ -128,6 +156,21 @@ export function usePersistCurrentLog({
             explicitDelete: Boolean(pendingChange.explicitDelete),
         });
         const wouldDestructivelyOverwrite = saveGuardDecision.blocked;
+        logWriteTrace("G1:local", {
+            date: normalizedLogDate,
+            decision: wouldDestructivelyOverwrite && !pendingChange.explicitDelete ? "block" : "pass",
+            reason: wouldDestructivelyOverwrite && !pendingChange.explicitDelete
+                ? saveGuardDecision.blockedReason || null
+                : saveGuardDecision.allowedReason || null,
+            flags: { explicitEdit, explicitDelete: Boolean(pendingChange.explicitDelete), source: pendingChange.reason },
+            exerciseCount: incomingMetrics.exerciseCount ?? saveExercises.length,
+            setCount: incomingMetrics.setCount ?? null,
+            extra: {
+                remoteExerciseCount: existingMetrics.exerciseCount,
+                remoteSetCount: existingMetrics.setCount,
+                removedExerciseNames: saveGuardDecision.details?.removedExerciseNames,
+            },
+        });
 
         logWorkoutPersistenceDecision({
             action: "local_auto_persist_check",
@@ -259,6 +302,14 @@ export function usePersistCurrentLog({
             // the empty content is intentional.
             ...(pendingChange.explicitDelete ? { explicitDelete: true } : {}),
         });
+        logWriteTrace("A-2:saveDraftForDate-call", {
+            date: normalizedLogDate,
+            decision: "executed",
+            reason: null,
+            flags: { explicitEdit: Boolean(dirtyDraftForPersistence?.meta?.explicitEdit), explicitDelete: Boolean(dirtyDraftForPersistence?.meta?.explicitDelete), source: dirtyDraftForPersistence?.meta?.source },
+            exerciseCount: wpCountExercises(dirtyDraftForPersistence?.sessionEx ?? dirtyDraftForPersistence?.exercises),
+            setCount: wpCountSetsFromLogData(dirtyDraftForPersistence?.logData),
+        });
         const draftSavedToLocalStorage = saveDraftForDate(normalizedLogDate, dirtyDraftForPersistence);
         latestLogDraftRef.current = dirtyDraftForPersistence;
         // Store the fully-built history directly in pendingSavePayloadsRef.
@@ -309,6 +360,14 @@ export function usePersistCurrentLog({
         };
         queueWorkoutSessionSync(normalizedLogDate);
 
+        logWriteTrace("setHistory:local", {
+            date: normalizedLogDate,
+            decision: "executed",
+            reason: pendingChange.reason || null,
+            flags: { explicitEdit, explicitDelete: Boolean(pendingChange.explicitDelete), source: pendingChange.reason },
+            exerciseCount: saveExercises.length,
+            setCount: wpCountSetsFromLogData(saveLogData),
+        });
         setHistory((prev) => {
             const nextHistory = buildDraftHistoryForDate({
                 baseHistory: prev,

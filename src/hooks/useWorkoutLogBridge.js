@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useWorkoutLog } from "../features/workout/useWorkoutLog";
+import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData } from "../utils/writeTrace";
 import {
     getRuntimeEnvironmentLabel,
     getWorkoutDraftSignature,
@@ -30,6 +31,14 @@ export function useWorkoutLogBridge({
     const handleWorkoutLogDraftChange = useCallback((nextDraft, mutation = {}) => {
         const normalizedDate = normalizeDraftDateKey(nextDraft?.date || logDate);
         const currentDate = normalizeDraftDateKey(logDate);
+        logWriteTrace("onDraftChange", {
+            date: normalizedDate || currentDate,
+            decision: "pass",
+            reason: mutation.reason || null,
+            flags: { explicitEdit: Boolean(mutation.explicitEdit), explicitDelete: Boolean(mutation.explicitDelete), source: mutation.reason || nextDraft?.meta?.source },
+            exerciseCount: wpCountExercises(nextDraft?.sessionEx ?? nextDraft?.exercises),
+            setCount: wpCountSetsFromLogData(nextDraft?.logData),
+        });
         if (!normalizedDate || normalizedDate !== currentDate) {
             console.warn("[workout log] skipped date-mismatched draft sync", {
                 action: "draft_restore_date_check",

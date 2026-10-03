@@ -1,6 +1,19 @@
+import { logWriteTrace } from "../../utils/writeTrace";
+
 const normalizeDateKey = (value) => String(value || "").slice(0, 10);
 
 const DEFAULT_PREFIX = "workoutDraft";
+
+const wpExCount = (draft) =>
+    (draft?.exercises || draft?.sessionEx || []).length;
+
+const wpSetCount = (draft) => {
+    const logData = draft?.logData || {};
+    return Object.values(logData).reduce(
+        (sum, sets) => sum + (Array.isArray(sets) ? sets.length : 0),
+        0
+    );
+};
 
 const safeParse = (value, fallback) => {
   try {
@@ -178,6 +191,15 @@ export function saveWorkoutDraft(date, draft, {
   // stamps normalizedDate on top of it — otherwise validation is toothless.
   const originalPayloadDate = normalizeDateKey(draft?.date || draft?.meta?.date);
   if (originalPayloadDate && originalPayloadDate !== normalizedDate) {
+    logWriteTrace("G4:stale-date", {
+      date: normalizedDate,
+      decision: "block",
+      reason: "payload date does not match key date",
+      flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+      exerciseCount: wpExCount(draft),
+      setCount: wpSetCount(draft),
+      extra: { keyDate: normalizedDate, payloadDate: originalPayloadDate },
+    });
     logger?.warn?.("[workout draft] blocked stale-date draft save", {
       action: "stale_closure_write_blocked",
       keyDate: normalizedDate,
@@ -189,6 +211,15 @@ export function saveWorkoutDraft(date, draft, {
     });
     return false;
   }
+  logWriteTrace("G4:stale-date", {
+    date: normalizedDate,
+    decision: "pass",
+    reason: null,
+    flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+    exerciseCount: wpExCount(draft),
+    setCount: wpSetCount(draft),
+    extra: { keyDate: normalizedDate, payloadDate: originalPayloadDate || null },
+  });
 
   // Guard: do not overwrite a non-empty draft with empty content unless the
   // caller explicitly wants to delete it (explicitDelete flag in meta).
@@ -208,6 +239,15 @@ export function saveWorkoutDraft(date, draft, {
     // Block: a system auto-save (stale closure, navigation race, etc.) must not silently
     // wipe in-progress workout data. User-initiated deletes (explicitDelete) and edits
     // (explicitEdit) are allowed to produce empty content intentionally.
+    logWriteTrace("G3:empty-overwrite", {
+      date: normalizedDate,
+      decision: "block",
+      reason: "incoming draft has no exercises/sets; existing draft has content",
+      flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+      exerciseCount: wpExCount(draft),
+      setCount: wpSetCount(draft),
+      extra: { existingHasContent, incomingHasContent, isExplicitUserAction },
+    });
     logger?.warn?.("[workout draft] blocked empty-content overwrite of non-empty draft", {
       action: "draft_empty_overwrite_blocked",
       keyDate: normalizedDate,
@@ -216,6 +256,15 @@ export function saveWorkoutDraft(date, draft, {
     });
     return false;
   }
+  logWriteTrace("G3:empty-overwrite", {
+    date: normalizedDate,
+    decision: "pass",
+    reason: null,
+    flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+    exerciseCount: wpExCount(draft),
+    setCount: wpSetCount(draft),
+    extra: { existingHasContent, incomingHasContent, isExplicitUserAction },
+  });
 
   const nextDraft = withWorkoutDraftMeta(normalizedDate, draft, draft?.meta || {});
   const validation = validateWorkoutDraftDate(normalizedDate, nextDraft);

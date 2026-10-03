@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { supabase } from "../utils/supabase";
+import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../utils/writeTrace";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
     saveWorkoutForDate as saveWorkoutForDateInRepository,
@@ -184,6 +185,15 @@ export function useHistorySave({
                     const effectiveHistoryForDate = directPayloadMap ?? normalizedHistoryMap;
                     const hasWorkoutForDate = hasValidWorkoutOnDate(effectiveHistoryForDate, workoutDate);
                     const incomingMetrics = getHistoryMetricsForDate(effectiveHistoryForDate, workoutDate);
+                    logWriteTrace("syncWorkoutRows", {
+                        date: workoutDate,
+                        decision: "pass",
+                        reason: null,
+                        flags: { explicitEdit: null, explicitDelete: null, source: "syncWorkoutRows:entry" },
+                        exerciseCount: wpCountExercisesFromHistory(effectiveHistoryForDate, workoutDate),
+                        setCount: wpCountSetsFromHistory(effectiveHistoryForDate, workoutDate),
+                        extra: { hasWorkoutForDate, usingDirectPayload: directPayloadMap != null },
+                    });
                     const {
                         row: existingWorkoutRow,
                         error: existingWorkoutError,
@@ -211,6 +221,14 @@ export function useHistorySave({
                             // completing) will see the correct data and save successfully.
                             // IMPORTANT: do NOT add to skippedDates — that would overwrite the
                             // local draft with empty remote data, destroying the user's input.
+                            logWriteTrace("G8:empty-workout", {
+                                date: workoutDate,
+                                decision: "hold",
+                                reason: "explicitEdit but history empty — draft not yet flushed",
+                                flags: { explicitEdit: true, explicitDelete: false, source: pendingChange.reason },
+                                exerciseCount: incomingMetrics.exerciseCount ?? 0,
+                                setCount: incomingMetrics.setCount ?? 0,
+                            });
                             console.warn("[save guard] hold empty workout for retry (explicit edit, draft not yet flushed)", {
                                 env: getRuntimeEnvironmentLabel(),
                                 user_id: userId,
@@ -227,6 +245,14 @@ export function useHistorySave({
                         }
                         // Non-explicit empty workout — no user edit intent, nothing to save.
                         // Clear any stale sync-failure banner for this date.
+                        logWriteTrace("G8:empty-workout", {
+                            date: workoutDate,
+                            decision: "skip",
+                            reason: "no local workout data and no explicit delete",
+                            flags: { explicitEdit, explicitDelete: false, source: pendingChange.reason },
+                            exerciseCount: incomingMetrics.exerciseCount ?? 0,
+                            setCount: incomingMetrics.setCount ?? 0,
+                        });
                         console.warn("[save guard] skip empty workout (no local data, no explicit delete)", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
@@ -242,6 +268,14 @@ export function useHistorySave({
                         results.skippedDates.push(workoutDate);
                         return;
                     }
+                    logWriteTrace("G8:empty-workout", {
+                        date: workoutDate,
+                        decision: "pass",
+                        reason: null,
+                        flags: { explicitEdit, explicitDelete: Boolean(pendingChange.explicitDelete), source: pendingChange.reason },
+                        exerciseCount: incomingMetrics.exerciseCount ?? null,
+                        setCount: incomingMetrics.setCount ?? null,
+                    });
                     const saveGuardDecision = getWorkoutSaveGuardDecision({
                         incomingMetrics,
                         remoteMetrics,
@@ -251,6 +285,21 @@ export function useHistorySave({
                     });
                     const wouldDestructivelyOverwrite = saveGuardDecision.blocked;
                     const allowDestructiveSave = Boolean(pendingChange.explicitDelete);
+                    logWriteTrace("G1:supabase", {
+                        date: workoutDate,
+                        decision: wouldDestructivelyOverwrite && !allowDestructiveSave ? "block" : "pass",
+                        reason: wouldDestructivelyOverwrite && !allowDestructiveSave
+                            ? saveGuardDecision.blockedReason || null
+                            : saveGuardDecision.allowedReason || null,
+                        flags: { explicitEdit, explicitDelete: allowDestructiveSave, source: pendingChange.reason },
+                        exerciseCount: incomingMetrics.exerciseCount ?? null,
+                        setCount: incomingMetrics.setCount ?? null,
+                        extra: {
+                            remoteExerciseCount: remoteMetrics.exerciseCount,
+                            remoteSetCount: remoteMetrics.setCount,
+                            removedExerciseNames: saveGuardDecision.details?.removedExerciseNames,
+                        },
+                    });
 
                     logWorkoutPersistenceDecision({
                         action: "workouts_sync_check",
@@ -311,6 +360,14 @@ export function useHistorySave({
                     });
 
                     if (wouldDestructivelyOverwrite && !allowDestructiveSave) {
+                        logWriteTrace("G9:supabase-write-guard", {
+                            date: workoutDate,
+                            decision: "skip",
+                            reason: saveGuardDecision.blockedReason || "G1 blocked and no allowDestructiveSave",
+                            flags: { explicitEdit, explicitDelete: allowDestructiveSave, source: pendingChange.reason },
+                            exerciseCount: incomingMetrics.exerciseCount ?? null,
+                            setCount: incomingMetrics.setCount ?? null,
+                        });
                         console.warn("[save guard] local workout is smaller than remote. Skip overwrite.", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
@@ -346,6 +403,14 @@ export function useHistorySave({
                         results.skippedDates.push(workoutDate);
                         return;
                     }
+                    logWriteTrace("G9:supabase-write-guard", {
+                        date: workoutDate,
+                        decision: "pass",
+                        reason: saveGuardDecision.allowedReason || null,
+                        flags: { explicitEdit, explicitDelete: allowDestructiveSave, source: pendingChange.reason },
+                        exerciseCount: incomingMetrics.exerciseCount ?? null,
+                        setCount: incomingMetrics.setCount ?? null,
+                    });
                     if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {
                         console.log("[workout edit] workouts.data save decision", {
                             env: getRuntimeEnvironmentLabel(),
@@ -377,6 +442,15 @@ export function useHistorySave({
                     writeRateRef.current[workoutDate] = rateEntry;
                     if (rateEntry.count > WRITE_RATE_LIMIT) {
                         const rateError = new Error(`write rate limit exceeded: ${rateEntry.count} writes in 60s for ${workoutDate}`);
+                        logWriteTrace("G10:write-rate-limiter", {
+                            date: workoutDate,
+                            decision: "block",
+                            reason: `rate limit exceeded: ${rateEntry.count} writes in 60s`,
+                            flags: { explicitEdit, explicitDelete: allowDestructiveSave, source: pendingChange.reason },
+                            exerciseCount: incomingMetrics.exerciseCount ?? null,
+                            setCount: incomingMetrics.setCount ?? null,
+                            extra: { count: rateEntry.count, limit: WRITE_RATE_LIMIT, windowMs: WRITE_RATE_WINDOW_MS },
+                        });
                         console.error("[save] write rate limit exceeded — stopping saves for this date", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
@@ -388,6 +462,15 @@ export function useHistorySave({
                         results.failedDates.push(workoutDate);
                         return;
                     }
+                    logWriteTrace("G10:write-rate-limiter", {
+                        date: workoutDate,
+                        decision: "pass",
+                        reason: `rate: ${rateEntry.count}/${WRITE_RATE_LIMIT} in window`,
+                        flags: { explicitEdit, explicitDelete: allowDestructiveSave, source: pendingChange.reason },
+                        exerciseCount: incomingMetrics.exerciseCount ?? null,
+                        setCount: incomingMetrics.setCount ?? null,
+                        extra: { count: rateEntry.count, limit: WRITE_RATE_LIMIT, windowMs: WRITE_RATE_WINDOW_MS },
+                    });
 
                     const repositorySaveResult = await saveWorkoutForDateInRepository({
                         userId,

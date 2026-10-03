@@ -8,6 +8,7 @@ import {
     serializeHistoryMap,
     shouldLogPerfDebug,
 } from "../utils/appHelpers";
+import { logWriteTrace } from "../utils/writeTrace";
 
 export function useWorkoutsDataHistorySync({
     workoutsDataHistory,
@@ -25,6 +26,20 @@ export function useWorkoutsDataHistorySync({
             incomingStateHistory,
             getCurrentWeekRangeForHomeSummary()
         );
+        logWriteTrace("G12:workoutsDataHistory-sync", {
+            date: null,
+            decision: decision.blocked ? "block" : "pass",
+            reason: decision.blocked ? "older workoutsDataHistory state attempted to replace richer ref" : null,
+            flags: { explicitEdit: undefined, explicitDelete: undefined, source: "workoutsDataHistory state commit" },
+            exerciseCount: null,
+            setCount: null,
+            extra: {
+                regressedBodyParts: decision.regressedBodyParts,
+                staleBodyPartCounts: decision.incomingSummary.bodyPartCounts,
+                trustedBodyPartCounts: decision.trustedSummary.bodyPartCounts,
+            },
+        });
+
         if (decision.blocked) {
             console.warn("[home weekly summary] stale state commit blocked", {
                 action: "home_weekly_stale_overwrite_blocked",
@@ -68,6 +83,21 @@ export function useWorkoutsDataHistorySync({
             incomingHistory,
             weekRange
         );
+
+        logWriteTrace("G12:applyWorkoutsDataHistorySnapshot", {
+            date: null,
+            decision: (!allowRegression && decision.blocked) ? "block" : "pass",
+            reason: (!allowRegression && decision.blocked) ? `stale overwrite blocked: ${reason}` : null,
+            flags: { explicitEdit: undefined, explicitDelete: undefined, source },
+            exerciseCount: null,
+            setCount: null,
+            extra: {
+                allowRegression,
+                regressedBodyParts: decision.regressedBodyParts,
+                staleBodyPartCounts: decision.incomingSummary.bodyPartCounts,
+                trustedBodyPartCounts: decision.trustedSummary.bodyPartCounts,
+            },
+        });
 
         if (!allowRegression && decision.blocked) {
             console.warn("[home weekly summary] stale overwrite blocked", {

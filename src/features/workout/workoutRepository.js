@@ -4,6 +4,7 @@ import {
   pickHistoryForDate,
 } from "./buildTrustedHistory";
 import { getWorkoutSaveGuardDecision } from "./workoutSaveGuards";
+import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../../utils/writeTrace";
 
 const normalizeDateKey = (value) => String(value || "").slice(0, 10);
 
@@ -321,6 +322,15 @@ export async function saveWorkoutForDate({
   const dateScopedHistory = pickHistoryForDate(history || {}, normalizedDate);
   const remoteDateScopedHistory = pickHistoryForDate(remoteHistory || {}, normalizedDate);
 
+  logWriteTrace("repository", {
+    date: normalizedDate,
+    decision: "pass",
+    reason: reason || null,
+    flags: { explicitEdit, explicitDelete, source },
+    exerciseCount: wpCountExercisesFromHistory(dateScopedHistory, normalizedDate),
+    setCount: wpCountSetsFromHistory(dateScopedHistory, normalizedDate),
+  });
+
   const guard = getWorkoutSaveGuardDecision({
     localHistory: dateScopedHistory,
     remoteHistory: remoteDateScopedHistory,
@@ -328,6 +338,19 @@ export async function saveWorkoutForDate({
     reason,
     explicitEdit,
     explicitDelete,
+  });
+
+  logWriteTrace("G2:repository-guard", {
+    date: normalizedDate,
+    decision: guard.blocked ? "block" : "pass",
+    reason: guard.blocked ? (guard.blockedReason || null) : (guard.allowedReason || null),
+    flags: { explicitEdit, explicitDelete, source },
+    exerciseCount: guard.localMetrics?.exerciseCount ?? null,
+    setCount: guard.localMetrics?.setCount ?? null,
+    extra: {
+      remoteExerciseCount: guard.remoteMetrics?.exerciseCount ?? null,
+      removedExerciseNames: guard.details?.removedExerciseNames,
+    },
   });
 
   if (guard.blocked) {
@@ -360,6 +383,34 @@ export async function saveWorkoutForDate({
   }
 
   const hasWorkout = guard.localMetrics.hasWorkout;
+  if (hasWorkout) {
+    logWriteTrace("supabase:upsert", {
+      date: normalizedDate,
+      decision: "executed",
+      reason: reason || null,
+      flags: { explicitEdit, explicitDelete, source },
+      exerciseCount: guard.localMetrics?.exerciseCount ?? null,
+      setCount: guard.localMetrics?.setCount ?? null,
+    });
+  } else if (explicitDelete) {
+    logWriteTrace("supabase:delete", {
+      date: normalizedDate,
+      decision: "executed",
+      reason: reason || null,
+      flags: { explicitEdit, explicitDelete, source },
+      exerciseCount: 0,
+      setCount: 0,
+    });
+  } else {
+    logWriteTrace("supabase:refused", {
+      date: normalizedDate,
+      decision: "block",
+      reason: "Refusing to save empty workout without explicit delete",
+      flags: { explicitEdit, explicitDelete, source },
+      exerciseCount: 0,
+      setCount: 0,
+    });
+  }
   const saveResponse = hasWorkout
     ? await supabase
         .from("workouts")
@@ -461,6 +512,23 @@ export async function saveWorkoutForDate({
         ? performance.now()
         : Date.now()) - startedAt
     ) * 10) / 10,
+  });
+
+  logWriteTrace("verify", {
+    date: normalizedDate,
+    decision: verifyFailed ? "block" : "pass",
+    reason: verifyFailed
+      ? (verify.error ? `fetch error: ${verify.error?.message || String(verify.error)}` : "remote verification did not match saved workout")
+      : null,
+    flags: { explicitEdit, explicitDelete, source },
+    exerciseCount: verifiedMetrics.exerciseCount ?? null,
+    setCount: verifiedMetrics.setCount ?? null,
+    extra: {
+      lostExerciseNames,
+      verifyFailed,
+      savedExerciseCount: guard.localMetrics?.exerciseCount ?? null,
+      savedSetCount: guard.localMetrics?.setCount ?? null,
+    },
   });
 
   return {

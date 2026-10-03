@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { load, save } from "../utils/helpers";
+import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData } from "../utils/writeTrace";
 import {
     clearWorkoutDraft as clearStoredWorkoutDraft,
     loadWorkoutDraft as loadStoredWorkoutDraft,
@@ -144,11 +145,28 @@ export function useDraftStore() {
     const saveDraftForDate = useCallback((dateStr, draft) => {
         const normalizedDate = normalizeDraftDateKey(dateStr);
         if (!normalizedDate) return false;
+        logWriteTrace("saveDraftForDate", {
+            date: normalizedDate,
+            decision: "pass",
+            reason: null,
+            flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+            exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
+            setCount: wpCountSetsFromLogData(draft?.logData),
+        });
         // Capture the original payload date BEFORE any overwrite for a clean second-line defence.
         // applyCurrentLogDraft's forDate guard is the first line; this catches any direct caller
         // that passes mismatched data (e.g. wrong date stamped on the draft by another path).
         const validation = getDraftDateValidation(normalizedDate, draft, normalizedDate);
         if (!validation.accepted) {
+            logWriteTrace("G5:date-validation", {
+                date: normalizedDate,
+                decision: "block",
+                reason: validation.rejectedReason || "payload date does not match key date",
+                flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+                exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
+                setCount: wpCountSetsFromLogData(draft?.logData),
+                extra: { keyDate: validation.keyDate, payloadDate: validation.payloadDate },
+            });
             console.warn("[save] blocked stale-closure draft write", {
                 action: "stale_closure_write_blocked",
                 keyDate: validation.keyDate,
@@ -160,6 +178,15 @@ export function useDraftStore() {
             });
             return false;
         }
+        logWriteTrace("G5:date-validation", {
+            date: normalizedDate,
+            decision: "pass",
+            reason: null,
+            flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+            exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
+            setCount: wpCountSetsFromLogData(draft?.logData),
+            extra: { keyDate: validation.keyDate, payloadDate: validation.payloadDate },
+        });
         const logData = draft.logData || {};
         const todayLabels = draft.todayLabels || [];
         const sessionEx = draft.sessionEx === null && !Object.keys(logData).length
@@ -193,12 +220,12 @@ export function useDraftStore() {
         save(getDraftKey("draft_exerciseUnits", normalizedDate), draft.exerciseUnits || {});
         save(getDraftKey("draft_meta", normalizedDate), meta);
 
-        save("draft_todayLabels", todayLabels);
-        save("draft_logData", logData);
-        save("draft_sessionEx", sessionEx);
-        save("draft_exerciseUnits", draft.exerciseUnits || {});
-        save("draft_meta", meta);
-        save("draft_logDate", normalizedDate);
+        // NOTE: global legacy keys (draft_logData, draft_sessionEx, etc.) are intentionally
+        // NOT written here.  Writing unscoped global keys caused date contamination: editing
+        // date A would overwrite the global draft_logData, which could then be loaded as
+        // date B's draft if the reader fell through to the legacy fallback.
+        // The legacy fallback in loadDraftForDate is kept for reading old drafts written
+        // before this change, but no new writes go there.
         return true;
     }, [getDraftKey]);
 

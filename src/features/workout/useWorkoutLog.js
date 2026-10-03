@@ -6,6 +6,7 @@ import {
   saveWorkoutDraft,
   withWorkoutDraftMeta,
 } from "./workoutDraftStore";
+import { logWriteTrace } from "../../utils/writeTrace";
 
 const normalizeDateKey = (value) => String(value || "").slice(0, 10);
 
@@ -305,6 +306,15 @@ export function useWorkoutLog({
     // written to the new date's key. Skip until the draft state catches up.
     const draftDate = normalizeDateKey(draft?.date || draft?.meta?.date);
     if (draftDate && draftDate !== normalizedDate) {
+      logWriteTrace("G7:stale-date-persist", {
+        date: normalizedDate,
+        decision: "block",
+        reason: "draft.date does not match normalizedDate",
+        flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+        exerciseCount: (draft.exercises || []).length,
+        setCount: null,
+        extra: { draftDate, normalizedDate },
+      });
       logger?.warn?.("[workout log] blocked stale-date persist", {
         action: "stale_closure_write_blocked",
         draftDate,
@@ -313,6 +323,14 @@ export function useWorkoutLog({
       });
       return undefined;
     }
+    logWriteTrace("G7:stale-date-persist", {
+      date: normalizedDate,
+      decision: "pass",
+      reason: null,
+      flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
+      exerciseCount: (draft.exercises || []).length,
+      setCount: null,
+    });
 
     const timeoutId = window.setTimeout(() => {
       const split = splitExercisesForApp(draft.exercises || [], draft.exerciseUnits || {});
@@ -320,6 +338,14 @@ export function useWorkoutLog({
         ...draft,
         ...split,
       };
+      logWriteTrace("A-1:saveWorkoutDraft", {
+        date: normalizedDate,
+        decision: "executed",
+        reason: null,
+        flags: { explicitEdit: draftToPersist?.meta?.explicitEdit, explicitDelete: draftToPersist?.meta?.explicitDelete, source: draftToPersist?.meta?.source },
+        exerciseCount: (draftToPersist.exercises || []).length,
+        setCount: Object.values(draftToPersist.logData || {}).reduce((s, sets) => s + (Array.isArray(sets) ? sets.length : 0), 0),
+      });
       saveWorkoutDraft(normalizedDate, draftToPersist, { storage, logger });
       onDraftPersist?.(draftToPersist, {
         source: "useWorkoutLog",
@@ -362,7 +388,28 @@ export function useWorkoutLog({
       const afterSetCount = getTotalSetCount(afterExercises);
       const explicitDelete = Boolean(mutation.explicitDelete || reason === "exercise_remove" || reason === "set_remove");
 
+      logWriteTrace("mutateExercises", {
+        date: normalizedDate,
+        decision: "pass",
+        reason,
+        flags: { explicitEdit: !explicitDelete, explicitDelete, source: reason },
+        exerciseCount: afterExercises.length,
+        setCount: afterSetCount,
+        extra: { beforeExerciseCount: beforeExercises.length, beforeSetCount, removedExerciseNames },
+      });
+
       if (!explicitDelete && (removedExerciseNames.length || afterSetCount < beforeSetCount)) {
+        logWriteTrace("G11:non-delete-regression", {
+          date: normalizedDate,
+          decision: "block",
+          reason: removedExerciseNames.length
+            ? "non-delete mutation removed exercises"
+            : "non-delete mutation reduced set count",
+          flags: { explicitEdit: false, explicitDelete: false, source: reason },
+          exerciseCount: beforeExercises.length,
+          setCount: beforeSetCount,
+          extra: { removedExerciseNames, beforeSetCount, afterSetCount },
+        });
         logger?.warn?.("[workout log] blocked non-delete regression", {
           action: "workout_restore_integrity_check",
           date: normalizedDate,
@@ -379,6 +426,14 @@ export function useWorkoutLog({
         });
         return prevDraft;
       }
+      logWriteTrace("G11:non-delete-regression", {
+        date: normalizedDate,
+        decision: "pass",
+        reason: null,
+        flags: { explicitEdit: !explicitDelete, explicitDelete, source: reason },
+        exerciseCount: afterExercises.length,
+        setCount: afterSetCount,
+      });
 
       const nextDraft = persistMutation(prevDraft, afterExercises, reason, { explicitDelete });
       const resolvedDetails = typeof mutation.details === "function"
