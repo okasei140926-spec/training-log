@@ -239,11 +239,11 @@ export function useHistoryHandlers({
                 restoreApplied: true,
                 overwrittenByRestore: false,
             });
-            markWorkoutContentChanged(
-                requestedDate,
-                localDraftIsRicher || explicitLocalEdit ? "local_draft_richer_restore" : "active_local_recording_restore",
-                { explicitEdit: explicitLocalEdit }
-            );
+            // Do NOT call markWorkoutContentChanged here.
+            // local_draft_richer_restore / active_local_recording_restore are display-only
+            // restores; marking them as pending writes (especially with explicitEdit:true)
+            // causes the OR-merge in markWorkoutContentChanged to poison subsequent save
+            // guards for the session — even after an explicit delete sets explicitEdit:false.
             logCalendarOpen("localDraft", datedDraftForDate);
             applyLogDraftState(datedDraftForDate);
             logRestoreDecision(
