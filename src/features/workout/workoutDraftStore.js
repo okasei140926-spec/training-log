@@ -52,6 +52,10 @@ export const makeWorkoutDraftMeta = ({
   hasUnsavedChanges = true,
   remoteVerifiedAt = "",
   updatedAt = new Date().toISOString(),
+  // Explicit intent flags — propagated so downstream guards (e.g. the empty-overwrite
+  // guard in saveWorkoutDraft) can distinguish user actions from system auto-saves.
+  explicitDelete = false,
+  explicitEdit = false,
 } = {}) => {
   const normalizedDate = normalizeDateKey(date);
   return {
@@ -63,6 +67,8 @@ export const makeWorkoutDraftMeta = ({
     hasUnsavedChanges: Boolean(hasUnsavedChanges),
     remoteVerifiedAt,
     updatedAt,
+    ...(explicitDelete ? { explicitDelete: true } : {}),
+    ...(explicitEdit ? { explicitEdit: true } : {}),
   };
 };
 
@@ -197,7 +203,11 @@ export function saveWorkoutDraft(date, draft, {
     (draft?.exercises || draft?.sessionEx || []).length > 0 ||
     Object.keys(draft?.logData || {}).length > 0
   );
-  if (existingHasContent && !incomingHasContent && !draft?.meta?.explicitDelete) {
+  const isExplicitUserAction = Boolean(draft?.meta?.explicitDelete || draft?.meta?.explicitEdit);
+  if (existingHasContent && !incomingHasContent && !isExplicitUserAction) {
+    // Block: a system auto-save (stale closure, navigation race, etc.) must not silently
+    // wipe in-progress workout data. User-initiated deletes (explicitDelete) and edits
+    // (explicitEdit) are allowed to produce empty content intentionally.
     logger?.warn?.("[workout draft] blocked empty-content overwrite of non-empty draft", {
       action: "draft_empty_overwrite_blocked",
       keyDate: normalizedDate,

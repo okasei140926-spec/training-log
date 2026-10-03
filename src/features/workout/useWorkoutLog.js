@@ -331,7 +331,7 @@ export function useWorkoutLog({
     return () => window.clearTimeout(timeoutId);
   }, [debounceMs, draft, draftHash, logger, normalizedDate, onDraftPersist, storage]);
 
-  const persistMutation = useCallback((prevDraft, nextExercises, reason) => {
+  const persistMutation = useCallback((prevDraft, nextExercises, reason, { explicitDelete = false } = {}) => {
     const split = splitExercisesForApp(nextExercises, prevDraft.exerciseUnits || {});
     return withWorkoutDraftMeta(normalizedDate, {
       ...prevDraft,
@@ -340,6 +340,10 @@ export function useWorkoutLog({
     }, {
       source: reason,
       hasUnsavedChanges: true,
+      // Propagate so saveWorkoutDraft's empty-overwrite guard can distinguish
+      // user-initiated deletes (which produce empty content intentionally) from
+      // system auto-saves (which must not wipe existing draft data).
+      ...(explicitDelete ? { explicitDelete: true } : { explicitEdit: true }),
     });
   }, [normalizedDate]);
 
@@ -376,7 +380,7 @@ export function useWorkoutLog({
         return prevDraft;
       }
 
-      const nextDraft = persistMutation(prevDraft, afterExercises, reason);
+      const nextDraft = persistMutation(prevDraft, afterExercises, reason, { explicitDelete });
       const resolvedDetails = typeof mutation.details === "function"
         ? mutation.details({
           beforeExercises,

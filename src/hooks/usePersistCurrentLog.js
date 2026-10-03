@@ -253,6 +253,11 @@ export function usePersistCurrentLog({
             hasUnsavedChanges: true,
             updatedAt: pendingChange.updatedAt || saveDraftSnapshot.meta?.updatedAt || new Date().toISOString(),
             remoteVerifiedAt: saveDraftSnapshot.meta?.remoteVerifiedAt || null,
+            // Stamp intent so saveWorkoutDraft's empty-overwrite guard lets explicit deletes through.
+            // Without this, deleting all exercises produces an empty draft that is blocked by
+            // "blocked empty-content overwrite of non-empty draft" since the guard doesn't know
+            // the empty content is intentional.
+            ...(pendingChange.explicitDelete ? { explicitDelete: true } : {}),
         });
         const draftSavedToLocalStorage = saveDraftForDate(normalizedLogDate, dirtyDraftForPersistence);
         latestLogDraftRef.current = dirtyDraftForPersistence;
