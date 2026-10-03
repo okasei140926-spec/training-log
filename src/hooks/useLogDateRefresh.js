@@ -60,33 +60,39 @@ export function useLogDateRefresh({
         const normalizedDate = String(logDate || "").slice(0, 10);
         if (!normalizedDate) return;
         if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) {
-            // Supabase fetch はスキップするが、ローカルドラフトを必ず適用する。
-            // handleLogForDate 内の applyLogDraftState は stale closure でブロックされるため、
-            // この effect が唯一の適用ルートになる。return だけだと画面が前の日付のデータを
-            // 表示し続けるバグが発生する（今日の記録が消えたように見える）。
-            const localDraft = loadDraftForDate(normalizedDate);
-            const draftDate = normalizeDraftDateKey(localDraft?.meta?.date || localDraft?.meta?.keyDate || "");
-            const draftDateMatches = !draftDate || draftDate === normalizedDate;
-            const hasContent = draftDateMatches && (
-                localDraft?.sessionEx !== null ||
-                Object.keys(localDraft?.logData || {}).length > 0 ||
-                Object.keys(localDraft?.exerciseUnits || {}).length > 0 ||
-                (localDraft?.todayLabels || []).length > 0
-            );
-            if (hasContent) {
-                // persist:false — the draft is already in localStorage; re-saving via
-                // applyCurrentLogDraft(persist=true) would let a stale regression-guard
-                // return value overwrite the new date's key with old content.
-                // forDate: ensures the stale-closure guard fires if logDate has changed.
-                applyCurrentLogDraft(withDraftDateMeta(normalizedDate, localDraft, {
-                    source: localDraft?.meta?.source || "pending_draft_restore",
-                    hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
-                }), { persist: false, forDate: normalizedDate });
-            } else if (!hasContent) {
-                // No valid draft for this date — force clear any stale display
-                applyCurrentLogDraft(withDraftDateMeta(normalizedDate, {
-                    todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {},
-                }, { source: "explicit_date_nav", hasUnsavedChanges: false }), { persist: false, forDate: normalizedDate });
+            const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate);
+            // When an explicit delete is pending, localStorage still holds the pre-delete
+            // draft (A-1 hasn't fired yet). Applying that stale draft would restore the
+            // deleted exercise and race with the correct in-flight save.
+            if (!pendingChange?.explicitDelete) {
+                // Supabase fetch はスキップするが、ローカルドラフトを必ず適用する。
+                // handleLogForDate 内の applyLogDraftState は stale closure でブロックされるため、
+                // この effect が唯一の適用ルートになる。return だけだと画面が前の日付のデータを
+                // 表示し続けるバグが発生する（今日の記録が消えたように見える）。
+                const localDraft = loadDraftForDate(normalizedDate);
+                const draftDate = normalizeDraftDateKey(localDraft?.meta?.date || localDraft?.meta?.keyDate || "");
+                const draftDateMatches = !draftDate || draftDate === normalizedDate;
+                const hasContent = draftDateMatches && (
+                    localDraft?.sessionEx !== null ||
+                    Object.keys(localDraft?.logData || {}).length > 0 ||
+                    Object.keys(localDraft?.exerciseUnits || {}).length > 0 ||
+                    (localDraft?.todayLabels || []).length > 0
+                );
+                if (hasContent) {
+                    // persist:false — the draft is already in localStorage; re-saving via
+                    // applyCurrentLogDraft(persist=true) would let a stale regression-guard
+                    // return value overwrite the new date's key with old content.
+                    // forDate: ensures the stale-closure guard fires if logDate has changed.
+                    applyCurrentLogDraft(withDraftDateMeta(normalizedDate, localDraft, {
+                        source: localDraft?.meta?.source || "pending_draft_restore",
+                        hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
+                    }), { persist: false, forDate: normalizedDate });
+                } else {
+                    // No valid draft for this date — force clear any stale display
+                    applyCurrentLogDraft(withDraftDateMeta(normalizedDate, {
+                        todayLabels: [], sessionEx: null, logData: {}, exerciseUnits: {},
+                    }, { source: "explicit_date_nav", hasUnsavedChanges: false }), { persist: false, forDate: normalizedDate });
+                }
             }
             return;
         }
@@ -366,7 +372,9 @@ export function useLogDateRefresh({
                         overwrittenByRestore: false,
                         blockedReason: "remote refresh would drop local draft sets",
                     });
-                    markWorkoutContentChanged(normalizedDate, "local_draft_richer_restore", { explicitEdit: true });
+                    // Do NOT call markWorkoutContentChanged here — local_draft_richer_restore
+                    // set explicitEdit:true which bypassed G2 guards and caused delete undos.
+                    // The original pending change already carries the correct flags.
                     return;
                 }
 
@@ -379,7 +387,8 @@ export function useLogDateRefresh({
                         localStorage: localMetrics,
                         explicitEdit: explicitWorkoutEditDatesRef.current.get(normalizedDate) || null,
                     });
-                    markWorkoutContentChanged(normalizedDate, "local_draft_richer_restore", { explicitEdit: true });
+                    // Do NOT call markWorkoutContentChanged here — local_draft_richer_restore
+                    // set explicitEdit:true which bypassed G2 guards and caused delete undos.
                     return;
                 }
 
@@ -393,7 +402,8 @@ export function useLogDateRefresh({
                         localExerciseNames: localMetrics.exerciseNames,
                         remoteExerciseNames: remoteMetrics.exerciseNames,
                     });
-                    markWorkoutContentChanged(normalizedDate, "local_draft_richer_restore");
+                    // Do NOT call markWorkoutContentChanged here — local_draft_richer_restore
+                    // bypassed G2 guards and caused delete undos.
                     return;
                 }
 
