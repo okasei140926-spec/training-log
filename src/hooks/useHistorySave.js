@@ -174,9 +174,14 @@ export function useHistorySave({
                     // over the async-updated normalizedHistoryMap (which comes from
                     // latestHistoryRef.current and may not yet reflect the latest setHistory call).
                     const directPayloadMap = pendingSavePayloadsRef?.current?.get(workoutDate) ?? null;
-                    const effectiveHistoryForDate = directPayloadMap != null
-                        ? { ...normalizedHistoryMap, ...directPayloadMap }
-                        : normalizedHistoryMap;
+                    // Use directPayloadMap directly — do NOT spread-merge with normalizedHistoryMap.
+                    // directPayloadMap is already built from latestHistoryRef.current as its base,
+                    // so it is the complete, authoritative picture for workoutDate.
+                    // Merging via { ...normalizedHistoryMap, ...directPayloadMap } cannot delete
+                    // top-level exercise keys: if an exercise was removed locally, the spread
+                    // leaves it in place from normalizedHistoryMap, causing deleted exercises to
+                    // reappear in the save payload (the "ghost exercise" bug).
+                    const effectiveHistoryForDate = directPayloadMap ?? normalizedHistoryMap;
                     const hasWorkoutForDate = hasValidWorkoutOnDate(effectiveHistoryForDate, workoutDate);
                     const incomingMetrics = getHistoryMetricsForDate(effectiveHistoryForDate, workoutDate);
                     const {
@@ -467,7 +472,13 @@ export function useHistorySave({
                         );
                         const persisted = isEditedSetPersisted(expectedSet, actualSet);
                         if (!persisted) {
-                            console.error("[save verify] workouts.data explicit set edit mismatch after save", {
+                            // Soft warning only — the overall metric check already passed.
+                            // This mismatch can legitimately occur when the exercise list changed
+                            // between the set-edit event and the final save (e.g. user deleted
+                            // exercise A and added exercise B; the last recorded set-edit detail
+                            // references A which no longer exists in Supabase). Throwing here
+                            // would trigger recordSyncFailure and an infinite retry loop.
+                            console.warn("[save verify] workouts.data explicit set edit mismatch after save", {
                                 env: getRuntimeEnvironmentLabel(),
                                 user_id: userId,
                                 date: workoutDate,
@@ -480,7 +491,6 @@ export function useHistorySave({
                                     ? getHistoryDebugSummaryForDate(verifyWorkoutRow.data || {}, workoutDate)
                                     : getHistoryDebugSummaryForDate({}, workoutDate),
                             });
-                            throw new Error(`workouts.data explicit set edit verification failed for ${workoutDate}`);
                         }
                     }
                     console.log("[save] workouts.data after save verified", {

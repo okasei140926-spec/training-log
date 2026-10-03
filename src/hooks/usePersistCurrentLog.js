@@ -23,6 +23,7 @@ import { computeWorkoutDisplayElapsedSec, getWorkoutTimerPersistence } from "../
 
 export function usePersistCurrentLog({
     logDate,
+    logDateRef,
     exercises,
     logData,
     todayLabels,
@@ -49,7 +50,10 @@ export function usePersistCurrentLog({
     setHistory,
 }) {
     const persistCurrentLog = useCallback(() => {
-        const normalizedLogDate = String(logDate || "").slice(0, 10);
+        // Use logDateRef.current (always the latest) to avoid stale-closure contamination.
+        // If logDate in this closure is stale (i.e. logDate changed but persistCurrentLog
+        // wasn't yet recreated), we must NOT write under the old date.
+        const normalizedLogDate = String(logDateRef?.current || logDate || "").slice(0, 10);
         const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedLogDate);
         if (!pendingChange) return;
 
@@ -70,7 +74,11 @@ export function usePersistCurrentLog({
             return;
         }
         const useLatestDraft =
-            latestDraftDate === normalizedLogDate
+            // Explicit deletes must never use the stale draft: the draft still has the
+            // deleted exercise(s), but `exercises` (closure) already reflects the removal.
+            // Using the stale draft here would save the old exercises and undo the delete.
+            !pendingChange.explicitDelete
+            && latestDraftDate === normalizedLogDate
             && hasDraftContent(latestDraftCandidate);
         const saveDraftSnapshot = normalizeLogDraftState(useLatestDraft
             ? latestDraftCandidate
@@ -354,8 +362,10 @@ export function usePersistCurrentLog({
     // `history` is intentionally excluded from deps — it's read via `latestHistoryRef.current`
     // (kept in sync by App.jsx's useEffect). Including `history` would recreate `persistCurrentLog`
     // on every setHistory call, which re-fires the auto-save useEffect and causes a write loop.
+    // `logDate` is intentionally excluded — we read it via `logDateRef.current` to prevent
+    // stale-closure contamination where exercises from date A are saved under date B's key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, logData, logDate, pendingSavePayloadsRef, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
+    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, logData, pendingSavePayloadsRef, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
 
     return { persistCurrentLog };
 }

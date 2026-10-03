@@ -692,7 +692,11 @@ export const getWorkoutSaveGuardDecision = ({
         };
     }
 
-    if (remoteHasWorkout && !localHasWorkout) {
+    if (remoteHasWorkout && !localHasWorkout && !explicitEdit && !explicitDelete) {
+        // Only block non-explicit auto-saves. When the user is actively adding a new exercise
+        // (explicitEdit: true), local sets are legitimately empty mid-input; blocking here
+        // prevents persistCurrentLog from saving the draft and queuing the sync, which means
+        // useHistorySave never gets to "hold for retry" logic — the edit is silently lost.
         return {
             blocked: true,
             allowedReason: null,
@@ -707,24 +711,16 @@ export const getWorkoutSaveGuardDecision = ({
         details.setCountReduced;
 
     if (explicitEdit) {
-        if (hasStructuralRegression) {
-            return {
-                blocked: true,
-                allowedReason: null,
-                blockedReason: [
-                    details.removedExerciseNames.length ? `removed exercises: ${details.removedExerciseNames.join(", ")}` : "",
-                    details.exerciseCountReduced ? "exercise count reduced" : "",
-                    details.setCountReduced ? "set count reduced" : "",
-                ].filter(Boolean).join("; "),
-                details,
-            };
-        }
-
+        // User explicitly acted — always allow, even if exercise/set count reduced.
+        // Blocking explicit edits breaks the delete-exercise-and-add-new flow.
+        // Only non-explicit auto-saves (stale closures, cross-date contamination) should be blocked.
         return {
             blocked: false,
-            allowedReason: details.volumeReduced
-                ? `explicit edit allowed despite volume decrease: ${reason || "content_change"}`
-                : `explicit edit allowed: ${reason || "content_change"}`,
+            allowedReason: hasStructuralRegression
+                ? `explicit edit allowed despite structural regression: ${reason || "content_change"}`
+                : details.volumeReduced
+                    ? `explicit edit allowed despite volume decrease: ${reason || "content_change"}`
+                    : `explicit edit allowed: ${reason || "content_change"}`,
             blockedReason: null,
             details,
         };
