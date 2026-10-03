@@ -286,6 +286,118 @@ export function useHistorySave({
                         exerciseCount: incomingMetrics.exerciseCount ?? null,
                         setCount: incomingMetrics.setCount ?? null,
                     });
+
+                    // ■3: Block writes whose pending change has no source.
+                    // reason=null means a restore or refresh triggered the save path with
+                    // no traceable user action. Allowing it risks overwriting correct
+                    // remote data with a stale snapshot. Only block when !explicitEdit and
+                    // !explicitDelete so legitimate user operations are never affected.
+                    if (!pendingChange.reason && !explicitEdit && !Boolean(pendingChange.explicitDelete)) {
+                        logWriteTrace("G8a:source-validation", {
+                            date: workoutDate,
+                            decision: "block",
+                            reason: "pendingChange.reason is null — no user action behind this write",
+                            flags: { explicitEdit, explicitDelete: false, source: null },
+                            exerciseCount: incomingMetrics.exerciseCount ?? null,
+                            setCount: incomingMetrics.setCount ?? null,
+                        });
+                        console.warn("[save guard] blocked write with null pending reason (no user action)", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            incomingMetrics,
+                            remoteMetrics,
+                        });
+                        results.skippedDates.push(workoutDate);
+                        return;
+                    }
+
+                    // ■5: Skip startup writes when local and remote are identical.
+                    // startup_unsynced_draft / startup_unsynced_local can fire even when
+                    // the app has already successfully synced — avoid redundant round-trips.
+                    const STARTUP_REASONS = new Set(["startup_unsynced_draft", "startup_unsynced_local"]);
+                    if (STARTUP_REASONS.has(pendingChange.reason) && !explicitEdit && !Boolean(pendingChange.explicitDelete)) {
+                        const incomingNames = new Set((incomingMetrics.exerciseNames || []).map((n) => String(n || "").trim()).filter(Boolean));
+                        const remoteNames = new Set((remoteMetrics.exerciseNames || []).map((n) => String(n || "").trim()).filter(Boolean));
+                        const namesMatch =
+                            incomingNames.size === remoteNames.size &&
+                            [...incomingNames].every((n) => remoteNames.has(n));
+                        const metricsMatch =
+                            namesMatch &&
+                            incomingMetrics.exerciseCount === remoteMetrics.exerciseCount &&
+                            incomingMetrics.setCount === remoteMetrics.setCount;
+                        if (metricsMatch) {
+                            logWriteTrace("G8b:startup-no-diff", {
+                                date: workoutDate,
+                                decision: "skip",
+                                reason: `startup write skipped: local === remote (${pendingChange.reason})`,
+                                flags: { explicitEdit, explicitDelete: false, source: pendingChange.reason },
+                                exerciseCount: incomingMetrics.exerciseCount ?? null,
+                                setCount: incomingMetrics.setCount ?? null,
+                            });
+                            console.log("[save guard] startup write skipped: local metrics match remote", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: userId,
+                                date: workoutDate,
+                                reason: pendingChange.reason,
+                                exerciseCount: incomingMetrics.exerciseCount,
+                                setCount: incomingMetrics.setCount,
+                            });
+                            clearSyncFailure(workoutDate);
+                            results.skippedDates.push(workoutDate);
+                            return;
+                        }
+                        logWriteTrace("G8b:startup-no-diff", {
+                            date: workoutDate,
+                            decision: "pass",
+                            reason: `startup write allowed: local !== remote (${pendingChange.reason})`,
+                            flags: { explicitEdit, explicitDelete: false, source: pendingChange.reason },
+                            exerciseCount: incomingMetrics.exerciseCount ?? null,
+                            setCount: incomingMetrics.setCount ?? null,
+                            extra: {
+                                incomingExerciseCount: incomingMetrics.exerciseCount,
+                                remoteExerciseCount: remoteMetrics.exerciseCount,
+                                incomingSetCount: incomingMetrics.setCount,
+                                remoteSetCount: remoteMetrics.setCount,
+                            },
+                        });
+                    }
+
+                    // ■4: Resurrection guard — block writes that add exercises back when
+                    // no explicit user action is present. All guards check for structural
+                    // shrinkage (exercises lost); none check for exercise restoration.
+                    // A non-explicit write that adds exercises not present in remote is
+                    // always a stale-snapshot write-back, never a legitimate user action.
+                    if (!explicitEdit && !Boolean(pendingChange.explicitDelete) && remoteMetrics.hasWorkout) {
+                        const remoteNameSet = new Set((remoteMetrics.exerciseNames || []).map((n) => String(n || "").trim()).filter(Boolean));
+                        const resurrectedNames = (incomingMetrics.exerciseNames || [])
+                            .map((n) => String(n || "").trim())
+                            .filter((n) => n && !remoteNameSet.has(n));
+                        if (resurrectedNames.length > 0) {
+                            logWriteTrace("G8c:resurrection-guard", {
+                                date: workoutDate,
+                                decision: "block",
+                                reason: "non-explicit write would resurrect deleted exercises",
+                                flags: { explicitEdit, explicitDelete: false, source: pendingChange.reason },
+                                exerciseCount: incomingMetrics.exerciseCount ?? null,
+                                setCount: incomingMetrics.setCount ?? null,
+                                extra: { resurrectedNames, remoteExerciseNames: remoteMetrics.exerciseNames },
+                            });
+                            console.warn("[save guard] blocked resurrection of deleted exercises (no explicit edit)", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: userId,
+                                date: workoutDate,
+                                resurrectedNames,
+                                reason: pendingChange.reason,
+                                explicitEdit,
+                                incomingExerciseNames: incomingMetrics.exerciseNames,
+                                remoteExerciseNames: remoteMetrics.exerciseNames,
+                            });
+                            results.skippedDates.push(workoutDate);
+                            return;
+                        }
+                    }
+
                     const saveGuardDecision = getWorkoutSaveGuardDecision({
                         incomingMetrics,
                         remoteMetrics,
