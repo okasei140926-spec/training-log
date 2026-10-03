@@ -105,14 +105,38 @@ export function usePersistCurrentLog({
         // before setSessionEx — so it always reflects the current intent regardless of
         // explicitDelete. Use it whenever the date matches.
         const useLatestDraft = latestDraftDate === normalizedLogDate;
-        const saveDraftSnapshot = normalizeLogDraftState(useLatestDraft
-            ? latestDraftCandidate
-            : {
+        // When useLatestDraft is true, treat latestDraftCandidate.sessionEx as the
+        // single authoritative exercise list. Do NOT call normalizeLogDraftState here
+        // because it internally calls mergeDraftExercisesWithLogData, which adds back
+        // any exercise whose key still exists in logData — silently un-deleting exercises.
+        // Instead, build the snapshot directly and filter logData to only the keys that
+        // are present in sessionEx so the two sources stay consistent.
+        let saveDraftSnapshot;
+        if (useLatestDraft) {
+            const authSessionEx = latestDraftCandidate.sessionEx || [];
+            const authNameSet = new Set(
+                authSessionEx.map((ex) => String(ex?.name || "").trim()).filter(Boolean)
+            );
+            const filteredLogData = Object.fromEntries(
+                Object.entries(latestDraftCandidate.logData || {}).filter(([name]) =>
+                    authNameSet.has(String(name || "").trim())
+                )
+            );
+            saveDraftSnapshot = {
+                todayLabels: latestDraftCandidate.todayLabels || todayLabels || [],
+                sessionEx: authSessionEx,
+                logData: filteredLogData,
+                exerciseUnits: latestDraftCandidate.exerciseUnits || exerciseUnits || {},
+                meta: latestDraftCandidate.meta,
+            };
+        } else {
+            saveDraftSnapshot = normalizeLogDraftState({
                 todayLabels,
                 logData,
                 sessionEx: exercises,
                 exerciseUnits,
             });
+        }
         const saveLabels = saveDraftSnapshot.todayLabels?.length
             ? saveDraftSnapshot.todayLabels
             : todayLabels;
