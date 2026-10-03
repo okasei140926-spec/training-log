@@ -1226,9 +1226,11 @@ export default function GymApp() {
         if (unsyncedDates.length > 0) {
             console.log("[startup] found unsynced drafts, queuing for rescue", { unsyncedDates, rescueCutoff });
             unsyncedDates.forEach((date) => {
-                // Pass explicitDelete: false so a stale explicitDelete:true from a
-                // previous session cannot be OR-merged and cause a false delete on rescue.
-                markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: true, explicitDelete: false });
+                // startup_unsynced_draft is a system process, not a user action.
+                // explicitEdit must NOT be true — it would bypass G2 save guards.
+                // explicitDelete: false — a stale delete flag from a prior session must
+                // not OR-merge into the pending change and cause a false delete.
+                markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: false, explicitDelete: false });
             });
             setForceSyncVersion((v) => v + 1);
         }
