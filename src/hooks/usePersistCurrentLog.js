@@ -101,13 +101,10 @@ export function usePersistCurrentLog({
             setCount: wpCountSetsFromLogData(latestDraftCandidate?.logData),
             extra: { latestDraftDate, normalizedLogDate },
         });
-        const useLatestDraft =
-            // Explicit deletes must never use the stale draft: the draft still has the
-            // deleted exercise(s), but `exercises` (closure) already reflects the removal.
-            // Using the stale draft here would save the old exercises and undo the delete.
-            !pendingChange.explicitDelete
-            && latestDraftDate === normalizedLogDate
-            && hasDraftContent(latestDraftCandidate);
+        // latestLogDraftRef is updated synchronously in handleWorkoutLogDraftChange —
+        // before setSessionEx — so it always reflects the current intent regardless of
+        // explicitDelete. Use it whenever the date matches.
+        const useLatestDraft = latestDraftDate === normalizedLogDate;
         const saveDraftSnapshot = normalizeLogDraftState(useLatestDraft
             ? latestDraftCandidate
             : {
@@ -310,7 +307,9 @@ export function usePersistCurrentLog({
             exerciseCount: wpCountExercises(dirtyDraftForPersistence?.sessionEx ?? dirtyDraftForPersistence?.exercises),
             setCount: wpCountSetsFromLogData(dirtyDraftForPersistence?.logData),
         });
-        const draftSavedToLocalStorage = saveDraftForDate(normalizedLogDate, dirtyDraftForPersistence);
+        // A-1 (useWorkoutLog 350ms debounce) already wrote the correct draft to
+        // localStorage. Do not overwrite it here — A-2 fires 50ms later and would
+        // clobber A-1's write with a potentially different snapshot.
         latestLogDraftRef.current = dirtyDraftForPersistence;
         // Store the fully-built history directly in pendingSavePayloadsRef.
         // setHistory(updater) is async — the updater (which sets latestHistoryRef.current)
@@ -340,7 +339,7 @@ export function usePersistCurrentLog({
                 beforeValue: pendingChange.details?.beforeValue ?? null,
                 afterValue: pendingChange.details?.afterValue ?? null,
                 localStateUpdated: true,
-                draftSavedToLocalStorage,
+                draftSavedToLocalStorage: false, // A-1 path owns localStorage; A-2 no longer writes draft
                 pendingSaveQueued: true,
                 repositorySaveStarted: false,
                 repositorySaveCompleted: false,
