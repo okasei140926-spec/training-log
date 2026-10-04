@@ -100,6 +100,10 @@ export function useHistorySync({
     const supabaseFetchBackoffRef = useRef({});
     const supabaseFetchFreshUntilRef = useRef({});
     const startupReconcileForUserRef = useRef(null);
+    // Tracks the earliest date that has been authoritatively loaded from Supabase
+    // into in-memory history (updated after initial_load and display_history_refresh).
+    // Used by persistHistoryForUserBounded in App.jsx to inject rangeFrom for all writes.
+    const historyLoadedRangeStartRef = useRef(null);
 
     // ─── Callbacks ────────────────────────────────────────────────────────────
 
@@ -411,6 +415,7 @@ export function useHistorySync({
                 historyRemoteLoadFailedRef.current = false;
                 historyHasTrustedRemoteSnapshotRef.current = false;
                 historyDeleteMarkersRef.current = createEmptyHistoryDeleteMarkers();
+                historyLoadedRangeStartRef.current = null;
                 if (isActive) setHistoryLoadError("");
                 if (isActive) setHistoryRemoteReady(false);
                 if (isActive) setHistoryDisplayFromCache(false);
@@ -920,8 +925,16 @@ export function useHistorySync({
                     workoutsDataHistory: getHistoryOverallMetrics(appliedWorkoutsDataHistory),
                     appliedDates: getValidWorkoutDatesFromHistory(mergedHistory),
                 });
+                // Track earliest authoritatively-loaded date for the bounded cache wrapper.
+                if (!historyLoadedRangeStartRef.current || sessionRangeStart < historyLoadedRangeStartRef.current) {
+                    historyLoadedRangeStartRef.current = sessionRangeStart;
+                }
                 if (hasRemoteWorkout || mergedHistory !== remoteHistory) {
-                    persistHistoryForUser(user.id, mergedHistory);
+                    persistHistoryForUser(user.id, mergedHistory, {
+                        rangeFrom: sessionRangeStart,
+                        rangeTo: null,
+                        source: "history_initial_load",
+                    });
                 }
             } catch (error) {
                 console.error("history sync load failed", {
@@ -1323,9 +1336,17 @@ export function useHistorySync({
                         source: "display_history_refresh",
                     });
                 }
+                // Track earliest authoritatively-loaded date for the bounded cache wrapper.
+                if (!historyLoadedRangeStartRef.current || sessionRangeStart < historyLoadedRangeStartRef.current) {
+                    historyLoadedRangeStartRef.current = sessionRangeStart;
+                }
                 if (serializeHistoryMap(nextHistory) !== serializeHistoryMap(currentHistory)) {
                     setHistory(nextHistory);
-                    persistHistoryForUser(user.id, nextHistory);
+                    persistHistoryForUser(user.id, nextHistory, {
+                        rangeFrom: sessionRangeStart,
+                        rangeTo: sessionRangeEnd,
+                        source: "display_history_refresh",
+                    });
                 }
                 const displayWorkoutsDataApplied = applyWorkoutsDataHistorySnapshot(nextWorkoutsDataHistory, {
                     source: "workouts.data",
@@ -1637,6 +1658,7 @@ export function useHistorySync({
         setHistoryLoadError,
         historySyncReady,
         historyRemoteLoadFailedRef,
+        historyLoadedRangeStartRef,
         applyTrustedWorkoutRowsSnapshot,
         applyTrustedSessionRowsSnapshot,
         markSupabaseFetchFresh,

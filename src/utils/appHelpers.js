@@ -8,6 +8,7 @@ import {
     buildHistoryFromWorkoutRowsWithScopes,
     formatDateKey,
     getRecordSourceSets,
+    getValidWorkoutDatesFromHistory,
     mergeHistoryMaps,
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
@@ -17,6 +18,7 @@ import { buildWorkoutSessionPayloadFromDraft } from "./workoutSessions";
 import { SUGGESTIONS } from "../constants/suggestions";
 import { normalizeExerciseName } from "./exerciseName";
 import { APP_VERSION, HISTORY_CACHE_SCHEMA_VERSION } from "../appVersion";
+import { logWriteTrace } from "./writeTrace";
 
 export const debugLog = (...args) => {
     if (process.env.NODE_ENV !== "production") console.debug(...args);
@@ -296,8 +298,178 @@ export const loadTrustedHistoryCache = (key, fallback = null) => {
     return trusted || fallback;
 };
 
-export const persistHistoryForUser = (userId, nextHistory) => {
-    const versionedHistory = buildVersionedHistoryCache(nextHistory);
+// Merge incoming history into existing cache for a specific date range.
+//
+// Rules:
+//   - Dates INSIDE  [rangeFrom, rangeTo): incoming is authoritative.
+//     Dates present in the existing cache but absent from incoming are
+//     treated as deleted and removed from the result.
+//   - Dates OUTSIDE [rangeFrom, rangeTo): existing cache is kept as-is.
+//     This prevents a narrow fetch (e.g. 30 days) from overwriting older
+//     data that a previous wider fetch (120 / 180 days) had stored.
+//
+// rangeFrom: inclusive, rangeTo: exclusive (null = no upper bound).
+// Records with no parseable date are silently dropped.
+function mergeHistoryForRange(existing, incoming, rangeFrom, rangeTo) {
+    const isInRange = (date) => {
+        if (!date) return false;
+        if (date < rangeFrom) return false;
+        if (rangeTo != null && date >= rangeTo) return false;
+        return true;
+    };
+
+    const allExercises = new Set([
+        ...Object.keys(existing || {}),
+        ...Object.keys(incoming || {}),
+    ]);
+
+    const result = {};
+
+    for (const exercise of allExercises) {
+        const existingRecords = existing?.[exercise] || [];
+        const incomingRecords = incoming?.[exercise] || [];
+
+        // Out-of-range: keep from existing cache unchanged.
+        const preserved = existingRecords.filter((r) => {
+            const date = String(r?.date || "").slice(0, 10);
+            return date && !isInRange(date);
+        });
+
+        // In-range: use incoming (absence = deletion).
+        const applied = incomingRecords.filter((r) => {
+            const date = String(r?.date || "").slice(0, 10);
+            return date && isInRange(date);
+        });
+
+        const merged = [...preserved, ...applied];
+        if (merged.length > 0) {
+            result[exercise] = merged;
+        }
+    }
+
+    return result;
+}
+
+// Union merge: keep all existing dates; overwrite with incoming where dates overlap.
+// Never deletes any existing date — used when the loaded window is unknown so we
+// cannot safely treat absent incoming dates as deletions.
+function mergeHistoryUnion(existing, incoming) {
+    const allExercises = new Set([
+        ...Object.keys(existing || {}),
+        ...Object.keys(incoming || {}),
+    ]);
+
+    const result = {};
+
+    for (const exercise of allExercises) {
+        const existingRecords = existing?.[exercise] || [];
+        const incomingRecords = incoming?.[exercise] || [];
+
+        // Build a map of incoming records keyed by date so incoming wins on overlap.
+        const incomingByDate = new Map();
+        for (const r of incomingRecords) {
+            const date = String(r?.date || "").slice(0, 10);
+            if (date) incomingByDate.set(date, r);
+        }
+
+        // Keep all existing records; replace with incoming when the date matches.
+        const merged = existingRecords.map((r) => {
+            const date = String(r?.date || "").slice(0, 10);
+            return (date && incomingByDate.has(date)) ? incomingByDate.get(date) : r;
+        });
+
+        // Append incoming records whose dates don't exist in existing at all.
+        const existingDates = new Set(existingRecords.map((r) => String(r?.date || "").slice(0, 10)).filter(Boolean));
+        for (const [date, r] of incomingByDate) {
+            if (!existingDates.has(date)) merged.push(r);
+        }
+
+        if (merged.length > 0) {
+            result[exercise] = merged;
+        }
+    }
+
+    return result;
+}
+
+// Persist the history cache for a user.
+//
+// mode:
+//   "merge"   — rangeFrom provided: in-range dates use incoming (absent = deleted);
+//               out-of-range dates preserved from existing cache unconditionally.
+//   "union"   — rangeFrom null but union:true: existing dates never deleted; incoming
+//               overwrites on overlap, appended where new.  Used when loaded window
+//               is unknown so absent dates cannot be treated as deletions.
+//   "replace" — rangeFrom null: full replacement (existing behaviour for paths that
+//               already hold the complete authoritative in-memory state).
+//
+// All writes emit a historyCache:write logWriteTrace entry regardless of mode.
+export const persistHistoryForUser = (userId, nextHistory, options = {}) => {
+    const { rangeFrom = null, rangeTo = null, source = null, union = false } = options;
+
+    // Always load existing cache so we can compute trace metrics and detect shrink.
+    const existing = userId
+        ? (loadTrustedHistoryCache(getUserHistoryCacheKey(userId), {}) || {})
+        : {};
+
+    let historyToWrite;
+    let mode;
+
+    if (rangeFrom != null) {
+        mode = "merge";
+        historyToWrite = mergeHistoryForRange(existing, nextHistory, rangeFrom, rangeTo);
+    } else if (union) {
+        mode = "union";
+        historyToWrite = mergeHistoryUnion(existing, nextHistory);
+    } else {
+        mode = "replace";
+        historyToWrite = nextHistory;
+    }
+
+    const existingDates = getValidWorkoutDatesFromHistory(existing);
+    const incomingDates = getValidWorkoutDatesFromHistory(nextHistory);
+    const mergedDates = getValidWorkoutDatesFromHistory(historyToWrite);
+
+    let removedDates;
+    let preservedOutOfRangeDateCount;
+
+    if (mode === "merge") {
+        const existingInRangeDates = existingDates.filter(
+            (d) => d >= rangeFrom && (rangeTo == null || d < rangeTo)
+        );
+        const mergedInRangeDateSet = new Set(
+            mergedDates.filter((d) => d >= rangeFrom && (rangeTo == null || d < rangeTo))
+        );
+        removedDates = existingInRangeDates.filter((d) => !mergedInRangeDateSet.has(d));
+        preservedOutOfRangeDateCount = mergedDates.filter(
+            (d) => d < rangeFrom || (rangeTo != null && d >= rangeTo)
+        ).length;
+    } else {
+        const mergedDateSet = new Set(mergedDates);
+        removedDates = existingDates.filter((d) => !mergedDateSet.has(d));
+        preservedOutOfRangeDateCount = 0;
+    }
+
+    const cacheShrunk = mode === "replace" && existingDates.length > mergedDates.length;
+
+    logWriteTrace("historyCache:write", {
+        date: null,
+        decision: "executed",
+        reason: cacheShrunk ? `${source ?? "unknown"} — cache shrunk` : source,
+        extra: {
+            mode,
+            callerSource: source,
+            incomingRangeFrom: rangeFrom,
+            incomingRangeTo: rangeTo,
+            incomingDateCount: incomingDates.length,
+            existingDateCount: existingDates.length,
+            mergedDateCount: mergedDates.length,
+            removedDates,
+            preservedOutOfRangeDateCount,
+        },
+    });
+
+    const versionedHistory = buildVersionedHistoryCache(historyToWrite);
     save("history", versionedHistory);
 
     if (userId) {
