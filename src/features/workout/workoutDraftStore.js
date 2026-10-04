@@ -1,4 +1,4 @@
-import { logWriteTrace } from "../../utils/writeTrace";
+import { logWriteTrace, trackRestoreAttempt } from "../../utils/writeTrace";
 
 const normalizeDateKey = (value) => String(value || "").slice(0, 10);
 
@@ -201,6 +201,9 @@ export function saveWorkoutDraft(date, draft, {
   // saveWorkoutDraft, so the UI shows correctly even though localStorage is not
   // updated.  On next app start, useLogDateRefresh re-fetches and re-applies.
   if (draft?.meta?.source === "remote_supabase") {
+    const _valveAttempts = trackRestoreAttempt(normalizedDate, "blocked");
+    const _exerciseNames = (draft?.sessionEx || draft?.exercises || []).slice(0, 10).map((ex) => String(ex?.name || "")).filter(Boolean);
+    const _payloadDateField = draft?.meta?.date || draft?.meta?.draftDate || draft?.meta?.workoutDate || null;
     logWriteTrace("valve:remote_supabase", {
       date: normalizedDate,
       decision: "block",
@@ -208,6 +211,7 @@ export function saveWorkoutDraft(date, draft, {
       flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: "remote_supabase" },
       exerciseCount: wpExCount(draft),
       setCount: wpSetCount(draft),
+      extra: { exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: draft?.meta?.payloadOrigin || null, attemptCount: _valveAttempts.count, blockedCount: _valveAttempts.blocked, appliedCount: _valveAttempts.applied },
     });
     logger?.warn?.("[workout draft] one-way valve: remote_supabase rejected", {
       action: "one_way_valve",

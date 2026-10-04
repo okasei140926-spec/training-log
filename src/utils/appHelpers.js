@@ -1399,12 +1399,33 @@ export const getDraftDateValidation = (keyDate, draft = {}, selectedDate = keyDa
 
 export const withDraftDateMeta = (dateStr, draft = {}, overrides = {}) => {
     const normalizedDate = normalizeDraftDateKey(dateStr);
+    // contentDate tracks the content's origin through label rewrites.
+    // Priority (highest first):
+    //   1. overrides.contentDate explicitly provided (key present, even if null) → caller declaration wins
+    //   2. draft?.meta?.contentDate truthy → preserve inherited origin
+    //   3. pre-rewrite date from draft.meta fields → label before this rewrite
+    //   4. null
+    // undefined from overrides is treated as "not provided" and falls through to 2/3/4.
+    let contentDate;
+    if (Object.prototype.hasOwnProperty.call(overrides, "contentDate")) {
+        contentDate = overrides.contentDate;
+    } else {
+        const existingContentDate = draft?.meta?.contentDate || null;
+        const preRewriteDate = normalizeDraftDateKey(
+            draft?.meta?.date ||
+            draft?.meta?.keyDate ||
+            draft?.meta?.draftDate ||
+            draft?.meta?.workoutDate
+        ) || null;
+        contentDate = existingContentDate || preRewriteDate || null;
+    }
     return withDraftMeta(draft, {
         ...overrides,
         date: normalizedDate,
         keyDate: normalizedDate,
         draftDate: normalizedDate,
         workoutDate: normalizedDate,
+        contentDate,
     });
 };
 

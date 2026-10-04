@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { load, save } from "../utils/helpers";
-import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData } from "../utils/writeTrace";
+import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData, trackRestoreAttempt } from "../utils/writeTrace";
 import {
     clearWorkoutDraft as clearStoredWorkoutDraft,
     loadWorkoutDraft as loadStoredWorkoutDraft,
@@ -145,6 +145,33 @@ export function useDraftStore() {
     const saveDraftForDate = useCallback((dateStr, draft) => {
         const normalizedDate = normalizeDraftDateKey(dateStr);
         if (!normalizedDate) return false;
+
+        // ■2: Extra diagnostic fields for payload tracing.
+        const _exerciseNames = (draft?.sessionEx ?? draft?.exercises ?? []).slice(0, 10).map((ex) => String(ex?.name || "")).filter(Boolean);
+        const _payloadDateField = draft?.meta?.date || draft?.meta?.draftDate || draft?.meta?.workoutDate || null;
+        const _payloadOrigin = draft?.meta?.payloadOrigin || null;
+
+        // ■3: Count source:"remote_supabase" attempts for loop detection.
+        // Moved from apply-time (useLogDateRefresh) to attempt-time so valve-blocked
+        // iterations are also counted.
+        let _restoreAttempts = null;
+        if (draft?.meta?.source === "remote_supabase") {
+            _restoreAttempts = trackRestoreAttempt(normalizedDate, "attempt");
+            if (_restoreAttempts.count >= 3) {
+                logWriteTrace("restoreLoop:detected", {
+                    date: normalizedDate,
+                    decision: "detected",
+                    reason: "remote_supabase saveDraftForDate called ≥3 times within 15s window",
+                    extra: {
+                        attemptCount: _restoreAttempts.count,
+                        blockedCount: _restoreAttempts.blocked,
+                        appliedCount: _restoreAttempts.applied,
+                        lastAppliedSource: "remote_supabase",
+                    },
+                });
+            }
+        }
+
         logWriteTrace("saveDraftForDate", {
             date: normalizedDate,
             decision: "pass",
@@ -152,10 +179,15 @@ export function useDraftStore() {
             flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
             exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
             setCount: wpCountSetsFromLogData(draft?.logData),
+            extra: { exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: _payloadOrigin },
         });
         // Capture the original payload date BEFORE any overwrite for a clean second-line defence.
         // applyCurrentLogDraft's forDate guard is the first line; this catches any direct caller
         // that passes mismatched data (e.g. wrong date stamped on the draft by another path).
+        // contentDate: preserved by withDraftDateMeta through label rewrites — detects cross-date
+        // content injection that G5's label check cannot see (G5 only checks the rewritten labels).
+        const _contentDate = draft?.meta?.contentDate ?? null;
+        const _contentDateMismatch = _contentDate !== null && _contentDate !== normalizedDate;
         const validation = getDraftDateValidation(normalizedDate, draft, normalizedDate);
         if (!validation.accepted) {
             logWriteTrace("G5:date-validation", {
@@ -165,7 +197,7 @@ export function useDraftStore() {
                 flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
                 exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
                 setCount: wpCountSetsFromLogData(draft?.logData),
-                extra: { keyDate: validation.keyDate, payloadDate: validation.payloadDate },
+                extra: { keyDate: validation.keyDate, payloadDate: validation.payloadDate, exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: _payloadOrigin, contentDate: _contentDate, contentDateMismatch: _contentDateMismatch },
             });
             console.warn("[save] blocked stale-closure draft write", {
                 action: "stale_closure_write_blocked",
@@ -185,8 +217,19 @@ export function useDraftStore() {
             flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
             exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
             setCount: wpCountSetsFromLogData(draft?.logData),
-            extra: { keyDate: validation.keyDate, payloadDate: validation.payloadDate },
+            extra: { keyDate: validation.keyDate, payloadDate: validation.payloadDate, exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: _payloadOrigin, contentDate: _contentDate, contentDateMismatch: _contentDateMismatch },
         });
+        if (_contentDateMismatch) {
+            console.warn("[WP] G5:content-date-mismatch", {
+                date: normalizedDate,
+                keyDate: normalizedDate,
+                contentDate: _contentDate,
+                exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
+                setCount: wpCountSetsFromLogData(draft?.logData),
+                exerciseNames: _exerciseNames,
+                source: draft?.meta?.source || null,
+            });
+        }
         const logData = draft.logData || {};
         const todayLabels = draft.todayLabels || [];
         const sessionEx = draft.sessionEx === null && !Object.keys(logData).length

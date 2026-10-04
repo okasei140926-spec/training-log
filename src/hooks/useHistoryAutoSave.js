@@ -352,7 +352,7 @@ export function useHistoryAutoSave({
                     ),
                     effectiveDeleteMarkers
                 );
-                applyWorkoutsDataHistorySnapshot(nextWorkoutsDataHistory, {
+                const _appliedSaveSync = applyWorkoutsDataHistorySnapshot(nextWorkoutsDataHistory, {
                     allowRegression: true,
                     source: "workouts.data",
                     reason: "workouts.data save sync",
@@ -365,7 +365,7 @@ export function useHistoryAutoSave({
                         env: getRuntimeEnvironmentLabel(),
                         user_id: currentUserId,
                         requestId: "save-sync",
-                        applied: true,
+                        applied: _appliedSaveSync,
                         reason: "workouts.data save sync",
                         ...getHomeWeeklySummaryDebug(nextWorkoutsDataHistory),
                     });
@@ -551,7 +551,7 @@ export function useHistoryAutoSave({
                         return;
                     }
 
-                    saveDraftForDate(date, savedDraft);
+                    const _saveDraftForDateResult = saveDraftForDate(date, savedDraft);
                     if (date === logDate) {
                         applyLogDraftState(savedDraft);
                     }
@@ -563,7 +563,7 @@ export function useHistoryAutoSave({
                         verifiedHistoryForDate,
                         [date]
                     );
-                    applyWorkoutsDataHistorySnapshot(verifiedWorkoutsDataHistory, {
+                    const _appliedSaveVerified = applyWorkoutsDataHistorySnapshot(verifiedWorkoutsDataHistory, {
                         allowRegression: true,
                         source: "workouts.data",
                         reason: "remote save verified",
@@ -602,10 +602,10 @@ export function useHistoryAutoSave({
                         date,
                         savedExerciseNames: savedDraft.sessionEx.map((exercise) => exercise.name),
                         savedSetCount: getRawDraftSetMetrics(savedDraft).setCount,
-                        saveDraftForDateUpdated: true,
+                        saveDraftForDateUpdated: _saveDraftForDateResult,
                         latestLogDraftRefUpdated: date === logDate,
                         logDataSessionExUpdated: date === logDate,
-                        historyWorkoutsDataHistoryUpdated: true,
+                        historyWorkoutsDataHistoryUpdated: _appliedSaveVerified,
                         explicitWorkoutEditDatesRefCleared: !explicitWorkoutEditDatesRef.current.has(date),
                         pendingSyncCleared: !pendingWorkoutContentChangeDatesRef.current.has(date) && !pendingWorkoutSessionSyncDatesRef.current.has(date),
                         sessionSynced,

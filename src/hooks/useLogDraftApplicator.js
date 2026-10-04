@@ -37,6 +37,13 @@ export function useLogDraftApplicator({
     const applyLogDraftState = useCallback((draft) => {
         const normalizedDraft = normalizeLogDraftState(draft);
         const currentDate = normalizeDraftDateKey(logDate);
+        // ■5: capture the provenance of the live state BEFORE any modification.
+        // latestLogDraftRef.current holds the last draft that was actually applied to React state.
+        // Its meta.date tells us which date key the live state was loaded from;
+        // its meta.source tells us where that content originated.
+        const _liveStateMeta = latestLogDraftRef.current?.meta || null;
+        const liveLogDataSourceDate = _liveStateMeta?.date || null;
+        const liveLogDataLoadedFrom = _liveStateMeta?.source || null;
         const incomingDate = normalizeDraftDateKey(
             normalizedDraft?.meta?.date ||
             normalizedDraft?.meta?.keyDate ||
@@ -63,7 +70,18 @@ export function useLogDraftApplicator({
         const incomingSource = normalizedDraft?.meta?.source || "unknown";
         // explicit_date_nav: intentional user navigation between log dates — bypasses all guards
         const isExplicitDateNav = incomingSource === "explicit_date_nav";
+        // dateMismatch used in shouldBlockRegression (unchanged behavior: short-circuits on isExplicitDateNav)
         const dateMismatch = !isExplicitDateNav && Boolean(screen === "log" && currentDate && incomingDate && incomingDate !== currentDate);
+        // ■3: True date mismatch regardless of source — for detection only, NOT used in guard logic.
+        // Uses a fresh raw comparison from meta fields without the || currentDate fallback,
+        // so a missing meta date is treated as "unknown" (no false negative).
+        const _rawIncomingDate = normalizeDraftDateKey(
+            normalizedDraft?.meta?.date ||
+            normalizedDraft?.meta?.keyDate ||
+            normalizedDraft?.meta?.draftDate ||
+            normalizedDraft?.meta?.workoutDate
+        ) || null;
+        const dateMismatchActual = Boolean(screen === "log" && currentDate && _rawIncomingDate && _rawIncomingDate !== currentDate);
         const regressionDetected = (
             lostExerciseNames.length > 0 ||
             restoredMetrics.exerciseCount < previousMetrics.exerciseCount ||
@@ -111,18 +129,21 @@ export function useLogDraftApplicator({
                 lostExerciseNames,
                 previousSetCount: previousMetrics.setCount,
                 restoredSetCount: restoredMetrics.setCount,
-                appliedSource: null,
+                appliedSource: latestLogDraftRef.current?.meta?.source || "previous_draft",
                 rejectedSource: incomingSource,
                 reason: dateMismatch
                     ? "draft date does not match current log date"
                     : "restore would remove current draft exercises or sets",
-                dateMismatch,
+                dateMismatch: dateMismatchActual,
                 incomingDate,
                 currentDate,
                 explicitDelete,
                 explicitUserEdit,
                 pendingExplicitEdit: Boolean(pendingChange.explicitEdit),
                 overwrittenByRestore: false,
+                liveLogDataExerciseNames: (todayLabels || []).slice(0, 10),
+                liveLogDataSourceDate,
+                liveLogDataLoadedFrom,
             });
             return previousDraft;
         }
@@ -163,13 +184,16 @@ export function useLogDraftApplicator({
                 reason: regressionDetected
                     ? (explicitDelete ? "explicit delete restore applied" : "user mutation restore applied")
                     : "restore applied",
-                dateMismatch: false,
+                dateMismatch: dateMismatchActual,
                 incomingDate,
                 currentDate,
                 explicitDelete,
                 explicitUserEdit,
                 pendingExplicitEdit: Boolean(pendingChange.explicitEdit),
                 overwrittenByRestore: regressionDetected,
+                liveLogDataExerciseNames: (todayLabels || []).slice(0, 10),
+                liveLogDataSourceDate,
+                liveLogDataLoadedFrom,
             });
         }
 

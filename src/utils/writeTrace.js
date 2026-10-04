@@ -97,3 +97,35 @@ export const wpCountSetsFromHistory = (historyMap, date) => {
     });
     return count;
 };
+
+// ─── ■4 Restore loop counter ─────────────────────────────────────────────────
+// Module-level so it is shared across useDraftStore, workoutDraftStore, and
+// useLogDateRefresh without prop-drilling. Keyed by date string.
+const _restoreAttempts = {};
+
+/**
+ * Track a restore attempt, blocked valve, or successful apply for a given date.
+ * @param {string} date  - YYYY-MM-DD
+ * @param {"attempt"|"blocked"|"applied"} type
+ * @returns {{ count: number, firstTs: number, blocked: number, applied: number }}
+ */
+export function trackRestoreAttempt(date, type) {
+    const d = String(date || "").slice(0, 10);
+    if (!d) return { count: 0, firstTs: Date.now(), blocked: 0, applied: 0 };
+    const now = Date.now();
+    const prev = _restoreAttempts[d] || { count: 0, firstTs: now, blocked: 0, applied: 0 };
+    const withinWindow = now - prev.firstTs < 15_000;
+    const base = withinWindow ? prev : { count: 0, firstTs: now, blocked: 0, applied: 0 };
+    _restoreAttempts[d] = {
+        count:   base.count   + (type === "attempt" ? 1 : 0),
+        firstTs: withinWindow ? base.firstTs : now,
+        blocked: base.blocked + (type === "blocked"  ? 1 : 0),
+        applied: base.applied + (type === "applied"  ? 1 : 0),
+    };
+    return _restoreAttempts[d];
+}
+
+/** Read the current counter for a date without incrementing. */
+export function getRestoreAttempts(date) {
+    return _restoreAttempts[String(date || "").slice(0, 10)] || null;
+}

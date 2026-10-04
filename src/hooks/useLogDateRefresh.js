@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../utils/supabase";
+import { trackRestoreAttempt } from "../utils/writeTrace";
 import {
     fetchWorkoutRowFromWorkoutsData as fetchWorkoutRowForDateFromRepository,
 } from "../features/workout/workoutRepository";
@@ -50,6 +51,7 @@ export function useLogDateRefresh({
     clearDraftForDate,
     setHistory,
     setHistoryLoadError,
+    getCurrentHistoryDeleteMarkers,
 }) {
     // Tracks the last timestamp at which a phantom draft was cleared per date,
     // so we can suppress duplicate log entries and avoid clearing the same date
@@ -143,6 +145,39 @@ export function useLogDateRefresh({
                 }
                 if (cancelled) return;
                 if (pendingWorkoutContentChangeDatesRef.current.has(normalizedDate)) return;
+
+                // ■1/■2 FIX: Check delete markers BEFORE processing any remote data.
+                // Race condition: stale pre-delete Supabase fetch can complete after the
+                // queue is cleared (queueSizeAfter:0) but before React cleanup sets
+                // cancelled=true. In that scenario hasWorkout=true (stale data), so the
+                // !remoteMetrics.hasWorkout gated check is never reached. We must intercept
+                // here, regardless of what Supabase returned, using persisted markers.
+                {
+                    const _pendingDeleteChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate);
+                    const _isExplicitDeletePending = Boolean(_pendingDeleteChange?.explicitDelete);
+                    const _isExplicitDeleteMarked = Boolean(
+                        typeof getCurrentHistoryDeleteMarkers === "function" &&
+                        getCurrentHistoryDeleteMarkers().dates?.includes(normalizedDate)
+                    );
+                    if (_isExplicitDeletePending || _isExplicitDeleteMarked) {
+                        const _emptyForDelete = withDraftDateMeta(normalizedDate, {
+                            todayLabels: [],
+                            sessionEx: null,
+                            logData: {},
+                            exerciseUnits: {},
+                        }, { source: "explicit_date_nav", hasUnsavedChanges: false });
+                        clearDraftForDate(normalizedDate);
+                        console.log("[restore] delete marker intercepted stale remote — skipping restore", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: user?.id,
+                            date: normalizedDate,
+                            _isExplicitDeletePending,
+                            _isExplicitDeleteMarked,
+                        });
+                        applyCurrentLogDraft(_emptyForDelete, { persist: false, forDate: normalizedDate });
+                        return;
+                    }
+                }
 
                 const fetchedWorkoutRowsForDate = workoutsRes.row ? [workoutsRes.row] : [];
                 const workoutRowsForDate = fetchedWorkoutRowsForDate.filter((row) => {
@@ -281,7 +316,7 @@ export function useLogDateRefresh({
                         user_id: user.id,
                         date: normalizedDate,
                         supabase: remoteMetrics,
-                        localStorage: localMetrics,
+                        localDraft: localMetrics,
                     });
                     const localHasUnsavedChanges = Boolean(localDraft?.meta?.hasUnsavedChanges);
                     // A "zombie draft" claims hasUnsavedChanges:true but was NOT written by a real
@@ -295,6 +330,30 @@ export function useLogDateRefresh({
                         logData: {},
                         exerciseUnits: {},
                     }, { source: "explicit_date_nav", hasUnsavedChanges: false });
+
+                    // If this date was explicitly deleted (in-flight queue or persisted marker),
+                    // treat empty remote as authoritative and clear any stale local state.
+                    const pendingDeleteChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate);
+                    const isExplicitDeletePending = Boolean(pendingDeleteChange?.explicitDelete);
+                    const isExplicitDeleteMarked = Boolean(
+                        typeof getCurrentHistoryDeleteMarkers === "function" &&
+                        getCurrentHistoryDeleteMarkers().dates?.includes(normalizedDate)
+                    );
+                    if (isExplicitDeletePending || isExplicitDeleteMarked) {
+                        if (localMetrics.hasWorkout) {
+                            clearDraftForDate(normalizedDate);
+                            console.log("[restore] explicit delete confirmed — clearing stale local draft", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: user.id,
+                                date: normalizedDate,
+                                localSetCount: localMetrics.setCount,
+                                isExplicitDeletePending,
+                                isExplicitDeleteMarked,
+                            });
+                        }
+                        applyCurrentLogDraft(emptyDraft, { persist: false, forDate: normalizedDate });
+                        return;
+                    }
 
                     if (!localMetrics.hasWorkout || (localMetrics.hasWorkout && (!localHasUnsavedChanges || isZombieDraft))) {
                         // Remote is empty and local has no workout, a phantom (no unsaved flag),
@@ -424,12 +483,15 @@ export function useLogDateRefresh({
                     {
                         source: "remote_supabase",
                         hasUnsavedChanges: false,
+                        contentDate: normalizedDate,
                     }
                 );
                 const cleanSavedDraftForDate = withDraftDateMeta(normalizedDate, savedDraftForDate, {
                     source: "remote_supabase",
                     remoteVerifiedAt,
                     hasUnsavedChanges: false,
+                    payloadOrigin: "fetchedRemoteRows",
+                    contentDate: normalizedDate,
                 });
 
                 if (shouldLogPerfDebug()) {
@@ -466,6 +528,9 @@ export function useLogDateRefresh({
                         });
                     }
                 }
+                // ■4: Track successful apply. Attempt/blocked counts are tracked in
+                // useDraftStore.saveDraftForDate and workoutDraftStore valve respectively.
+                trackRestoreAttempt(normalizedDate, "applied");
                 applyCurrentLogDraft(cleanSavedDraftForDate, { forDate: normalizedDate });
                 setHistoryLoadError("");
             } catch (error) {

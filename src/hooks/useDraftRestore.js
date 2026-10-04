@@ -231,6 +231,12 @@ export function useDraftRestore({
             source: "remote_supabase",
             remoteVerifiedAt: new Date().toISOString(),
             hasUnsavedChanges: false,
+            payloadOrigin: "canonicalDisplayHistory",
+            // contentDate declares where the live state content actually came from.
+            // canonicalDisplayHistory is built from live React state (workoutLogExercises),
+            // which may still hold a previous date's data during the transition render.
+            // latestLogDraftRef.current?.meta?.date is the date that state was loaded from.
+            contentDate: normalizeDraftDateKey(latestLogDraftRef.current?.meta?.date) || null,
         });
         applyCurrentLogDraft(cleanSavedDraft, { forDate: normalizedLogDate });
         logRestoreDecision(normalizedLogDate, cleanSavedDraft, localDraft, cleanSavedDraft, "supabase_saved_workout_refresh");
