@@ -21,7 +21,6 @@ import {
     getRawDraftSetMetrics,
     getRuntimeEnvironmentLabel,
     logRecordFetchError,
-    persistHistoryForUser,
     serializeHistoryMap,
     shouldLogPerfDebug,
     shouldPreserveRawDraftOverIncoming,
@@ -37,6 +36,7 @@ export function useHistoryAutoSave({
     history,
     user,
     historySyncReady,
+    persistHistoryForUser,
     logDate,
     screen,
     clearSyncFailure,
@@ -328,7 +328,7 @@ export function useHistoryAutoSave({
                 if (latestUserIdRef.current !== currentUserId) return;
                 if (historyRevisionRef.current !== saveRevision) return;
 
-                persistHistoryForUser(currentUserId, mergedHistory);
+                persistHistoryForUser(currentUserId, mergedHistory, { source: "useHistoryAutoSave:postUpsert" });
                 setHistory((prev) => {
                     const reconciledHistory = applyHistoryDeleteMarkers(
                         applyLocalHistoryDates(prev, mergedHistory, syncDates),
@@ -522,7 +522,7 @@ export function useHistoryAutoSave({
                     }
                     latestHistoryRef.current = verifiedHistorySnapshot;
                     setHistory(verifiedHistorySnapshot);
-                    persistHistoryForUser(currentUserId, verifiedHistorySnapshot);
+                    persistHistoryForUser(currentUserId, verifiedHistorySnapshot, { source: "useHistoryAutoSave:verify" });
                     const verifiedWorkoutsDataHistory = applyLocalHistoryDates(
                         workoutsDataHistoryRef.current || {},
                         verifiedHistoryForDate,

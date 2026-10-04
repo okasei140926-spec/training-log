@@ -1049,6 +1049,7 @@ export default function GymApp() {
         setHistoryLoadError,
         historySyncReady,
         historyRemoteLoadFailedRef,
+        historyLoadedRangeStartRef,
         applyTrustedWorkoutRowsSnapshot,
         applyTrustedSessionRowsSnapshot,
         runDedupeSupabaseFetch,
@@ -1127,6 +1128,31 @@ export default function GymApp() {
             });
         }
     }, [isOnline, historyDisplayFromCache, historyRemoteReady, historyLoadError]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Bounded wrapper for persistHistoryForUser.
+    //
+    // Auto-injects rangeFrom = historyLoadedRangeStartRef.current when the caller
+    // does not supply one.  This converts full-replace writes (which can wipe older
+    // cache data that was never loaded into the 30-day in-memory window) into
+    // range-aware merges that preserve out-of-range dates.
+    //
+    // When the loaded window is not yet known (ref is null — e.g. before initial_load
+    // completes), falls back to union mode: existing dates are never deleted, incoming
+    // overwrites on overlap.  Which callers hit this is reported in historyCache:write.
+    const persistHistoryForUserBounded = useCallback((userId, historyArg, opts = {}) => {
+        if (opts.rangeFrom !== undefined) {
+            // Caller explicitly provided a range — honour it as-is.
+            return persistHistoryForUser(userId, historyArg, opts);
+        }
+        const rangeFrom = historyLoadedRangeStartRef.current ?? null;
+        if (rangeFrom != null) {
+            return persistHistoryForUser(userId, historyArg, { ...opts, rangeFrom });
+        }
+        // Window unknown → union mode (never deletes existing dates).
+        return persistHistoryForUser(userId, historyArg, { ...opts, union: true });
+    // historyLoadedRangeStartRef is a ref (stable) — intentionally omitted from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const {
         historyRevisionRef,
@@ -1336,6 +1362,7 @@ export default function GymApp() {
         user,
         history,
         syncRetrying,
+        persistHistoryForUser: persistHistoryForUserBounded,
         syncFailuresByDateRef,
         latestHistoryRef,
         workoutsDataHistoryRef,
@@ -1406,8 +1433,8 @@ export default function GymApp() {
         if (!user?.id && getValidWorkoutDatesFromHistory(history).length === 0) {
             return;
         }
-        persistHistoryForUser(user?.id, history);
-    }, [authReady, history, historyRemoteLoadFailedRef, historyRemoteReady, historySyncReady, user]);
+        persistHistoryForUserBounded(user?.id, history, { source: "App:historyPersistEffect" });
+    }, [authReady, history, historyRemoteLoadFailedRef, historyRemoteReady, historySyncReady, user, persistHistoryForUserBounded]);
     useEffect(() => {
         save("lastActiveLogExerciseByDate", lastActiveLogExerciseByDate || {});
     }, [lastActiveLogExerciseByDate]);
@@ -1421,6 +1448,7 @@ export default function GymApp() {
         history,
         user,
         historySyncReady,
+        persistHistoryForUser: persistHistoryForUserBounded,
         logDate,
         screen,
         clearSyncFailure,
@@ -1966,6 +1994,7 @@ export default function GymApp() {
         logDate,
         logDateRef,
         exercises,
+        persistHistoryForUser: persistHistoryForUserBounded,
         logData,
         todayLabels,
         exerciseUnits,
@@ -2092,6 +2121,7 @@ export default function GymApp() {
         logDate,
         exercises,
         logData,
+        persistHistoryForUser: persistHistoryForUserBounded,
         todayLabels,
         unit,
         user,
@@ -2574,6 +2604,7 @@ export default function GymApp() {
         screen,
         user,
         historySyncReady,
+        persistHistoryForUser: persistHistoryForUserBounded,
         logDate,
         history,
         pendingWorkoutContentChangeDatesRef,
@@ -2607,7 +2638,7 @@ export default function GymApp() {
         history,
         latestHistoryRef,
         historyRevisionRef,
-        persistHistoryForUser,
+        persistHistoryForUser: persistHistoryForUserBounded,
         syncWorkoutRowsForDates,
         syncWorkoutSessionSnapshot,
         deleteRemoteWorkoutArtifactsForDate,
@@ -2720,7 +2751,11 @@ export default function GymApp() {
                         getCurrentHistoryDeleteMarkers()
                     );
                     setHistory(nextHistory);
-                    persistHistoryForUser(user.id, nextHistory);
+                    persistHistoryForUserBounded(user.id, nextHistory, {
+                        rangeFrom: monthStart,
+                        rangeTo: monthEnd,
+                        source: "calendar_month_fetch",
+                    });
                 }
             }
         } catch (e) {
@@ -2728,7 +2763,7 @@ export default function GymApp() {
         }
     }, [user?.id, runDedupeSupabaseFetch, applyTrustedWorkoutRowsSnapshot,
         getCurrentHistoryDeleteMarkers, applyLocalHistoryDates, latestHistoryRef,
-        setHistory]);
+        setHistory, persistHistoryForUserBounded]);
 
     // ─── 設定画面用 exercise 追加 ──────────────────────
     const openAddEx = (target) => { setAddTarget(target); setNewExName(""); setShowAddEx(true); };

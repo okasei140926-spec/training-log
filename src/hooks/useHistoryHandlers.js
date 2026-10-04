@@ -359,7 +359,7 @@ export function useHistoryHandlers({
             requestId: "history-record-edit",
             workoutsHistory: nextHistory,
         });
-        persistHistoryForUser(user?.id, nextHistory);
+        persistHistoryForUser(user?.id, nextHistory, { source: "useHistoryHandlers:editRecord" });
 
         let directSyncSucceeded = false;
         if (user?.id && editDate) {
@@ -590,7 +590,7 @@ export function useHistoryHandlers({
 
         latestHistoryRef.current = nextHistory;
         historyRevisionRef.current += 1;
-        persistHistoryForUser(user?.id, nextHistory);
+        persistHistoryForUser(user?.id, nextHistory, { source: "useHistoryHandlers:deleteRecord" });
 
         const recordMarkers = Object.entries(currentHistory || {})
             .filter(([, recs]) => (recs || []).some((record) => String(record?.date || "").slice(0, 10) === normalizedTargetDate))
@@ -694,7 +694,7 @@ export function useHistoryHandlers({
 
         latestHistoryRef.current = pending.previousHistory || {};
         historyRevisionRef.current += 1;
-        persistHistoryForUser(user?.id, latestHistoryRef.current);
+        persistHistoryForUser(user?.id, latestHistoryRef.current, { source: "useHistoryHandlers:undoDelete" });
         setHistory(latestHistoryRef.current);
         commitHistoryDeleteMarkers({
             dates: (historyDeleteMarkersRef.current?.dates || []).filter((date) => date !== pending.date),

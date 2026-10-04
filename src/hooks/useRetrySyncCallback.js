@@ -9,7 +9,6 @@ import {
     getRuntimeEnvironmentLabel,
     getWorkoutSaveGuardDecision,
     isExplicitWorkoutEditChange,
-    persistHistoryForUser,
     withDraftMeta,
 } from "../utils/appHelpers";
 import { mergeHistoryMaps, hasValidWorkoutOnDate } from "../utils/helpers";
@@ -18,6 +17,7 @@ export function useRetrySyncCallback({
     user,
     history,
     syncRetrying,
+    persistHistoryForUser,
     syncFailuresByDateRef,
     latestHistoryRef,
     workoutsDataHistoryRef,
@@ -159,7 +159,7 @@ export function useRetrySyncCallback({
                             requestId: "sync-retry",
                             workoutsHistory: retryHistory,
                         });
-                        persistHistoryForUser(user.id, currentHistory);
+                        persistHistoryForUser(user.id, currentHistory, { source: "useRetrySyncCallback:retrySync" });
                         const retryVerifiedAt = new Date().toISOString();
                         const savedDraft = withDraftMeta(buildWorkoutDraftForDateFromHistory(date, currentHistory), {
                             source: "save_verified",

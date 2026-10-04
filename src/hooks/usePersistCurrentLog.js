@@ -15,7 +15,6 @@ import {
     logWorkoutPersistenceDecision,
     normalizeDraftDateKey,
     normalizeLogDraftState,
-    persistHistoryForUser,
     serializeHistoryMap,
     shouldLogPerfDebug,
     withDraftDateMeta,
@@ -31,6 +30,7 @@ export function usePersistCurrentLog({
     exerciseUnits,
     history,
     user,
+    persistHistoryForUser,
     workoutStartedForDate,
     savedWorkoutDurationSecByDate,
     pendingWorkoutContentChangeDatesRef,
@@ -474,7 +474,7 @@ export function usePersistCurrentLog({
                 requestId: "local-draft-flush",
                 workoutsHistory: nextHistory,
             });
-            persistHistoryForUser(user?.id, nextHistory);
+            persistHistoryForUser(user?.id, nextHistory, { source: "usePersistCurrentLog:saveLog" });
             if (shouldLogPerfDebug()) {
                 console.log("[home weekly summary] apply", {
                     source: "workouts.data",

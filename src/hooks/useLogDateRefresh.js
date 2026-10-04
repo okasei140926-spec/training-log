@@ -18,7 +18,6 @@ import {
     isUnsavedUserWorkoutDraft,
     logRecordFetchError,
     normalizeDraftDateKey,
-    persistHistoryForUser,
     serializeHistoryMap,
     shouldLogPerfDebug,
     shouldPreserveRawDraftOverIncoming,
@@ -31,6 +30,7 @@ export function useLogDateRefresh({
     screen,
     user,
     historySyncReady,
+    persistHistoryForUser,
     logDate,
     history,
     pendingWorkoutContentChangeDatesRef,
@@ -445,7 +445,7 @@ export function useLogDateRefresh({
 
                 if (serializeHistoryMap(nextHistory) !== serializeHistoryMap(latestHistoryRef.current || history || {})) {
                     setHistory(nextHistory);
-                    persistHistoryForUser(user.id, nextHistory);
+                    persistHistoryForUser(user.id, nextHistory, { source: "useLogDateRefresh:refresh" });
                 }
                 if (serializeHistoryMap(nextWorkoutsDataHistory) !== serializeHistoryMap(workoutsDataHistoryRef.current || {})) {
                     const logDateRefreshApplied = applyWorkoutsDataHistorySnapshot(nextWorkoutsDataHistory, {

@@ -12,7 +12,6 @@ import {
     attachWorkoutDurationToHistoryDate,
     getExerciseRecordBodyPart,
     getSetDisplayUnit,
-    persistHistoryForUser,
     storeSetWeightForUnit,
 } from "../utils/appHelpers";
 import {
@@ -27,6 +26,7 @@ export function useWorkoutDaySummaryBuilder({
     todayLabels,
     unit,
     user,
+    persistHistoryForUser,
     savedWorkoutDurationSecByDate,
     workoutTimerStateRef,
     latestHistoryRef,
@@ -184,7 +184,7 @@ export function useWorkoutDaySummaryBuilder({
                 const next = attachWorkoutDurationToHistoryDate(prev, logDate, durationSec);
                 latestHistoryRef.current = next;
                 historyRevisionRef.current += 1;
-                persistHistoryForUser(user?.id, next);
+                persistHistoryForUser(user?.id, next, { source: "useWorkoutDaySummaryBuilder:finishTimer" });
                 return next;
             });
             queueWorkoutSessionSync(logDate);
