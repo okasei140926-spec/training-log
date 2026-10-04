@@ -186,7 +186,29 @@ export function useHistoryAutoSave({
                     ),
                     effectiveDeleteMarkers
                 );
-                const syncDates = [...new Set(pendingContentDates)];
+                // Re-read the queue at async execution time (not from the closure snapshot).
+                // pendingContentDates was captured synchronously at effect-start; by the time
+                // this async callback runs, the queue may have grown (user added another date
+                // while the Supabase fetch was in flight) or may have shrunk (a prior queued
+                // callback already processed some dates). Always using the live queue ensures
+                // every queued date gets at least one chance to be batched.
+                const livePendingDates = [...pendingWorkoutContentChangeDatesRef.current.keys()];
+                const syncDates = [...new Set(livePendingDates)];
+                logWriteTrace("syncBatch:build", {
+                    date: null,
+                    decision: "executed",
+                    reason: null,
+                    extra: {
+                        queueDates: livePendingDates,
+                        batchDates: syncDates,
+                        excludedDates: pendingContentDates.filter((d) => !syncDates.includes(d)),
+                        excludedReason: pendingContentDates.some((d) => !syncDates.includes(d))
+                            ? "date was in closure snapshot but no longer in live queue (already processed by a prior batch run)"
+                            : null,
+                        closureDates: pendingContentDates,
+                        newSinceClosureDates: syncDates.filter((d) => !pendingContentDates.includes(d)),
+                    },
+                });
                 // Re-read local history AFTER the async Supabase fetch.
                 // The 400 ms auto-save debounce (persistCurrentLog) can fire while the
                 // fetch is in progress and update latestHistoryRef.current.  Using a
