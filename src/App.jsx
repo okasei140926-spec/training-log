@@ -2954,14 +2954,18 @@ export default function GymApp() {
                     }}
                 />
 
-                {!isOnline && (
-                    <div style={{
-                        padding: "10px 18px 0",
-                        position: "sticky",
-                        top: "var(--app-header-height)",
-                        zIndex: 49,
-                        background: "var(--bg)",
-                    }}>
+                {/* Offline banner wrapper.
+                    Always in DOM so that adding/removing `position:sticky` never triggers
+                    a sticky-context reflow that collapses the content's top gap on iOS.
+                    When online: empty div, zero height, zero layout impact (≡ pre-545ad83). */}
+                <div style={isOnline ? {} : {
+                    padding: "10px 18px 0",
+                    position: "sticky",
+                    top: "var(--app-header-height)",
+                    zIndex: 49,
+                    background: "var(--bg)",
+                }}>
+                    {!isOnline && (
                         <div style={{
                             background: "var(--info-soft)",
                             color: "var(--text)",
@@ -2975,8 +2979,8 @@ export default function GymApp() {
                                 ? "オフラインです。端末内の記録を表示しています。通信が戻ると自動で同期します。"
                                 : "オフラインです。端末内に記録が無いため表示できません。"}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 {isOnline && user?.id && historyLoadError && (
                     <div style={{ padding: "10px 18px 0" }}>
