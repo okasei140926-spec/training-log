@@ -1044,6 +1044,7 @@ export default function GymApp() {
         trustedWorkoutRows,
         trustedSessionRows,
         historyRemoteReady,
+        historyDisplayFromCache,
         historyLoadError,
         setHistoryLoadError,
         historySyncReady,
@@ -2656,6 +2657,7 @@ export default function GymApp() {
     const fetchedCalendarMonthsRef = useRef(new Set());
     const handleCalendarMonthChange = useCallback(async (yearMonth) => {
         if (!user?.id || !yearMonth) return;
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
         if (fetchedCalendarMonthsRef.current.has(yearMonth)) return;
         fetchedCalendarMonthsRef.current.add(yearMonth);
 
@@ -3347,7 +3349,7 @@ export default function GymApp() {
                             }}
                             user={user}
                             workoutDurationSecByDate={savedWorkoutDurationSecByDate}
-                            recordsLoading={Boolean(!authReady || (user?.id && !historyRemoteReady && !historyLoadError))}
+                            recordsLoading={Boolean(!authReady || (user?.id && !historyRemoteReady && !historyDisplayFromCache && !historyLoadError))}
                             historyRemoteReady={historyRemoteReady}
                             remoteLoadFailed={historyRemoteLoadFailedRef.current}
                             onCopyExercises={handleCopyExercisesToSession}

@@ -6,6 +6,7 @@ import {
     buildHistoryFromWorkoutRows,
     getValidWorkoutDatesFromHistory,
 } from "../utils/helpers";
+import { logWriteTrace } from "../utils/writeTrace";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const REMOTE_HISTORY_SESSION_LOOKBACK_DAYS = 180;
@@ -80,6 +81,10 @@ export function useHistorySync({
     const [historySyncReady, setHistorySyncReady] = useState(false);
     const [historyRemoteReady, setHistoryRemoteReady] = useState(false);
     const [historyLoadError, setHistoryLoadError] = useState("");
+    // True when the initial Supabase fetch failed and we are displaying from the
+    // localStorage cache instead.  Distinct from historyRemoteReady (which stays
+    // false) so display gates can allow rendering without trusting remote data.
+    const [historyDisplayFromCache, setHistoryDisplayFromCache] = useState(false);
 
     // ─── Refs ─────────────────────────────────────────────────────────────────
     const historyRemoteLoadFailedRef = useRef(false);
@@ -408,6 +413,7 @@ export function useHistorySync({
                 historyDeleteMarkersRef.current = createEmptyHistoryDeleteMarkers();
                 if (isActive) setHistoryLoadError("");
                 if (isActive) setHistoryRemoteReady(false);
+                if (isActive) setHistoryDisplayFromCache(false);
                 if (isActive) setHistorySyncReady(true);
                 return;
             }
@@ -421,6 +427,8 @@ export function useHistorySync({
                 setHistorySyncReady(false);
                 setHistoryRemoteReady(hasCurrentTrustedDisplay);
                 setHistoryLoadError("");
+                // Keep historyDisplayFromCache as-is during re-fetch so the user
+                // continues to see cached data while the new Supabase request is in flight.
                 if (!historyHasTrustedRemoteSnapshotRef.current) {
                     console.log("[restore] ignore localStorage bootstrap until Supabase history load succeeds", {
                         env: getRuntimeEnvironmentLabel(),
@@ -461,6 +469,18 @@ export function useHistorySync({
             const effectiveDeleteMarkers = getCurrentHistoryDeleteMarkers();
 
             try {
+                // Early offline detection: if the OS already reports no network
+                // connectivity, skip the Supabase fetch entirely and fall through
+                // to the catch block immediately instead of waiting ~21 s for a
+                // timeout.  navigator.onLine being true does NOT mean the host is
+                // reachable (it only means the device has *some* network), so we
+                // still attempt the real fetch when true.
+                if (typeof navigator !== "undefined" && navigator.onLine === false) {
+                    throw Object.assign(
+                        new Error("navigator.onLine is false — network unavailable"),
+                        { __offlineEarlyExit: true }
+                    );
+                }
                 const sessionRangeStart = clampStartForFreeTier(
                     getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS),
                     isPro
@@ -470,6 +490,11 @@ export function useHistorySync({
                 const initialFetch = await runDedupeSupabaseFetch(
                     initialFetchKey,
                     async () => {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => {
+                            controller.abort();
+                        }, 5000);
+                        try {
                         const initialWeekRange = getCurrentWeekRangeForHomeSummary();
                         const workoutsRes = await supabase
                             .from("workouts")
@@ -477,7 +502,8 @@ export function useHistorySync({
                             .eq("user_id", user.id)
                             .gte("date", sessionRangeStart)
                             .order("date", { ascending: false })
-                            .limit(initialHistoryLimit);
+                            .limit(initialHistoryLimit)
+                            .abortSignal(controller.signal);
                         if (workoutsRes.error) {
                             const context = logRecordFetchError("history_initial_load", "workouts", workoutsRes.error, {
                                 userId: user.id,
@@ -494,7 +520,8 @@ export function useHistorySync({
                             .gte("date", initialWeekRange.start)
                             .lte("date", initialWeekRange.end)
                             .order("date", { ascending: true })
-                            .limit(14);
+                            .limit(14)
+                            .abortSignal(controller.signal);
                         if (weekWorkoutsRes.error) {
                             const context = logRecordFetchError("history_initial_load_week", "workouts", weekWorkoutsRes.error, {
                                 userId: user.id,
@@ -523,6 +550,9 @@ export function useHistorySync({
                                 skippedReason: "home initial load uses workouts.data only",
                             },
                         };
+                        } finally {
+                            clearTimeout(timeoutId);
+                        }
                     },
                     {
                         minIntervalMs: 20000,
@@ -877,6 +907,7 @@ export function useHistorySync({
                 }
                 setHistoryRemoteReady(true);
                 setHistoryLoadError("");
+                setHistoryDisplayFromCache(false);
                 setHistory(mergedHistory);
                 console.log("[restore] history ready state applied", {
                     env: getRuntimeEnvironmentLabel(),
@@ -919,8 +950,33 @@ export function useHistorySync({
                 // Conditions 1+2 together prevent an out-of-date cache from clobbering a richer in-memory
                 // state that was built from a previous successful fetch during the same app session.
                 const canApplyFallback = hasFallbackData && !hasCurrentData && !historyHasTrustedRemoteSnapshotRef.current;
+                const fallbackMetrics = getHistoryOverallMetrics(fallbackHistory);
+                let cacheBytesForTrace = 0;
+                try { cacheBytesForTrace = window.localStorage.getItem(getUserHistoryCacheKey(user.id))?.length || 0; } catch {}
+                const fallbackRejectedReason = hasCurrentData
+                    ? "hasCurrentData — stale cache must not overwrite current displayed state"
+                    : historyHasTrustedRemoteSnapshotRef.current
+                        ? "historyHasTrustedRemoteSnapshotRef — trusted remote snapshot exists"
+                        : "fallback cache has no workout data";
+                logWriteTrace("offlineFallback:apply", {
+                    date: null,
+                    decision: canApplyFallback ? "executed" : "skip",
+                    reason: canApplyFallback ? "offline fallback applied from history_cache" : fallbackRejectedReason,
+                    extra: {
+                        cacheKey: getUserHistoryCacheKey(user.id),
+                        cacheBytes: cacheBytesForTrace,
+                        cacheExerciseCount: fallbackMetrics.exerciseCount,
+                        cacheSetCount: fallbackMetrics.setCount,
+                        cacheDateCount: getValidWorkoutDatesFromHistory(fallbackHistory).length,
+                        remoteLoadFailed: historyRemoteLoadFailedRef.current,
+                        historyRemoteReady: false,
+                        hasCurrentData,
+                        offlineEarlyExit: Boolean(error?.__offlineEarlyExit),
+                    },
+                });
                 if (canApplyFallback) {
                     setHistory(fallbackHistory);
+                    setHistoryDisplayFromCache(true);
                     applyWorkoutsDataHistorySnapshot(fallbackHistory, {
                         allowRegression: true,
                         source: "localStorage/history_cache",
@@ -932,10 +988,20 @@ export function useHistorySync({
                         fetchName: "history_initial_load",
                         user_id: user.id,
                         fallbackSource: "localStorage/history_cache",
-                        fallback: getHistoryOverallMetrics(fallbackHistory),
+                        fallback: fallbackMetrics,
                         errorMessage: error?.message || String(error || "unknown error"),
+                        offlineEarlyExit: Boolean(error?.__offlineEarlyExit),
                     });
                 } else {
+                    // Only reset historyDisplayFromCache when trusted remote data exists or
+                    // there is genuinely nothing to show. If hasCurrentData is true but
+                    // historyHasTrustedRemoteSnapshotRef is false, the currently-displayed data
+                    // came from the offline cache (a previous run of this same effect set it via
+                    // setHistoryDisplayFromCache(true) + setHistory(fallbackHistory)). Resetting
+                    // to false here would blank the banner text even though cache data is showing.
+                    if (!hasCurrentData || historyHasTrustedRemoteSnapshotRef.current) {
+                        setHistoryDisplayFromCache(false);
+                    }
                     console.warn("[restore] fallback rejected after Supabase history load failure", {
                         env: getRuntimeEnvironmentLabel(),
                         fetchName: "history_initial_load",
@@ -945,14 +1011,10 @@ export function useHistorySync({
                         errorMessage: error?.message || String(error || "unknown error"),
                         fallbackUsed: false,
                         fallbackSource: "localStorage/history_cache",
-                        fallback: getHistoryOverallMetrics(fallbackHistory),
+                        fallback: fallbackMetrics,
                         currentDisplayed: getHistoryOverallMetrics(currentDisplayedHistory),
                         fallbackRejected: true,
-                        rejectedReason: hasCurrentData
-                            ? "Supabase fetch failed; stale fallback must not overwrite current displayed state"
-                            : historyHasTrustedRemoteSnapshotRef.current
-                                ? "Supabase fetch failed; stale fallback must not overwrite trusted remote snapshot"
-                                : "fallback has no workout data",
+                        rejectedReason: fallbackRejectedReason,
                     });
                 }
             } finally {
@@ -1043,6 +1105,7 @@ export function useHistorySync({
         let cancelled = false;
 
         const refreshDisplayHistoryFromSupabase = async () => {
+            if (typeof navigator !== "undefined" && navigator.onLine === false) return;
             const requestId = displayHistoryRefreshRequestIdRef.current + 1;
             displayHistoryRefreshRequestIdRef.current = requestId;
             const queryLabel = "display_history_refresh";
@@ -1372,6 +1435,7 @@ export function useHistorySync({
         const weekRange = getCurrentWeekRangeForHomeSummary();
 
         const refreshHomeWeeklySummaryFromWorkouts = async () => {
+            if (typeof navigator !== "undefined" && navigator.onLine === false) return;
             const sessionRangeStart = weekRange.start;
             const sessionRangeEnd = weekRange.end;
             const homeHistoryLimit = INITIAL_HOME_HISTORY_LIMIT;
@@ -1568,6 +1632,7 @@ export function useHistorySync({
         trustedWorkoutRows,
         trustedSessionRows,
         historyRemoteReady,
+        historyDisplayFromCache,
         historyLoadError,
         setHistoryLoadError,
         historySyncReady,
