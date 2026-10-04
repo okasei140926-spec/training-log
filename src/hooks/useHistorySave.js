@@ -71,6 +71,28 @@ export function useHistorySave({
         const normalizedDate = String(date || "").slice(0, 10);
         if (!normalizedDate) return;
 
+        // Defensive guard: a null/undefined reason means no traceable user action.
+        // G8a would block the write every time, causing an infinite retry loop.
+        // If the caller didn't pass an explicit reason and this isn't an explicit
+        // user operation, warn and bail out — nothing should be written to Supabase.
+        if (!reason && !options.explicitEdit && !options.explicitDelete) {
+            console.warn("[markWorkoutContentChanged] blocked null-reason entry (no user action)", {
+                env: getRuntimeEnvironmentLabel(),
+                user_id: user?.id || latestUserIdRef.current || null,
+                date: normalizedDate,
+                reason,
+                options,
+                note: "reason is falsy without explicit user action — this call is a no-op to prevent G8a infinite loop",
+            });
+            logWriteTrace("markWorkoutContentChanged", {
+                date: normalizedDate,
+                decision: "block",
+                reason: "null reason without explicit user action — noop",
+                extra: { saveReason: reason, explicitEdit: Boolean(options.explicitEdit), explicitDelete: Boolean(options.explicitDelete) },
+            });
+            return;
+        }
+
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
         const explicitEdit = Boolean(previous.explicitEdit || options.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(reason));
         // explicitDelete: if the caller explicitly passes `false`, reset it (e.g. startup rescue,
@@ -79,6 +101,7 @@ export function useHistorySave({
         const explicitDelete = options.explicitDelete === false
             ? false
             : Boolean(previous.explicitDelete || options.explicitDelete);
+        const _qbMwcc = pendingWorkoutContentChangeDatesRef.current.size;
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
@@ -86,6 +109,25 @@ export function useHistorySave({
             explicitEdit,
             details: options.details || previous.details || null,
             updatedAt: new Date().toISOString(),
+        });
+        logWriteTrace("markWorkoutContentChanged", {
+            date: normalizedDate,
+            decision: "executed",
+            reason,
+            extra: { explicitEdit, explicitDelete, saveReason: reason },
+        });
+        logWriteTrace("syncQueue:add", {
+            date: normalizedDate,
+            decision: "executed",
+            reason: "markWorkoutContentChanged",
+            extra: {
+                queueSizeBefore: _qbMwcc,
+                queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                saveReason: reason,
+                explicitEdit,
+                explicitDelete,
+            },
         });
         if (explicitEdit) {
             explicitWorkoutEditDatesRef.current.set(normalizedDate, {

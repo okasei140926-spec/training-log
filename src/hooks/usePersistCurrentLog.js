@@ -197,6 +197,16 @@ export function usePersistCurrentLog({
             workoutDate: normalizedLogDate,
         });
         const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || {}, normalizedLogDate);
+        logWriteTrace("remoteSnapshot:update", {
+            date: normalizedLogDate,
+            decision: "pass",
+            reason: "existingMetrics read from latestHistoryRef.current (local state, NOT Supabase)",
+            extra: {
+                remoteExerciseCount: existingMetrics.exerciseCount ?? null,
+                remoteSetCount: existingMetrics.setCount ?? null,
+                source: "latestHistoryRef.current",
+            },
+        });
         const explicitEdit = isExplicitWorkoutEditChange(pendingChange);
         const saveGuardDecision = getWorkoutSaveGuardDecision({
             incomingMetrics,

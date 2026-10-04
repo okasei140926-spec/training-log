@@ -222,7 +222,18 @@ export function useHistoryAutoSave({
                     // Clear pending content changes for failed dates so auto-save doesn't
                     // retry them on every history change, causing an infinite loop.
                     workoutSyncResults.failedDates.forEach((date) => {
+                        const _qbFailed = pendingWorkoutContentChangeDatesRef.current.size;
                         pendingWorkoutContentChangeDatesRef.current.delete(date);
+                        logWriteTrace("syncQueue:delete", {
+                            date,
+                            decision: "executed",
+                            reason: "failedDates cleanup",
+                            extra: {
+                                queueSizeBefore: _qbFailed,
+                                queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                                queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                            },
+                        });
                     });
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
                 }
@@ -240,7 +251,19 @@ export function useHistoryAutoSave({
                                 count,
                             });
                             recordSyncFailure(date, new Error(`save stalled: draft not flushed after ${count} holds`), "hold_timeout");
+                            const _qbHeld = pendingWorkoutContentChangeDatesRef.current.size;
                             pendingWorkoutContentChangeDatesRef.current.delete(date);
+                            logWriteTrace("syncQueue:delete", {
+                                date,
+                                decision: "executed",
+                                reason: "heldDates retry limit exceeded",
+                                extra: {
+                                    queueSizeBefore: _qbHeld,
+                                    queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                                    queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                                    holdCount: count,
+                                },
+                            });
                             delete heldRetryCountsRef.current[date];
                         } else {
                             console.warn("[save] held date: pending change kept, local history preserved", {
@@ -363,6 +386,39 @@ export function useHistoryAutoSave({
 
                 syncDates.forEach((date) => {
                     if (workoutSyncResults.skippedDates.includes(date)) {
+                        // Permanent rejection: the save guard blocked this write. Retrying
+                        // with identical data would produce the same result — remove from the
+                        // sync queue to prevent an infinite retry loop. If the user makes a
+                        // new edit, markWorkoutContentChanged will re-add the date with a
+                        // valid reason. Apply the same saveStartedAt safety check as the
+                        // success path so a newer in-flight edit is never discarded.
+                        const pendingAfterSkip = pendingWorkoutContentChangeDatesRef.current.get(date);
+                        if (!pendingAfterSkip?.updatedAt || getTimestampMs(pendingAfterSkip.updatedAt) <= getTimestampMs(saveStartedAt)) {
+                            logWriteTrace("guard:permanent-skip", {
+                                date,
+                                decision: "cleared",
+                                reason: "save guard permanently rejected write — removed from sync queue to prevent infinite retry",
+                                flags: {
+                                    explicitEdit: Boolean(pendingAfterSkip?.explicitEdit),
+                                    explicitDelete: Boolean(pendingAfterSkip?.explicitDelete),
+                                    source: pendingAfterSkip?.reason ?? null,
+                                },
+                                exerciseCount: null,
+                                setCount: null,
+                            });
+                            const _qbPermSkip = pendingWorkoutContentChangeDatesRef.current.size;
+                            pendingWorkoutContentChangeDatesRef.current.delete(date);
+                            logWriteTrace("syncQueue:delete", {
+                                date,
+                                decision: "executed",
+                                reason: "guard:permanent-skip",
+                                extra: {
+                                    queueSizeBefore: _qbPermSkip,
+                                    queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                                    queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                                },
+                            });
+                        }
                         return;
                     }
                     if (workoutSyncResults.heldDates?.includes(date)) {
@@ -371,7 +427,18 @@ export function useHistoryAutoSave({
                     }
                     const pendingAfterSave = pendingWorkoutContentChangeDatesRef.current.get(date);
                     if (!pendingAfterSave?.updatedAt || getTimestampMs(pendingAfterSave.updatedAt) <= getTimestampMs(saveStartedAt)) {
+                        const _qbSuccess = pendingWorkoutContentChangeDatesRef.current.size;
                         pendingWorkoutContentChangeDatesRef.current.delete(date);
+                        logWriteTrace("syncQueue:delete", {
+                            date,
+                            decision: "executed",
+                            reason: "sync success",
+                            extra: {
+                                queueSizeBefore: _qbSuccess,
+                                queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                                queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                            },
+                        });
                     }
                     if (!failedSessionSyncDates.has(date) && !skippedSessionSyncDates.has(date)) {
                         pendingWorkoutSessionSyncDatesRef.current.delete(date);
@@ -447,7 +514,18 @@ export function useHistoryAutoSave({
                         workoutsHistory: verifiedHistoryForDate,
                     });
                     explicitWorkoutEditDatesRef.current.delete(date);
+                    const _qbVerified = pendingWorkoutContentChangeDatesRef.current.size;
                     pendingWorkoutContentChangeDatesRef.current.delete(date);
+                    logWriteTrace("syncQueue:delete", {
+                        date,
+                        decision: "executed",
+                        reason: "save verified",
+                        extra: {
+                            queueSizeBefore: _qbVerified,
+                            queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                            queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                        },
+                    });
                     if (sessionSynced) {
                         pendingWorkoutSessionSyncDatesRef.current.delete(date);
                         clearSyncFailure(date);

@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { logWriteTrace } from "../utils/writeTrace";
 import {
     EXPLICIT_SET_EDIT_REASONS,
     getRawDraftSetMetrics,
@@ -235,6 +236,7 @@ export function useLogDraftApplicator({
             const normalizedDate = String(logDate || "").slice(0, 10);
             if (normalizedDate) {
                 const previousChange = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
+                const _qbSetLog = pendingWorkoutContentChangeDatesRef.current.size;
                 pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
                     ...previousChange,
                     reason: previousChange.explicitEdit || previousChange.explicitDelete
@@ -244,6 +246,17 @@ export function useLogDraftApplicator({
                     explicitEdit: Boolean(previousChange.explicitEdit),
                     details: previousChange.details || null,
                     updatedAt: new Date().toISOString(),
+                });
+                logWriteTrace("syncQueue:add", {
+                    date: normalizedDate,
+                    decision: "executed",
+                    reason: "setLogDataAndSaveDraft",
+                    extra: {
+                        queueSizeBefore: _qbSetLog,
+                        queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                        queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                        saveReason: "set_update",
+                    },
                 });
             }
 

@@ -409,6 +409,7 @@ export default function GymApp() {
 
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
         const explicitEdit = Boolean(previous.explicitEdit || details.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(reason));
+        const _qbMarkLog = pendingWorkoutContentChangeDatesRef.current.size;
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
@@ -416,6 +417,18 @@ export default function GymApp() {
             explicitEdit,
             details,
             updatedAt: new Date().toISOString(),
+        });
+        logWriteTrace("syncQueue:add", {
+            date: normalizedDate,
+            decision: "executed",
+            reason: "markLogWorkoutContentChanged",
+            extra: {
+                queueSizeBefore: _qbMarkLog,
+                queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                saveReason: reason,
+                explicitEdit,
+            },
         });
         if (explicitEdit) {
             explicitWorkoutEditDatesRef.current.set(normalizedDate, {

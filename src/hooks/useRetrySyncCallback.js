@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { logWriteTrace } from "../utils/writeTrace";
 import {
     applyPreferredHistoryDates,
     buildWorkoutDraftForDateFromHistory,
@@ -99,7 +100,18 @@ export function useRetrySyncCallback({
                             // Save guard blocked because remote already has more data than local.
                             // Remote is in a good state — clear the failure so the banner doesn't
                             // loop forever.
+                            const _qbRetryBlocked = pendingWorkoutContentChangeDatesRef.current.size;
                             pendingWorkoutContentChangeDatesRef.current.delete(date);
+                            logWriteTrace("syncQueue:delete", {
+                                date,
+                                decision: "executed",
+                                reason: "retry blocked by save guard — remote already has more data",
+                                extra: {
+                                    queueSizeBefore: _qbRetryBlocked,
+                                    queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                                    queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                                },
+                            });
                             clearSyncFailure(date);
                             continue;
                         }
@@ -156,7 +168,18 @@ export function useRetrySyncCallback({
                         });
                         if (savedDraft.hasSavedWorkout) saveDraftForDate(date, savedDraft);
                         explicitWorkoutEditDatesRef.current.delete(date);
+                        const _qbRetrySuccess = pendingWorkoutContentChangeDatesRef.current.size;
                         pendingWorkoutContentChangeDatesRef.current.delete(date);
+                        logWriteTrace("syncQueue:delete", {
+                            date,
+                            decision: "executed",
+                            reason: "retry success",
+                            extra: {
+                                queueSizeBefore: _qbRetrySuccess,
+                                queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                                queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                            },
+                        });
                     } else if (!isDeleteRetry) {
                         const remoteAlreadyHasWorkout = await hasRemoteWorkoutForDate(user.id, date);
                         if (!remoteAlreadyHasWorkout) {

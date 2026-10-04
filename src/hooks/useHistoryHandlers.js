@@ -5,6 +5,7 @@ import {
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
 } from "../utils/helpers";
+import { logWriteTrace } from "../utils/writeTrace";
 
 export function useHistoryHandlers({
     user,
@@ -371,7 +372,18 @@ export function useHistoryHandlers({
                 if (sessionResult?.skipped) {
                     throw new Error(`workout_sessions sync skipped ${editDate}`);
                 }
+                const _qbHistHandler = pendingWorkoutContentChangeDatesRef.current.size;
                 pendingWorkoutContentChangeDatesRef.current.delete(editDate);
+                logWriteTrace("syncQueue:delete", {
+                    date: editDate,
+                    decision: "executed",
+                    reason: "history handler sync success",
+                    extra: {
+                        queueSizeBefore: _qbHistHandler,
+                        queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+                        queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                    },
+                });
                 pendingWorkoutSessionSyncDatesRef.current.delete(editDate);
                 explicitWorkoutEditDatesRef.current.delete(editDate);
                 clearSyncFailure(editDate);
