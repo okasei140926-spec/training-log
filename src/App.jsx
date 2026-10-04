@@ -1107,6 +1107,27 @@ export default function GymApp() {
         createEmptyHistoryDeleteMarkers,
     });
 
+    useEffect(() => {
+        if (!isOnline) {
+            const displayedMetrics = getHistoryOverallMetrics(history || {});
+            const bannerVariant = displayedMetrics.setCount > 0 ? "cache" : "no-cache";
+            logWriteTrace("offlineBanner:render", {
+                date: null,
+                decision: "executed",
+                reason: null,
+                extra: {
+                    isOnline,
+                    historyDisplayFromCache,
+                    historyRemoteReady,
+                    remoteLoadFailed: historyRemoteLoadFailedRef.current,
+                    historyLoadError: historyLoadError || null,
+                    displayedSetCount: displayedMetrics.setCount,
+                    bannerVariant,
+                },
+            });
+        }
+    }, [isOnline, historyDisplayFromCache, historyRemoteReady, historyLoadError]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const {
         historyRevisionRef,
         historySaveQueueRef,
@@ -2899,7 +2920,13 @@ export default function GymApp() {
                 />
 
                 {!isOnline && (
-                    <div style={{ padding: "10px 18px 0" }}>
+                    <div style={{
+                        padding: "10px 18px 0",
+                        position: "sticky",
+                        top: "var(--app-header-height)",
+                        zIndex: 49,
+                        background: "var(--bg)",
+                    }}>
                         <div style={{
                             background: "var(--info-soft)",
                             color: "var(--text)",
@@ -2909,7 +2936,9 @@ export default function GymApp() {
                             fontSize: 13,
                             lineHeight: 1.6,
                         }}>
-                            オフラインです。端末内の記録は表示できます。通信が戻ると自動で同期します。
+                            {getHistoryOverallMetrics(history || {}).setCount > 0
+                                ? "オフラインです。端末内の記録を表示しています。通信が戻ると自動で同期します。"
+                                : "オフラインです。端末内に記録が無いため表示できません。"}
                         </div>
                     </div>
                 )}
