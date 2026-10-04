@@ -581,6 +581,23 @@ export function useHistoryHandlers({
 
         const currentHistory = latestHistoryRef.current || history || {};
         const nextHistory = removeHistoryDate(currentHistory, normalizedTargetDate);
+
+        const _beforeEntries = Object.entries(currentHistory || {}).filter(
+            ([, recs]) => (recs || []).some((r) => String(r?.date || "").slice(0, 10) === normalizedTargetDate)
+        );
+        const _beforeExerciseCount = _beforeEntries.length;
+        const _beforeSetCount = _beforeEntries.reduce((sum, [, recs]) => {
+            const rec = recs.find((r) => String(r?.date || "").slice(0, 10) === normalizedTargetDate);
+            return sum + (rec?.sets?.length || 0);
+        }, 0);
+        logWriteTrace("deleteAllHistory", {
+            date: normalizedTargetDate,
+            decision: "marked_for_queue_delete",
+            reason: "date_delete",
+            beforeExerciseCount: _beforeExerciseCount,
+            beforeSetCount: _beforeSetCount,
+            queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
+        });
         const previousDraft = loadDraftForDate(normalizedTargetDate);
         const previousDurationSec = savedWorkoutDurationSecByDate[normalizedTargetDate] || 0;
 
@@ -615,7 +632,6 @@ export function useHistoryHandlers({
             workoutsHistory: nextHistory,
         });
         queueWorkoutSessionSync(normalizedTargetDate);
-        pendingWorkoutSessionSyncDatesRef.current.delete(normalizedTargetDate);
 
         // その日が今の編集中なら画面上の状態も消す
         if (logDate === normalizedTargetDate) {
@@ -645,28 +661,6 @@ export function useHistoryHandlers({
         } catch {}
         onDeleteDateClearCompletion?.(normalizedTargetDate);
 
-        const remoteDelete = () => {
-            if (!user?.id) return;
-
-            deleteRemoteWorkoutArtifactsForDate(user.id, normalizedTargetDate, nextHistory)
-                .then(() => {
-                    clearSyncFailure(normalizedTargetDate);
-                    refreshHistorySyncDiagnostic(user.id, nextHistory, {
-                        prefix: normalizedTargetDate.slice(0, 7),
-                    });
-                    setSessionSyncVersion((prev) => prev + 1);
-                })
-                .catch((error) => {
-                    recordSyncFailure(normalizedTargetDate, error, "delete_workout_artifacts");
-                    console.error("workout date artifact delete failed", {
-                        error,
-                        userId: user.id,
-                        workoutDate: normalizedTargetDate,
-                    });
-                });
-        };
-
-        remoteDelete();
         const timeoutId = window.setTimeout(() => {
             pendingDeleteUndoRef.current = null;
             setPendingDeleteUndo(null);

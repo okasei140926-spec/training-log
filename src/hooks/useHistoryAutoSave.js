@@ -72,6 +72,8 @@ export function useHistoryAutoSave({
     applyLogDraftState,
     loadDraftForDate,
     saveDraftForDate,
+    clearDraftForDate,
+    clearLastActiveExerciseForDate,
     setHistory,
     setSessionSyncVersion,
     forceSyncVersion,
@@ -194,6 +196,10 @@ export function useHistoryAutoSave({
                 // every queued date gets at least one chance to be batched.
                 const livePendingDates = [...pendingWorkoutContentChangeDatesRef.current.keys()];
                 const syncDates = [...new Set(livePendingDates)];
+                // Capture before queue entries are cleared on success (line below syncDates.forEach).
+                const explicitDeleteSyncDates = new Set(
+                    syncDates.filter((d) => Boolean(pendingWorkoutContentChangeDatesRef.current.get(d)?.explicitDelete))
+                );
                 logWriteTrace("syncBatch:build", {
                     date: null,
                     decision: "executed",
@@ -480,7 +486,36 @@ export function useHistoryAutoSave({
                         buildWorkoutDraftForDateFromHistory(date, verifiedHistoryForDate),
                         { remoteVerifiedAt }
                     );
-                    if (!savedDraft.hasSavedWorkout) return;
+                    if (!savedDraft.hasSavedWorkout) {
+                        if (explicitDeleteSyncDates.has(date)) {
+                            // Supabase delete verified — clear all local copies of this date.
+                            clearDraftForDate(date);
+                            clearLastActiveExerciseForDate?.(date);
+                            const afterClearDraft = loadDraftForDate(date);
+                            const hasRemainingDraftContent = Boolean(
+                                afterClearDraft?.sessionEx ||
+                                Object.keys(afterClearDraft?.logData || {}).length > 0
+                            );
+                            const clearedInMemory = !hasValidWorkoutOnDate(latestHistoryRef.current || {}, date);
+                            logWriteTrace("deleteAllHistory:localCleanup", {
+                                date,
+                                decision: "executed",
+                                reason: "explicit delete verified by Supabase",
+                                clearedKeys: [
+                                    `workoutDraft:${date}`,
+                                    `draft_meta_${date}`,
+                                    `draft_logData_${date}`,
+                                    `draft_sessionEx_${date}`,
+                                    `draft_exerciseUnits_${date}`,
+                                    `draft_todayLabels_${date}`,
+                                    "lastActiveLogExerciseByDate",
+                                ],
+                                clearedInMemory,
+                                remainingKeys: hasRemainingDraftContent ? [`draft content still loaded after clearDraftForDate for ${date}`] : [],
+                            });
+                        }
+                        return;
+                    }
                     const localDraftForDate = date === logDate
                         ? latestLogDraftRef.current
                         : loadDraftForDate(date);
@@ -669,6 +704,8 @@ export function useHistoryAutoSave({
         applyLogDraftState,
         loadDraftForDate,
         saveDraftForDate,
+        clearDraftForDate,
+        clearLastActiveExerciseForDate,
         workoutTimerStateRef,
         forceSyncVersion,
     ]);

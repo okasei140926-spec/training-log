@@ -933,6 +933,23 @@ export function useHistorySave({
 
         if (!payload) {
             if (existingSession?.id) {
+                const [deleteLikesResult, deleteCommentsResult] = await Promise.all([
+                    supabase
+                        .from("workout_session_likes")
+                        .delete()
+                        .eq("session_id", existingSession.id),
+                    supabase
+                        .from("workout_session_comments")
+                        .delete()
+                        .eq("session_id", existingSession.id),
+                ]);
+                if (deleteLikesResult.error) {
+                    console.warn("[delete] workout_session_likes delete failed", deleteLikesResult.error);
+                }
+                if (deleteCommentsResult.error) {
+                    console.warn("[delete] workout_session_comments delete failed", deleteCommentsResult.error);
+                }
+
                 const { error: deleteExercisesError } = await supabase
                     .from("workout_session_exercises")
                     .delete()
