@@ -910,20 +910,51 @@ export function useHistorySync({
                 setHistoryLoadError(getHistoryLoadErrorMessage(error));
                 const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
                 const currentDisplayedHistory = latestHistoryRef.current || {};
-                console.warn("[restore] fallback rejected after Supabase history load failure", {
-                    env: getRuntimeEnvironmentLabel(),
-                    fetchName: "history_initial_load",
-                    user_id: user.id,
-                    dateRange: { from: getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS), limit: INITIAL_HOME_HISTORY_LIMIT },
-                    query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
-                    errorMessage: error?.message || String(error || "unknown error"),
-                    fallbackUsed: false,
-                    fallbackSource: "localStorage/history_cache",
-                    fallback: getHistoryOverallMetrics(fallbackHistory),
-                    currentDisplayed: getHistoryOverallMetrics(currentDisplayedHistory),
-                    fallbackRejected: true,
-                    rejectedReason: "Supabase fetch failed; stale fallback must not overwrite trusted/current displayed state",
-                });
+                const hasCurrentData = getHistoryOverallMetrics(currentDisplayedHistory).setCount > 0;
+                const hasFallbackData = getHistoryOverallMetrics(fallbackHistory).setCount > 0;
+                // Apply the persisted history cache as offline fallback only when:
+                //   1. No Supabase snapshot was loaded this session (startup offline, not mid-session loss)
+                //   2. Nothing is currently displayed — history state is still empty
+                //   3. The cache actually contains workout data
+                // Conditions 1+2 together prevent an out-of-date cache from clobbering a richer in-memory
+                // state that was built from a previous successful fetch during the same app session.
+                const canApplyFallback = hasFallbackData && !hasCurrentData && !historyHasTrustedRemoteSnapshotRef.current;
+                if (canApplyFallback) {
+                    setHistory(fallbackHistory);
+                    applyWorkoutsDataHistorySnapshot(fallbackHistory, {
+                        allowRegression: true,
+                        source: "localStorage/history_cache",
+                        reason: "offline startup fallback",
+                        requestId: "offline-fallback",
+                    });
+                    console.log("[restore] offline fallback applied from history cache", {
+                        env: getRuntimeEnvironmentLabel(),
+                        fetchName: "history_initial_load",
+                        user_id: user.id,
+                        fallbackSource: "localStorage/history_cache",
+                        fallback: getHistoryOverallMetrics(fallbackHistory),
+                        errorMessage: error?.message || String(error || "unknown error"),
+                    });
+                } else {
+                    console.warn("[restore] fallback rejected after Supabase history load failure", {
+                        env: getRuntimeEnvironmentLabel(),
+                        fetchName: "history_initial_load",
+                        user_id: user.id,
+                        dateRange: { from: getDateDaysAgoKey(INITIAL_HOME_HISTORY_LOOKBACK_DAYS), limit: INITIAL_HOME_HISTORY_LIMIT },
+                        query: "workouts.select(date,data).eq(user_id).gte(date).order(date asc).limit",
+                        errorMessage: error?.message || String(error || "unknown error"),
+                        fallbackUsed: false,
+                        fallbackSource: "localStorage/history_cache",
+                        fallback: getHistoryOverallMetrics(fallbackHistory),
+                        currentDisplayed: getHistoryOverallMetrics(currentDisplayedHistory),
+                        fallbackRejected: true,
+                        rejectedReason: hasCurrentData
+                            ? "Supabase fetch failed; stale fallback must not overwrite current displayed state"
+                            : historyHasTrustedRemoteSnapshotRef.current
+                                ? "Supabase fetch failed; stale fallback must not overwrite trusted remote snapshot"
+                                : "fallback has no workout data",
+                    });
+                }
             } finally {
                 if (isActive) setHistorySyncReady(true);
             }
