@@ -1444,6 +1444,15 @@ export default function GymApp() {
 
     // dismissPushPromptForToday → useUIHandlers
 
+    const clearLastActiveExerciseForDate = useCallback((date) => {
+        setLastActiveLogExerciseByDate((prev) => {
+            if (!prev?.[date]) return prev;
+            const next = { ...prev };
+            delete next[date];
+            return next;
+        });
+    }, []);
+
     useHistoryAutoSave({
         history,
         user,
@@ -1484,6 +1493,8 @@ export default function GymApp() {
         applyLogDraftState,
         loadDraftForDate,
         saveDraftForDate,
+        clearDraftForDate,
+        clearLastActiveExerciseForDate,
         setHistory,
         setSessionSyncVersion,
         forceSyncVersion,
@@ -1765,6 +1776,21 @@ export default function GymApp() {
         workoutLogExerciseUnits?.[name] || getExUnit(name)
     ), [getExUnit, workoutLogExerciseUnits]);
 
+    // ■1: Track which date workoutLogExercises actually belongs to.
+    // workoutLog.draft.date reflects the date of the internal useWorkoutLog draft state.
+    // When the user navigates to a new logDate, the draft resets asynchronously (via useEffect
+    // in useWorkoutLog). During that transition render workoutLog.draft.date still holds the
+    // previous date even though logDate has already changed.
+    // useDisplayHistory reads this ref synchronously in its useMemo to decide whether to skip
+    // the overlay, preventing stale exercises from being mapped into the new date's history.
+    const liveExercisesDateRef = useRef(null);
+    useEffect(() => {
+        const draftDate = normalizeDraftDateKey(
+            workoutLog.draft?.date || workoutLog.draft?.meta?.date
+        ) || null;
+        liveExercisesDateRef.current = draftDate;
+    }, [workoutLog.draft]);
+
     const {
         displayHistory,
         canonicalDisplayHistory,
@@ -1781,6 +1807,7 @@ export default function GymApp() {
         workoutLogExercises,
         workoutLogData,
         getWorkoutLogExUnit,
+        liveExercisesDateRef,
         pendingWorkoutContentChangeDatesRef,
         workoutTimerStateRef,
         buildDraftHistoryForDate,
@@ -2624,6 +2651,7 @@ export default function GymApp() {
         clearDraftForDate,
         setHistory,
         setHistoryLoadError,
+        getCurrentHistoryDeleteMarkers,
     });
 
     const {

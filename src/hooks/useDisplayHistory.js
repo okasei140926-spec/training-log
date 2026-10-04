@@ -29,6 +29,7 @@ export function useDisplayHistory({
     getWorkoutLogExUnit,
 
     // Refs (passed by reference, not reactive)
+    liveExercisesDateRef,
     pendingWorkoutContentChangeDatesRef,
     workoutTimerStateRef,
 
@@ -39,6 +40,25 @@ export function useDisplayHistory({
 }) {
     const displayHistory = useMemo(() => {
         if (!logDate) return history;
+
+        // ■2: Skip overlay when workoutLogExercises belongs to a different date than logDate.
+        // liveExercisesDateRef.current tracks the date that workoutLogExercises actually
+        // belongs to (derived from workoutLog.draft.date, updated by useEffect in App.jsx).
+        // - null/undefined → ref not yet initialized → overlay as before (safe default)
+        // - matches logDate → exercises are current → overlay as before
+        // - mismatches logDate → stale exercises from previous date → skip overlay to prevent
+        //   cross-date contamination in canonicalDisplayHistory
+        const liveExercisesDate = liveExercisesDateRef?.current ?? null;
+        const liveMatchesLogDate = liveExercisesDate === null || liveExercisesDate === logDate;
+        if (!liveMatchesLogDate) {
+            console.log("[WP] displayHistory:overlay-skipped", {
+                logDate,
+                liveExercisesDate,
+                reason: "workoutLogExercises belongs to a different date than logDate",
+            });
+            return history;
+        }
+
         const hasPendingDraftEdit = pendingWorkoutContentChangeDatesRef.current.has(String(logDate || "").slice(0, 10));
         const week = getCurrentWeekRangeForHomeSummary();
         const isLogDateThisWeek = logDate >= week.start && logDate <= week.end;
