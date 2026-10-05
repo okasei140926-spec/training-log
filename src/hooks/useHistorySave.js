@@ -43,6 +43,7 @@ export function useHistorySave({
     getSetEditUnit,
     buildHistoryFromWorkoutSessionRows,
     describeHistoryRecordsForDate,
+    clearHistoryDeleteMarkerForDate = null,
     pendingSavePayloadsRef = null,
 }) {
     // ─── Refs ─────────────────────────────────────────────────────────────────
@@ -776,6 +777,27 @@ export function useHistorySave({
                     }
 
                     clearSyncFailure(workoutDate);
+                    // Remove any delete marker ONLY when actual data was saved.
+                    // A deletion's verify confirms an empty/zero row — the marker must
+                    // stay active so in-flight pre-delete fetches cannot restore stale data.
+                    // Guard (a): explicit-delete flag.
+                    // Guard (b): verified set count = 0 (deletion row → no sets stored).
+                    // Both must be false for the marker to be cleared.
+                    {
+                        const _isExplicitDelete = Boolean(pendingChange.explicitDelete);
+                        const _verifiedSetCount = verifiedMetrics?.setCount ?? 0;
+                        const _shouldClearMarker = !_isExplicitDelete && _verifiedSetCount > 0;
+                        if (_shouldClearMarker) {
+                            clearHistoryDeleteMarkerForDate?.(workoutDate);
+                        } else {
+                            console.log("[restore] delete marker kept", {
+                                date: workoutDate,
+                                reason: _isExplicitDelete ? "explicit-delete" : "empty-verified-row",
+                                verifiedSetCount: _verifiedSetCount,
+                                explicitDelete: _isExplicitDelete,
+                            });
+                        }
+                    }
                     pendingSavePayloadsRef?.current?.delete(workoutDate);
                     results.syncedDates.push(workoutDate);
                 } catch (error) {

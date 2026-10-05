@@ -1002,33 +1002,143 @@ export default function GymApp() {
 
     const { applyWorkoutsDataHistorySnapshot } = useWorkoutsDataHistorySync({        workoutsDataHistory,        workoutsDataHistoryRef,        user,        setWorkoutsDataHistory,    });
     const commitHistoryDeleteMarkers = useCallback((nextMarkers) => {
-        const normalizedMarkers = normalizeHistoryDeleteMarkers(nextMarkers);
-        historyDeleteMarkersRef.current = normalizedMarkers;
+        const normalized = normalizeHistoryDeleteMarkers(nextMarkers);
+        // Preserve existing deletedAt timestamps for entries that the caller did not
+        // explicitly pass a deletedAt map for (e.g. the undo path only passes dates/records).
+        // Then remove timestamps whose date/record is no longer present in the marker lists.
+        const callerDeletedAt = normalized.deletedAt; // already extracted by normalizeHistoryDeleteMarkers
+        const existingDeletedAt = historyDeleteMarkersRef.current?.deletedAt || {};
+        const mergedDeletedAt = Object.keys(callerDeletedAt).length > 0
+            ? { ...existingDeletedAt, ...callerDeletedAt }
+            : existingDeletedAt;
+        const validDates = new Set(normalized.dates);
+        const validKeys = new Set(normalized.records);
+        const cleanedDeletedAt = {};
+        Object.entries(mergedDeletedAt).forEach(([k, v]) => {
+            if (validDates.has(k) || validKeys.has(k)) cleanedDeletedAt[k] = v;
+        });
+        const finalMarkers = { ...normalized, deletedAt: cleanedDeletedAt };
+        historyDeleteMarkersRef.current = finalMarkers;
 
         const userId = latestUserIdRef.current;
         if (userId) {
-            save(getHistoryDeleteMarkersKey(userId), normalizedMarkers);
+            save(getHistoryDeleteMarkersKey(userId), finalMarkers);
         }
 
-        return normalizedMarkers;
+        return finalMarkers;
     }, []);
 
     const appendHistoryDeleteMarkers = useCallback((nextMarkers) => {
-        return commitHistoryDeleteMarkers({
+        const now = new Date().toISOString();
+        const nextDates = nextMarkers?.dates || [];
+        const nextRecords = nextMarkers?.records || [];
+        // Build deletedAt map for the newly appended entries
+        const newDeletedAt = {};
+        nextDates.forEach((d) => { newDeletedAt[String(d || "").slice(0, 10)] = now; });
+        nextRecords.forEach((r) => { newDeletedAt[String(r || "")] = now; });
+        const result = commitHistoryDeleteMarkers({
             dates: [
                 ...(historyDeleteMarkersRef.current?.dates || []),
-                ...(nextMarkers?.dates || []),
+                ...nextDates,
             ],
             records: [
                 ...(historyDeleteMarkersRef.current?.records || []),
-                ...(nextMarkers?.records || []),
+                ...nextRecords,
             ],
+            deletedAt: {
+                ...(historyDeleteMarkersRef.current?.deletedAt || {}),
+                ...newDeletedAt,
+            },
         });
+        // ■4: Verify delete marker was written with deletedAt (detects write failures)
+        nextDates.forEach((d) => {
+            const key = String(d || "").slice(0, 10);
+            const writtenAt = result?.deletedAt?.[key] || null;
+            console.log("[restore] delete marker written", {
+                date: key,
+                deletedAt: writtenAt,
+                markerCount: result?.dates?.length ?? 0,
+            });
+        });
+        return result;
     }, [commitHistoryDeleteMarkers]);
 
-    const getCurrentHistoryDeleteMarkers = useCallback(() => (
-        normalizeHistoryDeleteMarkers(historyDeleteMarkersRef.current)
-    ), []);
+    // TTL for delete markers: 120 seconds from deletedAt.
+    // Ensures in-flight fetches (which resolve in <5 s) are protected without
+    // permanently suppressing data that was re-saved after the deletion.
+    const DELETE_MARKER_TTL_MS = 120_000;
+
+    const getCurrentHistoryDeleteMarkers = useCallback(() => {
+        const raw = historyDeleteMarkersRef.current || createEmptyHistoryDeleteMarkers();
+        const normalized = normalizeHistoryDeleteMarkers(raw);
+        const deletedAtMap = normalized.deletedAt;
+        const now = Date.now();
+
+        const isEntryValid = (key) => {
+            const dateKey = String(key || "").slice(0, 10); // for record keys, first 10 chars = date
+            // (a) Deletion is still pending in the sync queue → always intercept regardless of age
+            const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(dateKey);
+            if (Boolean(pendingChange?.explicitDelete)) return true;
+            // (b) deletedAt exists and is within TTL → intercept
+            const ts = deletedAtMap[key];
+            if (!ts) return false; // legacy entry without timestamp → treated as expired
+            return (now - new Date(ts).getTime()) < DELETE_MARKER_TTL_MS;
+        };
+
+        const filteredDates = normalized.dates.filter(isEntryValid);
+        const filteredRecords = normalized.records.filter(isEntryValid);
+
+        // Clean up expired entries from storage (de-duped: only when something was actually removed)
+        const expiredDates = normalized.dates.filter((d) => !filteredDates.includes(d));
+        const expiredRecords = normalized.records.filter((r) => !filteredRecords.includes(r));
+        if (expiredDates.length > 0 || expiredRecords.length > 0) {
+            const cleanedDeletedAt = { ...deletedAtMap };
+            expiredDates.forEach((d) => { delete cleanedDeletedAt[d]; });
+            expiredRecords.forEach((r) => { delete cleanedDeletedAt[r]; });
+            const cleanedMarkers = { dates: filteredDates, records: filteredRecords, deletedAt: cleanedDeletedAt };
+            historyDeleteMarkersRef.current = cleanedMarkers;
+            const userId = latestUserIdRef.current;
+            if (userId) save(getHistoryDeleteMarkersKey(userId), cleanedMarkers);
+            expiredDates.forEach((d) => {
+                console.log("[restore] delete marker cleared", { date: d, reason: "expired", deletedAt: deletedAtMap[d] || null });
+            });
+            expiredRecords.forEach((r) => {
+                console.log("[restore] delete marker cleared", { key: r, reason: "expired", deletedAt: deletedAtMap[r] || null });
+            });
+        }
+
+        return { dates: filteredDates, records: filteredRecords };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Remove a specific date's delete marker — called after a successful Supabase save
+    // confirms that valid data now exists for the date.
+    const clearHistoryDeleteMarkerForDate = useCallback((dateStr) => {
+        const date = String(dateStr || "").slice(0, 10);
+        if (!date) return;
+        const raw = historyDeleteMarkersRef.current || createEmptyHistoryDeleteMarkers();
+        const hasMark = (raw.dates || []).includes(date);
+        if (!hasMark) return;
+        const nextDates = (raw.dates || []).filter((d) => d !== date);
+        const nextRecords = (raw.records || []).filter((r) => !String(r || "").startsWith(`${date}::`));
+        const nextDeletedAt = { ...(raw.deletedAt || {}) };
+        delete nextDeletedAt[date];
+        nextRecords.forEach((r) => { delete nextDeletedAt[r]; }); // already removed records
+        commitHistoryDeleteMarkers({ dates: nextDates, records: nextRecords, deletedAt: nextDeletedAt });
+        console.log("[restore] delete marker cleared", { date, reason: "save-succeeded" });
+    }, [commitHistoryDeleteMarkers]);
+
+    // Debug helper for useLogDateRefresh logging — returns timestamp info for a date.
+    const getHistoryDeleteMarkerDebugInfo = useCallback((dateStr) => {
+        const date = String(dateStr || "").slice(0, 10);
+        const raw = historyDeleteMarkersRef.current || createEmptyHistoryDeleteMarkers();
+        const deletedAt = raw.deletedAt?.[date] || null;
+        const ageSeconds = deletedAt ? Math.round((Date.now() - new Date(deletedAt).getTime()) / 1000) : null;
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(date);
+        const isPending = Boolean(pendingChange?.explicitDelete);
+        return { deletedAt, ageSeconds, isPending };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Stable ref so onStartupUnsyncedLocalDates can be defined before markWorkoutContentChanged
     const pendingSavePayloadsRef = useRef(new Map());
@@ -1200,6 +1310,7 @@ export default function GymApp() {
         getSetEditUnit,
         buildHistoryFromWorkoutSessionRows,
         describeHistoryRecordsForDate,
+        clearHistoryDeleteMarkerForDate,
     });
 
     // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it
@@ -2652,6 +2763,7 @@ export default function GymApp() {
         setHistory,
         setHistoryLoadError,
         getCurrentHistoryDeleteMarkers,
+        getHistoryDeleteMarkerDebugInfo,
     });
 
     const {

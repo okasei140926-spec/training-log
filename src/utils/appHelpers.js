@@ -527,6 +527,9 @@ clearVersionedAppCachesIfNeeded();
 export const createEmptyHistoryDeleteMarkers = () => ({
     dates: [],
     records: [],
+    // deletedAt: { "YYYY-MM-DD": "ISO", "YYYY-MM-DD::name": "ISO" }
+    // Keyed by date string or record key. Absent key = legacy entry = treated as expired.
+    deletedAt: {},
 });
 
 export const normalizeHistoryDeleteMarkers = (markers) => {
@@ -545,6 +548,8 @@ export const normalizeHistoryDeleteMarkers = (markers) => {
                 })
                 .filter(Boolean)
         )],
+        // Preserve deletedAt map; non-object → empty (handles legacy storage without this field)
+        deletedAt: isPlainObject(markers.deletedAt) ? { ...markers.deletedAt } : {},
     };
 };
 
