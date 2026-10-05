@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../utils/supabase";
-import { trackRestoreAttempt } from "../utils/writeTrace";
+import { trackRestoreAttempt, getRestoreLoopSuppressionRemainingSec, getRestoreAttempts } from "../utils/writeTrace";
 import {
     fetchWorkoutRowFromWorkoutsData as fetchWorkoutRowForDateFromRepository,
 } from "../features/workout/workoutRepository";
@@ -52,12 +52,83 @@ export function useLogDateRefresh({
     setHistory,
     setHistoryLoadError,
     getCurrentHistoryDeleteMarkers,
+    getHistoryDeleteMarkerDebugInfo = null,
 }) {
     // Tracks the last timestamp at which a phantom draft was cleared per date,
     // so we can suppress duplicate log entries and avoid clearing the same date
     // twice within a short window even if the effect fires multiple times rapidly.
     const lastPhantomClearedRef = useRef({});
+
+    // ■1: Latest-callback refs — updated every render so the effect body always
+    // calls the current implementation without those functions appearing in the
+    // dep array. Removing them from deps stops the 1-second loop where:
+    //   setInterval(syncElapsed,1000) → setWorkoutElapsedSec (state)
+    //   → re-render → applyCurrentLogDraft new ref (deps: todayLabels/logData/…)
+    //   → useLogDateRefresh effect re-fires → Supabase fetch → loop.
+    const _applyCurrentLogDraftRef            = useRef(applyCurrentLogDraft);
+    const _buildSavedWorkoutDraftForDateRef   = useRef(buildSavedWorkoutDraftForDate);
+    const _getExUnitRef                       = useRef(getExUnit);
+    const _applyTrustedWorkoutRowsSnapshotRef = useRef(applyTrustedWorkoutRowsSnapshot);
+    const _applyTrustedSessionRowsSnapshotRef = useRef(applyTrustedSessionRowsSnapshot);
+    const _applyWorkoutsDataHistorySnapshotRef= useRef(applyWorkoutsDataHistorySnapshot);
+    const _applyLocalHistoryDatesRef          = useRef(applyLocalHistoryDates);
+    const _clearDraftForDateRef               = useRef(clearDraftForDate);
+    const _loadDraftForDateRef                = useRef(loadDraftForDate);
+    const _markWorkoutContentChangedRef       = useRef(markWorkoutContentChanged);
+    const _setHistoryLoadErrorRef             = useRef(setHistoryLoadError);
+    // Keep refs current on every render (ref updates never trigger re-renders):
+    _applyCurrentLogDraftRef.current            = applyCurrentLogDraft;
+    _buildSavedWorkoutDraftForDateRef.current   = buildSavedWorkoutDraftForDate;
+    _getExUnitRef.current                       = getExUnit;
+    _applyTrustedWorkoutRowsSnapshotRef.current = applyTrustedWorkoutRowsSnapshot;
+    _applyTrustedSessionRowsSnapshotRef.current = applyTrustedSessionRowsSnapshot;
+    _applyWorkoutsDataHistorySnapshotRef.current= applyWorkoutsDataHistorySnapshot;
+    _applyLocalHistoryDatesRef.current          = applyLocalHistoryDates;
+    _clearDraftForDateRef.current               = clearDraftForDate;
+    _loadDraftForDateRef.current                = loadDraftForDate;
+    _markWorkoutContentChangedRef.current       = markWorkoutContentChanged;
+    _setHistoryLoadErrorRef.current             = setHistoryLoadError;
+
+    // ■2: Refs for effect-fired log — tracks previous dep values to name changed dep(s).
+    const _dateRefreshPrevDepsRef  = useRef({ logDate: null, userId: null, historySyncReady: null, screen: null });
+    const _dateRefreshLastFiredRef = useRef(0);
+
     useEffect(() => {
+        // ■2: Log every invocation so 1-second looping is immediately visible.
+        {
+            const _now = Date.now();
+            const _prev = _dateRefreshPrevDepsRef.current;
+            const _changed = [];
+            if (_prev.logDate !== logDate) _changed.push("logDate");
+            if (_prev.userId !== user?.id) _changed.push("userId");
+            if (_prev.historySyncReady !== historySyncReady) _changed.push("historySyncReady");
+            if (_prev.screen !== screen) _changed.push("screen");
+            const _elapsedMs = _dateRefreshLastFiredRef.current ? _now - _dateRefreshLastFiredRef.current : null;
+            _dateRefreshPrevDepsRef.current = { logDate, userId: user?.id, historySyncReady, screen };
+            _dateRefreshLastFiredRef.current = _now;
+            console.log("[WP] dateRefresh:effect-fired", {
+                date: String(logDate || "").slice(0, 10),
+                changedDeps: _changed,
+                elapsedMs: _elapsedMs,
+            });
+        }
+
+        // ■1: Read latest callbacks from refs so the effect always uses current
+        // implementations without re-firing on every reference change.
+        const applyCurrentLogDraft           = _applyCurrentLogDraftRef.current;
+        const buildSavedWorkoutDraftForDate  = _buildSavedWorkoutDraftForDateRef.current;
+        const getExUnit                      = _getExUnitRef.current;
+        const applyTrustedWorkoutRowsSnapshot= _applyTrustedWorkoutRowsSnapshotRef.current;
+        const applyTrustedSessionRowsSnapshot= _applyTrustedSessionRowsSnapshotRef.current;
+        const applyWorkoutsDataHistorySnapshot= _applyWorkoutsDataHistorySnapshotRef.current;
+        const applyLocalHistoryDates         = _applyLocalHistoryDatesRef.current;
+        const clearDraftForDate              = _clearDraftForDateRef.current;
+        const loadDraftForDate               = _loadDraftForDateRef.current;
+        const markWorkoutContentChanged      = _markWorkoutContentChangedRef.current;
+        const setHistoryLoadError            = _setHistoryLoadErrorRef.current;
+        // history is accessed via latestHistoryRef.current (ref param, always current).
+        const history                        = latestHistoryRef.current || {};
+
         if (screen !== "log" || !user?.id || !historySyncReady || !logDate) return;
         const normalizedDate = String(logDate || "").slice(0, 10);
         if (!normalizedDate) return;
@@ -159,6 +230,7 @@ export function useLogDateRefresh({
                         typeof getCurrentHistoryDeleteMarkers === "function" &&
                         getCurrentHistoryDeleteMarkers().dates?.includes(normalizedDate)
                     );
+                    const _dbg = getHistoryDeleteMarkerDebugInfo?.(normalizedDate) || { deletedAt: null, ageSeconds: null, isPending: _isExplicitDeletePending };
                     if (_isExplicitDeletePending || _isExplicitDeleteMarked) {
                         const _emptyForDelete = withDraftDateMeta(normalizedDate, {
                             todayLabels: [],
@@ -173,8 +245,40 @@ export function useLogDateRefresh({
                             date: normalizedDate,
                             _isExplicitDeletePending,
                             _isExplicitDeleteMarked,
+                            deletedAt: _dbg.deletedAt,
+                            ageSeconds: _dbg.ageSeconds,
+                            isPending: _dbg.isPending,
+                            decision: "intercepted",
                         });
                         applyCurrentLogDraft(_emptyForDelete, { persist: false, forDate: normalizedDate });
+                        return;
+                    }
+                    // Marker absent or expired — proceed with restore
+                    console.log("[restore] delete marker allowed — proceeding with restore", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user?.id,
+                        date: normalizedDate,
+                        _isExplicitDeletePending,
+                        _isExplicitDeleteMarked,
+                        deletedAt: _dbg.deletedAt,
+                        ageSeconds: _dbg.ageSeconds,
+                        isPending: _dbg.isPending,
+                        decision: _isExplicitDeleteMarked ? "allowed-expired" : "allowed-not-pending",
+                    });
+                }
+
+                // ■5: If restore loop suppression is active for this date, skip the entire
+                // remote restore to prevent repeated state updates that drive the 1-second cycle.
+                // Suppression is activated by useDraftStore after ≥3 remote_supabase attempts
+                // within 15s, and auto-expires after 10s.
+                {
+                    const _suppressRemainingSec = getRestoreLoopSuppressionRemainingSec(normalizedDate);
+                    if (_suppressRemainingSec > 0) {
+                        console.log("[WP] restoreLoop:suppressed", {
+                            date: normalizedDate,
+                            remainingSec: _suppressRemainingSec,
+                            attemptCount: getRestoreAttempts(normalizedDate)?.count ?? 0,
+                        });
                         return;
                     }
                 }
@@ -339,6 +443,7 @@ export function useLogDateRefresh({
                         typeof getCurrentHistoryDeleteMarkers === "function" &&
                         getCurrentHistoryDeleteMarkers().dates?.includes(normalizedDate)
                     );
+                    const _dbg2 = getHistoryDeleteMarkerDebugInfo?.(normalizedDate) || { deletedAt: null, ageSeconds: null, isPending: isExplicitDeletePending };
                     if (isExplicitDeletePending || isExplicitDeleteMarked) {
                         if (localMetrics.hasWorkout) {
                             clearDraftForDate(normalizedDate);
@@ -349,11 +454,26 @@ export function useLogDateRefresh({
                                 localSetCount: localMetrics.setCount,
                                 isExplicitDeletePending,
                                 isExplicitDeleteMarked,
+                                deletedAt: _dbg2.deletedAt,
+                                ageSeconds: _dbg2.ageSeconds,
+                                isPending: _dbg2.isPending,
+                                decision: "intercepted",
                             });
                         }
                         applyCurrentLogDraft(emptyDraft, { persist: false, forDate: normalizedDate });
                         return;
                     }
+                    console.log("[restore] delete marker allowed (empty-remote path) — proceeding", {
+                        env: getRuntimeEnvironmentLabel(),
+                        user_id: user.id,
+                        date: normalizedDate,
+                        isExplicitDeletePending,
+                        isExplicitDeleteMarked,
+                        deletedAt: _dbg2.deletedAt,
+                        ageSeconds: _dbg2.ageSeconds,
+                        isPending: _dbg2.isPending,
+                        decision: isExplicitDeleteMarked ? "allowed-expired" : "allowed-not-pending",
+                    });
 
                     if (!localMetrics.hasWorkout || (localMetrics.hasWorkout && (!localHasUnsavedChanges || isZombieDraft))) {
                         // Remote is empty and local has no workout, a phantom (no unsaved flag),
@@ -551,22 +671,22 @@ export function useLogDateRefresh({
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
-        applyTrustedSessionRowsSnapshot,
-        applyTrustedWorkoutRowsSnapshot,
-        applyWorkoutsDataHistorySnapshot,
-        applyLocalHistoryDates,
-        applyCurrentLogDraft,
-        buildSavedWorkoutDraftForDate,
-        clearDraftForDate,
-        getExUnit,
-        history,
-        historySyncReady,
-        loadDraftForDate,
+        // ■1: Only deps that should genuinely re-trigger the fetch:
+        //   logDate          — user navigated to a different date
+        //   user?.id         — auth state changed
+        //   historySyncReady — initial remote data became available
+        //   screen           — user entered/left the log screen
+        //
+        // All callback props (applyCurrentLogDraft, buildSavedWorkoutDraftForDate,
+        // getExUnit, applyTrustedWorkoutRowsSnapshot, applyTrustedSessionRowsSnapshot,
+        // applyWorkoutsDataHistorySnapshot, applyLocalHistoryDates, clearDraftForDate,
+        // loadDraftForDate, markWorkoutContentChanged, saveDraftForDate,
+        // setHistoryLoadError) are read via latest-callback refs and excluded from
+        // this array — their reference changes must NOT re-trigger the Supabase fetch.
+        // history is read via latestHistoryRef.current (always current, no re-fire needed).
         logDate,
-        markWorkoutContentChanged,
-        saveDraftForDate,
+        historySyncReady,
         screen,
-        setHistoryLoadError,
         user?.id,
     ]);
 }

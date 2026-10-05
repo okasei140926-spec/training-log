@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { load, save } from "../utils/helpers";
-import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData, trackRestoreAttempt } from "../utils/writeTrace";
+import { logWriteTrace, wpCountExercises, wpCountSetsFromLogData, trackRestoreAttempt, suppressRestoreLoop, getRestoreLoopSuppressionRemainingSec, getRestoreAttempts } from "../utils/writeTrace";
 import {
     clearWorkoutDraft as clearStoredWorkoutDraft,
     loadWorkoutDraft as loadStoredWorkoutDraft,
@@ -154,8 +154,22 @@ export function useDraftStore() {
         // ■3: Count source:"remote_supabase" attempts for loop detection.
         // Moved from apply-time (useLogDateRefresh) to attempt-time so valve-blocked
         // iterations are also counted.
+        // ■5: Suppress further attempts for 10s after loop is detected (≥3 in 15s).
         let _restoreAttempts = null;
         if (draft?.meta?.source === "remote_supabase") {
+            const _remainingSec = getRestoreLoopSuppressionRemainingSec(normalizedDate);
+            if (_remainingSec > 0) {
+                logWriteTrace("restoreLoop:suppressed", {
+                    date: normalizedDate,
+                    decision: "suppressed",
+                    reason: "restore loop suppression active — skipping saveDraftForDate",
+                    extra: {
+                        remainingSec: _remainingSec,
+                        attemptCount: getRestoreAttempts(normalizedDate)?.count ?? 0,
+                    },
+                });
+                return false;
+            }
             _restoreAttempts = trackRestoreAttempt(normalizedDate, "attempt");
             if (_restoreAttempts.count >= 3) {
                 logWriteTrace("restoreLoop:detected", {
@@ -169,6 +183,7 @@ export function useDraftStore() {
                         lastAppliedSource: "remote_supabase",
                     },
                 });
+                suppressRestoreLoop(normalizedDate, 10_000);
             }
         }
 

@@ -1752,13 +1752,15 @@ export default function GymApp() {
         // have been deleted.
         if ((draft.meta?.hasUnsavedChanges ?? true) === false) return;
 
+        // ■4: updatedAt and remoteVerifiedAt excluded — both are fresh timestamps on
+        // every call and would always differ from the previous signature even when workout
+        // content (exercises, sets, weights) is unchanged. Content changes are fully captured
+        // by getWorkoutDraftSignature (todayLabels, sessionEx, logData, exerciseUnits).
         const draftSignature = JSON.stringify({
             date: normalizedDate,
             content: getWorkoutDraftSignature(draft),
             metaSource: draft.meta?.source || null,
             hasUnsavedChanges: draft.meta?.hasUnsavedChanges ?? null,
-            updatedAt: draft.meta?.updatedAt || null,
-            remoteVerifiedAt: draft.meta?.remoteVerifiedAt || null,
         });
         if (lastAutosavedDraftSignatureRef.current === draftSignature) return;
         lastAutosavedDraftSignatureRef.current = draftSignature;

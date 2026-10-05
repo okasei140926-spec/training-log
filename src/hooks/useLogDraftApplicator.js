@@ -233,12 +233,14 @@ export function useLogDraftApplicator({
         });
         const normalizedDraft = applyLogDraftState(datedDraft);
         if (persist) {
+            // ■4: remoteVerifiedAt excluded — it is a new ISO timestamp on every Supabase
+            // fetch and would always differ from the previous signature even when content is
+            // identical, defeating the purpose of this deduplication check.
             const draftSignature = JSON.stringify({
                 date: targetDate,
                 content: getWorkoutDraftSignature(normalizedDraft),
                 metaSource: normalizedDraft.meta?.source || null,
                 hasUnsavedChanges: normalizedDraft.meta?.hasUnsavedChanges ?? null,
-                remoteVerifiedAt: normalizedDraft.meta?.remoteVerifiedAt || null,
             });
             if (lastAutosavedDraftSignatureRef.current !== draftSignature) {
                 lastAutosavedDraftSignatureRef.current = draftSignature;

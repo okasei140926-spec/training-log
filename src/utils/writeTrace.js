@@ -129,3 +129,33 @@ export function trackRestoreAttempt(date, type) {
 export function getRestoreAttempts(date) {
     return _restoreAttempts[String(date || "").slice(0, 10)] || null;
 }
+
+// ─── ■5 Restore loop suppression ─────────────────────────────────────────────
+// After ≥3 remote_supabase attempts within 15s, suppress further attempts for
+// 10s. Module-level so it is shared across useDraftStore and useLogDateRefresh.
+// Auto-expires; no manual clear is required (explicit user edits use a different
+// source and are never blocked by this suppression).
+const _restoreSuppress = {}; // { [date]: suppressUntilMs }
+
+/** Activate suppression for a date for the given duration (default 10s). */
+export function suppressRestoreLoop(date, durationMs = 10_000) {
+    const d = String(date || "").slice(0, 10);
+    if (d) _restoreSuppress[d] = Date.now() + durationMs;
+}
+
+/**
+ * Returns remaining suppression seconds for a date (0 = not suppressed).
+ * Side-effect: deletes the entry once it has expired.
+ */
+export function getRestoreLoopSuppressionRemainingSec(date) {
+    const d = String(date || "").slice(0, 10);
+    if (!d) return 0;
+    const until = _restoreSuppress[d];
+    if (!until) return 0;
+    const remaining = Math.ceil((until - Date.now()) / 1000);
+    if (remaining <= 0) {
+        delete _restoreSuppress[d];
+        return 0;
+    }
+    return remaining;
+}
