@@ -23,12 +23,12 @@ const PRO_FEATURES = [
 ];
 
 // Per-call timeouts and absolute deadlines for auto vs manual-retry paths.
-// Auto: short timeouts so the paywall resolves quickly on bad networks.
-// Manual: longer timeouts since the user has explicitly asked to retry.
-const TIMEOUT_AUTO = 3000;
-const TIMEOUT_MANUAL = 5000;
-const DEADLINE_AUTO = 7000;
-const DEADLINE_MANUAL = 10000;
+// Auto: extended to 20 s total to survive Apple sandbox latency (App Store review).
+// Manual: extended to 30 s since the user explicitly asked to retry.
+const TIMEOUT_AUTO = 10000;
+const TIMEOUT_MANUAL = 15000;
+const DEADLINE_AUTO = 20000;
+const DEADLINE_MANUAL = 30000;
 
 export function ProPaywallCard({ source = "general", onStartPro, onClose, onRestorePro }) {
     const content = PAYWALL_CONTENT[source] || PAYWALL_CONTENT.general;
@@ -38,6 +38,19 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
     const [priceState, setPriceState] = useState({ price: null, loading: true, error: false, offline: false, retrying: false });
     const retryCountRef = useRef(0);
     const deadlineTimerRef = useRef(null);
+    const openedAtRef = useRef(Date.now());
+
+    const logPaywallState = useCallback((state, extra = {}) => {
+        const elapsedMs = openedAtRef.current != null ? Date.now() - openedAtRef.current : null;
+        console.log("[WP] paywall:state", {
+            state,
+            elapsedMs,
+            packageId: extra.packageId ?? null,
+            errorCode: extra.errorCode ?? null,
+            errorMessage: extra.errorMessage ?? null,
+            isSandbox: extra.isSandbox ?? null,
+        });
+    }, []);
 
     // Check once on mount whether the billing SDK is available on this platform.
     const isUnavailable = !getRevenueCatAvailability().native;
@@ -52,23 +65,30 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
             setPriceState((prev) => {
                 if (!prev.loading) return prev; // already resolved — no-op
                 const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+                logPaywallState("timeout", { errorMessage: isOffline ? "offline" : "deadline exceeded" });
                 return { price: null, loading: false, error: true, offline: isOffline, retrying: false };
             });
         }, deadlineMs);
-    }, []);
+    }, [logPaywallState]);
 
     // timeoutMs is passed through to getRevenueCatPriceString so the auto and
     // manual-retry paths use different per-call timeouts.
     const fetchPrice = useCallback((opts = {}) => {
         const { isRetry = false, timeoutMs = TIMEOUT_AUTO } = opts;
+        logPaywallState("fetching-offerings");
         setPriceState({ price: null, loading: true, error: false, offline: false, retrying: isRetry });
         getRevenueCatPriceString(timeoutMs)
             .then((price) => {
                 // Success may arrive after the deadline fired — that's fine, show the price.
                 retryCountRef.current = 0;
+                if (price) {
+                    logPaywallState("offerings-loaded");
+                } else {
+                    logPaywallState("offerings-empty");
+                }
                 setPriceState({ price, loading: false, error: false, offline: false, retrying: false });
             })
-            .catch(() => {
+            .catch((err) => {
                 const attempt = retryCountRef.current;
                 const isOffline = typeof navigator !== "undefined" && navigator.onLine === false;
                 if (attempt < 1) {
@@ -77,28 +97,35 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                     fetchPrice({ isRetry: true, timeoutMs });
                 } else {
                     // Both attempts failed — show error; user can still press "再試行".
+                    logPaywallState("offerings-error", {
+                        errorCode: err?.code ?? null,
+                        errorMessage: err?.message ?? String(err ?? "unknown"),
+                    });
                     setPriceState({ price: null, loading: false, error: true, offline: isOffline, retrying: false });
                 }
             });
-    }, []);
+    }, [logPaywallState]);
 
     useEffect(() => {
         // Skip price fetch on non-native platforms (web browser, simulator without StoreKit).
         if (isUnavailable) return undefined;
+        openedAtRef.current = Date.now();
+        logPaywallState("opened");
         retryCountRef.current = 0;
         startDeadline(DEADLINE_AUTO);
         fetchPrice({ timeoutMs: TIMEOUT_AUTO });
         return () => {
             if (deadlineTimerRef.current) clearTimeout(deadlineTimerRef.current);
         };
-    }, [fetchPrice, isUnavailable, startDeadline]);
+    }, [fetchPrice, isUnavailable, logPaywallState, startDeadline]);
 
     // Manual retry: reset deadline to the longer window so the user gets a fresh chance.
     const handleManualRetry = useCallback(() => {
+        logPaywallState("retry");
         retryCountRef.current = 0;
         startDeadline(DEADLINE_MANUAL);
         fetchPrice({ timeoutMs: TIMEOUT_MANUAL });
-    }, [fetchPrice, startDeadline]);
+    }, [fetchPrice, logPaywallState, startDeadline]);
 
     const handleRestore = async () => {
         if (!onRestorePro || restoreBusy) return;
@@ -112,7 +139,7 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                 setRestoreMsg("復元できる購入が見つかりませんでした。");
             }
         } catch {
-            setRestoreMsg("復元に失敗しました。");
+            setRestoreMsg("購入の復元を確認できませんでした。");
         } finally {
             setRestoreBusy(false);
         }
@@ -215,8 +242,8 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                 <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", marginBottom: 8 }}>
                         {priceState.offline
-                            ? "オフラインのため価格を取得できません。接続を確認して再試行してください。"
-                            : "価格を取得できませんでした。通信環境をご確認のうえ、再試行してください。"}
+                            ? "オフラインのため読み込みできません。接続を確認して再試行してください。"
+                            : "価格の読み込みに時間がかかっています。しばらくしてから再試行してください。"}
                     </div>
                     <button
                         type="button"
