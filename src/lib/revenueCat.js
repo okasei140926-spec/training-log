@@ -223,6 +223,11 @@ export const purchaseRevenueCatPro = async (user, onCustomerInfoUpdated) => {
     onCustomerInfoUpdated?.(customerInfo);
     return {
       success: isRevenueCatCustomerPro(customerInfo),
+      // purchaseCompleted: true when purchasePackage resolved without throwing.
+      // Even if entitlement is not yet reflected (success: false), this flag
+      // lets activatePumpPro distinguish "API call succeeded but entitlement delayed"
+      // from "API call failed / user cancelled".
+      purchaseCompleted: true,
       customerInfo,
       plan: buildRevenueCatPlan(customerInfo),
       productIdentifier: result?.productIdentifier || null,

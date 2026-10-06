@@ -3776,6 +3776,7 @@ export default function GymApp() {
                     onStartPro={activatePumpPro}
                     onClose={closePaywall}
                     onRestorePro={restorePumpPro}
+                    isPro={isPro}
                 />
 
                 <PushPromptModal

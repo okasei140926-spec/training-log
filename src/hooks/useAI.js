@@ -1189,6 +1189,12 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
     return true;
   };
 
+  // activatePumpPro returns a result object so callers can distinguish outcomes:
+  //   { outcome: "succeeded" }               — purchase complete, entitlement confirmed
+  //   { outcome: "verifying" }               — purchase API call completed but entitlement not yet reflected
+  //   { outcome: "cancelled" }               — user cancelled the purchase sheet
+  //   { outcome: "failed", reason: string }  — all other failures
+  // Non-RC paths (Stripe redirect, dev toggle) also use this shape.
   const activatePumpPro = async () => {
     try {
       const {
@@ -1199,13 +1205,20 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
 
       if (user?.id) {
         const purchaseResult = await purchaseRevenueCatPro(user, applyRevenueCatCustomerInfo);
-        if (purchaseResult?.success) return true;
+        if (purchaseResult?.success) return { outcome: "succeeded" };
+        if (purchaseResult?.cancelled) return { outcome: "cancelled" };
+        if (purchaseResult?.purchaseCompleted) {
+          // purchasePackage resolved without throwing, but the entitlement is not yet
+          // reflected in the customerInfo snapshot. The RC listener will update isPro
+          // asynchronously; the caller should wait and watch.
+          return { outcome: "verifying" };
+        }
         if (purchaseResult?.available && purchaseResult?.reason !== "not-native") {
-          return false;
+          return { outcome: "failed", reason: purchaseResult?.reason || "purchase-failed" };
         }
       }
 
-      if (!accessToken) return false;
+      if (!accessToken) return { outcome: "failed", reason: "no-session" };
 
       if (!isNativeCapacitorOrigin()) {
         try {
@@ -1220,32 +1233,32 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
           const checkoutData = await readApiJson(checkoutRes);
           if (checkoutData?.url) {
             window.location.href = checkoutData.url;
-            return true;
+            return { outcome: "succeeded" };
           }
           // 400 "すでにPro会員です。" — DB says active but frontend isPro is stale.
           // Refresh Pro status from server so the UI reflects the correct state.
           if (checkoutRes.status === 400 && checkoutData?.error?.includes("Pro")) {
             console.warn("[stripe checkout] already pro — refreshing status", { response: checkoutData });
             refreshPumpProStatus().catch(() => {});
-            return false;
+            return { outcome: "failed", reason: "already-pro-stale" };
           }
           logAiApiError("create checkout session failed", {
             apiUrl,
             status: checkoutRes.status,
             response: checkoutData,
           });
-          return false;
+          return { outcome: "failed", reason: "stripe-checkout-failed" };
         } catch (error) {
           logAiApiError("create checkout session request failed", {
             apiUrl: getApiUrl("/api/stripe?action=create-checkout"),
             error,
             message: error?.message,
           });
-          return false;
+          return { outcome: "failed", reason: "stripe-checkout-exception" };
         }
       }
 
-      if (process.env.NODE_ENV === "production") return false;
+      if (process.env.NODE_ENV === "production") return { outcome: "failed", reason: "prod-no-rc" };
 
       const apiUrl = getApiUrl("/api/pro?action=activate-dev");
       const res = await fetch(apiUrl, {
@@ -1263,18 +1276,18 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
           statusText: res.statusText,
           response: data,
         });
-        return false;
+        return { outcome: "failed", reason: "dev-activate-failed" };
       }
 
       applyServerAiUsage(data?.aiUsage);
-      return true;
+      return { outcome: "succeeded" };
     } catch (error) {
       logAiApiError("activate pro request failed", {
         apiUrl: getApiUrl("/api/pro?action=activate-dev"),
         error,
         message: error?.message,
       });
-      return false;
+      return { outcome: "failed", reason: "exception" };
     }
   };
 

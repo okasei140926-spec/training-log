@@ -453,8 +453,12 @@ export default function SettingsModal({
     setProActionBusy(true);
     setProMessage("");
     try {
-      const ok = nextIsPro ? await onStartPro?.() : await onDeactivateProDev?.();
-      if (!ok) {
+      const result = nextIsPro ? await onStartPro?.() : await onDeactivateProDev?.();
+      // onStartPro now returns { outcome } object; onDeactivateProDev still returns boolean
+      const succeeded = nextIsPro
+        ? (result?.outcome === "succeeded" || result?.outcome === "verifying")
+        : Boolean(result);
+      if (!succeeded) {
         setProMessage("開発用Pro状態の更新に失敗しました。");
         return;
       }
@@ -470,11 +474,19 @@ export default function SettingsModal({
     setProActionBusy(true);
     setProMessage("");
     try {
-      const ok = await onStartPro?.();
+      const result = await onStartPro?.();
       const data = await onRefreshProStatus?.();
       if (data?.plan) setProStatusData(data);
-      if (ok) {
+      if (result?.outcome === "succeeded") {
         setProMessage("Pump Proを有効化しました。");
+        return;
+      }
+      if (result?.outcome === "verifying") {
+        setProMessage("購入を確認しています。しばらくするとProが有効になります。");
+        return;
+      }
+      if (result?.outcome === "cancelled") {
+        // ユーザーが購入シートをキャンセル — 何も表示しない
         return;
       }
       if (!isNativePurchaseEnvironment()) {
@@ -484,7 +496,7 @@ export default function SettingsModal({
       if (isDevelopmentBuild) {
         setProMessage("RevenueCat購入を開始できませんでした。開発用切り替えも利用できます。");
       } else {
-        setProMessage("購入を完了できませんでした。キャンセルされた場合、課金は発生していません。");
+        setProMessage("購入手続きを完了できませんでした。もう一度お試しください。");
       }
     } finally {
       setProActionBusy(false);

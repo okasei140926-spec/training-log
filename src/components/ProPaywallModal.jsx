@@ -30,7 +30,7 @@ const TIMEOUT_MANUAL = 15000;
 const DEADLINE_AUTO = 20000;
 const DEADLINE_MANUAL = 30000;
 
-export function ProPaywallCard({ source = "general", onStartPro, onClose, onRestorePro }) {
+export function ProPaywallCard({ source = "general", onStartPro, onClose, onRestorePro, isPro = false }) {
     const content = PAYWALL_CONTENT[source] || PAYWALL_CONTENT.general;
     const [restoreBusy, setRestoreBusy] = useState(false);
     const [restoreMsg, setRestoreMsg] = useState("");
@@ -39,6 +39,13 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
     const retryCountRef = useRef(0);
     const deadlineTimerRef = useRef(null);
     const openedAtRef = useRef(Date.now());
+
+    // Purchase UI state machine.
+    // ui: "idle" | "purchasing" | "verifying" | "succeeded" | "failed"
+    // (cancelled silently resets to "idle" — nothing shown)
+    const [purchaseUI, setPurchaseUI] = useState({ ui: "idle", reason: null });
+    const purchasedAtRef = useRef(null);
+    const verifyTimerRef = useRef(null);
 
     const logPaywallState = useCallback((state, extra = {}) => {
         const elapsedMs = openedAtRef.current != null ? Date.now() - openedAtRef.current : null;
@@ -49,6 +56,16 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
             errorCode: extra.errorCode ?? null,
             errorMessage: extra.errorMessage ?? null,
             isSandbox: extra.isSandbox ?? null,
+        });
+    }, []);
+
+    // Logs UI-visible state transitions from the moment the user pressed the purchase button.
+    const logPurchaseUI = useCallback((ui, reason = null) => {
+        const elapsedMs = purchasedAtRef.current != null ? Date.now() - purchasedAtRef.current : null;
+        console.log("[WP] paywall:ui", {
+            ui,
+            elapsedMs,
+            reason: reason ?? null,
         });
     }, []);
 
@@ -126,6 +143,60 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
         startDeadline(DEADLINE_MANUAL);
         fetchPrice({ timeoutMs: TIMEOUT_MANUAL });
     }, [fetchPrice, logPaywallState, startDeadline]);
+
+    // Watch isPro while in "verifying" state.
+    // RC's customerInfoUpdateListener fires asynchronously after a successful purchase;
+    // when it does, isPro flips true and we can confirm success.
+    useEffect(() => {
+        if (purchaseUI.ui !== "verifying") return undefined;
+        if (isPro) {
+            logPurchaseUI("succeeded");
+            setPurchaseUI({ ui: "succeeded", reason: null });
+            const t = setTimeout(() => onClose?.(), 1500);
+            return () => clearTimeout(t);
+        }
+        // 10-second hard timeout — if entitlement still not reflected, show error guidance.
+        if (verifyTimerRef.current) clearTimeout(verifyTimerRef.current);
+        verifyTimerRef.current = setTimeout(() => {
+            verifyTimerRef.current = null;
+            logPurchaseUI("failed", "verifying-timeout");
+            setPurchaseUI({ ui: "failed", reason: "verifying-timeout" });
+        }, 10000);
+        return () => {
+            if (verifyTimerRef.current) clearTimeout(verifyTimerRef.current);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [purchaseUI.ui, isPro]);
+
+    const handleStartPro = useCallback(async () => {
+        if (purchaseUI.ui === "purchasing" || purchaseUI.ui === "verifying") return;
+        purchasedAtRef.current = Date.now();
+        logPurchaseUI("purchasing");
+        setPurchaseUI({ ui: "purchasing", reason: null });
+        try {
+            const result = await onStartPro?.();
+            const outcome = result?.outcome ?? (result === true ? "succeeded" : "failed");
+            if (outcome === "succeeded") {
+                logPurchaseUI("succeeded");
+                setPurchaseUI({ ui: "succeeded", reason: null });
+                setTimeout(() => onClose?.(), 1500);
+            } else if (outcome === "verifying") {
+                logPurchaseUI("verifying");
+                setPurchaseUI({ ui: "verifying", reason: null });
+                // Actual success/failure will be resolved by the isPro useEffect above.
+            } else if (outcome === "cancelled") {
+                logPurchaseUI("cancelled");
+                setPurchaseUI({ ui: "idle", reason: null });
+            } else {
+                const reason = result?.reason ?? "unknown";
+                logPurchaseUI("failed", reason);
+                setPurchaseUI({ ui: "failed", reason });
+            }
+        } catch (err) {
+            logPurchaseUI("failed", "exception");
+            setPurchaseUI({ ui: "failed", reason: "exception" });
+        }
+    }, [purchaseUI.ui, onStartPro, onClose, logPurchaseUI]);
 
     const handleRestore = async () => {
         if (!onRestorePro || restoreBusy) return;
@@ -232,13 +303,57 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                     </div>
                 ))}
             </div>
-            {/* 購入ボタン */}
+            {/* 購入ボタン・購入結果フィードバック */}
             {isUnavailable ? (
                 <div style={{ position: "relative", zIndex: 1, textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.68)", lineHeight: 1.7, padding: "4px 8px" }}>
                     このデバイスでは購入手続きができません。<br />
                     iOS アプリからご購入いただけます。
                 </div>
+            ) : purchaseUI.ui === "succeeded" ? (
+                /* (a) 購入成功・権限反映済み */
+                <div style={{ position: "relative", zIndex: 1, textAlign: "center", padding: "12px 0" }}>
+                    <div style={{ fontSize: 22, marginBottom: 6 }}>✓</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#33E1DB" }}>
+                        Pump Pro が有効になりました
+                    </div>
+                </div>
+            ) : purchaseUI.ui === "verifying" ? (
+                /* (b) 購入成功・権限反映待ち */
+                <div style={{ position: "relative", zIndex: 1, textAlign: "center", padding: "8px 0" }}>
+                    <div style={{ fontSize: 13, color: "rgba(255,255,255,0.80)", marginBottom: 4 }}>
+                        購入を確認しています...
+                    </div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.52)" }}>
+                        しばらくお待ちください
+                    </div>
+                </div>
+            ) : purchaseUI.ui === "failed" ? (
+                /* (d) 購入失敗（キャンセル以外） */
+                <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginBottom: 8, lineHeight: 1.6 }}>
+                        {purchaseUI.reason === "verifying-timeout"
+                            ? "購入の反映に時間がかかっています。「購入を復元」をお試しください。"
+                            : "購入手続きを完了できませんでした。もう一度お試しください。"}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setPurchaseUI({ ui: "idle", reason: null })}
+                        style={{
+                            background: "none",
+                            border: "1px solid rgba(255,255,255,0.30)",
+                            color: "#fff",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            borderRadius: 10,
+                            padding: "6px 16px",
+                            cursor: "pointer",
+                        }}
+                    >
+                        もう一度試す
+                    </button>
+                </div>
             ) : priceState.error ? (
+                /* 価格取得エラー */
                 <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", marginBottom: 8 }}>
                         {priceState.offline
@@ -263,6 +378,7 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                     </button>
                 </div>
             ) : (
+                /* idle / purchasing: 通常の購入ボタン */
                 <>
                     {priceState.loading && priceState.offline && (
                         <div style={{ position: "relative", zIndex: 1, textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.58)" }}>
@@ -271,8 +387,8 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                     )}
                     <button
                         type="button"
-                        onClick={onStartPro}
-                        disabled={priceState.loading}
+                        onClick={handleStartPro}
+                        disabled={priceState.loading || purchaseUI.ui === "purchasing"}
                         className="pressable"
                         style={{
                             position: "relative",
@@ -286,12 +402,14 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
                             fontSize: 15,
                             fontWeight: 900,
                             boxShadow: "0 14px 26px rgba(18, 199, 194, 0.26)",
-                            opacity: priceState.loading ? 0.6 : 1,
+                            opacity: (priceState.loading || purchaseUI.ui === "purchasing") ? 0.6 : 1,
                         }}
                     >
-                        {priceState.loading
-                            ? (priceState.retrying ? "価格情報を再取得しています..." : "価格を取得中...")
-                            : `Pump Pro を始める — ${priceState.price}/月`}
+                        {purchaseUI.ui === "purchasing"
+                            ? "処理中..."
+                            : priceState.loading
+                                ? (priceState.retrying ? "価格情報を再取得しています..." : "価格を取得中...")
+                                : `Pump Pro を始める — ${priceState.price}/月`}
                     </button>
                 </>
             )}
@@ -351,7 +469,7 @@ export function ProPaywallCard({ source = "general", onStartPro, onClose, onRest
     );
 }
 
-export function ProPaywallModal({ isOpen, source = "general", onStartPro, onClose, onRestorePro }) {
+export function ProPaywallModal({ isOpen, source = "general", onStartPro, onClose, onRestorePro, isPro = false }) {
     if (!isOpen) return null;
 
     return (
@@ -388,6 +506,7 @@ export function ProPaywallModal({ isOpen, source = "general", onStartPro, onClos
                     onStartPro={onStartPro}
                     onClose={onClose}
                     onRestorePro={onRestorePro}
+                    isPro={isPro}
                 />
             </div>
         </div>
