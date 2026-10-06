@@ -15,6 +15,13 @@ const _rcConfiguredPromise = new Promise((resolve) => {
 });
 let _rcConfigured = false;
 
+// Module load time — used as the epoch for elapsed-time logging.
+const _appStartedAt = Date.now();
+
+// True when RC was configured without an appUserID (anonymous session).
+// Reset to false once a real user ID is associated via Purchases.logIn().
+let _configuredAnonymously = false;
+
 const markRcConfigured = () => {
   if (_rcConfigured) return;
   _rcConfigured = true;
@@ -159,7 +166,17 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
   latestCustomerInfoListener = onCustomerInfoUpdated;
 
   try {
-    if (!configuredUserId) {
+    if (configuredUserId === userId) {
+      // Already configured for this user — skip configure/logIn, proceed to listener setup.
+    } else if (!configuredUserId && !_configuredAnonymously) {
+      // Never configured at all — configure with the real user ID directly.
+      // (Occurs when the app launches with a session already established.)
+      console.log("[WP] revenuecat:configure", {
+        phase: "started",
+        appUserId: "identified",
+        elapsedMs: Date.now() - _appStartedAt,
+        reason: null,
+      });
       if (process.env.NODE_ENV !== "production") {
         await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
       }
@@ -169,10 +186,35 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
       });
       configuredUserId = userId;
       markRcConfigured();
+      console.log("[WP] revenuecat:configure", {
+        phase: "succeeded",
+        appUserId: "identified",
+        elapsedMs: Date.now() - _appStartedAt,
+        reason: null,
+      });
+    } else if (_configuredAnonymously && !configuredUserId) {
+      // Was configured anonymously — now associating with a real user ID.
+      // Purchases.logIn() migrates any anonymous purchases to the real user.
+      const loginStartedAt = Date.now();
+      const loginResult = await Purchases.logIn({ appUserID: userId });
+      _configuredAnonymously = false;
+      configuredUserId = userId;
+      // markRcConfigured() was already called in configureRevenueCatAnonymously.
+      console.log("[WP] revenuecat:login", {
+        fromAnonymous: true,
+        elapsedMs: Date.now() - loginStartedAt,
+      });
+      if (loginResult?.customerInfo) latestCustomerInfoListener?.(loginResult.customerInfo);
     } else if (configuredUserId !== userId) {
+      // Switching between two identified users (e.g. account switch).
+      const loginStartedAt = Date.now();
       const loginResult = await Purchases.logIn({ appUserID: userId });
       configuredUserId = userId;
       markRcConfigured();
+      console.log("[WP] revenuecat:login", {
+        fromAnonymous: false,
+        elapsedMs: Date.now() - loginStartedAt,
+      });
       if (loginResult?.customerInfo) latestCustomerInfoListener?.(loginResult.customerInfo);
     }
 
@@ -211,6 +253,63 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
       error: serializeRevenueCatError(error),
     });
     return { available: true, configured: false, reason: "configure-failed", error, availability };
+  }
+};
+
+// Configure RevenueCat with an anonymous user ID so that getOfferings() and
+// purchasePackage() work before the user has logged in.  This is the correct
+// RevenueCat flow for unauthenticated users: configure → purchase, then
+// logIn(userId) once the user authenticates to migrate the purchase.
+//
+// Must be called at app startup (before any paywall is shown).  Idempotent —
+// subsequent calls are silently skipped when RC is already configured.
+export const configureRevenueCatAnonymously = async () => {
+  const availability = getRevenueCatAvailability();
+  if (!availability.native) {
+    return { configured: false, reason: "not-native" };
+  }
+  if (!availability.configured) {
+    return { configured: false, reason: "missing-api-key" };
+  }
+  if (configuredUserId || _configuredAnonymously) {
+    console.log("[WP] revenuecat:configure", {
+      phase: "skipped",
+      appUserId: configuredUserId ? "identified" : "anonymous",
+      elapsedMs: Date.now() - _appStartedAt,
+      reason: configuredUserId ? "already-identified" : "already-anonymous",
+    });
+    return { configured: true, reason: "already-configured" };
+  }
+
+  console.log("[WP] revenuecat:configure", {
+    phase: "started",
+    appUserId: "anonymous",
+    elapsedMs: Date.now() - _appStartedAt,
+    reason: null,
+  });
+  try {
+    if (process.env.NODE_ENV !== "production") {
+      await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
+    }
+    await Purchases.configure({ apiKey: getRevenueCatApiKey() });
+    _configuredAnonymously = true;
+    markRcConfigured();
+    console.log("[WP] revenuecat:configure", {
+      phase: "succeeded",
+      appUserId: "anonymous",
+      elapsedMs: Date.now() - _appStartedAt,
+      reason: null,
+    });
+    return { configured: true };
+  } catch (error) {
+    const reason = error?.message || String(error);
+    console.warn("[WP] revenuecat:configure", {
+      phase: "failed",
+      appUserId: "anonymous",
+      elapsedMs: Date.now() - _appStartedAt,
+      reason,
+    });
+    return { configured: false, reason, error };
   }
 };
 
@@ -253,7 +352,24 @@ export const getRevenueCatPriceString = async (timeoutMs = 3000) => {
 };
 
 export const purchaseRevenueCatPro = async (user, onCustomerInfoUpdated) => {
-  const configured = await configureRevenueCatForUser(user, onCustomerInfoUpdated);
+  let configured;
+  if (user?.id) {
+    // Authenticated user — configure with real user ID (handles anonymous→identified migration).
+    configured = await configureRevenueCatForUser(user, onCustomerInfoUpdated);
+  } else if (_rcConfigured) {
+    // RC is already configured anonymously — reuse it so the purchase proceeds without login.
+    // latestCustomerInfoListener is updated so the result callback reaches the caller.
+    latestCustomerInfoListener = onCustomerInfoUpdated;
+    configured = { configured: true, available: true };
+  } else {
+    // Neither a user ID nor a prior configure — attempt anonymous configure as last resort.
+    const anonResult = await configureRevenueCatAnonymously();
+    latestCustomerInfoListener = onCustomerInfoUpdated;
+    if (!anonResult.configured) {
+      return { success: false, available: getRevenueCatAvailability().native, configured: false, reason: anonResult.reason || "configure-failed" };
+    }
+    configured = { configured: true, available: true };
+  }
   if (!configured.configured) return { success: false, ...configured };
 
   const purchaseStartedAt = Date.now();

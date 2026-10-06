@@ -11,6 +11,7 @@ import { fetchWorkoutRowsForAI } from "../features/workout/workoutRepository";
 import { extractWorkoutPlanFromText, normalizeWorkoutPlan } from "../utils/aiWorkoutPlan";
 import {
   buildRevenueCatPlan,
+  configureRevenueCatAnonymously,
   configureRevenueCatForUser,
   getRevenueCatAvailability,
   purchaseRevenueCatPro,
@@ -1117,14 +1118,8 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       });
     };
 
-    supabase.auth.getSession()
-      .then(({ data }) => configureForSession(data?.session))
-      .catch((error) => {
-        console.warn("[RevenueCat] initial session sync failed", {
-          message: error?.message || String(error),
-        });
-      });
-
+    // Set up the auth state change listener synchronously so no login events are missed
+    // while the anonymous configure is in progress.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       configureForSession(session).catch((error) => {
         console.warn("[RevenueCat] auth session sync failed", {
@@ -1132,6 +1127,24 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
         });
       });
     });
+
+    // Configure RC anonymously first so the paywall works before login.
+    // Awaiting completion before the initial getSession() call ensures that
+    // configureRevenueCatForUser (for already-logged-in users) sees
+    // _configuredAnonymously=true and uses Purchases.logIn() instead of
+    // Purchases.configure(), avoiding a double-configure race.
+    configureRevenueCatAnonymously()
+      .catch(() => {}) // non-fatal — paywall degrades to rc-configure-timeout
+      .finally(() => {
+        if (!isActive) return;
+        supabase.auth.getSession()
+          .then(({ data }) => configureForSession(data?.session))
+          .catch((error) => {
+            console.warn("[RevenueCat] initial session sync failed", {
+              message: error?.message || String(error),
+            });
+          });
+      });
 
     return () => {
       isActive = false;
@@ -1203,7 +1216,9 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       const accessToken = session?.access_token;
       const user = session?.user;
 
-      if (user?.id) {
+      // On native platforms, attempt RC purchase regardless of login state.
+      // purchaseRevenueCatPro handles anonymous RC (pre-login) internally.
+      if (user?.id || getRevenueCatAvailability().native) {
         const purchaseResult = await purchaseRevenueCatPro(user, applyRevenueCatCustomerInfo);
         if (purchaseResult?.success) return { outcome: "succeeded" };
         if (purchaseResult?.cancelled) return { outcome: "cancelled" };
