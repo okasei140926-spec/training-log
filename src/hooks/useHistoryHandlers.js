@@ -633,10 +633,27 @@ export function useHistoryHandlers({
         });
         queueWorkoutSessionSync(normalizedTargetDate);
 
-        // その日が今の編集中なら画面上の状態も消す
-        if (logDate === normalizedTargetDate) {
-            applyLogDraftState({ todayLabels: [], logData: {}, sessionEx: null, exerciseUnits: {} });
+        // その日が今の編集中なら画面上の状態も消す。
+        // meta.source を "explicit_date_nav" にすることで useWorkoutLog の
+        // hasUnsavedChanges ガードを回避し、未保存編集中でも必ず exercises をクリアする。
+        // （ガード条件: prevDraft.hasUnsavedChanges && source !== "explicit_date_nav"）
+        const _clearedCurrentView = logDate === normalizedTargetDate;
+        if (_clearedCurrentView) {
+            applyLogDraftState({
+                todayLabels: [],
+                logData: {},
+                sessionEx: null,
+                exerciseUnits: {},
+                meta: { source: "explicit_date_nav", hasUnsavedChanges: false },
+            });
         }
+        console.log("[WP] deleteAllHistory:displayCleared", {
+            date: normalizedTargetDate,
+            clearedCurrentView: _clearedCurrentView,
+            reason: _clearedCurrentView
+                ? "deleted date matches current logDate — display state cleared synchronously"
+                : "deleted date does not match current logDate — display unchanged",
+        });
 
         // その日のdraftも消す
         clearDraftForDate(normalizedTargetDate);
