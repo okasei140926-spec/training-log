@@ -38,6 +38,45 @@ const withTimeout = (promise, ms, label) =>
 const waitForRcConfiguredWithTimeout = (ms = 3000) =>
   withTimeout(_rcConfiguredPromise, ms, "rc-configure");
 
+// --- RevenueCat timeout constants ---
+//
+// PURCHASE path (purchaseRevenueCatPro → getCurrentPackage):
+//   RC_PURCHASE_OFFERINGS_TIMEOUT_MS — getOfferings() timeout when called during purchase.
+//   Extended to 20 s after real-device measurement: getOfferings took 2049 ms in Apple
+//   sandbox on iPad Air M3 / iPadOS 27.0.1. The previous hard-coded 3 s default caused
+//   "getOfferings-timeout" → purchase-failed in App Store review (Guideline 2.1(b)).
+//   Intentionally kept finite (never infinite) so a hung StoreKit call does not
+//   freeze the purchase UI forever.
+//
+// DISPLAY path (getRevenueCatPriceString):
+//   Controlled by the caller (ProPaywallModal.jsx: TIMEOUT_AUTO=10 s, TIMEOUT_MANUAL=15 s).
+//   Deadline timers (DEADLINE_AUTO=20 s, DEADLINE_MANUAL=30 s) also live in ProPaywallModal.jsx.
+//   These are intentionally separate: the display path has its own retry/deadline logic
+//   that the purchase path does not share.
+const RC_PURCHASE_OFFERINGS_TIMEOUT_MS = 20_000;
+
+// --- Package cache ---
+// Stores the Package object from the most recent successful getCurrentPackage() call.
+// purchaseRevenueCatPro reuses it to skip a redundant getOfferings() round-trip:
+// the same package was already validated when the price string was shown in the paywall.
+//
+// TTL: 5 minutes — long enough to cover the normal purchase flow (user reads paywall →
+// taps buy), short enough to avoid stale product data if the app stays open across a
+// price-change event.
+const _PACKAGE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let _cachedPackage = null;
+let _cachedPackageAt = 0;
+
+const getCachedPackage = () => {
+  if (!_cachedPackage) return null;
+  if (Date.now() - _cachedPackageAt > _PACKAGE_CACHE_TTL_MS) {
+    _cachedPackage = null;
+    _cachedPackageAt = 0;
+    return null;
+  }
+  return _cachedPackage;
+};
+
 const getPlatform = () => {
   try {
     return Capacitor.getPlatform();
@@ -176,20 +215,26 @@ export const configureRevenueCatForUser = async (user, onCustomerInfoUpdated) =>
 };
 
 // timeoutMs controls both the configure-wait timeout and the getOfferings timeout.
-// Default 3 s keeps the initial paywall load snappy; pass a larger value for
-// manual retry paths where the user has explicitly indicated willingness to wait.
-const getCurrentPackage = async (timeoutMs = 3000) => {
+// Display path callers (getRevenueCatPriceString) pass their own value.
+// Purchase path callers (purchaseRevenueCatPro) use RC_PURCHASE_OFFERINGS_TIMEOUT_MS.
+const getCurrentPackage = async (timeoutMs = RC_PURCHASE_OFFERINGS_TIMEOUT_MS) => {
   await waitForRcConfiguredWithTimeout(timeoutMs);
   // getOfferings() queries StoreKit / App Store and can hang indefinitely
   // if the store is unreachable (observed in reviewer environment).
   const offerings = await withTimeout(Purchases.getOfferings(), timeoutMs, "getOfferings");
   const currentOffering = offerings?.current || Object.values(offerings?.all || {})[0] || null;
-  return (
+  const pkg = (
     currentOffering?.monthly ||
     currentOffering?.annual ||
     currentOffering?.availablePackages?.[0] ||
     null
   );
+  // Populate cache so purchaseRevenueCatPro can skip the next getOfferings() call.
+  if (pkg) {
+    _cachedPackage = pkg;
+    _cachedPackageAt = Date.now();
+  }
+  return pkg;
 };
 
 /**
@@ -211,16 +256,54 @@ export const purchaseRevenueCatPro = async (user, onCustomerInfoUpdated) => {
   const configured = await configureRevenueCatForUser(user, onCustomerInfoUpdated);
   if (!configured.configured) return { success: false, ...configured };
 
+  const purchaseStartedAt = Date.now();
+  const logPurchaseState = (state, extra = {}) => {
+    console.log("[WP] paywall:state", {
+      state,
+      elapsedMs: Date.now() - purchaseStartedAt,
+      packageId: extra.packageId ?? null,
+      errorCode: extra.errorCode ?? null,
+      errorMessage: extra.errorMessage ?? null,
+      isSandbox: extra.isSandbox ?? null,
+      timeoutKind: extra.timeoutKind ?? null,
+      timeoutMs: extra.timeoutMs ?? null,
+      fromCache: extra.fromCache ?? null,
+    });
+  };
+
+  // Track which phase threw, so the catch block can attribute the timeout correctly.
+  let _purchasePhase = "offerings"; // "offerings" | "purchase"
+
   try {
-    const aPackage = await getCurrentPackage();
+    // ■2: Reuse the package already fetched for price display.
+    // getCachedPackage() returns the object if it was fetched within the last 5 minutes.
+    // This avoids a redundant getOfferings() round-trip and eliminates the race where
+    // the purchase-path timeout (previously 3 s) fired before StoreKit responded.
+    let aPackage = getCachedPackage();
+    const fromCache = Boolean(aPackage);
+    if (!aPackage) {
+      // Cache miss or stale — fall back to a fresh fetch with the extended purchase timeout.
+      aPackage = await getCurrentPackage(RC_PURCHASE_OFFERINGS_TIMEOUT_MS);
+    }
+
     if (!aPackage) {
       console.warn("[RevenueCat] no package available for purchase");
       return { success: false, available: true, configured: true, reason: "no-package" };
     }
 
+    const packageId = aPackage?.identifier || aPackage?.product?.identifier || null;
+    logPurchaseState("purchase-started", { packageId, fromCache });
+
+    _purchasePhase = "purchase";
     const result = await Purchases.purchasePackage({ aPackage });
     const customerInfo = result?.customerInfo;
     onCustomerInfoUpdated?.(customerInfo);
+    const plan = buildRevenueCatPlan(customerInfo);
+    logPurchaseState("purchase-succeeded", {
+      packageId,
+      isSandbox: plan.isSandbox ?? null,
+      fromCache,
+    });
     return {
       success: isRevenueCatCustomerPro(customerInfo),
       // purchaseCompleted: true when purchasePackage resolved without throwing.
@@ -229,12 +312,26 @@ export const purchaseRevenueCatPro = async (user, onCustomerInfoUpdated) => {
       // from "API call failed / user cancelled".
       purchaseCompleted: true,
       customerInfo,
-      plan: buildRevenueCatPlan(customerInfo),
+      plan,
       productIdentifier: result?.productIdentifier || null,
     };
   } catch (error) {
     const serialized = serializeRevenueCatError(error);
     console.warn("[RevenueCat] purchase failed", serialized);
+
+    // Determine which timeout fired (if any) so the log can attribute it precisely.
+    // Error messages come from withTimeout's label: e.g. "getOfferings-timeout", "rc-configure-timeout".
+    const _isTimeout = Boolean(serialized.message?.endsWith("-timeout"));
+    const _timeoutKind = !_isTimeout ? null
+      : (_purchasePhase === "offerings" ? "purchase-offerings" : "purchase-package");
+    const _timeoutMs = _timeoutKind === "purchase-offerings" ? RC_PURCHASE_OFFERINGS_TIMEOUT_MS : null;
+
+    logPurchaseState(serialized.userCancelled ? "purchase-cancelled" : "purchase-failed", {
+      errorCode: serialized.code ?? null,
+      errorMessage: serialized.message ?? null,
+      timeoutKind: _timeoutKind,
+      timeoutMs: _timeoutMs,
+    });
     return {
       success: false,
       available: true,
