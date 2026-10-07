@@ -6,6 +6,7 @@ import {
     isCleanPersistedDraft,
     isDestructiveWorkoutRegression,
     isUnsavedUserWorkoutDraft,
+    loadPersistentDeletedDates,
     normalizeDraftDateKey,
     shouldLogPerfDebug,
     shouldPreserveRawDraftOverIncoming,
@@ -88,6 +89,36 @@ export function useDraftRestore({
         );
         if (!savedDraftForDate.hasSavedWorkout) return;
 
+        // Gate A: block content restoration for persistently deleted dates.
+        // Note: pendingWorkoutContentChangeDatesRef early-return at line 79 already handles
+        // all pending-change dates; Gate A is only reached when there is no pending change.
+        // Exception: if the localStorage draft is an unsaved user edit, preserve it.
+        {
+            const _persistentDeleted = loadPersistentDeletedDates(user?.id);
+            if (_persistentDeleted[normalizedLogDate]) {
+                // Load local draft here (normally done later) to check for unsaved user content.
+                const _localDraft = loadDraftForDate(normalizedLogDate);
+                const _hasUnsavedUserDraft = isUnsavedUserWorkoutDraft(_localDraft);
+                if (_hasUnsavedUserDraft) {
+                    console.log("[WP] restore:persistentDeleteSkipped", {
+                        date: normalizedLogDate,
+                        caller: "useDraftRestore",
+                        reason: "unsaved-user-draft",
+                        draftSource: _localDraft?.meta?.source,
+                    });
+                } else {
+                    console.log("[WP] restore:blockedByPersistentDelete", {
+                        date: normalizedLogDate,
+                        caller: "useDraftRestore",
+                        source: "canonical_display_history",
+                        exerciseCount: (savedDraftForDate?.sessionEx ?? []).length,
+                        deletedAt: _persistentDeleted[normalizedLogDate],
+                    });
+                    return;
+                }
+            }
+        }
+
         const currentDraft = withDraftDateMeta(normalizedLogDate, getCurrentLogDraftSnapshot(), {
             source: latestLogDraftRef.current?.meta?.source || "current_log_snapshot",
             hasUnsavedChanges: latestLogDraftRef.current?.meta?.hasUnsavedChanges ?? true,
@@ -133,9 +164,13 @@ export function useDraftRestore({
         const localDraftEditReason = getWorkoutEditReasonFromSource(localDraft?.meta?.source);
         const localDraftIsUnsavedUserEdit = isUnsavedUserWorkoutDraft(localDraft);
         const localDraftHasUnsavedChanges = Boolean(localDraft?.meta?.hasUnsavedChanges === true || explicitLocalEdit);
+        // zombie draft: hasUnsavedChanges === true but NOT from a real user edit (e.g. source: "date_delete").
+        // Must not be adopted — treat as if it has no override right.
+        const isZombieDraft = localDraftHasUnsavedChanges && !isUnsavedUserWorkoutDraft(localDraft);
         const localDraftCanOverrideSaved = Boolean(
             hasDraftContent(localDraft) &&
             !localDraftIsCleanPersisted &&
+            !isZombieDraft &&
             (localDraftHasUnsavedChanges || localDraftIsUnsavedUserEdit)
         );
         const {
@@ -158,6 +193,7 @@ export function useDraftRestore({
                 remoteUpdatedAt: null,
                 localSetCount: localMetrics.setCount,
                 remoteSetCount: savedMetrics.setCount,
+                isZombieDraft,
                 localIsNewerUnsavedDraft: localDraftCanOverrideSaved,
                 appliedSource: localDraftCanOverrideSaved && (isDestructiveWorkoutRegression(savedMetrics, localMetrics) || preserveRawLocalDraft)
                     ? "localDraft"

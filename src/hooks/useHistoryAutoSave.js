@@ -77,6 +77,7 @@ export function useHistoryAutoSave({
     setHistory,
     setSessionSyncVersion,
     forceSyncVersion,
+    invalidateSupabaseFetchFreshByPrefix,
 }) {
     const heldRetryCountsRef = useRef({});
     useEffect(() => {
@@ -513,6 +514,23 @@ export function useHistoryAutoSave({
                                 clearedInMemory,
                                 remainingKeys: hasRemainingDraftContent ? [`draft content still loaded after clearDraftForDate for ${date}`] : [],
                             });
+                            // 削除が Supabase で verify されたタイミングで freshness を再無効化する。
+                            // 削除処理中の最初の invalidate（deleteAllHistoryForDate）は
+                            // Supabase fetch より前に走る場合があるため、verify 後にもう一度無効化して
+                            // 次のリフレッシュが確実に fresh skip されない状態にする。
+                            if (invalidateSupabaseFetchFreshByPrefix) {
+                                const _screens = ["calendar", "log", "history"];
+                                const _invalidatedKeys = [];
+                                for (const _screen of _screens) {
+                                    const _prefix = `display_history:${_screen}:${currentUserId}:`;
+                                    const _keys = invalidateSupabaseFetchFreshByPrefix(_prefix);
+                                    _invalidatedKeys.push(..._keys);
+                                }
+                                console.log("[WP] deleteAllHistory:displayFreshnessInvalidatedAfterSync", {
+                                    date,
+                                    invalidatedKeys: _invalidatedKeys,
+                                });
+                            }
                         }
                         return;
                     }

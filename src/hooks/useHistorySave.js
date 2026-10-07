@@ -1,6 +1,7 @@
 import { useRef, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../utils/writeTrace";
+import { removePersistentDeletedDate } from "../utils/appHelpers";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
     fetchWorkoutRowFromWorkoutsData,
@@ -102,12 +103,23 @@ export function useHistorySave({
         const explicitDelete = options.explicitDelete === false
             ? false
             : Boolean(previous.explicitDelete || options.explicitDelete);
+        // deleteScope: "date" = full date deletion, "partial" = single exercise/set removal.
+        // explicitEdit が来た時点でペイロードは「新しいユーザー操作の内容」になる。
+        // 以前の "date" を継承したまま skip 条件を発火させると、
+        // その新しいペイロードが pendingSavePayloadsRef に書かれず
+        // latestHistoryRef へのフォールバック race が再発する。
+        // explicitEdit === true のときは previous.deleteScope をリセットする。
+        const deleteScope =
+            options.deleteScope ??
+            (options.explicitEdit ? null : previous.deleteScope) ??
+            null;
         const _qbMwcc = pendingWorkoutContentChangeDatesRef.current.size;
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
             explicitDelete,
             explicitEdit,
+            deleteScope,
             details: options.details || previous.details || null,
             updatedAt: new Date().toISOString(),
         });
@@ -135,6 +147,20 @@ export function useHistorySave({
                 reason,
                 updatedAt: Date.now(),
             });
+        }
+        // 削除後に再入力されたとき、persistentDeletedDates から即座に解除する。
+        // _datesToStrip が history を strip し続けると G8 hold → retry limit → syncQueue:delete になる。
+        // 条件: explicitEdit=true かつ NOT(explicitDelete=true && deleteScope="date")
+        if (explicitEdit && !(explicitDelete === true && deleteScope === "date")) {
+            const _userId = user?.id || latestUserIdRef.current || null;
+            if (_userId) {
+                removePersistentDeletedDate(_userId, normalizedDate);
+                console.log("[WP] persistentDelete:clearedByUserEdit", {
+                    date: normalizedDate,
+                    reason,
+                    deleteScope,
+                });
+            }
         }
         if (EXPLICIT_SET_EDIT_REASONS.has(reason)) {
             console.log("[workout edit] explicit set edit", {
@@ -647,6 +673,7 @@ export function useHistorySave({
                         reason: pendingChange.reason,
                         explicitEdit,
                         explicitDelete: Boolean(pendingChange.explicitDelete),
+                        deleteScope: pendingChange.deleteScope ?? null,
                         source: "syncWorkoutRowsForDates",
                         logger: console,
                     });
@@ -777,22 +804,37 @@ export function useHistorySave({
                     }
 
                     clearSyncFailure(workoutDate);
-                    // Remove any delete marker ONLY when actual data was saved.
-                    // A deletion's verify confirms an empty/zero row — the marker must
-                    // stay active so in-flight pre-delete fetches cannot restore stale data.
-                    // Guard (a): explicit-delete flag.
-                    // Guard (b): verified set count = 0 (deletion row → no sets stored).
-                    // Both must be false for the marker to be cleared.
+                    // Remove any delete marker ONLY when actual data was verified in Supabase.
+                    // Guard: verified set count > 0.
+                    // - Full date deletion: Supabase row is empty after delete → setCount = 0
+                    //   → marker stays. The !_isExplicitDelete guard has been removed because
+                    //   explicitDelete OR-merges and stays true even after the user re-enters
+                    //   data on the same date, making the original guard permanently fail for
+                    //   the "delete → re-input → save" path.
+                    // - Re-input after delete: save writes real sets → setCount > 0 → cleared.
+                    // - Partial delete: remaining exercises produce setCount > 0 → would call
+                    //   removePersistentDeletedDate, which is a no-op (partial delete never
+                    //   adds to the persistent delete list).
                     {
                         const _isExplicitDelete = Boolean(pendingChange.explicitDelete);
                         const _verifiedSetCount = verifiedMetrics?.setCount ?? 0;
-                        const _shouldClearMarker = !_isExplicitDelete && _verifiedSetCount > 0;
+                        const _shouldClearMarker = _verifiedSetCount > 0;
                         if (_shouldClearMarker) {
                             clearHistoryDeleteMarkerForDate?.(workoutDate);
+                            // A real workout was saved for this date — it is no longer deleted.
+                            // Remove from persistent deleted-dates list so startup reconcile
+                            // treats it as a normal date again.
+                            removePersistentDeletedDate(userId, workoutDate);
+                            console.log("[WP] persistentDelete:cleared", {
+                                date: workoutDate,
+                                reason: "record-recreated",
+                                explicitDelete: _isExplicitDelete,
+                                verifiedSetCount: _verifiedSetCount,
+                            });
                         } else {
                             console.log("[restore] delete marker kept", {
                                 date: workoutDate,
-                                reason: _isExplicitDelete ? "explicit-delete" : "empty-verified-row",
+                                reason: "empty-verified-row",
                                 verifiedSetCount: _verifiedSetCount,
                                 explicitDelete: _isExplicitDelete,
                             });

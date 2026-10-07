@@ -17,6 +17,7 @@ import {
     isDestructiveWorkoutRegression,
     isDraftNewerThan,
     isUnsavedUserWorkoutDraft,
+    loadPersistentDeletedDates,
     logRecordFetchError,
     normalizeDraftDateKey,
     serializeHistoryMap,
@@ -265,6 +266,42 @@ export function useLogDateRefresh({
                         isPending: _dbg.isPending,
                         decision: _isExplicitDeleteMarked ? "allowed-expired" : "allowed-not-pending",
                     });
+                }
+
+                // Gate A: block content restoration for persistently deleted dates.
+                // Note: pendingWorkoutContentChangeDatesRef early-return at line 219 already
+                // handles all pending-change dates; Gate A is only reached when there is none.
+                // Exception: if the localStorage draft is an unsaved user edit, preserve it.
+                {
+                    const _persistentDeleted = loadPersistentDeletedDates(user?.id);
+                    if (_persistentDeleted[normalizedDate]) {
+                        const _localDraft = _loadDraftForDateRef.current(normalizedDate);
+                        const _hasUnsavedUserDraft = isUnsavedUserWorkoutDraft(_localDraft);
+                        if (_hasUnsavedUserDraft) {
+                            console.log("[WP] restore:persistentDeleteSkipped", {
+                                date: normalizedDate,
+                                caller: "useLogDateRefresh",
+                                reason: "unsaved-user-draft",
+                                draftSource: _localDraft?.meta?.source,
+                            });
+                        } else {
+                            const _emptyForDelete = withDraftDateMeta(normalizedDate, {
+                                todayLabels: [],
+                                sessionEx: null,
+                                logData: {},
+                                exerciseUnits: {},
+                            }, { source: "explicit_date_nav", hasUnsavedChanges: false });
+                            console.log("[WP] restore:blockedByPersistentDelete", {
+                                date: normalizedDate,
+                                caller: "useLogDateRefresh",
+                                source: "remote_supabase",
+                                deletedAt: _persistentDeleted[normalizedDate],
+                            });
+                            clearDraftForDate(normalizedDate);
+                            applyCurrentLogDraft(_emptyForDelete, { persist: false, forDate: normalizedDate });
+                            return;
+                        }
+                    }
                 }
 
                 // ■5: If restore loop suppression is active for this date, skip the entire

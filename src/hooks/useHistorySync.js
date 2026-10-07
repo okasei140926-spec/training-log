@@ -6,6 +6,7 @@ import {
     buildHistoryFromWorkoutRows,
     getValidWorkoutDatesFromHistory,
 } from "../utils/helpers";
+import { loadPersistentDeletedDates, removeHistoryDateFromMap } from "../utils/appHelpers";
 import { logWriteTrace } from "../utils/writeTrace";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -115,12 +116,39 @@ export function useHistorySync({
         const incomingRows = (rows || [])
             .filter((row) => normalizeTrustedWorkoutRowDate(row))
             .filter((row) => !deletedDates.has(normalizeTrustedWorkoutRowDate(row)));
+
+        // マーカーログ: 削除マーカーで弾いた場合のみ出力
+        const _blockedIncomingDates = deletedDates.size > 0
+            ? (rows || [])
+                .map((row) => normalizeTrustedWorkoutRowDate(row))
+                .filter((d) => d && deletedDates.has(d))
+            : [];
+        const _blockedExistingDates = deletedDates.size > 0
+            ? (trustedWorkoutRowsRef.current || [])
+                .map((row) => normalizeTrustedWorkoutRowDate(row))
+                .filter((d) => d && deletedDates.has(d))
+            : [];
+        if (_blockedIncomingDates.length > 0 || _blockedExistingDates.length > 0) {
+            console.log("[WP] trustedRows:markerApplied", {
+                incomingCount: (rows || []).length,
+                filteredCount: incomingRows.length,
+                blockedDates: [...new Set([..._blockedIncomingDates, ..._blockedExistingDates])],
+            });
+        }
+
+        // マージ時に既存行にも削除マーカーを適用する。
+        // replace: false のとき mergeTrustedRowsByDate は currentRows を上書きしないため、
+        // deletedDates に含まれる既存行が nextRows に残ってしまうのを防ぐ。
+        const currentRows = (trustedWorkoutRowsRef.current || [])
+            .filter((row) => !deletedDates.has(normalizeTrustedWorkoutRowDate(row)));
+        const hasBlockedExisting = currentRows.length < (trustedWorkoutRowsRef.current || []).length;
+
         if (!replace) {
             const hasIncomingChange = incomingRows.some((row) => {
                 const date = normalizeTrustedWorkoutRowDate(row);
                 return trustedWorkoutRowSignaturesRef.current.get(date) !== serializeTrustedRow(row, normalizeTrustedWorkoutRowDate);
             });
-            if (!hasIncomingChange) {
+            if (!hasIncomingChange && !hasBlockedExisting) {
                 if (shouldLogPerfDebug()) {
                     const previousSignature = serializeTrustedRows(trustedWorkoutRowsRef.current || [], normalizeTrustedWorkoutRowDate);
                     console.log("[history] trusted row cache update", {
@@ -138,7 +166,7 @@ export function useHistorySync({
         }
         const nextRows = replace
             ? sortTrustedRowsByDate(incomingRows, normalizeTrustedWorkoutRowDate)
-            : mergeTrustedRowsByDate(trustedWorkoutRowsRef.current || [], incomingRows, normalizeTrustedWorkoutRowDate);
+            : mergeTrustedRowsByDate(currentRows, incomingRows, normalizeTrustedWorkoutRowDate);
         const previousSignature = serializeTrustedRows(trustedWorkoutRowsRef.current || [], normalizeTrustedWorkoutRowDate);
         const nextSignature = serializeTrustedRows(nextRows, normalizeTrustedWorkoutRowDate);
         if (previousSignature === nextSignature) {
@@ -263,6 +291,21 @@ export function useHistorySync({
     const isSupabaseFetchFresh = useCallback((key) => {
         if (!key) return false;
         return Number(supabaseFetchFreshUntilRef.current[key] || 0) > Date.now();
+    }, []);
+
+    // Invalidate all freshness entries whose key starts with `prefix`.
+    // Does NOT trigger a fetch — the next runDedupeSupabaseFetch call for a
+    // matching key will simply skip the "fresh" guard and proceed normally.
+    const invalidateSupabaseFetchFreshByPrefix = useCallback((prefix) => {
+        if (!prefix) return [];
+        const invalidated = [];
+        for (const key of Object.keys(supabaseFetchFreshUntilRef.current)) {
+            if (key.startsWith(prefix)) {
+                delete supabaseFetchFreshUntilRef.current[key];
+                invalidated.push(key);
+            }
+        }
+        return invalidated;
     }, []);
 
     const runDedupeSupabaseFetch = useCallback(async (
@@ -893,13 +936,29 @@ export function useHistorySync({
                     const remoteDateSet = new Set(
                         (workoutsRes.data || []).map((r) => String(r?.date || "").slice(0, 10)).filter(Boolean)
                     );
-                    const unsyncedDates = localDates.filter((d) => !remoteDateSet.has(d));
+                    // Load persistent deleted-dates list (30-day TTL, survives restarts).
+                    // Dates in this list were explicitly deleted by the user and must NOT
+                    // be treated as "unsynced local" — they are intentionally absent from Supabase.
+                    const persistentDeletedDates = loadPersistentDeletedDates(user.id);
+                    const unsyncedDates = localDates.filter(
+                        (d) => !remoteDateSet.has(d) && !(d in persistentDeletedDates)
+                    );
+                    const deletedDatesExcluded = localDates.filter(
+                        (d) => !remoteDateSet.has(d) && (d in persistentDeletedDates)
+                    );
+                    if (deletedDatesExcluded.length > 0) {
+                        console.log("[WP] startupReconcile:deletedDatesExcluded", {
+                            excludedDates: deletedDatesExcluded,
+                            unsyncedDates,
+                        });
+                    }
                     console.log("[startup reconcile] local vs remote comparison", {
                         env: getRuntimeEnvironmentLabel(),
                         user_id: user.id,
                         localDatesInWindow: localDates.length,
                         remoteDatesInWindow: remoteDateSet.size,
                         unsyncedDates,
+                        deletedDatesExcluded,
                     });
                     if (unsyncedDates.length > 0) {
                         // Merge local-only dates into mergedHistory so that:
@@ -1283,7 +1342,17 @@ export function useHistorySync({
                     ),
                     effectiveDeleteMarkers
                 );
-                const pendingLocalDates = new Set(Array.from(pendingWorkoutContentChangeDatesRef.current.keys()));
+                const _allPendingLocalDates = Array.from(pendingWorkoutContentChangeDatesRef.current.keys());
+                const _persistentDeletedForDisplay = loadPersistentDeletedDates(user.id);
+                const _excludedFromPending = _allPendingLocalDates.filter((d) => d in _persistentDeletedForDisplay);
+                const pendingLocalDates = new Set(_allPendingLocalDates.filter((d) => !(d in _persistentDeletedForDisplay)));
+                if (_excludedFromPending.length > 0) {
+                    console.log("[WP] displayRefresh:pendingLocalDatesFiltered", {
+                        screen,
+                        excludedDates: _excludedFromPending,
+                        pendingLocalDates: [...pendingLocalDates],
+                    });
+                }
                 const remoteDates = getValidWorkoutDatesFromHistory(remoteHistory)
                     .filter((date) => !pendingLocalDates.has(date));
                 const workoutsDates = getValidWorkoutDatesFromHistory(workoutsOnlyHistory)
@@ -1299,11 +1368,11 @@ export function useHistorySync({
                 if (!remoteDates.length && !workoutsDates.length) return;
 
                 const currentHistory = latestHistoryRef.current || {};
-                const nextHistory = applyHistoryDeleteMarkers(
+                let nextHistory = applyHistoryDeleteMarkers(
                     applyLocalHistoryDates(currentHistory, remoteHistory, remoteDates),
                     effectiveDeleteMarkers
                 );
-                const nextWorkoutsDataHistory = applyHistoryDeleteMarkers(
+                let nextWorkoutsDataHistory = applyHistoryDeleteMarkers(
                     applyLocalHistoryDates(
                         workoutsDataHistoryRef.current || currentHistory,
                         workoutsOnlyHistory,
@@ -1311,6 +1380,52 @@ export function useHistorySync({
                     ),
                     effectiveDeleteMarkers
                 );
+
+                // 永続削除リストに載っている日付を nextHistory / nextWorkoutsDataHistory から除去する。
+                // 目的: 表示リフレッシュの Supabase フェッチが delete より前に走った場合、
+                //       リモートがまだ削除前のデータを返し applyLocalHistoryDates が
+                //       その日付を re-insert してしまうのを防ぐ。
+                //
+                // strip 条件: 永続リストに載っており、かつ以下のいずれか:
+                //   (i)  保留中の変更が存在しない（同期完了後）
+                //   (ii) 保留中の変更が日付全体の削除（explicitDelete:true & deleteScope:"date"）
+                //
+                // strip しない（skip）条件:
+                //   保留中の変更がユーザーの編集（例: explicitEdit）。
+                //   これにより「削除後に同じ日付へ記録を作り直した」ケースを保護する。
+                {
+                    const _datesToStrip = [];
+                    const _skippedDates = [];
+                    for (const d of Object.keys(_persistentDeletedForDisplay)) {
+                        const _pendingChange = pendingWorkoutContentChangeDatesRef.current.get(d);
+                        if (!_pendingChange) {
+                            // (i) 保留なし → strip
+                            _datesToStrip.push(d);
+                        } else if (_pendingChange.explicitDelete === true && _pendingChange.deleteScope === "date") {
+                            // (ii) 日付全体の削除が pending → strip
+                            _datesToStrip.push(d);
+                        } else {
+                            // ユーザー編集が pending → skip
+                            _skippedDates.push({
+                                date: d,
+                                reason: _pendingChange.explicitEdit ? "pending-user-edit" : "pending-other",
+                            });
+                        }
+                    }
+                    if (_datesToStrip.length > 0) {
+                        for (const d of _datesToStrip) {
+                            nextHistory = removeHistoryDateFromMap(nextHistory, d);
+                            nextWorkoutsDataHistory = removeHistoryDateFromMap(nextWorkoutsDataHistory, d);
+                        }
+                    }
+                    if (_datesToStrip.length > 0 || _skippedDates.length > 0) {
+                        console.log("[WP] displayRefresh:deletedDatesRemovedFromHistory", {
+                            screen,
+                            removedDates: _datesToStrip,
+                            skippedDates: _skippedDates,
+                        });
+                    }
+                }
 
                 console.log("[restore] display history refreshed from workouts.data priority", {
                     env: getRuntimeEnvironmentLabel(),
@@ -1531,7 +1646,17 @@ export function useHistorySync({
                     buildHistoryFromWorkoutRows(data || []),
                     getCurrentHistoryDeleteMarkers()
                 );
-                const pendingLocalDates = new Set(Array.from(pendingWorkoutContentChangeDatesRef.current.keys()));
+                const _allPendingLocalDatesWeekly = Array.from(pendingWorkoutContentChangeDatesRef.current.keys());
+                const _persistentDeletedForWeekly = loadPersistentDeletedDates(user.id);
+                const _excludedFromPendingWeekly = _allPendingLocalDatesWeekly.filter((d) => d in _persistentDeletedForWeekly);
+                const pendingLocalDates = new Set(_allPendingLocalDatesWeekly.filter((d) => !(d in _persistentDeletedForWeekly)));
+                if (_excludedFromPendingWeekly.length > 0) {
+                    console.log("[WP] displayRefresh:pendingLocalDatesFiltered", {
+                        screen: "home_weekly",
+                        excludedDates: _excludedFromPendingWeekly,
+                        pendingLocalDates: [...pendingLocalDates],
+                    });
+                }
                 const remoteDates = getValidWorkoutDatesFromHistory(remoteWorkoutsHistory)
                     .filter((date) => !pendingLocalDates.has(date));
 
@@ -1659,10 +1784,12 @@ export function useHistorySync({
         historySyncReady,
         historyRemoteLoadFailedRef,
         historyLoadedRangeStartRef,
+        trustedWorkoutRowsRef,
         applyTrustedWorkoutRowsSnapshot,
         applyTrustedSessionRowsSnapshot,
         markSupabaseFetchFresh,
         isSupabaseFetchFresh,
+        invalidateSupabaseFetchFreshByPrefix,
         runDedupeSupabaseFetch,
     };
 }

@@ -383,17 +383,28 @@ export function usePersistCurrentLog({
         // fetch in useHistoryAutoSave resolves. By writing here synchronously we guarantee
         // that syncWorkoutRowsForDates always sees the correct payload regardless of timing.
         if (pendingSavePayloadsRef) {
-            const directPayloadForDate = buildDraftHistoryForDate({
-                baseHistory: latestHistoryRef.current || {},
-                workoutDate: normalizedLogDate,
-                exercises: saveExercises,
-                logData: saveLogData,
-                getExUnit: getSaveExUnit,
-                labels: saveLabels,
-                durationSec,
-                replaceDate: Boolean(pendingChange.explicitDelete),
-            });
-            pendingSavePayloadsRef.current.set(normalizedLogDate, directPayloadForDate);
+            // 日付全体の削除が保留中のとき stale payload の書き込みをスキップする。
+            // deleteAllHistoryForDate は pendingSavePayloadsRef をクリアするが、
+            // その直後に 400ms debounce が解消して削除前の内容を再書き込みする競合を防ぐ。
+            // deleteScope === "partial" の部分削除（種目・セット単位）はスキップしない。
+            if (pendingChange.explicitDelete && pendingChange.deleteScope === "date") {
+                console.log("[WP] persistCurrentLog:payloadSkipped", {
+                    date: normalizedLogDate,
+                    reason: "explicit-delete-pending",
+                });
+            } else {
+                const directPayloadForDate = buildDraftHistoryForDate({
+                    baseHistory: latestHistoryRef.current || {},
+                    workoutDate: normalizedLogDate,
+                    exercises: saveExercises,
+                    logData: saveLogData,
+                    getExUnit: getSaveExUnit,
+                    labels: saveLabels,
+                    durationSec,
+                    replaceDate: false,
+                });
+                pendingSavePayloadsRef.current.set(normalizedLogDate, directPayloadForDate);
+            }
         }
         if (shouldLogPerfDebug() && explicitEdit && normalizedLogDate !== getTodayKey()) {
             console.log("[workout edit] past edit persistence debug", {

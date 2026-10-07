@@ -155,6 +155,7 @@ import {
     normalizeTrustedSessionRowDate,
     normalizeTrustedWorkoutRowDate,
     persistHistoryForUser,
+    removePersistentDeletedDate,
     serializeHistoryMap,
     serializeTrustedRow,
     serializeTrustedRows,
@@ -178,7 +179,8 @@ export default function GymApp() {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }, []);
 
-    const { getDraftKey, loadDraftForDate, hasDraftContent, makeDefaultDraftSets, saveDraftForDate, clearDraftForDate } = useDraftStore();
+    const draftStoreUserIdRef = useRef(null);
+    const { getDraftKey, loadDraftForDate, hasDraftContent, makeDefaultDraftSets, saveDraftForDate, clearDraftForDate } = useDraftStore({ userIdRef: draftStoreUserIdRef });
 
     const removeHistoryDate = useCallback((historyMap, targetDate) => {
         const normalizedDate = String(targetDate || "").slice(0, 10);
@@ -215,6 +217,9 @@ export default function GymApp() {
     // ─── State ────────────────────────────────────────
     // eslint-disable-next-line no-unused-vars
     const [user, setUser] = useState(null);
+    // Synchronous assignment so Gate B in useDraftStore has userId available from the very first
+    // render — a useEffect fires after the render, which is too late for startup restore paths.
+    draftStoreUserIdRef.current = user?.id ?? null;
     const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
     const [splashMinElapsed, setSplashMinElapsed] = useState(false);
     const [splashForceDone, setSplashForceDone] = useState(false);
@@ -435,6 +440,18 @@ export default function GymApp() {
                 reason,
                 updatedAt: Date.now(),
             });
+        }
+        // 削除後に再入力されたとき、persistentDeletedDates から即座に解除する。
+        // markLogWorkoutContentChanged は deleteScope をリセットしないため previous.deleteScope で判定する。
+        if (explicitEdit && !(Boolean(previous.explicitDelete) && (previous.deleteScope ?? null) === "date")) {
+            if (user?.id) {
+                removePersistentDeletedDate(user.id, normalizedDate);
+                console.log("[WP] persistentDelete:clearedByUserEdit", {
+                    date: normalizedDate,
+                    reason,
+                    deleteScope: previous.deleteScope ?? null,
+                });
+            }
         }
         pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
 
@@ -1160,8 +1177,10 @@ export default function GymApp() {
         historySyncReady,
         historyRemoteLoadFailedRef,
         historyLoadedRangeStartRef,
+        trustedWorkoutRowsRef,
         applyTrustedWorkoutRowsSnapshot,
         applyTrustedSessionRowsSnapshot,
+        invalidateSupabaseFetchFreshByPrefix,
         runDedupeSupabaseFetch,
     } = useHistorySync({
         user,
@@ -1609,6 +1628,7 @@ export default function GymApp() {
         setHistory,
         setSessionSyncVersion,
         forceSyncVersion,
+        invalidateSupabaseFetchFreshByPrefix,
     });
 
     useEffect(() => {
@@ -2454,6 +2474,10 @@ export default function GymApp() {
             hasUnsavedChanges: true,
         });
         markWorkoutContentChanged(todayKey, "exercise_copy", { explicitEdit: true });
+        // Remove from persistent deleted-dates list before writing: the user is explicitly
+        // recreating content for this date, so "deleted" state no longer applies.
+        // removePersistentDeletedDate is a no-op when the date is not in the list.
+        removePersistentDeletedDate(user?.id, todayKey);
         saveDraftForDate(todayKey, newDraft);
         setLogMode("today");
         setLogDate(todayKey);
@@ -2815,6 +2839,8 @@ export default function GymApp() {
         workoutsDataHistoryRef,
         markWorkoutContentChanged,
         applyTrustedWorkoutRowsSnapshot,
+        trustedWorkoutRowsRef,
+        pendingSavePayloadsRef,
         buildSavedWorkoutDraftForDate,
         setSessionSyncVersion,
         pendingDeleteUndoRef,
@@ -2845,6 +2871,7 @@ export default function GymApp() {
         buildHistoryRecordDeleteKey,
         removeHistoryDate,
         onDeleteDateClearCompletion: unmarkPlanDayCompleted,
+        invalidateSupabaseFetchFreshByPrefix,
     });
 
     // ─── カレンダー月移動時の追加フェッチ ─────────────────

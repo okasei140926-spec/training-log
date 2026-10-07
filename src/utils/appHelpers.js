@@ -167,7 +167,52 @@ export const normalizeDraftSetFromRecord = (set, fallbackUnit = "kg") => {
 export const HISTORY_OWNER_KEY = "historyOwnerUserId";
 export const getUserHistoryCacheKey = (userId) => `history_cache_${userId}`;
 export const getHistoryDeleteMarkersKey = (userId) => `historyDeleteMarkers_${userId}`;
+export const getPersistentDeletedDatesKey = (userId) => `persistentDeletedDates_${userId}`;
 export const EXERCISE_BODY_PART_OVERRIDES_KEY = "exerciseBodyPartOverrides";
+
+// TTL for persistent delete records: 30 days.
+// Separate from DELETE_MARKER_TTL_MS (120 s) which is for short-lived race prevention.
+// These records survive restarts to prevent startup reconcile from re-adding deleted dates.
+const PERSISTENT_DELETE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Load the persistent deleted-dates map for a user, filtering out TTL-expired entries.
+// Returns { "YYYY-MM-DD": ISO-timestamp, ... }
+export const loadPersistentDeletedDates = (userId) => {
+    if (!userId) return {};
+    const stored = load(getPersistentDeletedDatesKey(userId), {});
+    const map = (typeof stored === "object" && stored !== null && !Array.isArray(stored)) ? stored : {};
+    const now = Date.now();
+    return Object.fromEntries(
+        Object.entries(map).filter(([, ts]) => {
+            const age = now - new Date(ts).getTime();
+            return Number.isFinite(age) && age < PERSISTENT_DELETE_TTL_MS;
+        })
+    );
+};
+
+// Add a date to the persistent deleted-dates list for the given user.
+// Returns the updated map (TTL-cleaned).
+export const addPersistentDeletedDate = (userId, dateStr) => {
+    if (!userId || !dateStr) return {};
+    const normalizedDate = String(dateStr).slice(0, 10);
+    if (!normalizedDate) return {};
+    const current = loadPersistentDeletedDates(userId);
+    const next = { ...current, [normalizedDate]: new Date().toISOString() };
+    save(getPersistentDeletedDatesKey(userId), next);
+    return next;
+};
+
+// Remove a date from the persistent deleted-dates list (called when a record is re-created).
+export const removePersistentDeletedDate = (userId, dateStr) => {
+    if (!userId || !dateStr) return;
+    const normalizedDate = String(dateStr).slice(0, 10);
+    if (!normalizedDate) return;
+    const current = loadPersistentDeletedDates(userId);
+    if (!(normalizedDate in current)) return;
+    const next = { ...current };
+    delete next[normalizedDate];
+    save(getPersistentDeletedDatesKey(userId), next);
+};
 export const isPlainObject = (value) =>
     !!value && typeof value === "object" && !Array.isArray(value);
 

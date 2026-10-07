@@ -8,6 +8,8 @@ import {
 } from "../features/workout/workoutDraftStore";
 import {
     getDraftDateValidation,
+    getWorkoutEditReasonFromSource,
+    loadPersistentDeletedDates,
     logDraftRestoreDateCheck,
     makeDraftMeta,
     mergeDraftExercisesWithLogData,
@@ -16,7 +18,7 @@ import {
     withDraftDateMeta,
 } from "../utils/appHelpers";
 
-export function useDraftStore() {
+export function useDraftStore({ userIdRef } = {}) {
     const getDraftKey = useCallback((baseKey, dateStr) => `${baseKey}_${dateStr}`, []);
 
     const loadDraftForDate = useCallback((dateStr) => {
@@ -234,6 +236,52 @@ export function useDraftStore() {
             setCount: wpCountSetsFromLogData(draft?.logData),
             extra: { keyDate: validation.keyDate, payloadDate: validation.payloadDate, exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: _payloadOrigin, contentDate: _contentDate, contentDateMismatch: _contentDateMismatch },
         });
+        // G14: zombie-draft-write detection — deletion-source draft with actual content.
+        // Decision is always "pass" (informational only); blocks are handled upstream.
+        const _g14SetCount = wpCountSetsFromLogData(draft?.logData);
+        const _g14Source = draft?.meta?.source;
+        if (_g14SetCount > 0 && _g14Source && !getWorkoutEditReasonFromSource(_g14Source)) {
+            logWriteTrace("G14:zombie-draft-write", {
+                date: normalizedDate,
+                decision: "pass",
+                reason: null,
+                flags: { source: _g14Source, explicitDelete: draft?.meta?.explicitDelete, explicitEdit: draft?.meta?.explicitEdit },
+                exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
+                setCount: _g14SetCount,
+                extra: { exerciseNames: _exerciseNames, caller: "saveDraftForDate" },
+            });
+        }
+
+        // Gate B: block content writes for persistently deleted dates when source is not
+        // a genuine user edit and the draft carries exercises.
+        {
+            const _userId = userIdRef?.current;
+            const _source = draft?.meta?.source || null;
+            const _exerciseCount = wpCountExercises(draft?.sessionEx ?? draft?.exercises);
+            if (_userId && _exerciseCount > 0 && !getWorkoutEditReasonFromSource(_source)) {
+                const _persistentDeleted = loadPersistentDeletedDates(_userId);
+                if (_persistentDeleted[normalizedDate]) {
+                    logWriteTrace("GateB:persistentDelete:blocked", {
+                        date: normalizedDate,
+                        decision: "block",
+                        reason: "date is in persistent deleted list and source is not a genuine user edit",
+                        flags: { source: _source, explicitDelete: draft?.meta?.explicitDelete, explicitEdit: draft?.meta?.explicitEdit },
+                        exerciseCount: _exerciseCount,
+                        setCount: wpCountSetsFromLogData(draft?.logData),
+                        extra: { exerciseNames: _exerciseNames, payloadOrigin: _payloadOrigin, deletedAt: _persistentDeleted[normalizedDate] },
+                    });
+                    console.warn("[WP] saveDraftForDate:blockedByPersistentDelete", {
+                        date: normalizedDate,
+                        source: _source,
+                        exerciseCount: _exerciseCount,
+                        exerciseNames: _exerciseNames,
+                        deletedAt: _persistentDeleted[normalizedDate],
+                    });
+                    return false;
+                }
+            }
+        }
+
         if (_contentDateMismatch) {
             console.warn("[WP] G5:content-date-mismatch", {
                 date: normalizedDate,
@@ -285,6 +333,8 @@ export function useDraftStore() {
         // The legacy fallback in loadDraftForDate is kept for reading old drafts written
         // before this change, but no new writes go there.
         return true;
+    // userIdRef is a ref — intentionally excluded from deps (stable, no re-render needed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [getDraftKey]);
 
     const clearDraftForDate = useCallback((dateStr) => {

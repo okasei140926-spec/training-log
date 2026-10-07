@@ -340,6 +340,7 @@ export async function saveWorkoutForDate({
   reason = "",
   explicitEdit = false,
   explicitDelete = false,
+  deleteScope = null,
   source = "workoutRepository",
   logger = console,
   supabase = defaultSupabase,
@@ -414,6 +415,24 @@ export async function saveWorkoutForDate({
   }
 
   const hasWorkout = guard.localMetrics.hasWorkout;
+
+  // G13: 日付全体の削除（deleteScope === "date"）かつ hasWorkout は矛盾した状態を示す。
+  // 正常な全削除では payload が空になるため hasWorkout = false になるはず。
+  // hasWorkout = true のままここに到達した場合、stale payload が
+  // pendingSavePayloadsRef に残っている可能性が高い。
+  // deleteScope === "partial" の部分削除では hasWorkout = true が正常なため除外する。
+  // 現時点では delete 分岐への強制切り替えはせず、ログのみ出力する（決定は呼び出し元）。
+  if (explicitDelete && hasWorkout && deleteScope === "date") {
+    logWriteTrace("G13:delete-payload-contradiction", {
+      date: normalizedDate,
+      decision: "pass",
+      reason: "explicitDelete is true but hasWorkout is true — payload may be stale",
+      flags: { explicitEdit, explicitDelete, source },
+      exerciseCount: guard.localMetrics?.exerciseCount ?? null,
+      setCount: guard.localMetrics?.setCount ?? null,
+    });
+  }
+
   if (hasWorkout) {
     logWriteTrace("supabase:upsert", {
       date: normalizedDate,

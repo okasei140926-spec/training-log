@@ -5,6 +5,7 @@ import {
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
 } from "../utils/helpers";
+import { addPersistentDeletedDate, loadPersistentDeletedDates, removePersistentDeletedDate } from "../utils/appHelpers";
 import { logWriteTrace } from "../utils/writeTrace";
 
 export function useHistoryHandlers({
@@ -47,6 +48,8 @@ export function useHistoryHandlers({
     workoutsDataHistoryRef,
     markWorkoutContentChanged,
     applyTrustedWorkoutRowsSnapshot,
+    trustedWorkoutRowsRef,
+    pendingSavePayloadsRef,
     buildSavedWorkoutDraftForDate,
     setSessionSyncVersion,
     pendingDeleteUndoRef,
@@ -77,6 +80,7 @@ export function useHistoryHandlers({
     buildHistoryRecordDeleteKey,
     removeHistoryDate,
     onDeleteDateClearCompletion,
+    invalidateSupabaseFetchFreshByPrefix,
 }) {
     const handleLogForDate = (dateStr) => {
         const requestedDate = normalizeDraftDateKey(dateStr);
@@ -258,9 +262,62 @@ export function useHistoryHandlers({
             return;
         }
 
+        // Gate A: block content restoration for persistently deleted dates.
+        // Exceptions: skip the block if the user has a pending edit (re-creating the workout)
+        // or an unsaved user draft in localStorage — wiping those would cause data loss.
+        {
+            const _persistentDeleted = loadPersistentDeletedDates(user?.id);
+            if (_persistentDeleted[requestedDate]) {
+                // (i) pendingChange exists AND is NOT an explicit full-date delete.
+                // explicitDelete OR-merges and never drops back to false on its own, so we
+                // use deleteScope (reset to null when explicitEdit=true fires) instead.
+                // Same logic as useHistorySync._datesToStrip condition.
+                const _hasPendingUserEdit = Boolean(
+                    pendingChange &&
+                    !(pendingChange.explicitDelete === true && pendingChange.deleteScope === "date")
+                );
+                // (ii) localStorage has an unsaved user-typed draft for this date
+                const _hasUnsavedUserDraft = isUnsavedUserWorkoutDraft(draftForDate);
+                if (_hasPendingUserEdit) {
+                    console.log("[WP] restore:persistentDeleteSkipped", {
+                        date: requestedDate,
+                        caller: "handleLogForDate",
+                        reason: "pending-user-edit",
+                        explicitDelete: pendingChange.explicitDelete,
+                        explicitEdit: pendingChange.explicitEdit,
+                    });
+                } else if (_hasUnsavedUserDraft) {
+                    console.log("[WP] restore:persistentDeleteSkipped", {
+                        date: requestedDate,
+                        caller: "handleLogForDate",
+                        reason: "unsaved-user-draft",
+                        draftSource: draftForDate?.meta?.source,
+                    });
+                } else {
+                    const _emptyDraft = withDraftDateMeta(requestedDate, {
+                        todayLabels: [],
+                        sessionEx: null,
+                        logData: {},
+                        exerciseUnits: {},
+                    }, { source: "explicit_date_nav", hasUnsavedChanges: false });
+                    console.log("[WP] restore:blockedByPersistentDelete", {
+                        date: requestedDate,
+                        caller: "handleLogForDate:shouldUseSavedWorkout",
+                        source: "explicit_date_nav",
+                        exerciseCount: (savedDraftForDate?.sessionEx ?? []).length,
+                        deletedAt: _persistentDeleted[requestedDate],
+                    });
+                    applyLogDraftState(_emptyDraft);
+                    setScreen("log");
+                    return;
+                }
+            }
+        }
+
         if (shouldUseSavedWorkout) {
             const cleanSavedDraft = withDraftDateMeta(requestedDate, savedDraftForDate, {
                 source: "explicit_date_nav",
+                payloadOrigin: "canonicalDisplayHistory",
                 remoteVerifiedAt: new Date().toISOString(),
                 hasUnsavedChanges: false,
             });
@@ -409,7 +466,7 @@ export function useHistoryHandlers({
     };
 
     const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
-        markWorkoutContentChanged(recordDate, setIdx !== undefined ? "set_delete" : "history_record_delete", { explicitDelete: true });
+        markWorkoutContentChanged(recordDate, setIdx !== undefined ? "set_delete" : "history_record_delete", { explicitDelete: true, deleteScope: "partial" });
         let shouldClearDateArtifacts = false;
         let deletedTargetDate = recordDate;
 
@@ -577,7 +634,7 @@ export function useHistoryHandlers({
     const deleteAllHistoryForDate = (targetDate) => {
         const normalizedTargetDate = String(targetDate || "").trim();
         if (!normalizedTargetDate) return;
-        markWorkoutContentChanged(normalizedTargetDate, "date_delete", { explicitDelete: true });
+        markWorkoutContentChanged(normalizedTargetDate, "date_delete", { explicitDelete: true, deleteScope: "date" });
 
         const currentHistory = latestHistoryRef.current || history || {};
         const nextHistory = removeHistoryDate(currentHistory, normalizedTargetDate);
@@ -618,6 +675,16 @@ export function useHistoryHandlers({
             records: recordMarkers,
         });
 
+        // Record in the persistent deleted-dates list (survives restarts, 30-day TTL).
+        // This is separate from the short-lived delete markers (120 s TTL) used for
+        // in-flight race prevention. The persistent list prevents startup reconcile from
+        // treating the deleted date as "unsynced local" and adding it back to mergedHistory.
+        const _persistentDeleteList = addPersistentDeletedDate(user?.id, normalizedTargetDate);
+        console.log("[WP] deleteAllHistory:persistentDeleteRecorded", {
+            date: normalizedTargetDate,
+            listSize: Object.keys(_persistentDeleteList || {}).length,
+        });
+
         setHistory(nextHistory);
         const nextWorkoutsDataHistory = applyLocalHistoryDates(
             workoutsDataHistoryRef.current || currentHistory,
@@ -631,13 +698,55 @@ export function useHistoryHandlers({
             requestId: "delete-date",
             workoutsHistory: nextHistory,
         });
+
+        // pendingSavePayloadsRef から削除対象日のエントリを消す。
+        // persistCurrentLog（400ms debounce）が削除前の内容を書き込んでいた場合、
+        // syncWorkoutRowsForDates がその stale payload を優先して upsert を実行してしまう。
+        // Map.delete() でエントリを消すことで normalizedHistoryMap へのフォールバックを効かせる。
+        const _hadPayload = pendingSavePayloadsRef?.current?.has(normalizedTargetDate) ?? false;
+        const _stalePayload = _hadPayload ? pendingSavePayloadsRef.current.get(normalizedTargetDate) : null;
+        const _clearedExerciseCount = _stalePayload
+            ? Object.entries(_stalePayload || {}).filter(([, recs]) =>
+                (recs || []).some((r) => String(r?.date || "").slice(0, 10) === normalizedTargetDate)
+            ).length
+            : 0;
+        if (_hadPayload) {
+            pendingSavePayloadsRef.current.delete(normalizedTargetDate);
+        }
+        console.log("[WP] deleteAllHistory:pendingPayloadCleared", {
+            date: normalizedTargetDate,
+            hadPayload: _hadPayload,
+            clearedExerciseCount: _clearedExerciseCount,
+        });
+
         queueWorkoutSessionSync(normalizedTargetDate);
+
+        // trustedWorkoutRows から削除対象日の行を取り除く。
+        // buildTrustedHistory は exactHistory (forceReplace:true) で existingHistory を上書きするため、
+        // trustedWorkoutRows に残った行が canonicalDisplayHistory に再注入されるのを防ぐ。
+        const _trustedBefore = (trustedWorkoutRowsRef?.current || []).length;
+        const _filteredRows = (trustedWorkoutRowsRef?.current || []).filter(
+            (row) => String(row?.date || "").slice(0, 10) !== normalizedTargetDate
+        );
+        const _removedCount = _trustedBefore - _filteredRows.length;
+        if (_removedCount > 0) {
+            applyTrustedWorkoutRowsSnapshot(_filteredRows, { replace: true, source: "date_delete" });
+            console.log("[WP] deleteAllHistory:trustedRowsFiltered", {
+                date: normalizedTargetDate,
+                beforeCount: _trustedBefore,
+                afterCount: _filteredRows.length,
+                removedCount: _removedCount,
+            });
+        }
 
         // その日が今の編集中なら画面上の状態も消す。
         // meta.source を "explicit_date_nav" にすることで useWorkoutLog の
         // hasUnsavedChanges ガードを回避し、未保存編集中でも必ず exercises をクリアする。
         // （ガード条件: prevDraft.hasUnsavedChanges && source !== "explicit_date_nav"）
-        const _clearedCurrentView = logDate === normalizedTargetDate;
+        const _latestLogDraftDate = normalizeDraftDateKey(
+            latestLogDraftRef.current?.meta?.date || latestLogDraftRef.current?.date
+        );
+        const _clearedCurrentView = _latestLogDraftDate === normalizedTargetDate || logDate === normalizedTargetDate;
         if (_clearedCurrentView) {
             applyLogDraftState({
                 todayLabels: [],
@@ -647,16 +756,43 @@ export function useHistoryHandlers({
                 meta: { source: "explicit_date_nav", hasUnsavedChanges: false },
             });
         }
+        console.log("[WP] deleteAllHistory:latestLogDraftCleared", {
+            targetDate: normalizedTargetDate,
+            refDate: _latestLogDraftDate,
+            logDate,
+            cleared: _clearedCurrentView,
+        });
         console.log("[WP] deleteAllHistory:displayCleared", {
             date: normalizedTargetDate,
             clearedCurrentView: _clearedCurrentView,
             reason: _clearedCurrentView
-                ? "deleted date matches current logDate — display state cleared synchronously"
+                ? "deleted date matches current logDate or latestLogDraftRef — display state cleared synchronously"
                 : "deleted date does not match current logDate — display unchanged",
         });
 
         // その日のdraftも消す
         clearDraftForDate(normalizedTargetDate);
+
+        // display_history 系 fetch の freshness キャッシュを無効化する。
+        // 削除後に runDedupeSupabaseFetch が "fresh skip" で弾かれ、カレンダーや
+        // 履歴画面の表示が更新されないままになるのを防ぐ。
+        // 強制フェッチは行わず、「次の更新要求が来たときに skip されない」状態にするだけ。
+        {
+            const _screens = ["calendar", "log", "history"];
+            const _invalidatedKeys = [];
+            if (invalidateSupabaseFetchFreshByPrefix) {
+                for (const _screen of _screens) {
+                    const _prefix = `display_history:${_screen}:${user?.id}:`;
+                    const _keys = invalidateSupabaseFetchFreshByPrefix(_prefix);
+                    _invalidatedKeys.push(..._keys);
+                }
+            }
+            console.log("[WP] deleteAllHistory:displayFreshnessInvalidated", {
+                date: normalizedTargetDate,
+                invalidatedKeys: _invalidatedKeys,
+            });
+        }
+
         setSavedWorkoutDurationSecByDate((prev) => {
             if (!prev[normalizedTargetDate]) return prev;
             const next = { ...prev };
@@ -712,6 +848,9 @@ export function useHistoryHandlers({
             records: (historyDeleteMarkersRef.current?.records || []).filter((key) => !String(key || "").startsWith(`${pending.date}::`)),
         });
 
+        // Remove from persistent deleted-dates list so Gate A/Gate B no longer block this date.
+        // Without this, navigating away and back would show an empty screen for the restored date.
+        removePersistentDeletedDate(user?.id, pending.date);
         saveDraftForDate(pending.date, pending.previousDraft || {});
         if (logDate === pending.date) {
             applyLogDraftState(pending.previousDraft || {
