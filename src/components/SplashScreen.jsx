@@ -35,7 +35,7 @@ export default function SplashScreen({ visible }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#F7FBFB",
+        background: "var(--app-bg)",
         opacity: visible ? 1 : 0,
         transition: visible ? "none" : "opacity 220ms ease",
         pointerEvents: visible ? "auto" : "none",
@@ -43,12 +43,12 @@ export default function SplashScreen({ visible }) {
       aria-hidden={!visible}
     >
       <img
-        src="/app-icon.svg"
+        src="/splash-logo.svg"
         alt=""
         aria-hidden="true"
         style={{
-          width: 96,
-          height: 96,
+          width: "min(38vw, 38vh)",
+          height: "auto",
           display: "block",
         }}
       />

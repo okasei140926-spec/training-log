@@ -42,11 +42,21 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>PUMP</title>
+    <script>
+      (function () {
+        try {
+          var dark = JSON.parse(localStorage.getItem("isDark"));
+          // isDark defaults to true (dark) when not set
+          var bg = dark === false ? "#e2eaea" : "#0f0f0f";
+          document.documentElement.style.setProperty("--initial-splash-bg", bg);
+        } catch (e) {}
+      })();
+    </script>
     <style>
       html,
       body {
         margin: 0;
-        background: #F7FBFB;
+        background: var(--initial-splash-bg, #0f0f0f);
       }
 
       #initial-splash {
@@ -56,12 +66,12 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #F7FBFB;
+        background: var(--initial-splash-bg, #0f0f0f);
       }
 
       #initial-splash img {
-        width: 96px;
-        height: 96px;
+        width: min(38vw, 38vh);
+        height: auto;
         display: block;
         animation: splashPop 0.3s ease-out;
       }
@@ -75,7 +85,7 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="initial-splash" aria-hidden="true">
-      <img src="%PUBLIC_URL%/app-icon.svg" alt="" />
+      <img src="%PUBLIC_URL%/splash-logo.svg" alt="" />
     </div>
     <div id="root"></div>
     <!--
