@@ -52,6 +52,7 @@ export function useWorkoutHistory({
   summaryHistory = null,
   cacheHistory = {},
   allowCacheFallback = false,
+  deletedDates = {},
   calledFrom = "useWorkoutHistory",
   log = false,
 } = {}) {
@@ -72,6 +73,7 @@ export function useWorkoutHistory({
   const workoutsDataHistoryHash = useMemo(() => hashHistory(fallbackWorkoutsDataHistory), [fallbackWorkoutsDataHistory]);
   const summaryHistoryHash = useMemo(() => hashHistory(fallbackSummaryHistory), [fallbackSummaryHistory]);
   const cacheHistoryHash = useMemo(() => hashHistory(fallbackCacheHistory), [fallbackCacheHistory]);
+  const deletedDatesHash = useMemo(() => JSON.stringify(Object.keys(deletedDates || {}).sort()), [deletedDates]);
   const inputHash = [
     workoutRowsHash,
     sessionRowsHash,
@@ -80,6 +82,7 @@ export function useWorkoutHistory({
     summaryHistoryHash,
     cacheHistoryHash,
     allowCacheFallback && !hasRemoteWorkoutRows ? "cache" : "no-cache",
+    deletedDatesHash,
     calledFrom,
   ].join("|");
 
@@ -111,6 +114,7 @@ export function useWorkoutHistory({
       summaryHistory: fallbackSummaryHistory,
       cacheHistory: fallbackCacheHistory,
       allowCacheFallback: allowCacheFallback && !hasRemoteWorkoutRows,
+      deletedDates,
       calledFrom,
       log,
     });
@@ -145,6 +149,7 @@ export function useWorkoutHistory({
   }, [
     allowCacheFallback,
     calledFrom,
+    deletedDates,
     fallbackCacheHistory,
     fallbackExistingHistory,
     fallbackSummaryHistory,

@@ -49,6 +49,8 @@ export function useHistoryHandlers({
     markWorkoutContentChanged,
     applyTrustedWorkoutRowsSnapshot,
     trustedWorkoutRowsRef,
+    applyTrustedSessionRowsSnapshot,
+    trustedSessionRows,
     pendingSavePayloadsRef,
     buildSavedWorkoutDraftForDate,
     setSessionSyncVersion,
@@ -465,6 +467,39 @@ export function useHistoryHandlers({
         if (!directSyncSucceeded) queueWorkoutSessionSync(editDate);
     };
 
+    // trustedWorkoutRows と trustedSessionRows から指定日の行を除去する共通ヘルパー。
+    // buildTrustedHistory の exactHistory 上書き（forceReplace:true）および
+    // session fallback（onlyIfMissing:true）による再注入を防ぐ。
+    // 日付のすべての exercise が消えた時点で呼ぶこと。部分削除（exercise が残る場合）には呼ばない。
+    const _clearTrustedRowsForDate = (normalizedDate) => {
+        if (!normalizedDate) return;
+
+        const _wBefore = (trustedWorkoutRowsRef?.current || []).length;
+        const _wFiltered = (trustedWorkoutRowsRef?.current || []).filter(
+            (row) => String(row?.date || "").slice(0, 10) !== normalizedDate
+        );
+        const _wRemoved = _wBefore - _wFiltered.length;
+        if (_wRemoved > 0) {
+            applyTrustedWorkoutRowsSnapshot(_wFiltered, { replace: true, source: "date_empty" });
+        }
+
+        if (applyTrustedSessionRowsSnapshot) {
+            const _sBefore = (trustedSessionRows || []).length;
+            const _sFiltered = (trustedSessionRows || []).filter(
+                (row) => String(row?.workout_date || row?.date || "").slice(0, 10) !== normalizedDate
+            );
+            const _sRemoved = _sBefore - _sFiltered.length;
+            if (_sRemoved > 0) {
+                applyTrustedSessionRowsSnapshot(_sFiltered, { replace: true, source: "date_empty" });
+            }
+            console.log("[WP] clearTrustedRowsForDate", {
+                date: normalizedDate,
+                workoutRowsRemoved: _wRemoved,
+                sessionRowsRemoved: _sRemoved,
+            });
+        }
+    };
+
     const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
         markWorkoutContentChanged(recordDate, setIdx !== undefined ? "set_delete" : "history_record_delete", { explicitDelete: true, deleteScope: "partial" });
         let shouldClearDateArtifacts = false;
@@ -543,6 +578,9 @@ export function useHistoryHandlers({
         });
 
         if (shouldClearDateArtifacts && deletedTargetDate) {
+            // この日付の exercise が 0 になったため trustedRows からも除去する。
+            // deleteAllHistoryForDate と同じ理由: session fallback (onlyIfMissing:true) による再注入を防ぐ。
+            _clearTrustedRowsForDate(String(deletedTargetDate || "").slice(0, 10));
             appendHistoryDeleteMarkers({ dates: [deletedTargetDate] });
             clearDraftForDate(deletedTargetDate);
             setSavedWorkoutDurationSecByDate((prev) => {
@@ -721,23 +759,9 @@ export function useHistoryHandlers({
 
         queueWorkoutSessionSync(normalizedTargetDate);
 
-        // trustedWorkoutRows から削除対象日の行を取り除く。
-        // buildTrustedHistory は exactHistory (forceReplace:true) で existingHistory を上書きするため、
-        // trustedWorkoutRows に残った行が canonicalDisplayHistory に再注入されるのを防ぐ。
-        const _trustedBefore = (trustedWorkoutRowsRef?.current || []).length;
-        const _filteredRows = (trustedWorkoutRowsRef?.current || []).filter(
-            (row) => String(row?.date || "").slice(0, 10) !== normalizedTargetDate
-        );
-        const _removedCount = _trustedBefore - _filteredRows.length;
-        if (_removedCount > 0) {
-            applyTrustedWorkoutRowsSnapshot(_filteredRows, { replace: true, source: "date_delete" });
-            console.log("[WP] deleteAllHistory:trustedRowsFiltered", {
-                date: normalizedTargetDate,
-                beforeCount: _trustedBefore,
-                afterCount: _filteredRows.length,
-                removedCount: _removedCount,
-            });
-        }
+        // trustedWorkoutRows と trustedSessionRows から削除対象日の行を取り除く。
+        // 詳細は _clearTrustedRowsForDate のコメントを参照。
+        _clearTrustedRowsForDate(normalizedTargetDate);
 
         // その日が今の編集中なら画面上の状態も消す。
         // meta.source を "explicit_date_nav" にすることで useWorkoutLog の

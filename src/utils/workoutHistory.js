@@ -297,6 +297,7 @@ export const buildTrustedHistory = ({
   summaryHistory = null,
   cacheHistory = {},
   allowCacheFallback = false,
+  deletedDates = {},
   source = "unknown",
   logger = console,
   log = false,
@@ -357,9 +358,17 @@ export const buildTrustedHistory = ({
     blockExactDates: true,
   });
 
+  // session fallback で削除済み日付を再注入しない。
+  // アプリ再起動後に workout_sessions の Supabase 削除が未完了でも
+  // 永続削除リストにある日付はカレンダーに復活しない。
+  const _deletedDatesSet = Object.keys(deletedDates || {});
+  const filteredSummaryDates = _deletedDatesSet.length > 0
+    ? summaryDates.filter((d) => !deletedDates[d])
+    : summaryDates;
+
   applyCandidate({
     candidateHistory: sessionFallback.history,
-    dates: summaryDates,
+    dates: filteredSummaryDates,
     sourceName: "workout_sessions.summary_json",
     onlyIfMissing: true,
   });

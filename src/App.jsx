@@ -142,6 +142,7 @@ import {
     isPlainObject,
     isTransientSupabaseFetchError,
     isUnsavedUserWorkoutDraft,
+    loadPersistentDeletedDates,
     loadTrustedHistoryCache,
     logRecordFetchError,
     logWorkoutPersistenceDecision,
@@ -1924,6 +1925,14 @@ export default function GymApp() {
         liveExercisesDateRef.current = draftDate;
     }, [workoutLog.draft]);
 
+    // 永続削除リスト: buildTrustedHistory の session fallback が削除済み日付を
+    // 再注入しないよう useDisplayHistory → useWorkoutHistory → buildTrustedHistory に渡す。
+    // userId が確定するまでは空オブジェクト（デフォルト引数）が使われる。
+    const persistentDeletedDates = useMemo(
+        () => loadPersistentDeletedDates(user?.id),
+        [user?.id]  // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
     const {
         displayHistory,
         canonicalDisplayHistory,
@@ -1946,6 +1955,7 @@ export default function GymApp() {
         buildDraftHistoryForDate,
         getCurrentWeekRangeForHomeSummary,
         shouldLogPerfDebug,
+        deletedDates: persistentDeletedDates,
     });
 
     // Keep latestCanonicalHistoryRef in sync (used in handleFinishWorkout callback)
@@ -2840,6 +2850,8 @@ export default function GymApp() {
         markWorkoutContentChanged,
         applyTrustedWorkoutRowsSnapshot,
         trustedWorkoutRowsRef,
+        applyTrustedSessionRowsSnapshot,
+        trustedSessionRows,
         pendingSavePayloadsRef,
         buildSavedWorkoutDraftForDate,
         setSessionSyncVersion,

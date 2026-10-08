@@ -37,6 +37,9 @@ export function useDisplayHistory({
     buildDraftHistoryForDate,
     getCurrentWeekRangeForHomeSummary,
     shouldLogPerfDebug,
+
+    // 永続削除リスト: session fallback が削除済み日付を再注入しないよう buildTrustedHistory に渡す
+    deletedDates = {},
 }) {
     const displayHistory = useMemo(() => {
         if (!logDate) return history;
@@ -111,6 +114,7 @@ export function useDisplayHistory({
         sessionRows: trustedSessionRows,
         existingHistory: displayHistory,
         workoutsDataHistory,
+        deletedDates,
         calledFrom: "canonicalDisplayHistory",
         log: shouldLogPerfDebug(),
     });
