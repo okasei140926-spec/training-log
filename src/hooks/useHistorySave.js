@@ -46,6 +46,7 @@ export function useHistorySave({
     describeHistoryRecordsForDate,
     clearHistoryDeleteMarkerForDate = null,
     pendingSavePayloadsRef = null,
+    onPersistentDeleteChanged = null,
 }) {
     // ─── Refs ─────────────────────────────────────────────────────────────────
     // pendingWorkoutContentChangeDatesRef and explicitWorkoutEditDatesRef are
@@ -155,6 +156,7 @@ export function useHistorySave({
             const _userId = user?.id || latestUserIdRef.current || null;
             if (_userId) {
                 removePersistentDeletedDate(_userId, normalizedDate);
+                onPersistentDeleteChanged?.();
                 console.log("[WP] persistentDelete:clearedByUserEdit", {
                     date: normalizedDate,
                     reason,
@@ -825,6 +827,7 @@ export function useHistorySave({
                             // Remove from persistent deleted-dates list so startup reconcile
                             // treats it as a normal date again.
                             removePersistentDeletedDate(userId, workoutDate);
+                            onPersistentDeleteChanged?.();
                             console.log("[WP] persistentDelete:cleared", {
                                 date: workoutDate,
                                 reason: "record-recreated",

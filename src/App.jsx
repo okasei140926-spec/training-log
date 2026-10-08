@@ -406,6 +406,18 @@ export default function GymApp() {
     }, [exerciseUnits, hasDraftContent, logData, sessionEx, todayLabels]);
 
     const { applyLogDraftState, applyCurrentLogDraft, setLogDataAndSaveDraft } = useLogDraftApplicator({        logDate,        screen,        exerciseUnits,        logData,        sessionEx,        todayLabels,        user,        latestLogDraftRef,        pendingWorkoutContentChangeDatesRef,        lastAppliedLogDataHashRef,        lastAutosavedDraftSignatureRef,        hasDraftContent,        saveDraftForDate,        getCurrentLogDraftSnapshot,        setTodayLabels,        setLogData,        setSessionEx,        setExerciseUnits,    });
+
+    // persistentDeletedVersion: addPersistentDeletedDate / removePersistentDeletedDate が
+    // 呼ばれるたびにインクリメントされる。persistentDeletedDates の useMemo を正確に無効化し、
+    // 毎レンダーの再計算を避けるためにバージョン管理する。
+    // ここで宣言することで markLogWorkoutContentChanged / useHistorySave など
+    // 後続のすべての呼び出し元に参照を渡せる。
+    const [persistentDeletedVersion, setPersistentDeletedVersion] = useState(0);
+    const onPersistentDeleteChanged = useCallback(
+        () => setPersistentDeletedVersion((v) => v + 1),
+        []
+    );
+
     const markLogWorkoutContentChanged = useCallback((reason = "set_update", details = {}) => {
         // Use logDateRef.current to avoid stale-closure contamination: if logDate
         // changes in state but this callback hasn't been recreated yet, the ref
@@ -447,6 +459,7 @@ export default function GymApp() {
         if (explicitEdit && !(Boolean(previous.explicitDelete) && (previous.deleteScope ?? null) === "date")) {
             if (user?.id) {
                 removePersistentDeletedDate(user.id, normalizedDate);
+                onPersistentDeleteChanged();
                 console.log("[WP] persistentDelete:clearedByUserEdit", {
                     date: normalizedDate,
                     reason,
@@ -472,7 +485,7 @@ export default function GymApp() {
     // logDate is intentionally excluded — we read it via logDateRef.current to avoid
     // stale-closure contamination (marking pending changes for the wrong date).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id]);
+    }, [user?.id, onPersistentDeleteChanged]);
 
     const { saveLog } = useLogLogic({
         logData,
@@ -1331,6 +1344,7 @@ export default function GymApp() {
         buildHistoryFromWorkoutSessionRows,
         describeHistoryRecordsForDate,
         clearHistoryDeleteMarkerForDate,
+        onPersistentDeleteChanged,
     });
 
     // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it
@@ -1930,7 +1944,8 @@ export default function GymApp() {
     // userId が確定するまでは空オブジェクト（デフォルト引数）が使われる。
     const persistentDeletedDates = useMemo(
         () => loadPersistentDeletedDates(user?.id),
-        [user?.id]  // eslint-disable-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [user?.id, persistentDeletedVersion]
     );
 
     const {
@@ -2488,6 +2503,7 @@ export default function GymApp() {
         // recreating content for this date, so "deleted" state no longer applies.
         // removePersistentDeletedDate is a no-op when the date is not in the list.
         removePersistentDeletedDate(user?.id, todayKey);
+        onPersistentDeleteChanged();
         saveDraftForDate(todayKey, newDraft);
         setLogMode("today");
         setLogDate(todayKey);
@@ -2852,6 +2868,7 @@ export default function GymApp() {
         trustedWorkoutRowsRef,
         applyTrustedSessionRowsSnapshot,
         trustedSessionRows,
+        onPersistentDeleteChanged,
         pendingSavePayloadsRef,
         buildSavedWorkoutDraftForDate,
         setSessionSyncVersion,

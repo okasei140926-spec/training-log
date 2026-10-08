@@ -51,6 +51,7 @@ export function useHistoryHandlers({
     trustedWorkoutRowsRef,
     applyTrustedSessionRowsSnapshot,
     trustedSessionRows,
+    onPersistentDeleteChanged = null,
     pendingSavePayloadsRef,
     buildSavedWorkoutDraftForDate,
     setSessionSyncVersion,
@@ -718,6 +719,7 @@ export function useHistoryHandlers({
         // in-flight race prevention. The persistent list prevents startup reconcile from
         // treating the deleted date as "unsynced local" and adding it back to mergedHistory.
         const _persistentDeleteList = addPersistentDeletedDate(user?.id, normalizedTargetDate);
+        onPersistentDeleteChanged?.();
         console.log("[WP] deleteAllHistory:persistentDeleteRecorded", {
             date: normalizedTargetDate,
             listSize: Object.keys(_persistentDeleteList || {}).length,
@@ -875,6 +877,7 @@ export function useHistoryHandlers({
         // Remove from persistent deleted-dates list so Gate A/Gate B no longer block this date.
         // Without this, navigating away and back would show an empty screen for the restored date.
         removePersistentDeletedDate(user?.id, pending.date);
+        onPersistentDeleteChanged?.();
         saveDraftForDate(pending.date, pending.previousDraft || {});
         if (logDate === pending.date) {
             applyLogDraftState(pending.previousDraft || {
@@ -911,6 +914,7 @@ export function useHistoryHandlers({
         historyRevisionRef,
         latestHistoryRef,
         logDate,
+        onPersistentDeleteChanged,
         pendingDeleteUndoRef,
         persistHistoryForUser,
         queueWorkoutSessionSync,
