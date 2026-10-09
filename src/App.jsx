@@ -428,6 +428,11 @@ export default function GymApp() {
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
         const explicitEdit = Boolean(previous.explicitEdit || details.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(reason));
         const _qbMarkLog = pendingWorkoutContentChangeDatesRef.current.size;
+        // Clear stalled flag when a new user intent arrives: explicitEdit means the
+        // user just edited the date; explicitDelete+scope=date means the user deleted it.
+        // Mirrors the condition in useHistorySave.js markWorkoutContentChanged.
+        const _clearStalled = explicitEdit
+            || (Boolean(previous.explicitDelete) && (previous.deleteScope ?? null) === "date");
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
@@ -435,8 +440,7 @@ export default function GymApp() {
             explicitEdit,
             details,
             updatedAt: new Date().toISOString(),
-            // Clear stalled flag when the user re-edits the date — re-activates sync.
-            ...(explicitEdit ? { stalled: false, stalledAt: null } : {}),
+            ...(_clearStalled ? { stalled: false, stalledAt: null } : {}),
         });
         logWriteTrace("syncQueue:add", {
             date: normalizedDate,
@@ -1347,8 +1351,6 @@ export default function GymApp() {
         describeHistoryRecordsForDate,
         clearHistoryDeleteMarkerForDate,
         onPersistentDeleteChanged,
-        loadDraftForDate,
-        saveDraftForDate,
     });
 
     // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it

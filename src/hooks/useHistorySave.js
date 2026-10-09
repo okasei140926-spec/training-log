@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../utils/writeTrace";
-import { makeDraftMeta, removePersistentDeletedDate } from "../utils/appHelpers";
+import { removePersistentDeletedDate } from "../utils/appHelpers";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
     fetchWorkoutRowFromWorkoutsData,
@@ -47,8 +47,6 @@ export function useHistorySave({
     clearHistoryDeleteMarkerForDate = null,
     pendingSavePayloadsRef = null,
     onPersistentDeleteChanged = null,
-    loadDraftForDate = null,
-    saveDraftForDate = null,
 }) {
     // ─── Refs ─────────────────────────────────────────────────────────────────
     // pendingWorkoutContentChangeDatesRef and explicitWorkoutEditDatesRef are
@@ -422,28 +420,6 @@ export function useHistorySave({
                                 setCount: incomingMetrics.setCount,
                             });
                             clearSyncFailure(workoutDate);
-                            // G8b confirmed local === remote via a real Supabase row.
-                            // Clear hasUnsavedChanges so the next startup scan skips this date.
-                            // Guard: remoteWorkoutsDataRow !== null ensures we verified against
-                            // an actual Supabase record (not an offline null-response).
-                            if (remoteWorkoutsDataRow !== null && loadDraftForDate && saveDraftForDate) {
-                                const _staleDraft = loadDraftForDate(workoutDate);
-                                if (_staleDraft?.meta?.hasUnsavedChanges) {
-                                    saveDraftForDate(workoutDate, {
-                                        ..._staleDraft,
-                                        meta: makeDraftMeta(_staleDraft.meta || {}, {
-                                            hasUnsavedChanges: false,
-                                            source: "g8b_verified",
-                                        }),
-                                    });
-                                    console.log("[save guard] startup draft verified: cleared hasUnsavedChanges", {
-                                        env: getRuntimeEnvironmentLabel(),
-                                        user_id: userId,
-                                        date: workoutDate,
-                                        reason: pendingChange.reason,
-                                    });
-                                }
-                            }
                             results.skippedDates.push(workoutDate);
                             return;
                         }
