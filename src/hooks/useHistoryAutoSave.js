@@ -32,6 +32,11 @@ import {
 } from "./useHistorySync";
 import { getWorkoutTimerPersistence } from "../utils/workoutTimer";
 
+// Stalled queue entries are skipped by auto-save but kept in the queue so a
+// subsequent user edit can re-activate them.  Entries older than this TTL are
+// purged automatically when the syncDates list is next built.
+const STALLED_ENTRY_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 export function useHistoryAutoSave({
     history,
     user,
@@ -196,7 +201,24 @@ export function useHistoryAutoSave({
                 // callback already processed some dates). Always using the live queue ensures
                 // every queued date gets at least one chance to be batched.
                 const livePendingDates = [...pendingWorkoutContentChangeDatesRef.current.keys()];
-                const syncDates = [...new Set(livePendingDates)];
+                const _now = Date.now();
+                const syncDates = [...new Set(
+                    livePendingDates.filter((d) => {
+                        const entry = pendingWorkoutContentChangeDatesRef.current.get(d);
+                        if (!entry?.stalled) return true;
+                        // TTL: stalled entry survived long enough — purge it silently.
+                        if (_now - (entry.stalledAt || 0) > STALLED_ENTRY_TTL_MS) {
+                            pendingWorkoutContentChangeDatesRef.current.delete(d);
+                            logWriteTrace("syncQueue:delete", {
+                                date: d,
+                                decision: "executed",
+                                reason: "stalled entry TTL expired",
+                                extra: { stalledAt: entry.stalledAt, ttlMs: STALLED_ENTRY_TTL_MS },
+                            });
+                        }
+                        return false; // skip stalled entries (whether TTL hit or not)
+                    })
+                )];
                 // Capture before queue entries are cleared on success (line below syncDates.forEach).
                 const explicitDeleteSyncDates = new Set(
                     syncDates.filter((d) => Boolean(pendingWorkoutContentChangeDatesRef.current.get(d)?.explicitDelete))
@@ -280,16 +302,23 @@ export function useHistoryAutoSave({
                                 count,
                             });
                             recordSyncFailure(date, new Error(`save stalled: draft not flushed after ${count} holds`), "hold_timeout");
-                            const _qbHeld = pendingWorkoutContentChangeDatesRef.current.size;
-                            pendingWorkoutContentChangeDatesRef.current.delete(date);
-                            logWriteTrace("syncQueue:delete", {
+                            // Keep the entry in the queue as "stalled" instead of deleting it.
+                            // Auto-save skips stalled entries; the next user edit for this date
+                            // overwrites the entry with a fresh one (no stalled flag), re-activating
+                            // normal sync.  The entry is purged after STALLED_ENTRY_TTL_MS.
+                            const _existingEntry = pendingWorkoutContentChangeDatesRef.current.get(date) || {};
+                            pendingWorkoutContentChangeDatesRef.current.set(date, {
+                                ..._existingEntry,
+                                stalled: true,
+                                stalledAt: Date.now(),
+                            });
+                            logWriteTrace("syncQueue:stall", {
                                 date,
                                 decision: "executed",
-                                reason: "heldDates retry limit exceeded",
+                                reason: "heldDates retry limit exceeded — entry marked stalled",
                                 extra: {
-                                    queueSizeBefore: _qbHeld,
-                                    queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
-                                    queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                                    queueSize: pendingWorkoutContentChangeDatesRef.current.size,
+                                    queueDates: [...pendingWorkoutContentChangeDatesRef.current.keys()],
                                     holdCount: count,
                                 },
                             });

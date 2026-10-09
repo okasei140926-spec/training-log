@@ -435,6 +435,8 @@ export default function GymApp() {
             explicitEdit,
             details,
             updatedAt: new Date().toISOString(),
+            // Clear stalled flag when the user re-edits the date — re-activates sync.
+            ...(explicitEdit ? { stalled: false, stalledAt: null } : {}),
         });
         logWriteTrace("syncQueue:add", {
             date: normalizedDate,
@@ -1345,6 +1347,8 @@ export default function GymApp() {
         describeHistoryRecordsForDate,
         clearHistoryDeleteMarkerForDate,
         onPersistentDeleteChanged,
+        loadDraftForDate,
+        saveDraftForDate,
     });
 
     // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it

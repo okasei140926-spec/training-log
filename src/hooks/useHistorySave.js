@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../utils/writeTrace";
-import { removePersistentDeletedDate } from "../utils/appHelpers";
+import { makeDraftMeta, removePersistentDeletedDate } from "../utils/appHelpers";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
     fetchWorkoutRowFromWorkoutsData,
@@ -47,6 +47,8 @@ export function useHistorySave({
     clearHistoryDeleteMarkerForDate = null,
     pendingSavePayloadsRef = null,
     onPersistentDeleteChanged = null,
+    loadDraftForDate = null,
+    saveDraftForDate = null,
 }) {
     // ─── Refs ─────────────────────────────────────────────────────────────────
     // pendingWorkoutContentChangeDatesRef and explicitWorkoutEditDatesRef are
@@ -115,6 +117,10 @@ export function useHistorySave({
             (options.explicitEdit ? null : previous.deleteScope) ??
             null;
         const _qbMwcc = pendingWorkoutContentChangeDatesRef.current.size;
+        // Clear stalled flag when a new user intent arrives: explicitEdit means the
+        // user just edited the date; explicitDelete+scope=date means the user deleted it.
+        // Either way the previous stall is no longer relevant — sync must re-attempt.
+        const _clearStalled = explicitEdit || (explicitDelete && deleteScope === "date");
         pendingWorkoutContentChangeDatesRef.current.set(normalizedDate, {
             ...previous,
             reason,
@@ -123,6 +129,7 @@ export function useHistorySave({
             deleteScope,
             details: options.details || previous.details || null,
             updatedAt: new Date().toISOString(),
+            ...(_clearStalled ? { stalled: false, stalledAt: null } : {}),
         });
         logWriteTrace("markWorkoutContentChanged", {
             date: normalizedDate,
@@ -415,6 +422,28 @@ export function useHistorySave({
                                 setCount: incomingMetrics.setCount,
                             });
                             clearSyncFailure(workoutDate);
+                            // G8b confirmed local === remote via a real Supabase row.
+                            // Clear hasUnsavedChanges so the next startup scan skips this date.
+                            // Guard: remoteWorkoutsDataRow !== null ensures we verified against
+                            // an actual Supabase record (not an offline null-response).
+                            if (remoteWorkoutsDataRow !== null && loadDraftForDate && saveDraftForDate) {
+                                const _staleDraft = loadDraftForDate(workoutDate);
+                                if (_staleDraft?.meta?.hasUnsavedChanges) {
+                                    saveDraftForDate(workoutDate, {
+                                        ..._staleDraft,
+                                        meta: makeDraftMeta(_staleDraft.meta || {}, {
+                                            hasUnsavedChanges: false,
+                                            source: "g8b_verified",
+                                        }),
+                                    });
+                                    console.log("[save guard] startup draft verified: cleared hasUnsavedChanges", {
+                                        env: getRuntimeEnvironmentLabel(),
+                                        user_id: userId,
+                                        date: workoutDate,
+                                        reason: pendingChange.reason,
+                                    });
+                                }
+                            }
                             results.skippedDates.push(workoutDate);
                             return;
                         }
