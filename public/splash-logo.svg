@@ -1,10 +1,4 @@
 <svg width="1024" height="977" viewBox="240 250 576 550" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="mint" x1="220" y1="190" x2="820" y2="850" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2EF2DB"/>
-      <stop offset="1" stop-color="#0FAE9F"/>
-    </linearGradient>
-  </defs>
   <path fill-rule="evenodd" clip-rule="evenodd"
     d="M335 250
        H618
@@ -24,5 +18,5 @@
        C654 504 688 477 688 438
        C688 399 654 372 610 372
        H475Z"
-    fill="url(#mint)"/>
+    fill="#FFFFFF"/>
 </svg>

@@ -35,7 +35,7 @@ export default function SplashScreen({ visible }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--app-bg)",
+        background: "#0E9E88",
         opacity: visible ? 1 : 0,
         transition: visible ? "none" : "opacity 220ms ease",
         pointerEvents: visible ? "auto" : "none",
