@@ -935,56 +935,6 @@ export default function SettingsModal({
                     )}
                   </>
                 )}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const raw = localStorage.getItem("wpTraceLog") || "[]";
-                      await navigator.clipboard.writeText(raw);
-                      setDebugLogMessage("デバッグログをコピーしました。");
-                    } catch {
-                      setDebugLogMessage("コピーに失敗しました。");
-                    }
-                    setTimeout(() => setDebugLogMessage(""), 4000);
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "14px 16px",
-                    borderRadius: 14,
-                    background: "var(--card2)",
-                    border: "1px solid var(--border2)",
-                    color: "var(--text)",
-                    fontSize: 14,
-                    fontWeight: 900,
-                  }}
-                >
-                  デバッグログをコピー
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem("wpTraceLog");
-                    setDebugLogMessage("デバッグログを消去しました。");
-                    setTimeout(() => setDebugLogMessage(""), 4000);
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "14px 16px",
-                    borderRadius: 14,
-                    background: "var(--card2)",
-                    border: "1px solid var(--border2)",
-                    color: "var(--text2)",
-                    fontSize: 14,
-                    fontWeight: 900,
-                  }}
-                >
-                  デバッグログを消去
-                </button>
-                {debugLogMessage && (
-                  <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
-                    {debugLogMessage}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1277,6 +1227,85 @@ export default function SettingsModal({
                   >
                     {accountActionBusy ? "削除中..." : "アカウントとデータを削除"}
                   </button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text3)", marginBottom: 10 }}>
+                サポート
+              </div>
+              <div
+                style={{
+                  background: "var(--card)",
+                  borderRadius: 20,
+                  padding: 16,
+                  border: "1px solid var(--border2)",
+                  boxShadow: "var(--shadow-card)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.7 }}>
+                  不具合のご報告時に、サポートから操作をお願いすることがあります。動作ログには記録した日付・種目名・重量が含まれます。
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const raw = localStorage.getItem("wpTraceLog") || "[]";
+                      let entries = [];
+                      try { entries = JSON.parse(raw); } catch {}
+                      const count = Array.isArray(entries) ? entries.length : 0;
+                      await navigator.clipboard.writeText(raw);
+                      setDebugLogMessage(
+                        count === 0
+                          ? "ログはありません。"
+                          : `デバッグログをコピーしました（${count}件）。`
+                      );
+                    } catch {
+                      setDebugLogMessage("コピーに失敗しました。");
+                    }
+                    setTimeout(() => setDebugLogMessage(""), 4000);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    background: "var(--card2)",
+                    border: "1px solid var(--border2)",
+                    color: "var(--text)",
+                    fontSize: 14,
+                    fontWeight: 900,
+                  }}
+                >
+                  デバッグログをコピー
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem("wpTraceLog");
+                    setDebugLogMessage("デバッグログを消去しました。");
+                    setTimeout(() => setDebugLogMessage(""), 4000);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    background: "var(--card2)",
+                    border: "1px solid var(--border2)",
+                    color: "var(--text)",
+                    fontSize: 14,
+                    fontWeight: 900,
+                  }}
+                >
+                  デバッグログを消去
+                </button>
+                {debugLogMessage && (
+                  <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
+                    {debugLogMessage}
+                  </div>
                 )}
               </div>
             </div>
