@@ -1426,9 +1426,7 @@ export default function GymApp() {
                 // or fetchedRemoteRows). These were auto-persisted by the hydration path and do
                 // not represent user intent. Rescuing them would zombie-restore exercises that
                 // were deleted before the next remote sync completed.
-                const isRemoteOriginContent =
-                    draft.meta?.payloadOrigin === "canonicalDisplayHistory" ||
-                    draft.meta?.payloadOrigin === "fetchedRemoteRows";
+                const isRemoteOriginContent = draft.meta?.contentOrigin === "remote";
                 if (isRemoteOriginContent) continue;
                 // Inject local draft directly into pendingSavePayloadsRef so
                 // syncWorkoutRowsForDates sends local content (not remote-derived history).

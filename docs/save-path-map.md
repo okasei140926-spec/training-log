@@ -46,28 +46,38 @@
 
 ---
 
-### C2. localStorage: `draft_{field}_{YYYY-MM-DD}`
+### C2. localStorage ドラフトストレージ（2キー並行書き込み）
 
 | 項目 | 内容 |
 |------|------|
-| キー群 | `draft_logData_{date}`, `draft_sessionEx_{date}`, `draft_exerciseUnits_{date}`, `draft_todayLabels_{date}`, `draft_meta_{date}` |
-| 定義 | `src/hooks/useDraftStore.js` L79–114 (load), L323–362 (save) |
+| プライマリキー | `workoutDraft:{date}` — `workoutDraftStore.js` の `DEFAULT_PREFIX = "workoutDraft"` が生成する複合キー |
+| セカンダリキー群 | `draft_logData_{date}`, `draft_sessionEx_{date}`, `draft_exerciseUnits_{date}`, `draft_todayLabels_{date}`, `draft_meta_{date}` |
+| 定義 | `src/features/workout/workoutDraftStore.js` L59 (key生成), `src/hooks/useDraftStore.js` L79–114 (load), L323–362 (save) |
 | 寿命 | **persistent**（ブラウザ/WebView の localStorage、アプリ削除まで残る） |
-| 保持内容 | 日付ごとの編集バッファのスナップショット |
+| 保持内容 | 日付ごとの編集バッファのスナップショット（1ドラフト = 2キーに同内容が並行保存） |
 | 真実の源 / 派生 | ユーザーの未同期編集の真実の源（Supabase へ届く前の保険） |
 
-**書き込み箇所:**
-- `src/features/workout/workoutDraftStore.js` L191–360 `saveWorkoutDraft()` — C1 の変更をフラッシュ
-- `src/hooks/useDraftStore.js` L318 — ラッパー経由
+**書き込み（プライマリ + セカンダリ同時）:**
+- `src/hooks/useDraftStore.js` `saveDraftForDate()` —
+  内部で `saveStoredWorkoutDraft(date, draft)` → `workoutDraft:{date}` へ書き込み、
+  さらに `save(getDraftKey("draft_logData", date), ...)` 等で `draft_*_{date}` にも並行書き込みする
 
-**読み取り箇所:**
-- `src/features/workout/workoutDraftStore.js` L150–189 `loadWorkoutDraft()`
-- `src/hooks/useDraftStore.js` L79–114 `load()`
-- `src/App.jsx` L1384 `rescueUnsyncedDrafts()` — 起動時に全日付をスキャン
+**読み取りの優先順位:**
+- `src/hooks/useDraftStore.js` `loadDraftForDate()` — プライマリ（`workoutDraft:{date}`）を先に試み、
+  存在しなければセカンダリ（`draft_*_{date}`）、さらになければレガシーグローバルキーの順でフォールバック
+- すべての経路が `normalizeDraftForLoad` → `resolveContentOrigin` を通る
 
-**レガシーグローバルキー（非推奨、移行中）:**
+**normalizeDraftForLoad を経由しない直読み箇所（注意）:**
+- `src/features/workout/useWorkoutLog.js` L261 `loadWorkoutDraft(normalizedDate, ...)` —
+  プライマリキー `workoutDraft:{date}` を直接読む。`useDraftStore` の `normalizeDraftForLoad` を経由しないため、
+  `resolveContentOrigin` による `contentOrigin` の補完が行われない
+
+**読み取り（上記以外）:**
+- `src/App.jsx` L1384 `rescueUnsyncedDrafts()` — 起動時に全日付をスキャン（`loadDraftForDate` 経由）
+
+**レガシーグローバルキー（非推奨、読み取り専用）:**
 `draft_logData`, `draft_sessionEx`, `draft_exerciseUnits`, `draft_todayLabels`, `draft_meta`
-(日付なし。`useDraftStore.js` L111–114 で読み取り専用)
+(日付なし。`useDraftStore.js` L111–114 で読み取り専用。新規書き込みなし)
 
 ---
 
@@ -680,6 +690,24 @@ C3 を廃止して C6 を直接 `buildTrustedHistory()` に渡す形に変更し
 **コンテンツの出所のみ**を表現するよう整理する。
 one-way valve の判定を `source` 1つで完結させる。
 リスク: **中**（`source` の全値パターンの洗い替えが必要、既存のガードロジックへの影響が広い）。
+
+**案E の現状（2026-10-10 時点）:**
+案E-1 完了。`payloadOrigin` 新規書き込みを停止し、`meta.contentOrigin`（4値: `user_edit` / `remote` / `local_draft` / `empty`）を導入した。
+`rescueUnsyncedDrafts` の判定を `contentOrigin === "remote"` 1フィールドで完結させた。
+旧端末の localStorage にある `payloadOrigin` のみのドラフトは `useDraftStore.normalizeDraftForLoad` 1箇所で `resolveContentOrigin` により補完する。
+
+**案E-3 前に確認が必要な未解決の問い:**
+one-way valve（`workoutDraftStore.js:208`）はプライマリキー `workoutDraft:{date}` への
+`source === "remote_supabase"` 書き込みをブロックするが、
+**セカンダリキー `draft_*_{date}` への書き込みも同様にブロックされるかが未確認**。
+
+`useDraftStore.saveDraftForDate` は `saveStoredWorkoutDraft`（プライマリ）と
+`save("draft_meta_{date}", meta)`（セカンダリ）を独立して呼ぶ。
+もし valve がプライマリのみをブロックし、セカンダリへは書き込まれる場合、
+remote 由来のコンテンツが `draft_meta_{date}` 等に残り、
+プライマリが存在しないフォールバック読み出しで `loadDraftForDate` が復活させる経路が生じる。
+案E-2（one-way valve の適用範囲の明確化）または案E-3（valve を呼び出し側の明示オプションに移す）の前に
+この経路の有無を実装で確認する必要がある。
 
 ---
 

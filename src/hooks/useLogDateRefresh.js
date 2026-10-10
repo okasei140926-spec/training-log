@@ -553,6 +553,7 @@ export function useLogDateRefresh({
                     const datedLocalDraft = withDraftDateMeta(normalizedDate, localDraft, {
                         source: localDraft?.meta?.source || "draft_restore",
                         hasUnsavedChanges: true,
+                        contentOrigin: localDraft?.meta?.contentOrigin || "local_draft",
                     });
                     console.warn("[restore] skipped Supabase date refresh during unsaved user draft; keeping local draft", {
                         env: getRuntimeEnvironmentLabel(),
@@ -647,7 +648,7 @@ export function useLogDateRefresh({
                     source: "remote_supabase",
                     remoteVerifiedAt,
                     hasUnsavedChanges: false,
-                    payloadOrigin: "fetchedRemoteRows",
+                    contentOrigin: "remote",
                     contentDate: normalizedDate,
                 });
 

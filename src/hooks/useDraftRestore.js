@@ -85,6 +85,7 @@ export function useDraftRestore({
             {
                 source: "canonical_display_history",
                 hasUnsavedChanges: false,
+                contentOrigin: "remote",
             }
         );
         if (!savedDraftForDate.hasSavedWorkout) return;
@@ -232,6 +233,7 @@ export function useDraftRestore({
             const datedLocalDraft = withDraftDateMeta(normalizedLogDate, localDraft, {
                 source: localDraft?.meta?.source || "draft_restore",
                 hasUnsavedChanges: true,
+                contentOrigin: localDraft?.meta?.contentOrigin || "local_draft",
             });
             applyCurrentLogDraft(datedLocalDraft, { forDate: normalizedLogDate });
             markWorkoutContentChanged(normalizedLogDate, localDraftEditReason || "local_unsaved_draft_restore", { explicitEdit: true });
@@ -257,6 +259,7 @@ export function useDraftRestore({
             const datedLocalDraft = withDraftDateMeta(normalizedLogDate, localDraft, {
                 source: localDraft?.meta?.source || "draft_restore",
                 hasUnsavedChanges: localDraft?.meta?.hasUnsavedChanges ?? true,
+                contentOrigin: localDraft?.meta?.contentOrigin || "local_draft",
             });
             applyCurrentLogDraft(datedLocalDraft, { forDate: normalizedLogDate });
             logRestoreDecision(normalizedLogDate, savedDraftForDate, datedLocalDraft, datedLocalDraft, "local_draft_richer_than_saved");
@@ -267,7 +270,7 @@ export function useDraftRestore({
             source: "remote_supabase",
             remoteVerifiedAt: new Date().toISOString(),
             hasUnsavedChanges: false,
-            payloadOrigin: "canonicalDisplayHistory",
+            contentOrigin: "remote",
             // contentDate declares where the live state content actually came from.
             // trustedHistory is built from live React state (workoutLogExercises),
             // which may still hold a previous date's data during the transition render.

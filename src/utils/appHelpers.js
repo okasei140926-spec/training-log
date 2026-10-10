@@ -690,6 +690,24 @@ export const isUnsavedUserWorkoutDraft = (draft = {}) =>
         getWorkoutEditReasonFromSource(draft?.meta?.source)
     );
 
+/**
+ * 読み出し境界専用: localStorage から読み出したドラフトに contentOrigin を付与する。
+ * 新規書き込み済みのドラフトはフィールドを持つのでそのまま返す。
+ * 古い端末の localStorage に payloadOrigin だけ残っているドラフトを後方互換で解決する。
+ * この関数は useDraftStore.js の normalizeDraftForLoad の中でのみ呼ぶこと。
+ */
+export const resolveContentOrigin = (meta = {}) => {
+    if (meta.contentOrigin) return meta.contentOrigin;
+    const { payloadOrigin, source } = meta;
+    if (payloadOrigin === "canonicalDisplayHistory" || payloadOrigin === "fetchedRemoteRows") return "remote";
+    if (["remote_supabase", "canonical_display_history", "save_verified", "workouts.data"].includes(source)) return "remote";
+    if (source === "empty_draft") return "empty";
+    if (getWorkoutEditReasonFromSource(source)) return "user_edit";
+    if (source === "draft_restore") return "local_draft";
+    // 不明なものは rescue 対象（安全方向）に倒す
+    return "local_draft";
+};
+
 export const getSetEditUnit = (set, fallbackUnit = "kg") =>
     normalizeSetWeightMode(
         set?.weightMode

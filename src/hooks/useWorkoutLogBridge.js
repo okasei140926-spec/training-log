@@ -65,6 +65,7 @@ export function useWorkoutLogBridge({
         }), {
             source,
             hasUnsavedChanges: true,
+            contentOrigin: "user_edit",
         });
 
         latestLogDraftRef.current = normalizedDraft;

@@ -107,6 +107,7 @@ export function useHistoryHandlers({
             {
                 source: "canonical_display_history",
                 hasUnsavedChanges: false,
+                contentOrigin: "remote",
             }
         );
         const hasSavedWorkout = savedDraftForDate.hasSavedWorkout;
@@ -321,7 +322,7 @@ export function useHistoryHandlers({
         if (shouldUseSavedWorkout) {
             const cleanSavedDraft = withDraftDateMeta(requestedDate, savedDraftForDate, {
                 source: "explicit_date_nav",
-                payloadOrigin: "canonicalDisplayHistory",
+                contentOrigin: "remote",
                 remoteVerifiedAt: new Date().toISOString(),
                 hasUnsavedChanges: false,
             });
@@ -452,6 +453,7 @@ export function useHistoryHandlers({
                     source: "save_verified",
                     remoteVerifiedAt: new Date().toISOString(),
                     hasUnsavedChanges: false,
+                    contentOrigin: "remote",
                 });
                 if (savedDraft.hasSavedWorkout) {
                     saveDraftForDate(editDate, savedDraft);

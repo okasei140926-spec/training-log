@@ -14,6 +14,7 @@ import {
     makeDraftMeta,
     mergeDraftExercisesWithLogData,
     normalizeDraftDateKey,
+    resolveContentOrigin,
     shouldLogPerfDebug,
     withDraftDateMeta,
 } from "../utils/appHelpers";
@@ -31,6 +32,7 @@ export function useDraftStore({ userIdRef } = {}) {
         }, {
             source: "empty_draft",
             hasUnsavedChanges: false,
+            contentOrigin: "empty",
         });
         if (!normalizedDate) return emptyDraft;
 
@@ -62,6 +64,7 @@ export function useDraftStore({ userIdRef } = {}) {
                 source: draft?.meta?.source || source,
                 hasUnsavedChanges: draft?.meta?.hasUnsavedChanges ?? true,
                 remoteVerifiedAt: draft?.meta?.remoteVerifiedAt ?? null,
+                contentOrigin: resolveContentOrigin(draft?.meta || {}),
             });
         };
 

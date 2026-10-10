@@ -77,6 +77,9 @@ export const makeWorkoutDraftMeta = ({
   // Preserved so rescueUnsyncedDrafts can skip drafts that originated from trustedHistory
   // or fetchedRemoteRows and avoid zombie-restoring deleted exercises at startup.
   payloadOrigin = null,
+  // Content origin — normalized single-field answer to "where did this content come from?"
+  // Values: "user_edit" | "remote" | "local_draft" | "empty"
+  contentOrigin = null,
 } = {}) => {
   const normalizedDate = normalizeDateKey(date);
   return {
@@ -92,6 +95,7 @@ export const makeWorkoutDraftMeta = ({
     userEditedAt,
     syncedAt,
     ...(payloadOrigin != null ? { payloadOrigin } : {}),
+    ...(contentOrigin != null ? { contentOrigin } : {}),
     ...(explicitDelete ? { explicitDelete: true } : {}),
     ...(explicitEdit ? { explicitEdit: true } : {}),
   };

@@ -356,6 +356,7 @@ export function useLogDraftApplicator({
             const datedNextDraft = withDraftDateMeta(logDate, nextDraft, {
                 source: nextDraft?.meta?.source || "user_input",
                 hasUnsavedChanges: nextDraft?.meta?.hasUnsavedChanges ?? true,
+                contentOrigin: "user_edit",
             });
             saveDraftForDate(logDate, datedNextDraft);
             latestLogDraftRef.current = datedNextDraft;
