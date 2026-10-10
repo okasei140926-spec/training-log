@@ -264,7 +264,7 @@ export default function GymApp() {
     }, []);
 
     useEffect(() => {
-        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 1500);
+        const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 400);
         const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 3000);
 
         return () => {

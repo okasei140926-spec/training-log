@@ -8,6 +8,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     private var appleSignInBridge: AppleSignInBridge?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // スプラッシュ消去後に UIWindow の地が白/黒で見えないよう teal に設定する。
+        // 戻し方: この1行を削除する。
+        window?.backgroundColor = UIColor(red: 14/255, green: 158/255, blue: 136/255, alpha: 1)
         return true
     }
 
