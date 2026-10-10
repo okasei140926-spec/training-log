@@ -10,6 +10,56 @@
  * Default: ON
  */
 
+// ─── Persistent ring buffer ──────────────────────────────────────────────────
+// Accumulates trace entries in localStorage so they survive app restarts and
+// can be copied from the settings screen for offline debugging.
+
+const TRACE_LOG_KEY = "wpTraceLog";
+const TRACE_MAX_ENTRIES = 800;
+const TRACE_MAX_BYTES = 300 * 1024; // 300 KB
+
+function _appendTraceEntry(stage, data) {
+    try {
+        // Read current buffer
+        let logs;
+        try {
+            const raw = window.localStorage.getItem(TRACE_LOG_KEY);
+            logs = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(logs)) logs = [];
+        } catch {
+            logs = [];
+        }
+
+        logs.push({ t: new Date().toISOString(), s: stage, d: data });
+
+        // Trim by entry count
+        if (logs.length > TRACE_MAX_ENTRIES) {
+            logs = logs.slice(logs.length - TRACE_MAX_ENTRIES);
+        }
+
+        // Trim by byte size (halve until within limit)
+        let serialized = JSON.stringify(logs);
+        while (serialized.length > TRACE_MAX_BYTES && logs.length > 1) {
+            logs = logs.slice(Math.ceil(logs.length / 2));
+            serialized = JSON.stringify(logs);
+        }
+
+        // Write, with one retry after halving on QuotaExceededError
+        try {
+            window.localStorage.setItem(TRACE_LOG_KEY, serialized);
+        } catch {
+            logs = logs.slice(Math.ceil(logs.length / 2));
+            try {
+                window.localStorage.setItem(TRACE_LOG_KEY, JSON.stringify(logs));
+            } catch {
+                // Give up silently — never propagate
+            }
+        }
+    } catch {
+        // Never propagate to caller
+    }
+}
+
 const isEnabled = () => {
     try {
         return typeof window !== "undefined"
@@ -55,6 +105,7 @@ export function logWriteTrace(stage, payload = {}) {
     const level = (payload.decision === "block" || payload.decision === "skip") ? "warn" : "log";
     // eslint-disable-next-line no-console
     console[level](`[WP] ${stage}`, out);
+    _appendTraceEntry(stage, out);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

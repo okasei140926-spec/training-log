@@ -221,6 +221,7 @@ export default function SettingsModal({
   const [proActionBusy, setProActionBusy] = useState(false);
   const [proMessage, setProMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
+  const [debugLogMessage, setDebugLogMessage] = useState("");
   const [profileEditorField, setProfileEditorField] = useState(null); // fieldDef being edited
   const [profileEditorValue, setProfileEditorValue] = useState(null);
   const [profileEditorBirthYear, setProfileEditorBirthYear] = useState("");
@@ -933,6 +934,56 @@ export default function SettingsModal({
                       </div>
                     )}
                   </>
+                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const raw = localStorage.getItem("wpTraceLog") || "[]";
+                      await navigator.clipboard.writeText(raw);
+                      setDebugLogMessage("デバッグログをコピーしました。");
+                    } catch {
+                      setDebugLogMessage("コピーに失敗しました。");
+                    }
+                    setTimeout(() => setDebugLogMessage(""), 4000);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    background: "var(--card2)",
+                    border: "1px solid var(--border2)",
+                    color: "var(--text)",
+                    fontSize: 14,
+                    fontWeight: 900,
+                  }}
+                >
+                  デバッグログをコピー
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem("wpTraceLog");
+                    setDebugLogMessage("デバッグログを消去しました。");
+                    setTimeout(() => setDebugLogMessage(""), 4000);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    background: "var(--card2)",
+                    border: "1px solid var(--border2)",
+                    color: "var(--text2)",
+                    fontSize: 14,
+                    fontWeight: 900,
+                  }}
+                >
+                  デバッグログを消去
+                </button>
+                {debugLogMessage && (
+                  <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
+                    {debugLogMessage}
+                  </div>
                 )}
               </div>
             </div>
