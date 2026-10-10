@@ -260,6 +260,10 @@ export default function GymApp() {
     const [showAuth, setShowAuth] = useState(false);
 
     useEffect(() => {
+        logWriteTrace("app:launch", { date: null, decision: "executed", extra: { online: navigator.onLine } });
+    }, []);
+
+    useEffect(() => {
         const minTimerId = window.setTimeout(() => setSplashMinElapsed(true), 1500);
         const maxTimerId = window.setTimeout(() => setSplashForceDone(true), 3000);
 
@@ -314,7 +318,19 @@ export default function GymApp() {
     }, [screen]);
 
     useEffect(() => {
-        const handleOnline = () => setIsOnline(true);
+        const handleOnline = () => {
+            setIsOnline(true);
+            // On network restore, re-scan localStorage for unsynced drafts and queue
+            // them for sync. Debounced to 1 s to guard against rapid-fire events.
+            // Uses a stable ref so this effect never needs to re-register.
+            if (onlineResumeSyncDebounceRef.current) {
+                window.clearTimeout(onlineResumeSyncDebounceRef.current);
+            }
+            onlineResumeSyncDebounceRef.current = window.setTimeout(() => {
+                onlineResumeSyncDebounceRef.current = null;
+                rescueUnsyncedDraftsRef.current?.("online_resume");
+            }, 1_000);
+        };
         const handleOffline = () => setIsOnline(false);
 
         window.addEventListener("online", handleOnline);
@@ -323,6 +339,10 @@ export default function GymApp() {
         return () => {
             window.removeEventListener("online", handleOnline);
             window.removeEventListener("offline", handleOffline);
+            if (onlineResumeSyncDebounceRef.current) {
+                window.clearTimeout(onlineResumeSyncDebounceRef.current);
+                onlineResumeSyncDebounceRef.current = null;
+            }
         };
     }, []);
 
@@ -1180,6 +1200,8 @@ export default function GymApp() {
     // Stable ref so onStartupUnsyncedLocalDates can be defined before markWorkoutContentChanged
     const pendingSavePayloadsRef = useRef(new Map());
     const markWorkoutContentChangedRef = useRef(null);
+    const rescueUnsyncedDraftsRef = useRef(null);
+    const onlineResumeSyncDebounceRef = useRef(null);
     const onStartupUnsyncedLocalDates = useCallback((unsyncedDates) => {
         unsyncedDates.forEach((date) => {
             markWorkoutContentChangedRef.current?.(date, "startup_unsynced_local", { explicitEdit: false });
@@ -1356,26 +1378,14 @@ export default function GymApp() {
     // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it
     markWorkoutContentChangedRef.current = markWorkoutContentChanged;
 
-    // Rescue draft files that were written to localStorage but never synced to Supabase
-    // (meta.hasUnsavedChanges = true or meta.remoteVerifiedAt is empty).
-    // This handles the case where the app crashed / was force-quit before
-    // useHistoryAutoSave could complete the Supabase write.
-    const unsyncedDraftRescueRef = useRef(new Set());
-    useEffect(() => {
+    // Scan localStorage for drafts with hasUnsavedChanges: true and queue them for
+    // sync. Used both at startup and when network is restored after offline edits.
+    // trigger: "startup" | "online_resume"
+    const rescueUnsyncedDrafts = useCallback((trigger = "startup") => {
         if (!user?.id || !historySyncReady) return;
-        if (unsyncedDraftRescueRef.current.has(user.id)) return;
-        unsyncedDraftRescueRef.current.add(user.id);
-
-        // Only rescue drafts from the last 7 days.  Older drafts likely had
-        // remoteVerifiedAt missing for historical reasons (field was added later),
-        // not because they actually failed to sync; rescuing them would trigger a
-        // Supabase write storm on every app startup.
+        // Only rescue drafts from the last 7 days to avoid spurious write storms.
         const rescueCutoff = getDateDaysAgoKey(7);
         const unsyncedDates = [];
-        // Collect all date candidates from BOTH draft formats:
-        //   new format: workoutDraft:YYYY-MM-DD
-        //   old scoped: draft_logData_YYYY-MM-DD
-        // We deduplicate by date so each date is processed once.
         const draftDateCandidates = new Set();
         try {
             for (let i = 0; i < window.localStorage.length; i++) {
@@ -1391,17 +1401,12 @@ export default function GymApp() {
         } catch { }
         try {
             for (const date of draftDateCandidates) {
-                // Skip dates older than 7 days
                 if (date < rescueCutoff) continue;
                 const draft = loadDraftForDate(date);
                 if (!draft) continue;
-                // Discard drafts whose embedded meta.date doesn't match the localStorage key.
-                // This can happen via stale-closure contamination: exercises from date A were
-                // written under date B's key.  These drafts must NOT be synced — they would
-                // overwrite correct remote data with wrong local data.
                 const draftMetaDate = normalizeDraftDateKey(draft.meta?.date || draft.date);
                 if (draftMetaDate && draftMetaDate !== date) {
-                    console.warn("[startup] discarding date-contaminated draft", {
+                    console.warn(`[${trigger}] discarding date-contaminated draft`, {
                         key: date,
                         draftMetaDate,
                         source: draft.meta?.source || null,
@@ -1413,12 +1418,20 @@ export default function GymApp() {
                     || Object.keys(draft.logData || {}).length > 0;
                 if (!hasContent) continue;
                 // Only rescue drafts explicitly marked as having unsaved changes.
-                // Removing !remoteVerifiedAt: that flag can be absent on old drafts
-                // written before the field was introduced, causing spurious rescues.
+                // A deleted date has hasUnsavedChanges: false → skipped here, preventing
+                // permanently-deleted dates from being re-synced by this path.
                 const isUnsynced = draft.meta?.hasUnsavedChanges === true;
                 if (!isUnsynced) continue;
-                // Build history payload and inject it into pendingSavePayloadsRef so
-                // syncWorkoutRowsForDates can save it without waiting for persistCurrentLog
+                // Skip drafts whose content originated from remote data (canonicalDisplayHistory
+                // or fetchedRemoteRows). These were auto-persisted by the hydration path and do
+                // not represent user intent. Rescuing them would zombie-restore exercises that
+                // were deleted before the next remote sync completed.
+                const isRemoteOriginContent =
+                    draft.meta?.payloadOrigin === "canonicalDisplayHistory" ||
+                    draft.meta?.payloadOrigin === "fetchedRemoteRows";
+                if (isRemoteOriginContent) continue;
+                // Inject local draft directly into pendingSavePayloadsRef so
+                // syncWorkoutRowsForDates sends local content (not remote-derived history).
                 const directPayload = buildDraftHistoryForDate({
                     baseHistory: latestHistoryRef.current || {},
                     workoutDate: date,
@@ -1433,20 +1446,50 @@ export default function GymApp() {
                 unsyncedDates.push(date);
             }
         } catch (err) {
-            console.warn("[startup] unsynced draft scan failed", err);
+            console.warn(`[${trigger}] unsynced draft scan failed`, err);
         }
         if (unsyncedDates.length > 0) {
-            console.log("[startup] found unsynced drafts, queuing for rescue", { unsyncedDates, rescueCutoff });
+            console.log(`[${trigger}] found unsynced drafts, queuing for rescue`, { unsyncedDates, rescueCutoff });
             unsyncedDates.forEach((date) => {
                 // startup_unsynced_draft is a system process, not a user action.
                 // explicitEdit must NOT be true — it would bypass G2 save guards.
                 // explicitDelete: false — a stale delete flag from a prior session must
                 // not OR-merge into the pending change and cause a false delete.
                 markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: false, explicitDelete: false });
+                // On online-resume: clear stalled flag so syncDates includes this entry.
+                // Network failures that hit the retry limit stall the entry; restoring
+                // connectivity un-stalls it so the next auto-save cycle retries.
+                if (trigger === "online_resume") {
+                    const _entry = pendingWorkoutContentChangeDatesRef.current.get(date);
+                    if (_entry?.stalled) {
+                        pendingWorkoutContentChangeDatesRef.current.set(date, {
+                            ..._entry,
+                            stalled: false,
+                            stalledAt: null,
+                        });
+                        logWriteTrace("syncQueue:unstall", {
+                            date,
+                            decision: "executed",
+                            reason: "online-resume rescue: stalled entry re-activated",
+                        });
+                    }
+                }
             });
             setForceSyncVersion((v) => v + 1);
         }
-    }, [historySyncReady, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [historySyncReady, user?.id, loadDraftForDate, clearDraftForDate, getExUnit]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Keep ref current so the stable online-event listener always calls the latest version.
+    rescueUnsyncedDraftsRef.current = rescueUnsyncedDrafts;
+
+    // Rescue draft files that were written to localStorage but never synced to Supabase
+    // (meta.hasUnsavedChanges = true). Runs once per user session at startup.
+    const unsyncedDraftRescueRef = useRef(new Set());
+    useEffect(() => {
+        if (!user?.id || !historySyncReady) return;
+        if (unsyncedDraftRescueRef.current.has(user.id)) return;
+        unsyncedDraftRescueRef.current.add(user.id);
+        rescueUnsyncedDrafts("startup");
+    }, [historySyncReady, user?.id, rescueUnsyncedDrafts]);
 
     const {
         historySyncDiagnostic,
@@ -1900,6 +1943,20 @@ export default function GymApp() {
         meta: latestLogDraftRef.current?.meta || null,
     }), [exerciseUnits, exercises, logData, logDate, todayLabels]);
 
+    // ログ画面での exercise 削除後に trustedWorkoutRows のその日付の行を除去するコールバック。
+    // buildTrustedHistory が forceReplace:true で exactHistory を上書きするため、行を残すと
+    // 次の handleLogForDate で削除した exercise が zombie restore される。
+    const clearTrustedRowsForDate = useCallback((date) => {
+        if (!date || !trustedWorkoutRowsRef?.current) return;
+        const d = String(date).slice(0, 10);
+        const filtered = (trustedWorkoutRowsRef.current || []).filter(
+            (row) => String(row?.date || "").slice(0, 10) !== d
+        );
+        if (filtered.length !== (trustedWorkoutRowsRef.current || []).length) {
+            applyTrustedWorkoutRowsSnapshot(filtered, { replace: true, source: "log_exercise_delete" });
+        }
+    }, [trustedWorkoutRowsRef, applyTrustedWorkoutRowsSnapshot]);
+
     const {
         workoutLog,
         workoutLogExercises,
@@ -1924,7 +1981,9 @@ export default function GymApp() {
         setSessionEx,
         setExerciseUnits,
         startWorkoutTimerIfNeeded,
+        clearTrustedRowsForDate,
     });
+
 
     const getWorkoutLogExUnit = useCallback((name) => (
         workoutLogExerciseUnits?.[name] || getExUnit(name)

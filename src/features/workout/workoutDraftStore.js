@@ -73,6 +73,10 @@ export const makeWorkoutDraftMeta = ({
   layerVersion = 2,
   userEditedAt = null,  // timestamp (ms) of last user gesture; null for system writes
   syncedAt = null,      // timestamp (ms) when this content was confirmed written to Supabase
+  // Payload origin — tracks whether content came from remote data vs. local user edits.
+  // Preserved so rescueUnsyncedDrafts can skip drafts that originated from canonicalDisplayHistory
+  // or fetchedRemoteRows and avoid zombie-restoring deleted exercises at startup.
+  payloadOrigin = null,
 } = {}) => {
   const normalizedDate = normalizeDateKey(date);
   return {
@@ -87,6 +91,7 @@ export const makeWorkoutDraftMeta = ({
     layerVersion,
     userEditedAt,
     syncedAt,
+    ...(payloadOrigin != null ? { payloadOrigin } : {}),
     ...(explicitDelete ? { explicitDelete: true } : {}),
     ...(explicitEdit ? { explicitEdit: true } : {}),
   };

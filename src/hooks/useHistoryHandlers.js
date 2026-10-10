@@ -156,7 +156,8 @@ export function useHistoryHandlers({
             preserveRawLocalDraft ||
             isUnsavedUserWorkoutDraft(draftForDate)
         );
-        const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft;
+        const hasPendingDeleteIntent = Boolean(pendingChange?.explicitDelete);
+        const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft && !hasPendingDeleteIntent;
         const logCalendarOpen = (appliedSource, loadedDraft) => {
             const loadedHistoryDates = getValidWorkoutDatesFromHistory(canonicalDisplayHistory)
                 .filter((date) => date === requestedDate);
@@ -578,10 +579,14 @@ export function useHistoryHandlers({
             return next;
         });
 
-        if (shouldClearDateArtifacts && deletedTargetDate) {
-            // この日付の exercise が 0 になったため trustedRows からも除去する。
-            // deleteAllHistoryForDate と同じ理由: session fallback (onlyIfMissing:true) による再注入を防ぐ。
+        if (deletedTargetDate) {
+            // 部分削除でも trustedRows からこの日付の行を除去する。
+            // buildTrustedHistory が forceReplace:true で exactHistory を上書きするため、
+            // 行を残すと削除済みの exercise が復活する（zombie restore）。
             _clearTrustedRowsForDate(String(deletedTargetDate || "").slice(0, 10));
+        }
+
+        if (shouldClearDateArtifacts && deletedTargetDate) {
             appendHistoryDeleteMarkers({ dates: [deletedTargetDate] });
             clearDraftForDate(deletedTargetDate);
             setSavedWorkoutDurationSecByDate((prev) => {

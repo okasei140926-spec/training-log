@@ -27,6 +27,7 @@ export function useWorkoutLogBridge({
     setSessionEx,
     setExerciseUnits,
     startWorkoutTimerIfNeeded,
+    clearTrustedRowsForDate,
 }) {
     const handleWorkoutLogDraftChange = useCallback((nextDraft, mutation = {}) => {
         const normalizedDate = normalizeDraftDateKey(nextDraft?.date || logDate);
@@ -94,6 +95,13 @@ export function useWorkoutLogBridge({
                 explicitEdit: Boolean(mutation.explicitEdit),
                 details: mutation.details || null,
             });
+        }
+
+        // ログ画面での exercise 削除後、trustedWorkoutRows のこの日付の行を除去する。
+        // buildTrustedHistory が forceReplace:true で exactHistory を上書きするため、
+        // 行を残すと次の handleLogForDate で削除した exercise が復活する（zombie restore）。
+        if (mutation.explicitDelete && clearTrustedRowsForDate) {
+            clearTrustedRowsForDate(normalizedDate);
         }
 
         // Start the workout timer as soon as any set has reps > 0.

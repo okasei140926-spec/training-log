@@ -85,6 +85,7 @@ export function useHistoryAutoSave({
     invalidateSupabaseFetchFreshByPrefix,
 }) {
     const heldRetryCountsRef = useRef({});
+    const networkFailureRetryCountsRef = useRef({});
     useEffect(() => {
         if (!user || !historySyncReady) return;
         const currentUserId = user.id;
@@ -270,21 +271,49 @@ export function useHistoryAutoSave({
 
                 const workoutSyncResults = await syncWorkoutRowsForDates(currentUserId, mergedHistory, syncDates);
                 if (workoutSyncResults.failedDates.length > 0) {
-                    // Clear pending content changes for failed dates so auto-save doesn't
-                    // retry them on every history change, causing an infinite loop.
+                    // Keep failed dates in the queue so the next trigger retries.
+                    // After 3 consecutive network failures the entry is marked stalled
+                    // (same mechanism as hold-limit exceeded) so auto-save stops
+                    // hammering the server. The online-resume handler un-stalls the
+                    // entry when connectivity is restored.
                     workoutSyncResults.failedDates.forEach((date) => {
-                        const _qbFailed = pendingWorkoutContentChangeDatesRef.current.size;
-                        pendingWorkoutContentChangeDatesRef.current.delete(date);
-                        logWriteTrace("syncQueue:delete", {
-                            date,
-                            decision: "executed",
-                            reason: "failedDates cleanup",
-                            extra: {
-                                queueSizeBefore: _qbFailed,
-                                queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
-                                queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
-                            },
-                        });
+                        const _failCount = (networkFailureRetryCountsRef.current[date] || 0) + 1;
+                        networkFailureRetryCountsRef.current[date] = _failCount;
+                        if (_failCount >= 3) {
+                            const _existingEntry = pendingWorkoutContentChangeDatesRef.current.get(date) || {};
+                            pendingWorkoutContentChangeDatesRef.current.set(date, {
+                                ..._existingEntry,
+                                stalled: true,
+                                stalledAt: Date.now(),
+                            });
+                            logWriteTrace("syncQueue:stall", {
+                                date,
+                                decision: "executed",
+                                reason: "network failure retry limit exceeded — entry marked stalled",
+                                extra: {
+                                    queueSize: pendingWorkoutContentChangeDatesRef.current.size,
+                                    failCount: _failCount,
+                                },
+                            });
+                            delete networkFailureRetryCountsRef.current[date];
+                        } else {
+                            logWriteTrace("syncQueue:retain", {
+                                date,
+                                decision: "retained",
+                                reason: "sync failed — retaining entry for retry on next trigger",
+                                extra: {
+                                    queueSize: pendingWorkoutContentChangeDatesRef.current.size,
+                                    failCount: _failCount,
+                                },
+                            });
+                        }
+                    });
+                    // Reset counts for dates that are no longer failing (they resolved or were
+                    // never in failedDates this cycle).
+                    Object.keys(networkFailureRetryCountsRef.current).forEach((date) => {
+                        if (!workoutSyncResults.failedDates.includes(date)) {
+                            delete networkFailureRetryCountsRef.current[date];
+                        }
                     });
                     throw new Error(`workouts sync failed for ${workoutSyncResults.failedDates.join(", ")}`);
                 }
@@ -485,6 +514,7 @@ export function useHistoryAutoSave({
                     }
                     const pendingAfterSave = pendingWorkoutContentChangeDatesRef.current.get(date);
                     if (!pendingAfterSave?.updatedAt || getTimestampMs(pendingAfterSave.updatedAt) <= getTimestampMs(saveStartedAt)) {
+                        delete networkFailureRetryCountsRef.current[date];
                         const _qbSuccess = pendingWorkoutContentChangeDatesRef.current.size;
                         pendingWorkoutContentChangeDatesRef.current.delete(date);
                         logWriteTrace("syncQueue:delete", {
@@ -618,6 +648,7 @@ export function useHistoryAutoSave({
                         workoutsHistory: verifiedHistoryForDate,
                     });
                     explicitWorkoutEditDatesRef.current.delete(date);
+                    delete networkFailureRetryCountsRef.current[date];
                     const _qbVerified = pendingWorkoutContentChangeDatesRef.current.size;
                     pendingWorkoutContentChangeDatesRef.current.delete(date);
                     logWriteTrace("syncQueue:delete", {
