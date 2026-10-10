@@ -281,7 +281,7 @@ export function buildMuscleExFromAnswers(answers) {
  * @param {object} params
  * @param {string[]} params.bodyParts - Body parts for this plan day
  * @param {object|null} params.answers - onboardingAnswers from localStorage
- * @param {object} params.history - canonicalDisplayHistory ({ exName: [{ date, bodyPart, sets }] })
+ * @param {object} params.history - trustedHistory ({ exName: [{ date, bodyPart, sets }] })
  * @returns {{ name: string, bodyPart: string, label: string }[]}
  */
 export function buildSessionExercisesForPlanDay({ bodyParts, answers, history }) {

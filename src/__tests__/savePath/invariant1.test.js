@@ -4,7 +4,7 @@
  * バグの再現条件:
  *   useHistoryHandlers.js の shouldUseSavedWorkout の計算に
  *   !hasPendingDeleteIntent が含まれていない場合、
- *   handleLogForDate が canonicalDisplayHistory から復元したデータを
+ *   handleLogForDate が trustedHistory から復元したデータを
  *   applyLogDraftState に渡してしまう（削除が無効化される）。
  *
  * テスト有効性の証明手順（手動):
@@ -34,7 +34,7 @@ jest.mock('../../utils/writeTrace', () => ({
 }));
 
 // helpers はモックしない。
-// getValidWorkoutDatesFromHistory({}) は canonicalDisplayHistory={} に対して
+// getValidWorkoutDatesFromHistory({}) は trustedHistory={} に対して
 // 自然に [] を返すため、実装そのままで動作する。
 
 // ── テスト本体 ────────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ describe('不変条件1: 削除した記録が復活しない', () => {
             // 前提1: ユーザーは DATE の記録を削除した
             //         → pendingChange に explicitDelete: true が入っている
             //         → まだ Supabase へのデリートは完了していない
-            // 前提2: canonicalDisplayHistory（Supabase キャッシュ）には
+            // 前提2: trustedHistory（Supabase キャッシュ）には
             //         Bench Press のデータがまだ残っている
             // 前提3: localStorage にローカルドラフトはない
             // 前提4: persistentDeletedDates には入っていない（Gate A を通過させる）

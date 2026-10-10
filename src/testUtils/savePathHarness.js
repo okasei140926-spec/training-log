@@ -120,7 +120,7 @@ export function makeHarness({
 
     // ── buildSavedWorkoutDraftForDate: シナリオ設定に従って返す ───────────────
     // App.jsx の実装を簡略化して「日付と種目リストだけで制御できる」stub。
-    // 第2引数（canonicalDisplayHistory）は harness では無視する。
+    // 第2引数（trustedHistory）は harness では無視する。
     const buildSavedWorkoutDraftForDate = jest.fn((dateStr) => {
         const d = normalizeDraftDateKey(dateStr);
         const sw = savedWorkout;
@@ -256,7 +256,7 @@ export function makeHarness({
             getCurrentLogDraftSnapshot: jest.fn().mockReturnValue(makeEmptyCurrentDraft()),
             latestLogDraftRef: { current: { meta: { source: 'current_log_snapshot', hasUnsavedChanges: false } } },
             getTodayKey: () => HARNESS_TODAY,
-            canonicalDisplayHistory: {},  // buildSavedWorkoutDraftForDate の stub で代替
+            trustedHistory: {},  // buildSavedWorkoutDraftForDate の stub で代替
             getDraftMetricsForDate,
             getExUnit: jest.fn().mockReturnValue('kg'),
             isExplicitWorkoutEditChange,

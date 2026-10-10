@@ -64,7 +64,7 @@ export function useHistoryHandlers({
     getCurrentLogDraftSnapshot,
     latestLogDraftRef,
     getTodayKey,
-    canonicalDisplayHistory,
+    trustedHistory,
     getDraftMetricsForDate,
     getExUnit,
     isExplicitWorkoutEditChange,
@@ -103,7 +103,7 @@ export function useHistoryHandlers({
         const draftForDate = loadDraftForDate(requestedDate);
         const savedDraftForDate = withDraftDateMeta(
             requestedDate,
-            buildSavedWorkoutDraftForDate(requestedDate, canonicalDisplayHistory),
+            buildSavedWorkoutDraftForDate(requestedDate, trustedHistory),
             {
                 source: "canonical_display_history",
                 hasUnsavedChanges: false,
@@ -159,7 +159,7 @@ export function useHistoryHandlers({
         const hasPendingDeleteIntent = Boolean(pendingChange?.explicitDelete);
         const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft && !hasPendingDeleteIntent;
         const logCalendarOpen = (appliedSource, loadedDraft) => {
-            const loadedHistoryDates = getValidWorkoutDatesFromHistory(canonicalDisplayHistory)
+            const loadedHistoryDates = getValidWorkoutDatesFromHistory(trustedHistory)
                 .filter((date) => date === requestedDate);
             const appliedValidation = getDraftDateValidation(requestedDate, loadedDraft || {}, requestedDate);
             console.log("[restore] calendar open log", {

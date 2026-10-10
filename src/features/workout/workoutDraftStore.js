@@ -74,7 +74,7 @@ export const makeWorkoutDraftMeta = ({
   userEditedAt = null,  // timestamp (ms) of last user gesture; null for system writes
   syncedAt = null,      // timestamp (ms) when this content was confirmed written to Supabase
   // Payload origin — tracks whether content came from remote data vs. local user edits.
-  // Preserved so rescueUnsyncedDrafts can skip drafts that originated from canonicalDisplayHistory
+  // Preserved so rescueUnsyncedDrafts can skip drafts that originated from trustedHistory
   // or fetchedRemoteRows and avoid zombie-restoring deleted exercises at startup.
   payloadOrigin = null,
 } = {}) => {

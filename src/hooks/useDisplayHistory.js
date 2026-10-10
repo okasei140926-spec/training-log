@@ -4,7 +4,7 @@ import { computeWorkoutDisplayElapsedSec } from "../utils/workoutTimer";
 
 /**
  * Manages displayHistory (draft-overlaid history for the log screen)
- * and canonicalDisplayHistory (trusted history from useWorkoutHistory).
+ * and trustedHistory (trusted history from useWorkoutHistory).
  *
  * workoutsDataHistory state/ref/applyWorkoutsDataHistorySnapshot stay in
  * App.jsx to avoid circular deps with useHistorySync.
@@ -50,7 +50,7 @@ export function useDisplayHistory({
         // - null/undefined → ref not yet initialized → overlay as before (safe default)
         // - matches logDate → exercises are current → overlay as before
         // - mismatches logDate → stale exercises from previous date → skip overlay to prevent
-        //   cross-date contamination in canonicalDisplayHistory
+        //   cross-date contamination in trustedHistory
         const liveExercisesDate = liveExercisesDateRef?.current ?? null;
         const liveMatchesLogDate = liveExercisesDate === null || liveExercisesDate === logDate;
         if (!liveMatchesLogDate) {
@@ -115,15 +115,15 @@ export function useDisplayHistory({
         existingHistory: displayHistory,
         workoutsDataHistory,
         deletedDates,
-        calledFrom: "canonicalDisplayHistory",
+        calledFrom: "trustedHistory",
         log: shouldLogPerfDebug(),
     });
 
-    const canonicalDisplayHistory = workoutHistoryView.trustedHistory;
+    const trustedHistory = workoutHistoryView.trustedHistory;
 
     return {
         displayHistory,
         workoutHistoryView,
-        canonicalDisplayHistory,
+        trustedHistory,
     };
 }

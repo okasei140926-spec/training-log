@@ -915,7 +915,7 @@ export default function GymApp() {
         } catch {}
     };
 
-    // Track latest canonicalDisplayHistory for use in callbacks (handleFinishWorkout etc.)
+    // Track latest trustedHistory for use in callbacks (handleFinishWorkout etc.)
     const latestCanonicalHistoryRef = useRef({});
 
     // Helper: get body parts that have valid sets recorded for a given date
@@ -1422,7 +1422,7 @@ export default function GymApp() {
                 // permanently-deleted dates from being re-synced by this path.
                 const isUnsynced = draft.meta?.hasUnsavedChanges === true;
                 if (!isUnsynced) continue;
-                // Skip drafts whose content originated from remote data (canonicalDisplayHistory
+                // Skip drafts whose content originated from remote data (trustedHistory
                 // or fetchedRemoteRows). These were auto-persisted by the hydration path and do
                 // not represent user intent. Rescuing them would zombie-restore exercises that
                 // were deleted before the next remote sync completed.
@@ -2015,7 +2015,7 @@ export default function GymApp() {
 
     const {
         displayHistory,
-        canonicalDisplayHistory,
+        trustedHistory,
     } = useDisplayHistory({
         history,
         workoutsDataHistory,
@@ -2040,8 +2040,8 @@ export default function GymApp() {
 
     // Keep latestCanonicalHistoryRef in sync (used in handleFinishWorkout callback)
     useEffect(() => {
-        latestCanonicalHistoryRef.current = canonicalDisplayHistory;
-    }, [canonicalDisplayHistory]);
+        latestCanonicalHistoryRef.current = trustedHistory;
+    }, [trustedHistory]);
 
     // AIプラン自動完了: 対象部位で 2種目以上・4セット以上記録されたら完了とみなす
     const AI_PLAN_AUTO_COMPLETE_MIN_SETS = 4;
@@ -2066,7 +2066,7 @@ export default function GymApp() {
         const exercisesWithSets = new Set();
         const recordedBodyParts = new Set();
 
-        Object.entries(canonicalDisplayHistory).forEach(([exName, records]) => {
+        Object.entries(trustedHistory).forEach(([exName, records]) => {
             const record = (records || []).find((r) => r.date === logDate);
             if (!record) return;
 
@@ -2109,11 +2109,11 @@ export default function GymApp() {
             markPlanDayCompleted(logDate);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [canonicalDisplayHistory, logDate, aiPlanEnabled, getPlanDayForDate, markPlanDayCompleted, markPlanDayCompletedAtIndex, aiPlanProgress]);
+    }, [trustedHistory, logDate, aiPlanEnabled, getPlanDayForDate, markPlanDayCompleted, markPlanDayCompletedAtIndex, aiPlanProgress]);
 
     const weeklyBodyPartCounts = useMemo(
-        () => buildWeeklyBodyPartSetCounts(canonicalDisplayHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides),
-        [canonicalDisplayHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides]
+        () => buildWeeklyBodyPartSetCounts(trustedHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides),
+        [trustedHistory, weekStartDay, muscleEx, exerciseBodyPartOverrides]
     );
 
     useEffect(() => {
@@ -2125,9 +2125,9 @@ export default function GymApp() {
         if (!shouldLogPerfDebug()) return;
         const weekRange = getCurrentWeekRangeForHomeSummary();
         const debugDates = ["2026-06-01", "2026-06-02", "2026-06-03"];
-        const summary = getHomeWeeklySummaryDebug(canonicalDisplayHistory, weekRange);
+        const summary = getHomeWeeklySummaryDebug(trustedHistory, weekRange);
         const signature = JSON.stringify({
-            dates: getHistoryDatesInRange(canonicalDisplayHistory, weekRange),
+            dates: getHistoryDatesInRange(trustedHistory, weekRange),
             counts: summary.bodyPartCounts,
             history: getHistoryOverallMetrics(history),
             workoutsDataHistory: getHistoryOverallMetrics(workoutsDataHistory),
@@ -2142,13 +2142,13 @@ export default function GymApp() {
             user_id: user?.id || null,
             historyLength: getHistoryOverallMetrics(history),
             workoutsDataHistoryLength: getHistoryOverallMetrics(workoutsDataHistory),
-            canonicalDisplayHistoryLength: getHistoryOverallMetrics(canonicalDisplayHistory),
+            trustedHistoryLength: getHistoryOverallMetrics(trustedHistory),
             displayHistoryLength: getHistoryOverallMetrics(displayHistory),
-            datesIncluded: getHistoryDatesInRange(canonicalDisplayHistory, weekRange),
+            datesIncluded: getHistoryDatesInRange(trustedHistory, weekRange),
             historyDatesIncluded: getHistoryDatesInRange(history, weekRange),
             workoutsDataHistoryDatesIncluded: getHistoryDatesInRange(workoutsDataHistory, weekRange),
             displayHistoryDatesIncluded: getHistoryDatesInRange(displayHistory, weekRange),
-            sessionsByDate: getHomePropsDateDebug(canonicalDisplayHistory, debugDates),
+            sessionsByDate: getHomePropsDateDebug(trustedHistory, debugDates),
             historySessionsByDate: getHomePropsDateDebug(history, debugDates),
             workoutsDataHistorySessionsByDate: getHomePropsDateDebug(workoutsDataHistory, debugDates),
             displayHistorySessionsByDate: getHomePropsDateDebug(displayHistory, debugDates),
@@ -2158,7 +2158,7 @@ export default function GymApp() {
             bicepsCount: summary.bodyPartCounts["二頭"] || 0,
             backCount: summary.bodyPartCounts["背中"] || 0,
         });
-    }, [canonicalDisplayHistory, displayHistory, history, screen, user?.id, workoutsDataHistory]);
+    }, [trustedHistory, displayHistory, history, screen, user?.id, workoutsDataHistory]);
 
     useEffect(() => {
         if (screen !== "log") return;
@@ -2355,7 +2355,7 @@ export default function GymApp() {
     const { prCache } = useSupabasePR({ userId: user?.id || null });
 
     const { getPrev, getPR, getPreviousPR, copySetDown, copyRepDown } = useWorkout({
-        history: canonicalDisplayHistory,
+        history: trustedHistory,
         manualBests,
         sessionHistory,
         setLogData: setLogDataAndSaveDraft,
@@ -2800,14 +2800,14 @@ export default function GymApp() {
         });
         const shouldLogRenderSource = missingFromRendered.length > 0 || shouldLogPerfDebug();
         if (!shouldLogRenderSource) return;
-        const canonicalDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, canonicalDisplayHistory);
-        const canonicalDisplayHistoryExerciseNamesForDate = (canonicalDraftForDate.sessionEx || []).map((exercise) => exercise.name);
+        const canonicalDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, trustedHistory);
+        const trustedHistoryExerciseNamesForDate = (canonicalDraftForDate.sessionEx || []).map((exercise) => exercise.name);
         const signature = JSON.stringify({
             normalizedDate,
             logDataExerciseNames,
             sessionExNames,
             latestLogDraftRefExerciseNames,
-            canonicalDisplayHistoryExerciseNamesForDate,
+            trustedHistoryExerciseNamesForDate,
             finalRenderedExerciseNames,
             missingFromRendered,
         });
@@ -2822,14 +2822,14 @@ export default function GymApp() {
             logDataExerciseNames,
             sessionExNames,
             latestLogDraftRefExerciseNames,
-            canonicalDisplayHistoryExerciseNamesForDate,
+            trustedHistoryExerciseNamesForDate,
             finalRenderedExerciseNames,
             missingFromRendered,
             missingReason: missingFromRendered.length
                 ? "final rendered exercises are missing current draft/logData names"
                 : null,
         });
-    }, [buildSavedWorkoutDraftForDate, canonicalDisplayHistory, exercises, logData, logDate, screen, sessionEx, user?.id]);
+    }, [buildSavedWorkoutDraftForDate, trustedHistory, exercises, logData, logDate, screen, sessionEx, user?.id]);
 
     const { logRestoreDecision } = useDraftRestore({
         screen,
@@ -2839,7 +2839,7 @@ export default function GymApp() {
         pendingWorkoutContentChangeDatesRef,
         explicitWorkoutEditDatesRef,
         latestLogDraftRef,
-        canonicalDisplayHistory,
+        trustedHistory,
         exerciseUnits,
         logData,
         sessionEx,
@@ -2946,7 +2946,7 @@ export default function GymApp() {
         getCurrentLogDraftSnapshot,
         latestLogDraftRef,
         getTodayKey,
-        canonicalDisplayHistory,
+        trustedHistory,
         getDraftMetricsForDate,
         getExUnit,
         isExplicitWorkoutEditChange,
@@ -3544,7 +3544,7 @@ export default function GymApp() {
                             onSaveCustomExercise={addCustomExercise}
                             onBulkSaveCustomExercises={bulkAddCustomExercises}
                             updateTodayLabels={updateTodayLabels}
-                            canonicalDisplayHistory={canonicalDisplayHistory}
+                            trustedHistory={trustedHistory}
                             handleFinishWorkoutTimerAndShowSummary={handleFinishWorkoutTimerAndShowSummary}
                             handleLogSetInputFocusChange={handleLogSetInputFocusChange}
                             logExerciseFocusRequest={logExerciseFocusRequest}
@@ -3564,7 +3564,7 @@ export default function GymApp() {
                                 (() => {
                                     let answers = null;
                                     try { answers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
-                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: canonicalDisplayHistory })
+                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: trustedHistory })
                                         .forEach((ex) => addExToSession(ex.name, ex.bodyPart));
                                 })();
                                 setPlanBannerDismissedForDate(logDate);
@@ -3587,7 +3587,7 @@ export default function GymApp() {
 
                     {screen === "analytics" && (
                         <AnalyticsScreen
-                            history={canonicalDisplayHistory}
+                            history={trustedHistory}
                             manualBests={manualBests}
                             muscleEx={muscleEx}
                             hiddenBodyParts={hiddenBodyParts}
@@ -3670,7 +3670,7 @@ export default function GymApp() {
 
                     {screen === "history" && (
                         <HomeScreen
-                            history={canonicalDisplayHistory}
+                            history={trustedHistory}
                             muscleEx={muscleEx}
                             exerciseBodyPartOverrides={exerciseBodyPartOverrides}
                             hiddenBodyParts={hiddenBodyParts}
@@ -3701,7 +3701,7 @@ export default function GymApp() {
                                 (() => {
                                     let answers = null;
                                     try { answers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
-                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: canonicalDisplayHistory })
+                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: trustedHistory })
                                         .forEach((ex) => addExToSession(ex.name, ex.bodyPart));
                                 })();
                                 setPlanBannerDismissedForDate(todayKey);
@@ -3717,7 +3717,7 @@ export default function GymApp() {
                         const minCalendarYearMonth = null; // 全ユーザー全期間閲覧可
                         return (
                             <CalendarScreenView
-                                canonicalDisplayHistory={canonicalDisplayHistory}
+                                trustedHistory={trustedHistory}
                                 workoutElapsedSec={workoutElapsedSec}
                                 savedWorkoutDurationSecByDate={savedWorkoutDurationSecByDate}
                                 logDate={logDate}
@@ -3752,7 +3752,7 @@ export default function GymApp() {
                             sendAI={sendAI}
                             aiLoad={aiLoad}
                             aiEnd={aiEnd}
-                            history={canonicalDisplayHistory}
+                            history={trustedHistory}
                             weeklyBodyPartCounts={weeklyBodyPartCounts}
                             weeklySetTargets={weeklySetTargets}
                             isPro={isPro}

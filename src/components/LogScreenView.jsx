@@ -52,7 +52,7 @@ export default function LogScreenView({
     onSaveCustomExercise,
     onBulkSaveCustomExercises,
     updateTodayLabels,
-    canonicalDisplayHistory,
+    trustedHistory,
     handleFinishWorkoutTimerAndShowSummary,
     handleLogSetInputFocusChange,
     logExerciseFocusRequest,
@@ -159,7 +159,7 @@ export default function LogScreenView({
                         onSaveCustomExercise={onSaveCustomExercise}
                         onBulkSaveCustomExercises={onBulkSaveCustomExercises}
                         setTodayLabels={updateTodayLabels}
-                        history={canonicalDisplayHistory}
+                        history={trustedHistory}
                         logDate={logDate}
                         workoutElapsedSec={displayedWorkoutElapsedSec}
                         workoutTimerStatus={displayedWorkoutTimerStatus}

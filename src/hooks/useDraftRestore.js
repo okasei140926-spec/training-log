@@ -22,7 +22,7 @@ export function useDraftRestore({
     pendingWorkoutContentChangeDatesRef,
     explicitWorkoutEditDatesRef,
     latestLogDraftRef,
-    canonicalDisplayHistory,
+    trustedHistory,
     exerciseUnits,
     logData,
     sessionEx,
@@ -81,7 +81,7 @@ export function useDraftRestore({
         const normalizedLogDate = normalizeDraftDateKey(logDate);
         const savedDraftForDate = withDraftDateMeta(
             normalizedLogDate,
-            buildSavedWorkoutDraftForDate(normalizedLogDate, canonicalDisplayHistory),
+            buildSavedWorkoutDraftForDate(normalizedLogDate, trustedHistory),
             {
                 source: "canonical_display_history",
                 hasUnsavedChanges: false,
@@ -269,7 +269,7 @@ export function useDraftRestore({
             hasUnsavedChanges: false,
             payloadOrigin: "canonicalDisplayHistory",
             // contentDate declares where the live state content actually came from.
-            // canonicalDisplayHistory is built from live React state (workoutLogExercises),
+            // trustedHistory is built from live React state (workoutLogExercises),
             // which may still hold a previous date's data during the transition render.
             // latestLogDraftRef.current?.meta?.date is the date that state was loaded from.
             contentDate: normalizeDraftDateKey(latestLogDraftRef.current?.meta?.date) || null,
@@ -280,7 +280,7 @@ export function useDraftRestore({
     }, [
         buildSavedWorkoutDraftForDate,
         applyCurrentLogDraft,
-        canonicalDisplayHistory,
+        trustedHistory,
         exerciseUnits,
         historySyncReady,
         hasDraftContent,

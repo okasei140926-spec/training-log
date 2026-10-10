@@ -2,7 +2,7 @@ import { lazy } from "react";
 const HistoryScreen = lazy(() => import("./HistoryScreen"));
 
 export default function CalendarScreenView({
-    canonicalDisplayHistory,
+    trustedHistory,
     workoutElapsedSec,
     savedWorkoutDurationSecByDate,
     logDate,
@@ -28,7 +28,7 @@ export default function CalendarScreenView({
 }) {
     return (
         <HistoryScreen
-            history={canonicalDisplayHistory}
+            history={trustedHistory}
             minCalendarYearMonth={minCalendarYearMonth}
             todayWorkoutDurationSec={workoutElapsedSec || savedWorkoutDurationSecByDate[logDate] || 0}
             muscleEx={muscleEx}

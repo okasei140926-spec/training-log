@@ -185,7 +185,7 @@ export function calcRadarValue(ratio, category, gender = "male") {
 /**
  * Compute strength ranks and radar values for all score categories.
  *
- * @param {Object} history              - canonicalDisplayHistory
+ * @param {Object} history              - trustedHistory
  * @param {Object} muscleEx             - { bodyPart: [exName | {name}] }
  * @param {Object} exerciseBodyPartOverrides
  * @param {number|null} bodyWeightKg
