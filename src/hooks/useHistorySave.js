@@ -126,8 +126,13 @@ export function useHistorySave({
             explicitEdit,
             deleteScope,
             details: options.details || previous.details || null,
-            updatedAt: new Date().toISOString(),
-            ...(_clearStalled ? { stalled: false, stalledAt: null } : {}),
+            // recordToOutbox:false = system re-queue (startup rescue / outbox replay), not a new
+            // user action. Never advance updatedAt: the sync-success clear condition
+            // (updatedAt <= saveStartedAt) must remain intact so Bug #5 doesn't occur.
+            ...(recordToOutbox !== false ? { updatedAt: new Date().toISOString() } : {}),
+            // Same reason: a system re-queue must not un-stall hold_limit / guard_skip entries.
+            // Only the user's own explicit action should clear those stalls.
+            ...(_clearStalled && recordToOutbox !== false ? { stalled: false, stalledAt: null } : {}),
         });
         // F-1: Outbox — persist operation so it survives app restarts.
         // recordToOutbox: false is passed by system-generated callers (startup rescue,
@@ -811,6 +816,7 @@ export function useHistorySave({
                     if (verifyWorkoutRow) {
                         applyTrustedWorkoutRowsSnapshot([verifyWorkoutRow], {
                             source: "workouts.data save verified",
+                            skipPendingFilter: true,
                         });
                     }
                     if (EXPLICIT_SET_EDIT_REASONS.has(pendingChange.reason)) {

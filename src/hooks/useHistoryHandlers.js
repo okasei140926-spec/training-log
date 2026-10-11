@@ -484,7 +484,7 @@ export function useHistoryHandlers({
         );
         const _wRemoved = _wBefore - _wFiltered.length;
         if (_wRemoved > 0) {
-            applyTrustedWorkoutRowsSnapshot(_wFiltered, { replace: true, source: "date_empty" });
+            applyTrustedWorkoutRowsSnapshot(_wFiltered, { replace: true, source: "date_empty", skipPendingFilter: true });
         }
 
         if (applyTrustedSessionRowsSnapshot) {
@@ -504,23 +504,91 @@ export function useHistoryHandlers({
         }
     };
 
-    const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
-        markWorkoutContentChanged(recordDate, setIdx !== undefined ? "set_delete" : "history_record_delete", { explicitDelete: true, deleteScope: "partial" });
+    // 記録画面 × とカレンダー画面 × の共通削除処理。
+    // C3（history）更新・削除マーカー・shouldClearDateArtifacts・アーティファクトクリアを行う。
+    // markWorkoutContentChanged は呼び出し側が行うこと。
+    const applyExerciseDeleteToHistory = (targetDate, exName) => {
+        const normalizedDate = String(targetDate || "").slice(0, 10);
+        if (!normalizedDate || !exName) return;
+
         let shouldClearDateArtifacts = false;
-        let deletedTargetDate = recordDate;
 
         setHistory(prev => {
             const recs = [...(prev[exName] || [])];
-            const idx = historyIdx !== undefined
-                ? historyIdx
-                : recs.findIndex(r => r.date === recordDate);
+            const idx = recs.findIndex(r => r.date === normalizedDate);
+            if (idx < 0) return prev;
 
-            if (idx < 0 || idx >= recs.length) return prev;
-            const targetDate = recordDate || recs[idx]?.date;
-            deletedTargetDate = targetDate;
+            recs.splice(idx, 1);
+            appendHistoryDeleteMarkers({
+                records: [buildHistoryRecordDeleteKey(normalizedDate, exName)],
+            });
 
-            // セット単位削除
-            if (setIdx !== undefined) {
+            let next;
+            if (!recs.length) {
+                next = { ...prev };
+                delete next[exName];
+            } else {
+                next = { ...prev, [exName]: recs };
+            }
+
+            shouldClearDateArtifacts = !Object.values(next).some((records) =>
+                (records || []).some((record) => record?.date === normalizedDate)
+            );
+            return next;
+        });
+
+        // 部分削除でも trustedRows からこの日付の行を除去する。
+        // buildTrustedHistory が forceReplace:true で exactHistory を上書きするため、
+        // 行を残すと削除済みの exercise が復活する（zombie restore）。
+        _clearTrustedRowsForDate(normalizedDate);
+
+        if (shouldClearDateArtifacts) {
+            appendHistoryDeleteMarkers({ dates: [normalizedDate] });
+            clearDraftForDate(normalizedDate);
+            setSavedWorkoutDurationSecByDate((prev) => {
+                if (!prev[normalizedDate]) return prev;
+                const next = { ...prev };
+                delete next[normalizedDate];
+                return next;
+            });
+            if (summary?.date === normalizedDate) setSummary(null);
+            if (workoutDayShareTarget?.workoutDate === normalizedDate) setWorkoutDayShareTarget(null);
+            if (workoutStartedForDate === normalizedDate) resetWorkoutElapsedTimer();
+            if (user?.id) {
+                deleteRemoteWorkoutArtifactsForDate(user.id, normalizedDate)
+                    .then(() => {
+                        clearSyncFailure(normalizedDate);
+                        setSessionSyncVersion((prev) => prev + 1);
+                    })
+                    .catch((error) => {
+                        recordSyncFailure(normalizedDate, error, "delete_workout_artifacts");
+                        console.error("workout date artifact delete failed", {
+                            error,
+                            userId: user.id,
+                            workoutDate: normalizedDate,
+                        });
+                    });
+            }
+        }
+    };
+
+    const handleDeleteHistory = (exName, historyIdx, recordDate, setIdx) => {
+        markWorkoutContentChanged(recordDate, setIdx !== undefined ? "set_delete" : "history_record_delete", { explicitDelete: true, deleteScope: "partial" });
+
+        if (setIdx !== undefined) {
+            // セット単位削除: まずセット数を確認して更新する
+            let exerciseBecameEmpty = false;
+            let setRemovedDate = recordDate;
+
+            setHistory(prev => {
+                const recs = [...(prev[exName] || [])];
+                const idx = historyIdx !== undefined
+                    ? historyIdx
+                    : recs.findIndex(r => r.date === recordDate);
+                if (idx < 0 || idx >= recs.length) return prev;
+                const targetDate = recordDate || recs[idx]?.date;
+                setRemovedDate = targetDate;
+
                 const target = recs[idx];
                 const nextSets = sanitizeWorkoutSets(
                     (target.sets || []).filter((_, i) => i !== setIdx),
@@ -537,84 +605,21 @@ export function useHistoryHandlers({
                     return { ...prev, [exName]: recs };
                 }
 
-                // セット全部消えたらその種目のその日記録ごと削除
-                recs.splice(idx, 1);
-                appendHistoryDeleteMarkers({
-                    records: [buildHistoryRecordDeleteKey(targetDate, exName)],
-                });
-
-                if (!recs.length) {
-                    const next = { ...prev };
-                    delete next[exName];
-                    shouldClearDateArtifacts = !Object.values(next).some((records) =>
-                        (records || []).some((record) => record?.date === targetDate)
-                    );
-                    return next;
-                }
-
-                const next = { ...prev, [exName]: recs };
-                shouldClearDateArtifacts = !Object.values(next).some((records) =>
-                    (records || []).some((record) => record?.date === targetDate)
-                );
-                return next;
-            }
-
-            // 記録単位削除
-            recs.splice(idx, 1);
-            appendHistoryDeleteMarkers({
-                records: [buildHistoryRecordDeleteKey(targetDate, exName)],
+                // セットが全部消えた → applyExerciseDeleteToHistory で種目ごと削除
+                exerciseBecameEmpty = true;
+                return prev;
             });
 
-            if (!recs.length) {
-                const next = { ...prev };
-                delete next[exName];
-                shouldClearDateArtifacts = !Object.values(next).some((records) =>
-                    (records || []).some((record) => record?.date === targetDate)
-                );
-                return next;
+            if (exerciseBecameEmpty) {
+                // 種目が空になった: 共通削除処理へ
+                applyExerciseDeleteToHistory(setRemovedDate, exName);
+            } else {
+                // セットが残っている: trustedRows だけクリア（zombie restore 防止）
+                _clearTrustedRowsForDate(String(setRemovedDate || "").slice(0, 10));
             }
-
-            const next = { ...prev, [exName]: recs };
-            shouldClearDateArtifacts = !Object.values(next).some((records) =>
-                (records || []).some((record) => record?.date === targetDate)
-            );
-            return next;
-        });
-
-        if (deletedTargetDate) {
-            // 部分削除でも trustedRows からこの日付の行を除去する。
-            // buildTrustedHistory が forceReplace:true で exactHistory を上書きするため、
-            // 行を残すと削除済みの exercise が復活する（zombie restore）。
-            _clearTrustedRowsForDate(String(deletedTargetDate || "").slice(0, 10));
-        }
-
-        if (shouldClearDateArtifacts && deletedTargetDate) {
-            appendHistoryDeleteMarkers({ dates: [deletedTargetDate] });
-            clearDraftForDate(deletedTargetDate);
-            setSavedWorkoutDurationSecByDate((prev) => {
-                if (!prev[deletedTargetDate]) return prev;
-                const next = { ...prev };
-                delete next[deletedTargetDate];
-                return next;
-            });
-            if (summary?.date === deletedTargetDate) setSummary(null);
-            if (workoutDayShareTarget?.workoutDate === deletedTargetDate) setWorkoutDayShareTarget(null);
-            if (workoutStartedForDate === deletedTargetDate) resetWorkoutElapsedTimer();
-            if (user?.id) {
-                deleteRemoteWorkoutArtifactsForDate(user.id, deletedTargetDate)
-                    .then(() => {
-                        clearSyncFailure(deletedTargetDate);
-                        setSessionSyncVersion((prev) => prev + 1);
-                    })
-                    .catch((error) => {
-                        recordSyncFailure(deletedTargetDate, error, "delete_workout_artifacts");
-                        console.error("workout date artifact delete failed", {
-                            error,
-                            userId: user.id,
-                            workoutDate: deletedTargetDate,
-                        });
-                    });
-            }
+        } else {
+            // 記録単位削除: 共通削除処理
+            applyExerciseDeleteToHistory(recordDate, exName);
         }
 
         queueWorkoutSessionSync(recordDate);
@@ -627,14 +632,12 @@ export function useHistoryHandlers({
         const draftSession = dateDraft.sessionEx;
         const draftUnits = dateDraft.exerciseUnits || {};
 
-        // その種目のdraftが無ければ終了
         if (!draftLog[exName]) return;
 
         let nextDraftLog = { ...draftLog };
 
         if (setIdx !== undefined) {
             const nextSets = (nextDraftLog[exName] || []).filter((_, i) => i !== setIdx);
-
             if (nextSets.length > 0) {
                 nextDraftLog[exName] = nextSets;
             } else {
@@ -647,12 +650,10 @@ export function useHistoryHandlers({
         let nextDraftSession = draftSession;
         let nextDraftUnits = draftUnits;
 
-        // その種目のセットが0になったら sessionEx / units からも消す
         if (!nextDraftLog[exName]) {
             if (Array.isArray(draftSession)) {
                 nextDraftSession = draftSession.filter((ex) => ex.name !== exName);
             }
-
             if (draftUnits[exName] !== undefined) {
                 nextDraftUnits = { ...draftUnits };
                 delete nextDraftUnits[exName];
@@ -666,7 +667,6 @@ export function useHistoryHandlers({
             exerciseUnits: nextDraftUnits,
         });
 
-        // 今まさにその日を編集中なら画面状態にも反映
         if (logDate === recordDate) {
             applyLogDraftState({
                 todayLabels: dateDraft.todayLabels,
@@ -942,5 +942,6 @@ export function useHistoryHandlers({
         handleCalendarDayOpen,
         handleLogForDate,
         undoDeleteAllHistoryForDate,
+        applyExerciseDeleteToHistory,
     };
 }

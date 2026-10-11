@@ -28,6 +28,7 @@ export function useWorkoutLogBridge({
     setExerciseUnits,
     startWorkoutTimerIfNeeded,
     clearTrustedRowsForDate,
+    applyExerciseDeleteToHistoryRef,
 }) {
     const handleWorkoutLogDraftChange = useCallback((nextDraft, mutation = {}) => {
         const normalizedDate = normalizeDraftDateKey(nextDraft?.date || logDate);
@@ -103,6 +104,13 @@ export function useWorkoutLogBridge({
         // 行を残すと次の handleLogForDate で削除した exercise が復活する（zombie restore）。
         if (mutation.explicitDelete && clearTrustedRowsForDate) {
             clearTrustedRowsForDate(normalizedDate);
+        }
+
+        // P0: 記録画面からの exercise 削除でも history（C3）を更新する。
+        // カレンダー画面の × と同じ共通関数を通すことで、両方の入口が
+        // setHistory・削除マーカー・shouldClearDateArtifacts を同様に処理する。
+        if (mutation.reason === "exercise_delete" && mutation.details?.exerciseName) {
+            applyExerciseDeleteToHistoryRef?.current?.(normalizedDate, mutation.details.exerciseName);
         }
 
         // Start the workout timer as soon as any set has reps > 0.

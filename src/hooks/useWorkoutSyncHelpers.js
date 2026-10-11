@@ -39,6 +39,7 @@ export function useWorkoutSyncHelpers({
         if (error) throw error;
         applyTrustedWorkoutRowsSnapshot(rows || [], {
             source: "fetchRemoteWorkoutRowsForDates",
+            skipPendingFilter: true,
         });
         return rows || [];
     }, [applyTrustedWorkoutRowsSnapshot]);

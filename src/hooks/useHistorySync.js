@@ -111,11 +111,24 @@ export function useHistorySync({
     const applyTrustedWorkoutRowsSnapshot = useCallback((rows = [], {
         replace = false,
         source = "workouts.data",
+        skipPendingFilter = false,
     } = {}) => {
         const deletedDates = new Set(historyDeleteMarkersRef.current?.dates || []);
         const incomingRows = (rows || [])
             .filter((row) => normalizeTrustedWorkoutRowDate(row))
             .filter((row) => !deletedDates.has(normalizeTrustedWorkoutRowDate(row)));
+
+        // P2: 同期待ちの日付を background fetch で上書きしない。
+        // skipPendingFilter:true は sync verify や内部状態管理の呼び出し元が指定する。
+        const pendingDates = !skipPendingFilter && pendingWorkoutContentChangeDatesRef?.current
+            ? new Set(pendingWorkoutContentChangeDatesRef.current.keys())
+            : new Set();
+        const filteredIncomingRows = pendingDates.size > 0
+            ? incomingRows.filter((row) => {
+                const date = normalizeTrustedWorkoutRowDate(row);
+                return !date || !pendingDates.has(date);
+            })
+            : incomingRows;
 
         // マーカーログ: 削除マーカーで弾いた場合のみ出力
         const _blockedIncomingDates = deletedDates.size > 0
@@ -144,7 +157,7 @@ export function useHistorySync({
         const hasBlockedExisting = currentRows.length < (trustedWorkoutRowsRef.current || []).length;
 
         if (!replace) {
-            const hasIncomingChange = incomingRows.some((row) => {
+            const hasIncomingChange = filteredIncomingRows.some((row) => {
                 const date = normalizeTrustedWorkoutRowDate(row);
                 return trustedWorkoutRowSignaturesRef.current.get(date) !== serializeTrustedRow(row, normalizeTrustedWorkoutRowDate);
             });
@@ -154,7 +167,7 @@ export function useHistorySync({
                     console.log("[history] trusted row cache update", {
                         action: "trusted_row_cache_update",
                         source,
-                        rowsCount: incomingRows.length,
+                        rowsCount: filteredIncomingRows.length,
                         rowsHash: previousSignature,
                         previousRowsHash: previousSignature,
                         skippedSameSnapshot: true,
@@ -165,8 +178,8 @@ export function useHistorySync({
             }
         }
         const nextRows = replace
-            ? sortTrustedRowsByDate(incomingRows, normalizeTrustedWorkoutRowDate)
-            : mergeTrustedRowsByDate(currentRows, incomingRows, normalizeTrustedWorkoutRowDate);
+            ? sortTrustedRowsByDate(filteredIncomingRows, normalizeTrustedWorkoutRowDate)
+            : mergeTrustedRowsByDate(currentRows, filteredIncomingRows, normalizeTrustedWorkoutRowDate);
         const previousSignature = serializeTrustedRows(trustedWorkoutRowsRef.current || [], normalizeTrustedWorkoutRowDate);
         const nextSignature = serializeTrustedRows(nextRows, normalizeTrustedWorkoutRowDate);
         if (previousSignature === nextSignature) {
@@ -203,6 +216,7 @@ export function useHistorySync({
     }, [
         historyDeleteMarkersRef,
         normalizeTrustedWorkoutRowDate,
+        pendingWorkoutContentChangeDatesRef,
         serializeTrustedRow,
         shouldLogPerfDebug,
         serializeTrustedRows,

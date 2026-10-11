@@ -1994,9 +1994,11 @@ export default function GymApp() {
             (row) => String(row?.date || "").slice(0, 10) !== d
         );
         if (filtered.length !== (trustedWorkoutRowsRef.current || []).length) {
-            applyTrustedWorkoutRowsSnapshot(filtered, { replace: true, source: "log_exercise_delete" });
+            applyTrustedWorkoutRowsSnapshot(filtered, { replace: true, source: "log_exercise_delete", skipPendingFilter: true });
         }
     }, [trustedWorkoutRowsRef, applyTrustedWorkoutRowsSnapshot]);
+
+    const applyExerciseDeleteToHistoryRef = useRef(null);
 
     const {
         workoutLog,
@@ -2023,6 +2025,7 @@ export default function GymApp() {
         setExerciseUnits,
         startWorkoutTimerIfNeeded,
         clearTrustedRowsForDate,
+        applyExerciseDeleteToHistoryRef,
     });
 
 
@@ -2931,6 +2934,7 @@ export default function GymApp() {
         handleDeleteHistory,
         deleteAllHistoryForDate,
         undoDeleteAllHistoryForDate,
+        applyExerciseDeleteToHistory,
     } = useHistoryHandlers({
         user,
         history,
@@ -3008,6 +3012,8 @@ export default function GymApp() {
         onDeleteDateClearCompletion: unmarkPlanDayCompleted,
         invalidateSupabaseFetchFreshByPrefix,
     });
+
+    applyExerciseDeleteToHistoryRef.current = applyExerciseDeleteToHistory;
 
     // ─── カレンダー月移動時の追加フェッチ ─────────────────
     const fetchedCalendarMonthsRef = useRef(new Set());
