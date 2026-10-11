@@ -382,6 +382,22 @@ export function usePersistCurrentLog({
         // only runs during React's render phase, which happens AFTER the Supabase reconcile
         // fetch in useHistoryAutoSave resolves. By writing here synchronously we guarantee
         // that syncWorkoutRowsForDates always sees the correct payload regardless of timing.
+        //
+        // Both pendingSavePayloadsRef and setHistory use buildDraftHistoryForDate with the same
+        // args. The ONLY intentional difference is baseHistory:
+        //   - pendingSavePayloadsRef: latestHistoryRef.current (synchronous ref, readable now)
+        //   - setHistory:             prev (React updater arg, reflects batched state at render time)
+        // All other args, including replaceDate, must stay identical. They are declared once here
+        // so that a change to one cannot silently diverge from the other.
+        const draftHistoryArgs = {
+            workoutDate: normalizedLogDate,
+            exercises: saveExercises,
+            logData: saveLogData,
+            getExUnit: getSaveExUnit,
+            labels: saveLabels,
+            durationSec,
+            replaceDate: Boolean(pendingChange.explicitDelete),
+        };
         if (pendingSavePayloadsRef) {
             // 日付全体の削除が保留中のとき stale payload の書き込みをスキップする。
             // deleteAllHistoryForDate は pendingSavePayloadsRef をクリアするが、
@@ -393,15 +409,11 @@ export function usePersistCurrentLog({
                     reason: "explicit-delete-pending",
                 });
             } else {
+                // pendingSavePayloadsRef は Supabase の reconcile fetch より先に同期的に書く必要があるため
+                // updater の外で latestHistoryRef.current を baseHistory に使う（L380-384 参照）。
                 const directPayloadForDate = buildDraftHistoryForDate({
+                    ...draftHistoryArgs,
                     baseHistory: latestHistoryRef.current || {},
-                    workoutDate: normalizedLogDate,
-                    exercises: saveExercises,
-                    logData: saveLogData,
-                    getExUnit: getSaveExUnit,
-                    labels: saveLabels,
-                    durationSec,
-                    replaceDate: false,
                 });
                 pendingSavePayloadsRef.current.set(normalizedLogDate, directPayloadForDate);
             }
@@ -445,15 +457,11 @@ export function usePersistCurrentLog({
             setCount: wpCountSetsFromLogData(saveLogData),
         });
         setHistory((prev) => {
+            // setHistory は React の updater 契約により prev を使う。
+            // setHistory(() => next) にすると並行してバッチされた他の日付への更新が失われる。
             const nextHistory = buildDraftHistoryForDate({
+                ...draftHistoryArgs,
                 baseHistory: prev,
-                workoutDate: normalizedLogDate,
-                exercises: saveExercises,
-                logData: saveLogData,
-                getExUnit: getSaveExUnit,
-                labels: saveLabels,
-                durationSec,
-                replaceDate: Boolean(pendingChange.explicitDelete),
             });
 
             if (shouldLogPerfDebug()) {

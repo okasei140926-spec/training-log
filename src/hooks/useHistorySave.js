@@ -282,7 +282,11 @@ export function useHistorySave({
                         flags: { explicitEdit: null, explicitDelete: null, source: "syncWorkoutRows:entry" },
                         exerciseCount: wpCountExercisesFromHistory(effectiveHistoryForDate, workoutDate),
                         setCount: wpCountSetsFromHistory(effectiveHistoryForDate, workoutDate),
-                        extra: { hasWorkoutForDate, usingDirectPayload: directPayloadMap != null },
+                        extra: {
+                        hasWorkoutForDate,
+                        usingDirectPayload: directPayloadMap != null,
+                        replaceDate: Boolean(pendingWorkoutContentChangeDatesRef.current.get(workoutDate)?.explicitDelete),
+                    },
                     });
                     const {
                         row: existingWorkoutRow,
