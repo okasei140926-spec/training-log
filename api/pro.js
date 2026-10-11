@@ -131,7 +131,7 @@ async function handleStatus(req, res) {
 
 // POST /api/pro?action=activate-dev  — activate-pro-dev
 async function handleActivateDev(req, res) {
-  if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+  if (process.env.ALLOW_DEV_PRO !== "true") {
     return res.status(404).json({ error: "Not found" });
   }
 
@@ -178,7 +178,7 @@ async function handleActivateDev(req, res) {
 
 // POST /api/pro?action=deactivate-dev  — deactivate-pro-dev
 async function handleDeactivateDev(req, res) {
-  if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+  if (process.env.ALLOW_DEV_PRO !== "true") {
     return res.status(404).json({ error: "Not found" });
   }
 

@@ -35,14 +35,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Verify Authorization header
+  // Verify Authorization header — fail-closed: if the secret is not configured
+  // the endpoint is inoperable rather than open to unauthenticated callers.
+  if (!WEBHOOK_SECRET) {
+    console.error("[revenuecat-webhook] REVENUECAT_WEBHOOK_SECRET is not configured — request rejected");
+    return res.status(503).json({ error: "Service unavailable" });
+  }
   const authHeader = req.headers["authorization"] || "";
-  if (WEBHOOK_SECRET) {
-    const expected = `Bearer ${WEBHOOK_SECRET}`;
-    if (authHeader !== expected) {
-      console.warn("[revenuecat-webhook] unauthorized", { authHeader: authHeader.slice(0, 20) });
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+  const expected = `Bearer ${WEBHOOK_SECRET}`;
+  if (authHeader !== expected) {
+    console.warn("[revenuecat-webhook] unauthorized", { authHeader: authHeader.slice(0, 20) });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   if (!adminSupabase) {
