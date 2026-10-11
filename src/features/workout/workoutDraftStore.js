@@ -220,7 +220,7 @@ export function saveWorkoutDraft(date, draft, {
       flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: "remote_supabase" },
       exerciseCount: wpExCount(draft),
       setCount: wpSetCount(draft),
-      extra: { exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: draft?.meta?.payloadOrigin || null, attemptCount: _valveAttempts.count, blockedCount: _valveAttempts.blocked, appliedCount: _valveAttempts.applied },
+      extra: { exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: draft?.meta?.payloadOrigin || null, contentOrigin: draft?.meta?.contentOrigin || null, attemptCount: _valveAttempts.count, blockedCount: _valveAttempts.blocked, appliedCount: _valveAttempts.applied },
     });
     logger?.warn?.("[workout draft] one-way valve: remote_supabase rejected", {
       action: "one_way_valve",

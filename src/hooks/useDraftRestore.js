@@ -12,6 +12,8 @@ import {
     shouldPreserveRawDraftOverIncoming,
     withDraftDateMeta,
     getWorkoutEditReasonFromSource,
+    loadPendingOps,
+    hasOutboxEntryForDate,
 } from "../utils/appHelpers";
 
 export function useDraftRestore({
@@ -277,6 +279,21 @@ export function useDraftRestore({
             // latestLogDraftRef.current?.meta?.date is the date that state was loaded from.
             contentDate: normalizeDraftDateKey(latestLogDraftRef.current?.meta?.date) || null,
         });
+        // F-2: If the outbox has a pending op for this date, don't let remote overwrite local
+        // hasOutboxEntryForDate includes stalled entries — stalled = retry-next-session, NOT complete
+        const _pendingOps = loadPendingOps(user?.id);
+        if (hasOutboxEntryForDate(_pendingOps, normalizedLogDate)) {
+            // There is an unconfirmed pending operation — preserve local state
+            if (hasDraftContent(localDraft)) {
+                const datedLocalDraft = withDraftDateMeta(normalizedLogDate, localDraft, {
+                    source: localDraft?.meta?.source || "outbox_pending",
+                    hasUnsavedChanges: true,
+                    contentOrigin: localDraft?.meta?.contentOrigin || "local_draft",
+                });
+                applyCurrentLogDraft(datedLocalDraft, { forDate: normalizedLogDate });
+            }
+            return;
+        }
         applyCurrentLogDraft(cleanSavedDraft, { forDate: normalizedLogDate });
         logRestoreDecision(normalizedLogDate, cleanSavedDraft, localDraft, cleanSavedDraft, "supabase_saved_workout_refresh");
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -142,6 +142,8 @@ import {
     isPlainObject,
     isTransientSupabaseFetchError,
     isUnsavedUserWorkoutDraft,
+    loadPendingOps,
+    upsertPendingOp,
     loadPersistentDeletedDates,
     loadTrustedHistoryCache,
     logRecordFetchError,
@@ -1416,18 +1418,23 @@ export default function GymApp() {
                 }
                 const hasContent = (draft.sessionEx || draft.exercises || []).length > 0
                     || Object.keys(draft.logData || {}).length > 0;
-                if (!hasContent) continue;
-                // Only rescue drafts explicitly marked as having unsaved changes.
-                // A deleted date has hasUnsavedChanges: false → skipped here, preventing
-                // permanently-deleted dates from being re-synced by this path.
-                const isUnsynced = draft.meta?.hasUnsavedChanges === true;
-                if (!isUnsynced) continue;
-                // Skip drafts whose content originated from remote data (trustedHistory
-                // or fetchedRemoteRows). These were auto-persisted by the hydration path and do
-                // not represent user intent. Rescuing them would zombie-restore exercises that
-                // were deleted before the next remote sync completed.
-                const isRemoteOriginContent = draft.meta?.contentOrigin === "remote";
-                if (isRemoteOriginContent) continue;
+                // F-2: If outbox has an active entry for this date, always include it
+                const _pendingOps = loadPendingOps(user?.id);
+                const _hasPendingOp = Boolean(_pendingOps[date]);
+                if (!_hasPendingOp) {
+                    if (!hasContent) continue;
+                    // Only rescue drafts explicitly marked as having unsaved changes.
+                    // A deleted date has hasUnsavedChanges: false → skipped here, preventing
+                    // permanently-deleted dates from being re-synced by this path.
+                    const isUnsynced = draft.meta?.hasUnsavedChanges === true;
+                    if (!isUnsynced) continue;
+                    // Skip drafts whose content originated from remote data (trustedHistory
+                    // or fetchedRemoteRows). These were auto-persisted by the hydration path and do
+                    // not represent user intent. Rescuing them would zombie-restore exercises that
+                    // were deleted before the next remote sync completed.
+                    const isRemoteOriginContent = draft.meta?.contentOrigin === "remote";
+                    if (isRemoteOriginContent) continue;
+                }
                 // Inject local draft directly into pendingSavePayloadsRef so
                 // syncWorkoutRowsForDates sends local content (not remote-derived history).
                 const directPayload = buildDraftHistoryForDate({
@@ -1488,6 +1495,31 @@ export default function GymApp() {
         unsyncedDraftRescueRef.current.add(user.id);
         rescueUnsyncedDrafts("startup");
     }, [historySyncReady, user?.id, rescueUnsyncedDrafts]);
+
+    // F-1: Replay outbox entries from previous session
+    const outboxReplayRef = useRef(new Set());
+    useEffect(() => {
+        if (!historySyncReady || !user?.id) return;
+        if (outboxReplayRef.current.has(user.id)) return;
+        outboxReplayRef.current.add(user.id);
+        const ops = loadPendingOps(user.id);
+        let replayed = false;
+        Object.entries(ops).forEach(([date, entry]) => {
+            // Reset stalled flag and increment attempts before replaying
+            upsertPendingOp(user.id, date, {
+                ...entry,
+                stalled: false,
+                attempts: (entry.attempts || 0) + 1,
+            });
+            markWorkoutContentChangedRef.current?.(date, entry.reason || "startup_unsynced_draft", {
+                explicitDelete: entry.explicitDelete,
+                explicitEdit: entry.explicitEdit,
+                deleteScope: entry.deleteScope || null,
+            });
+            replayed = true;
+        });
+        if (replayed) setForceSyncVersion((v) => v + 1);
+    }, [historySyncReady, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const {
         historySyncDiagnostic,

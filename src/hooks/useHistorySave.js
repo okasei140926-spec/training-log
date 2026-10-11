@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../utils/writeTrace";
-import { removePersistentDeletedDate } from "../utils/appHelpers";
+import { removePersistentDeletedDate, upsertPendingOp } from "../utils/appHelpers";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
     fetchWorkoutRowFromWorkoutsData,
@@ -129,6 +129,19 @@ export function useHistorySave({
             updatedAt: new Date().toISOString(),
             ...(_clearStalled ? { stalled: false, stalledAt: null } : {}),
         });
+        // F-1: Outbox — persist operation so it survives app restarts
+        const _userId = user?.id || latestUserIdRef.current || null;
+        if (_userId) {
+            upsertPendingOp(_userId, normalizedDate, {
+                reason,
+                explicitDelete,
+                explicitEdit,
+                deleteScope: deleteScope || null,
+                at: Date.now(),
+                attempts: 0,
+                stalled: false,
+            });
+        }
         logWriteTrace("markWorkoutContentChanged", {
             date: normalizedDate,
             decision: "executed",

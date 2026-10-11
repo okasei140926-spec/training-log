@@ -25,6 +25,8 @@ import {
     shouldLogPerfDebug,
     shouldPreserveRawDraftOverIncoming,
     getTimestampMs,
+    deletePendingOp,
+    setPendingOpStalled,
 } from "../utils/appHelpers";
 import {
     REMOTE_HISTORY_SESSION_LOOKBACK_DAYS,
@@ -505,6 +507,8 @@ export function useHistoryAutoSave({
                                     queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
                                 },
                             });
+                            // F-1: Guard permanently rejected — mark stalled (do NOT delete)
+                            setPendingOpStalled(currentUserId, date);
                         }
                         return;
                     }
@@ -527,6 +531,8 @@ export function useHistoryAutoSave({
                                 queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
                             },
                         });
+                        // F-1: Sync confirmed — clear outbox entry
+                        deletePendingOp(currentUserId, date);
                     }
                     if (!failedSessionSyncDates.has(date) && !skippedSessionSyncDates.has(date)) {
                         pendingWorkoutSessionSyncDatesRef.current.delete(date);

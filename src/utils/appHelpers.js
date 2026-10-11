@@ -202,6 +202,74 @@ export const addPersistentDeletedDate = (userId, dateStr) => {
     return next;
 };
 
+// F-1: Outbox — persistent pending-operations store keyed by userId.
+// Survives app restarts; cleared only on verified sync success.
+const PENDING_OPS_KEY_PREFIX = "wp_pending_ops_";
+const PENDING_OPS_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+const PENDING_OPS_MAX_ENTRIES = 400;
+
+export const getPendingOpsKey = (userId) => `${PENDING_OPS_KEY_PREFIX}${userId}`;
+
+export const loadPendingOps = (userId) => {
+    if (!userId) return {};
+    try {
+        const raw = window.localStorage.getItem(getPendingOpsKey(userId));
+        const map = raw ? JSON.parse(raw) : {};
+        if (typeof map !== "object" || map === null || Array.isArray(map)) return {};
+        const now = Date.now();
+        // Filter expired entries and entries that have exceeded max retry attempts
+        const filtered = Object.fromEntries(
+            Object.entries(map).filter(([, entry]) =>
+                entry &&
+                typeof entry.at === "number" &&
+                (now - entry.at) < PENDING_OPS_MAX_AGE_MS &&
+                (entry.attempts == null || entry.attempts <= 10)
+            )
+        );
+        // Trim to max entries (keep newest)
+        const entries = Object.entries(filtered).sort(([, a], [, b]) => b.at - a.at);
+        return Object.fromEntries(entries.slice(0, PENDING_OPS_MAX_ENTRIES));
+    } catch {
+        return {};
+    }
+};
+
+export const upsertPendingOp = (userId, dateStr, entry) => {
+    if (!userId || !dateStr) return;
+    try {
+        const current = loadPendingOps(userId);
+        const next = { ...current, [String(dateStr).slice(0, 10)]: entry };
+        window.localStorage.setItem(getPendingOpsKey(userId), JSON.stringify(next));
+    } catch { }
+};
+
+export const deletePendingOp = (userId, dateStr) => {
+    if (!userId || !dateStr) return;
+    try {
+        const current = loadPendingOps(userId);
+        const next = { ...current };
+        delete next[String(dateStr).slice(0, 10)];
+        window.localStorage.setItem(getPendingOpsKey(userId), JSON.stringify(next));
+    } catch { }
+};
+
+export const setPendingOpStalled = (userId, dateStr) => {
+    if (!userId || !dateStr) return;
+    try {
+        const current = loadPendingOps(userId);
+        const existing = current[String(dateStr).slice(0, 10)];
+        if (!existing) return;
+        const next = { ...current, [String(dateStr).slice(0, 10)]: { ...existing, stalled: true } };
+        window.localStorage.setItem(getPendingOpsKey(userId), JSON.stringify(next));
+    } catch { }
+};
+
+// Returns true if the outbox has any entry (including stalled) for the given date.
+// "Stalled" means retry-next-session, NOT operation-complete. Always use this instead of
+// checking !entry.stalled, which would incorrectly allow remote data to overwrite local state.
+export const hasOutboxEntryForDate = (pendingOps, dateStr) =>
+    Boolean(pendingOps && pendingOps[String(dateStr).slice(0, 10)]);
+
 // Remove a date from the persistent deleted-dates list (called when a record is re-created).
 export const removePersistentDeletedDate = (userId, dateStr) => {
     if (!userId || !dateStr) return;

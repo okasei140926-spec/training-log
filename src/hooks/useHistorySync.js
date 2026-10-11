@@ -936,16 +936,12 @@ export function useHistorySync({
                     const remoteDateSet = new Set(
                         (workoutsRes.data || []).map((r) => String(r?.date || "").slice(0, 10)).filter(Boolean)
                     );
-                    // Load persistent deleted-dates list (30-day TTL, survives restarts).
-                    // Dates in this list were explicitly deleted by the user and must NOT
-                    // be treated as "unsynced local" — they are intentionally absent from Supabase.
-                    const persistentDeletedDates = loadPersistentDeletedDates(user.id);
+                    // F-3: persistentDeletedDates filter removed; outbox guards against re-uploading deletes.
                     const unsyncedDates = localDates.filter(
-                        (d) => !remoteDateSet.has(d) && !(d in persistentDeletedDates)
+                        (d) => !remoteDateSet.has(d)
                     );
-                    const deletedDatesExcluded = localDates.filter(
-                        (d) => !remoteDateSet.has(d) && (d in persistentDeletedDates)
-                    );
+                    // F-3: no longer filtered by persistentDeletedDates
+                    const deletedDatesExcluded = [];
                     if (deletedDatesExcluded.length > 0) {
                         console.log("[WP] startupReconcile:deletedDatesExcluded", {
                             excludedDates: deletedDatesExcluded,

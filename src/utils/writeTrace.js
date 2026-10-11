@@ -15,8 +15,8 @@
 // can be copied from the settings screen for offline debugging.
 
 const TRACE_LOG_KEY = "wpTraceLog";
-const TRACE_MAX_ENTRIES = 800;
-const TRACE_MAX_BYTES = 300 * 1024; // 300 KB
+const TRACE_MAX_ENTRIES = 5000;
+const TRACE_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
 function _appendTraceEntry(stage, data) {
     try {

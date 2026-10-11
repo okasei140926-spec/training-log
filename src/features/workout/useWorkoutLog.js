@@ -332,12 +332,30 @@ export function useWorkoutLog({
       setCount: null,
     });
 
+    const split = splitExercisesForApp(draft.exercises || [], draft.exerciseUnits || {});
+    const draftToPersist = {
+      ...draft,
+      ...split,
+    };
+
+    // Bypass debounce for explicit deletes — write immediately so the state
+    // survives a crash within the normal debounce window.
+    if (draftToPersist.meta?.explicitDelete) {
+      logWriteTrace("A-1:saveWorkoutDraft", {
+        date: normalizedDate,
+        decision: "executed",
+        reason: "explicitDelete_bypass",
+        flags: { explicitEdit: draftToPersist?.meta?.explicitEdit, explicitDelete: draftToPersist?.meta?.explicitDelete, source: draftToPersist?.meta?.source },
+        exerciseCount: (draftToPersist.exercises || []).length,
+        setCount: Object.values(draftToPersist.logData || {}).reduce((s, sets) => s + (Array.isArray(sets) ? sets.length : 0), 0),
+      });
+      saveWorkoutDraft(normalizedDate, draftToPersist, { storage, logger });
+      onDraftPersist?.(draftToPersist, { source: "useWorkoutLog", hash: draftHash });
+      lastSavedHashRef.current = draftHash;
+      return undefined;
+    }
+
     const timeoutId = window.setTimeout(() => {
-      const split = splitExercisesForApp(draft.exercises || [], draft.exerciseUnits || {});
-      const draftToPersist = {
-        ...draft,
-        ...split,
-      };
       logWriteTrace("A-1:saveWorkoutDraft", {
         date: normalizedDate,
         decision: "executed",

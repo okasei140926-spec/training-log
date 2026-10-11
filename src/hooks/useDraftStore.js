@@ -155,6 +155,7 @@ export function useDraftStore({ userIdRef } = {}) {
         const _exerciseNames = (draft?.sessionEx ?? draft?.exercises ?? []).slice(0, 10).map((ex) => String(ex?.name || "")).filter(Boolean);
         const _payloadDateField = draft?.meta?.date || draft?.meta?.draftDate || draft?.meta?.workoutDate || null;
         const _payloadOrigin = draft?.meta?.payloadOrigin || null;
+        const _contentOrigin = draft?.meta?.contentOrigin || null;
 
         // ■3: Count source:"remote_supabase" attempts for loop detection.
         // Moved from apply-time (useLogDateRefresh) to attempt-time so valve-blocked
@@ -199,7 +200,7 @@ export function useDraftStore({ userIdRef } = {}) {
             flags: { explicitEdit: draft?.meta?.explicitEdit, explicitDelete: draft?.meta?.explicitDelete, source: draft?.meta?.source },
             exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
             setCount: wpCountSetsFromLogData(draft?.logData),
-            extra: { exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: _payloadOrigin },
+            extra: { exerciseNames: _exerciseNames, payloadDateField: _payloadDateField, payloadOrigin: _payloadOrigin, contentOrigin: _contentOrigin },
         });
         // Capture the original payload date BEFORE any overwrite for a clean second-line defence.
         // applyCurrentLogDraft's forDate guard is the first line; this catches any direct caller
@@ -251,7 +252,7 @@ export function useDraftStore({ userIdRef } = {}) {
                 flags: { source: _g14Source, explicitDelete: draft?.meta?.explicitDelete, explicitEdit: draft?.meta?.explicitEdit },
                 exerciseCount: wpCountExercises(draft?.sessionEx ?? draft?.exercises),
                 setCount: _g14SetCount,
-                extra: { exerciseNames: _exerciseNames, caller: "saveDraftForDate" },
+                extra: { exerciseNames: _exerciseNames, caller: "saveDraftForDate", contentOrigin: _contentOrigin },
             });
         }
 
