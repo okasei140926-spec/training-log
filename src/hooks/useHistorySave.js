@@ -70,7 +70,7 @@ export function useHistorySave({
         pendingWorkoutSessionSyncDatesRef.current.add(normalizedDate);
     }, []);
 
-    const markWorkoutContentChanged = useCallback((date, reason = "content_change", options = {}) => {
+    const markWorkoutContentChanged = useCallback((date, reason = "content_change", options = {}, { recordToOutbox = true } = {}) => {
         const normalizedDate = String(date || "").slice(0, 10);
         if (!normalizedDate) return;
 
@@ -98,12 +98,12 @@ export function useHistorySave({
 
         const previous = pendingWorkoutContentChangeDatesRef.current.get(normalizedDate) || {};
         const explicitEdit = Boolean(previous.explicitEdit || options.explicitEdit || EXPLICIT_WORKOUT_EDIT_REASONS.has(reason));
-        // explicitDelete: if the caller explicitly passes `false`, reset it (e.g. startup rescue,
-        // session-change triggers). Otherwise OR-merge so a queued delete is not lost by a
-        // concurrent non-delete markWorkoutContentChanged call for the same date.
+        // explicitDelete: only true for the mutation that explicitly sets it.
+        // Per-mutation: not inherited from previous queue entry, so a subsequent
+        // non-delete call for the same date does not carry a stale delete flag.
         const explicitDelete = options.explicitDelete === false
             ? false
-            : Boolean(previous.explicitDelete || options.explicitDelete);
+            : Boolean(options.explicitDelete);
         // deleteScope: "date" = full date deletion, "partial" = single exercise/set removal.
         // explicitEdit が来た時点でペイロードは「新しいユーザー操作の内容」になる。
         // 以前の "date" を継承したまま skip 条件を発火させると、
@@ -129,9 +129,11 @@ export function useHistorySave({
             updatedAt: new Date().toISOString(),
             ...(_clearStalled ? { stalled: false, stalledAt: null } : {}),
         });
-        // F-1: Outbox — persist operation so it survives app restarts
+        // F-1: Outbox — persist operation so it survives app restarts.
+        // recordToOutbox: false is passed by system-generated callers (startup rescue,
+        // outbox replay) that must NOT overwrite the stored user-intent entry.
         const _userId = user?.id || latestUserIdRef.current || null;
-        if (_userId) {
+        if (_userId && recordToOutbox !== false) {
             upsertPendingOp(_userId, normalizedDate, {
                 reason,
                 explicitDelete,

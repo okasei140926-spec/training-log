@@ -226,6 +226,19 @@ export function useHistoryAutoSave({
                 const explicitDeleteSyncDates = new Set(
                     syncDates.filter((d) => Boolean(pendingWorkoutContentChangeDatesRef.current.get(d)?.explicitDelete))
                 );
+                const stalledExcludedDates = livePendingDates.filter(
+                    (d) => Boolean(pendingWorkoutContentChangeDatesRef.current.get(d)?.stalled)
+                );
+                const closureExcludedDates = pendingContentDates.filter((d) => !syncDates.includes(d));
+                const allExcludedDates = [...new Set([...closureExcludedDates, ...stalledExcludedDates])];
+                const excludedReasons = [
+                    closureExcludedDates.length > 0
+                        ? "date was in closure snapshot but no longer in live queue (already processed by a prior batch run)"
+                        : null,
+                    stalledExcludedDates.length > 0
+                        ? `stalled entries suppressed in same session: ${stalledExcludedDates.join(", ")}`
+                        : null,
+                ].filter(Boolean);
                 logWriteTrace("syncBatch:build", {
                     date: null,
                     decision: "executed",
@@ -233,12 +246,11 @@ export function useHistoryAutoSave({
                     extra: {
                         queueDates: livePendingDates,
                         batchDates: syncDates,
-                        excludedDates: pendingContentDates.filter((d) => !syncDates.includes(d)),
-                        excludedReason: pendingContentDates.some((d) => !syncDates.includes(d))
-                            ? "date was in closure snapshot but no longer in live queue (already processed by a prior batch run)"
-                            : null,
+                        excludedDates: allExcludedDates,
+                        excludedReason: excludedReasons.length > 0 ? excludedReasons.join("; ") : null,
                         closureDates: pendingContentDates,
                         newSinceClosureDates: syncDates.filter((d) => !pendingContentDates.includes(d)),
+                        stalledDates: stalledExcludedDates,
                     },
                 });
                 // Re-read local history AFTER the async Supabase fetch.
@@ -287,6 +299,7 @@ export function useHistoryAutoSave({
                                 ..._existingEntry,
                                 stalled: true,
                                 stalledAt: Date.now(),
+                                stalledReason: "network_failure",
                             });
                             logWriteTrace("syncQueue:stall", {
                                 date,
@@ -342,6 +355,7 @@ export function useHistoryAutoSave({
                                 ..._existingEntry,
                                 stalled: true,
                                 stalledAt: Date.now(),
+                                stalledReason: "hold_limit",
                             });
                             logWriteTrace("syncQueue:stall", {
                                 date,
@@ -495,19 +509,25 @@ export function useHistoryAutoSave({
                                 exerciseCount: null,
                                 setCount: null,
                             });
-                            const _qbPermSkip = pendingWorkoutContentChangeDatesRef.current.size;
-                            pendingWorkoutContentChangeDatesRef.current.delete(date);
-                            logWriteTrace("syncQueue:delete", {
+                            // F-1: Guard permanently rejected — mark stalled in ref so
+                            // syncBatch:build's stalled filter suppresses further retries
+                            // within the same session.  Do NOT delete: the TTL path in
+                            // syncBatch:build will purge it once STALLED_ENTRY_TTL_MS passes.
+                            const stalledEntry = pendingWorkoutContentChangeDatesRef.current.get(date);
+                            pendingWorkoutContentChangeDatesRef.current.set(date, {
+                                ...(stalledEntry || {}),
+                                stalled: true,
+                                stalledAt: Date.now(),
+                                stalledReason: "guard_skip",
+                            });
+                            logWriteTrace("syncQueue:stall", {
                                 date,
                                 decision: "executed",
-                                reason: "guard:permanent-skip",
+                                reason: "guard:permanent-skip — entry marked stalled in ref",
                                 extra: {
-                                    queueSizeBefore: _qbPermSkip,
-                                    queueSizeAfter: pendingWorkoutContentChangeDatesRef.current.size,
                                     queueDatesAfter: [...pendingWorkoutContentChangeDatesRef.current.keys()],
                                 },
                             });
-                            // F-1: Guard permanently rejected — mark stalled (do NOT delete)
                             setPendingOpStalled(currentUserId, date);
                         }
                         return;

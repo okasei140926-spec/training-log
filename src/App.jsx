@@ -1206,7 +1206,7 @@ export default function GymApp() {
     const onlineResumeSyncDebounceRef = useRef(null);
     const onStartupUnsyncedLocalDates = useCallback((unsyncedDates) => {
         unsyncedDates.forEach((date) => {
-            markWorkoutContentChangedRef.current?.(date, "startup_unsynced_local", { explicitEdit: false });
+            markWorkoutContentChangedRef.current?.(date, "startup_unsynced_local", { explicitEdit: false }, { recordToOutbox: false });
         });
         setForceSyncVersion((v) => v + 1);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1460,22 +1460,28 @@ export default function GymApp() {
                 // explicitEdit must NOT be true — it would bypass G2 save guards.
                 // explicitDelete: false — a stale delete flag from a prior session must
                 // not OR-merge into the pending change and cause a false delete.
-                markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: false, explicitDelete: false });
+                markWorkoutContentChangedRef.current?.(date, "startup_unsynced_draft", { explicitEdit: false, explicitDelete: false }, { recordToOutbox: false });
                 // On online-resume: clear stalled flag so syncDates includes this entry.
                 // Network failures that hit the retry limit stall the entry; restoring
                 // connectivity un-stalls it so the next auto-save cycle retries.
                 if (trigger === "online_resume") {
                     const _entry = pendingWorkoutContentChangeDatesRef.current.get(date);
-                    if (_entry?.stalled) {
+                    // Only un-stall entries that were stalled due to network failure.
+                    // hold_limit and guard_skip stalls are NOT connectivity issues —
+                    // clearing them on online_resume causes the ~10s retry loop where
+                    // the entry stalls immediately again on the next batch.
+                    // Only network_failure stalls should be retried when connectivity returns.
+                    if (_entry?.stalled && _entry.stalledReason === "network_failure") {
                         pendingWorkoutContentChangeDatesRef.current.set(date, {
                             ..._entry,
                             stalled: false,
                             stalledAt: null,
+                            stalledReason: null,
                         });
                         logWriteTrace("syncQueue:unstall", {
                             date,
                             decision: "executed",
-                            reason: "online-resume rescue: stalled entry re-activated",
+                            reason: "online-resume rescue: network_failure stall cleared",
                         });
                     }
                 }
@@ -1505,17 +1511,22 @@ export default function GymApp() {
         const ops = loadPendingOps(user.id);
         let replayed = false;
         Object.entries(ops).forEach(([date, entry]) => {
+            // Stalled entries ARE replayed at startup — their stalled flag is cleared
+            // here and attempts is incremented.  Same-session suppression is handled
+            // by the syncBatch:build stalled filter in useHistoryAutoSave, not here.
             // Reset stalled flag and increment attempts before replaying
             upsertPendingOp(user.id, date, {
                 ...entry,
                 stalled: false,
                 attempts: (entry.attempts || 0) + 1,
             });
+            // recordToOutbox: false — the outbox was already updated by upsertPendingOp
+            // directly above; calling markWorkoutContentChanged must NOT overwrite it.
             markWorkoutContentChangedRef.current?.(date, entry.reason || "startup_unsynced_draft", {
                 explicitDelete: entry.explicitDelete,
                 explicitEdit: entry.explicitEdit,
                 deleteScope: entry.deleteScope || null,
-            });
+            }, { recordToOutbox: false });
             replayed = true;
         });
         if (replayed) setForceSyncVersion((v) => v + 1);
