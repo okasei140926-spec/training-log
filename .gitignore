@@ -29,6 +29,7 @@ yarn-error.log*
 *.tar.gz
 *.tar.bz2
 *.tgz
+*.pump
 
 # macOS
 *.DS_Store
