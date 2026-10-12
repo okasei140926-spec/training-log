@@ -686,17 +686,10 @@ export default function GymApp() {
             root.removeChild(bottomProbe);
 
             if (shouldLog) {
-                // Position-based probe for top: alternative CSS mechanism for
-                // cross-validating the height-probe value above.
-                // If cssEnvTop !== probeTop the two CSS evaluation paths diverge.
-                const bcrProbe = document.createElement("div");
-                bcrProbe.style.cssText = "position:fixed;top:env(safe-area-inset-top,0px);left:0;width:1px;height:1px;pointer-events:none;visibility:hidden;";
-                root.appendChild(bcrProbe);
-                const cssEnvTop = Math.round(bcrProbe.getBoundingClientRect().top * 10) / 10;
-                root.removeChild(bcrProbe);
-
                 // Read current CSS var values BEFORE applying the new probe
                 // results — this shows whether correction was needed.
+                // (changedTop/changedBottom are log-only; the setProperty below
+                //  runs unconditionally regardless of these values.)
                 const prevTop = parseFloat(root.style.getPropertyValue("--safe-top")) || 0;
                 const prevBottom = parseFloat(root.style.getPropertyValue("--safe-bottom")) || 0;
 
@@ -707,7 +700,6 @@ export default function GymApp() {
                         trigger,
                         probeTop: safeTop,
                         probeBottom: safeBottom,
-                        cssEnvTop,
                         innerWidth: window.innerWidth,
                         innerHeight: window.innerHeight,
                         changedTop: safeTop !== prevTop,
