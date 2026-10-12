@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import { logWriteTrace, wpCountExercisesFromHistory, wpCountSetsFromHistory } from "../utils/writeTrace";
-import { removePersistentDeletedDate, upsertPendingOp } from "../utils/appHelpers";
+import { removePersistentDeletedDate, upsertPendingOp, buildDraftHistoryForDate } from "../utils/appHelpers";
 import {
     fetchWorkoutRowForDate as fetchWorkoutRowForDateFromRepository,
     fetchWorkoutRowFromWorkoutsData,
@@ -47,6 +47,10 @@ export function useHistorySave({
     clearHistoryDeleteMarkerForDate = null,
     pendingSavePayloadsRef = null,
     onPersistentDeleteChanged = null,
+    loadDraftForDate = null,
+    hasDraftContent = null,
+    historyRemoteReady = true,
+    historyDisplayFromCache = false,
 }) {
     // ─── Refs ─────────────────────────────────────────────────────────────────
     // pendingWorkoutContentChangeDatesRef and explicitWorkoutEditDatesRef are
@@ -260,6 +264,11 @@ export function useHistorySave({
             // so the next useHistoryAutoSave run (triggered by persistCurrentLog
             // updating history) can retry with the complete local data.
             heldDates: [],
+            // g15HeldDates: dates held specifically by G15 (history not yet loaded).
+            // Tracked separately from heldDates so useHistoryAutoSave can use a higher
+            // retry limit (50) and stall with stalledReason:"network_failure" (un-stalled
+            // by online_resume) instead of the 3-retry "hold_limit" (not un-stalled).
+            g15HeldDates: [],
             verifiedHistoryByDate: {},
         };
 
@@ -279,7 +288,72 @@ export function useHistorySave({
                     // top-level exercise keys: if an exercise was removed locally, the spread
                     // leaves it in place from normalizedHistoryMap, causing deleted exercises to
                     // reappear in the save payload (the "ghost exercise" bug).
-                    const effectiveHistoryForDate = directPayloadMap ?? normalizedHistoryMap;
+                    let effectiveHistoryForDate;
+                    let payloadSource;
+                    if (directPayloadMap !== null) {
+                        effectiveHistoryForDate = directPayloadMap;
+                        payloadSource = "direct_payload";
+                    } else {
+                        // loadDraftForDate goes through normalizeDraftForLoad → resolveContentOrigin,
+                        // so the returned draft always has meta.contentOrigin set to one of:
+                        //   "user_edit"  — explicit user action (exercise_add, exercise_delete, …)
+                        //   "local_draft" — local-only edit (explicitDelete_bypass, draft_restore, …)
+                        //   "remote"     — written from Supabase data; one-way valve blocks re-write
+                        //   "empty"      — emptyDraft placeholder (no real draft for this date)
+                        // null/undefined can appear from test mocks that bypass normalizeDraftForLoad;
+                        // treat as "local_draft" (safe direction — not explicitly remote).
+                        const draftForDate = loadDraftForDate?.(workoutDate) ?? null;
+                        const draftContentOrigin = draftForDate?.meta?.contentOrigin ?? null;
+
+                        if (draftForDate !== null && draftContentOrigin === "remote") {
+                            // Remote-origin draft: do NOT use as payload and do NOT fall back to history.
+                            // Falling back would risk upsert-ing cache/history data over a user delete.
+                            // Hold for retry — the next batch will have either a real local draft or
+                            // historyRemoteReady=true so the correct action can be determined.
+                            logWriteTrace("remote-draft-hold", {
+                                date: workoutDate,
+                                decision: "hold",
+                                reason: "draft has contentOrigin=remote — cannot use as save payload",
+                                flags: { explicitEdit: Boolean(pendingWorkoutContentChangeDatesRef.current.get(workoutDate)?.explicitEdit), explicitDelete: Boolean(pendingWorkoutContentChangeDatesRef.current.get(workoutDate)?.explicitDelete), source: pendingWorkoutContentChangeDatesRef.current.get(workoutDate)?.reason },
+                                exerciseCount: null,
+                                setCount: null,
+                                extra: { draftContentOrigin, historyRemoteReady },
+                            });
+                            console.warn("[save guard] remote-draft-hold: draft is remote-origin, holding for retry", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: userId,
+                                date: workoutDate,
+                                draftContentOrigin,
+                            });
+                            results.heldDates.push(workoutDate);
+                            return;
+                        }
+
+                        // "empty" contentOrigin = emptyDraft placeholder (no real draft).
+                        // Use the draft only when it is user/local content.
+                        // null/undefined = old localStorage or test mock without contentOrigin → adopt (safe).
+                        const draftIsUsable = draftForDate !== null
+                            && draftContentOrigin !== "empty";
+                        if (draftIsUsable) {
+                            effectiveHistoryForDate = buildDraftHistoryForDate({
+                                baseHistory: {},
+                                workoutDate,
+                                exercises: draftForDate.sessionEx || [],
+                                logData: draftForDate.logData || {},
+                                getExUnit: (name) => draftForDate.exerciseUnits?.[name] || "kg",
+                                labels: draftForDate.todayLabels || [],
+                                durationSec: 0,
+                                replaceDate: true,
+                            });
+                            payloadSource = "draft";
+                        } else {
+                            effectiveHistoryForDate = normalizedHistoryMap;
+                            // Distinguish cache-backed history from remote-verified history.
+                            // Both are held by G15 (history_cache is as untrustworthy as history
+                            // when historyRemoteReady=false — it is a pre-delete snapshot).
+                            payloadSource = historyDisplayFromCache ? "history_cache" : "history";
+                        }
+                    }
                     const hasWorkoutForDate = hasValidWorkoutOnDate(effectiveHistoryForDate, workoutDate);
                     const incomingMetrics = getHistoryMetricsForDate(effectiveHistoryForDate, workoutDate);
                     logWriteTrace("syncWorkoutRows", {
@@ -290,10 +364,11 @@ export function useHistorySave({
                         exerciseCount: wpCountExercisesFromHistory(effectiveHistoryForDate, workoutDate),
                         setCount: wpCountSetsFromHistory(effectiveHistoryForDate, workoutDate),
                         extra: {
-                        hasWorkoutForDate,
-                        usingDirectPayload: directPayloadMap != null,
-                        replaceDate: Boolean(pendingWorkoutContentChangeDatesRef.current.get(workoutDate)?.explicitDelete),
-                    },
+                            hasWorkoutForDate,
+                            usingDirectPayload: directPayloadMap != null,
+                            payloadSource,
+                            replaceDate: Boolean(pendingWorkoutContentChangeDatesRef.current.get(workoutDate)?.explicitDelete),
+                        },
                     });
                     const {
                         row: existingWorkoutRow,
@@ -693,6 +768,52 @@ export function useHistorySave({
                         setCount: incomingMetrics.setCount ?? null,
                         extra: { count: rateEntry.count, limit: WRITE_RATE_LIMIT, windowMs: WRITE_RATE_WINDOW_MS },
                     });
+
+                    // G15: explicitDelete + history/history_cache payload — hold if remote history hasn't loaded.
+                    // Prevents outbox replay from deleting Supabase data before history is available.
+                    // "history_cache" is treated the same as "history": it is a pre-delete snapshot that
+                    // must not be upserted when the true current state is unknown (remote not yet fetched).
+                    // Defensive: if historyRemoteReady is not a boolean (wiring bug), fail-open and skip
+                    // this guard — G15 must not silently block saves when misconfigured.
+                    const g15HistorySource = payloadSource === "history" || payloadSource === "history_cache";
+                    if (typeof historyRemoteReady !== "boolean") {
+                        console.error("[save guard] G15: historyRemoteReady is not boolean — fail-open, guard skipped", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            historyRemoteReady,
+                            payloadSource,
+                        });
+                        logWriteTrace("G15:history-not-loaded-guard", {
+                            date: workoutDate,
+                            decision: "pass",
+                            reason: "historyRemoteReady_not_wired — fail-open",
+                            flags: { explicitEdit, explicitDelete: Boolean(pendingChange.explicitDelete), source: pendingChange.reason },
+                            exerciseCount: incomingMetrics.exerciseCount ?? 0,
+                            setCount: incomingMetrics.setCount ?? 0,
+                            extra: { payloadSource, historyRemoteReady },
+                        });
+                    } else if (!hasWorkoutForDate && Boolean(pendingChange.explicitDelete) && g15HistorySource && !historyRemoteReady) {
+                        logWriteTrace("G15:history-not-loaded-guard", {
+                            date: workoutDate,
+                            decision: "hold",
+                            reason: "explicitDelete + history payload — remote history not yet loaded, holding for retry",
+                            flags: { explicitEdit, explicitDelete: true, source: pendingChange.reason },
+                            exerciseCount: incomingMetrics.exerciseCount ?? 0,
+                            setCount: incomingMetrics.setCount ?? 0,
+                            extra: { payloadSource, historyRemoteReady },
+                        });
+                        console.warn("[save guard] G15: holding explicitDelete + history payload — history not loaded yet", {
+                            env: getRuntimeEnvironmentLabel(),
+                            user_id: userId,
+                            date: workoutDate,
+                            payloadSource,
+                            historyRemoteReady,
+                            reason: pendingChange.reason,
+                        });
+                        results.g15HeldDates.push(workoutDate);
+                        return;
+                    }
 
                     const repositorySaveResult = await saveWorkoutForDateInRepository({
                         userId,

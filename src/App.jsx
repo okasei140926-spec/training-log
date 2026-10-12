@@ -1375,6 +1375,10 @@ export default function GymApp() {
         describeHistoryRecordsForDate,
         clearHistoryDeleteMarkerForDate,
         onPersistentDeleteChanged,
+        loadDraftForDate,
+        hasDraftContent,
+        historyRemoteReady,
+        historyDisplayFromCache,
     });
 
     // Keep ref current so onStartupUnsyncedLocalDates (defined before useHistorySave) can call it
@@ -1692,6 +1696,8 @@ export default function GymApp() {
         history,
         user,
         historySyncReady,
+        historyRemoteReady,
+        historyDisplayFromCache,
         persistHistoryForUser: persistHistoryForUserBounded,
         logDate,
         screen,

@@ -93,6 +93,8 @@ function makeAutoSaveProps({
         history: {},
         user: { id: USER_ID },
         historySyncReady: true,
+        historyRemoteReady: true,
+        historyDisplayFromCache: false,
         persistHistoryForUser: jest.fn(),
         logDate: '2099-01-01',
         screen: 'log',

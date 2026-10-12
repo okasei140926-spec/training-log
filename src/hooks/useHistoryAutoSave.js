@@ -43,6 +43,8 @@ export function useHistoryAutoSave({
     history,
     user,
     historySyncReady,
+    historyRemoteReady,
+    historyDisplayFromCache,
     persistHistoryForUser,
     logDate,
     screen,
@@ -88,6 +90,11 @@ export function useHistoryAutoSave({
 }) {
     const heldRetryCountsRef = useRef({});
     const networkFailureRetryCountsRef = useRef({});
+    // G15-specific counter — higher limit (50) and stalls with "network_failure" so
+    // online_resume can un-stall it.  Kept separate because G15 waits for a local
+    // init state (historyRemoteReady), not a network error; 3 retries is too tight.
+    const g15HoldCountsRef = useRef({});
+    const G15_HOLD_LIMIT = 50;
     useEffect(() => {
         if (!user || !historySyncReady) return;
         const currentUserId = user.id;
@@ -136,6 +143,43 @@ export function useHistoryAutoSave({
             .catch(() => { })
             .then(async () => {
                 if (latestUserIdRef.current !== currentUserId) return;
+                // Gate: if remote history hasn't loaded yet (and load hasn't failed), skip this batch.
+                // This prevents outbox replay from firing a sync before history is available.
+                // Defensive: if either flag is not a boolean (wiring bug), fail-open with an error —
+                // undefined is treated as falsy which would silently block ALL saves indefinitely.
+                if (typeof historyRemoteReady !== "boolean" || typeof historyDisplayFromCache !== "boolean") {
+                    console.error("[save gate] historyRemoteReady or historyDisplayFromCache not wired — fail-open", {
+                        env: getRuntimeEnvironmentLabel(),
+                        historyRemoteReady,
+                        historyDisplayFromCache,
+                        queueDates: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                    });
+                    logWriteTrace("syncBatch:build", {
+                        date: null,
+                        decision: "pass",
+                        reason: "historyRemoteReady_not_wired",
+                        extra: {
+                            historyRemoteReady,
+                            historyDisplayFromCache,
+                            queueDates: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                        },
+                    });
+                    // fall through (fail-open)
+                } else if (!historyRemoteReady && !historyRemoteLoadFailedRef.current && !historyDisplayFromCache) {
+                    logWriteTrace("syncBatch:build", {
+                        date: null,
+                        decision: "skip",
+                        reason: "history_not_loaded",
+                        extra: {
+                            skippedReason: "history_not_loaded",
+                            queueDates: [...pendingWorkoutContentChangeDatesRef.current.keys()],
+                            historyRemoteReady,
+                            historyRemoteLoadFailed: historyRemoteLoadFailedRef.current,
+                            historyDisplayFromCache,
+                        },
+                    });
+                    return;
+                }
                 const saveStartedAt = new Date().toISOString();
                 const saveRevision = historyRevisionRef.current;
                 const baseLocalHistory = mergeHistoryMaps(latestHistoryRef.current);
@@ -382,6 +426,52 @@ export function useHistoryAutoSave({
                     Object.keys(heldRetryCountsRef.current).forEach((date) => {
                         if (!workoutSyncResults.heldDates.includes(date)) {
                             delete heldRetryCountsRef.current[date];
+                        }
+                    });
+                }
+                if (workoutSyncResults.g15HeldDates?.length > 0) {
+                    workoutSyncResults.g15HeldDates.forEach((date) => {
+                        const count = (g15HoldCountsRef.current[date] || 0) + 1;
+                        g15HoldCountsRef.current[date] = count;
+                        logWriteTrace("G15:history-not-loaded-guard", {
+                            date,
+                            decision: "hold",
+                            reason: "history_not_loaded_hold",
+                            extra: { holdCount: count, limit: G15_HOLD_LIMIT, historyRemoteReady: false },
+                        });
+                        if (count >= G15_HOLD_LIMIT) {
+                            // historyRemoteReady has not become true after 50 batches.
+                            // This indicates a deeper problem (not just slow startup).
+                            // Stall with "network_failure" so online_resume can un-stall it
+                            // when connectivity (and thus remote history fetch) returns.
+                            console.error("[save] G15 hold limit exceeded — stalling as network_failure", {
+                                env: getRuntimeEnvironmentLabel(),
+                                user_id: currentUserId,
+                                date,
+                                count,
+                                note: "historyRemoteReady never became true; stalling with network_failure for online_resume recovery",
+                            });
+                            recordSyncFailure(date, new Error(`G15 hold limit exceeded after ${count} holds — historyRemoteReady never became true`), "g15_hold_timeout");
+                            const _existingEntry = pendingWorkoutContentChangeDatesRef.current.get(date) || {};
+                            pendingWorkoutContentChangeDatesRef.current.set(date, {
+                                ..._existingEntry,
+                                stalled: true,
+                                stalledAt: Date.now(),
+                                stalledReason: "network_failure",
+                            });
+                            logWriteTrace("syncQueue:stall", {
+                                date,
+                                decision: "executed",
+                                reason: "G15 hold limit exceeded — stalled as network_failure for online_resume recovery",
+                                extra: { holdCount: count, limit: G15_HOLD_LIMIT },
+                            });
+                            delete g15HoldCountsRef.current[date];
+                        }
+                    });
+                    // Reset counts for G15-held dates that resolved
+                    Object.keys(g15HoldCountsRef.current).forEach((date) => {
+                        if (!workoutSyncResults.g15HeldDates.includes(date)) {
+                            delete g15HoldCountsRef.current[date];
                         }
                     });
                 }
@@ -781,6 +871,8 @@ export function useHistoryAutoSave({
         history,
         user,
         historySyncReady,
+        historyRemoteReady,
+        historyDisplayFromCache,
         logDate,
         screen,
         clearSyncFailure,
