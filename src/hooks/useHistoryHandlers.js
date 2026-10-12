@@ -803,8 +803,21 @@ export function useHistoryHandlers({
                 : "deleted date does not match current logDate — display unchanged",
         });
 
-        // その日のdraftも消す
-        clearDraftForDate(normalizedTargetDate);
+        // その日のdraftを空ドラフトで上書きする。
+        // clearDraftForDate の代わりに空ドラフトを書き、削除の意図を記録する。
+        // 再起動後に loadDraftForDate が contentOrigin:"empty" を返さなくなり、
+        // payloadSource="draft" が選ばれて G15 を迂回せず削除が完了する。
+        saveDraftForDate(normalizedTargetDate, {
+            sessionEx: [],
+            logData: {},
+            exerciseUnits: {},
+            todayLabels: [],
+            meta: {
+                source: "date_delete",
+                hasUnsavedChanges: false,
+                explicitDelete: true,
+            },
+        });
 
         // display_history 系 fetch の freshness キャッシュを無効化する。
         // 削除後に runDedupeSupabaseFetch が "fresh skip" で弾かれ、カレンダーや
@@ -885,7 +898,17 @@ export function useHistoryHandlers({
         // Without this, navigating away and back would show an empty screen for the restored date.
         removePersistentDeletedDate(user?.id, pending.date);
         onPersistentDeleteChanged?.();
-        saveDraftForDate(pending.date, pending.previousDraft || {});
+        // Restore the draft to its pre-delete state.
+        // previousDraft is captured by loadDraftForDate before the delete fires.
+        // If it is null (user never opened the date in this session), the draft did not
+        // exist before the delete, so we delete the key rather than writing {} — an empty
+        // object becomes a usable draft after Change B and would cause the undo-synced
+        // payload to be empty, silently re-deleting the restored workout.
+        if (pending.previousDraft) {
+            saveDraftForDate(pending.date, pending.previousDraft);
+        } else {
+            clearDraftForDate(pending.date);
+        }
         if (logDate === pending.date) {
             applyLogDraftState(pending.previousDraft || {
                 todayLabels: [],
@@ -924,6 +947,7 @@ export function useHistoryHandlers({
         onPersistentDeleteChanged,
         pendingDeleteUndoRef,
         persistHistoryForUser,
+        clearDraftForDate,
         queueWorkoutSessionSync,
         recordSyncFailure,
         saveDraftForDate,

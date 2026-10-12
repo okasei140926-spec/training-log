@@ -107,6 +107,8 @@ jest.mock('../../utils/appHelpers', () => ({
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useHistorySave } from '../../hooks/useHistorySave';
 import { useHistoryAutoSave } from '../../hooks/useHistoryAutoSave';
+import { useHistoryHandlers } from '../../hooks/useHistoryHandlers';
+import { useDraftStore } from '../../hooks/useDraftStore';
 import {
     EXPLICIT_SET_EDIT_REASONS,
     EXPLICIT_WORKOUT_EDIT_REASONS,
@@ -267,13 +269,12 @@ describe("J-1: G15 ガード — historyRemoteReady=false で explicitDelete + e
         expect(g15Call[1].decision).toBe("hold");
     });
 
-    it("mutation test: historyRemoteReady=true の場合、同じ条件でも G15 は発動しない（保存が進む）", async () => {
+    it("mutation test: explicitDelete=false のとき、payloadSource=history でも G15 は発動しない", async () => {
         const pendingRef = { current: new Map() };
         pendingRef.current.set(DATE, {
             reason: "startup_replay",
             explicitEdit: false,
-            explicitDelete: true,
-            deleteScope: "full",
+            explicitDelete: false,  // ← NOT a delete; G15 must not fire
             updatedAt: new Date().toISOString(),
         });
 
@@ -281,7 +282,7 @@ describe("J-1: G15 ガード — historyRemoteReady=false で explicitDelete + e
             pendingWorkoutContentChangeDatesRef: pendingRef,
             loadDraftForDate: jest.fn().mockReturnValue(null),
             hasDraftContent: jest.fn().mockReturnValue(false),
-            historyRemoteReady: true, // remote ready → G15 should NOT fire
+            historyRemoteReady: false, // even false doesn't matter — no explicitDelete
         });
 
         let syncResults;
@@ -293,15 +294,14 @@ describe("J-1: G15 ガード — historyRemoteReady=false で explicitDelete + e
             );
         });
 
-        // G15 は発動しない
-        const g11Call = logWriteTrace.mock.calls.find(
+        // G15 は発動しない（explicitDelete=false なので）
+        const g15Call = logWriteTrace.mock.calls.find(
             ([tag]) => tag === "G15:history-not-loaded-guard"
         );
-        expect(g11Call).toBeUndefined();
+        expect(g15Call).toBeUndefined();
 
-        // 保存が呼ばれている（heldDates ではない）
-        expect(syncResults.heldDates).not.toContain(DATE);
-        expect(saveWorkoutForDate).toHaveBeenCalled();
+        // heldDates には入らない
+        expect(syncResults.g15HeldDates).not.toContain(DATE);
     });
 });
 
@@ -671,5 +671,421 @@ describe("J-3: 空ドラフト + explicitDelete — history フォールバッ�
         const savedDateData = savedHistoryMap?.[DATE];
         const hasStaleName = savedDateData && "ベンチプレス" in savedDateData;
         expect(hasStaleName).toBeFalsy();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// J-7: G15 — exerciseCount 非零でも explicitDelete + history → G15 発動
+// ─────────────────────────────────────────────────────────────────────────────
+describe("J-7: G15 — exerciseCount 非零でも explicitDelete + history → G15 発動", () => {
+    it("fix: explicitDelete:true + payloadSource:history + hasWorkoutForDate:true → G15 hold / saveWorkoutForDate 未呼び出し", async () => {
+        const pendingRef = { current: new Map() };
+        pendingRef.current.set(DATE, {
+            reason: "startup_replay",
+            explicitEdit: false,
+            explicitDelete: true,
+            deleteScope: "date",
+            updatedAt: new Date().toISOString(),
+        });
+
+        // hasValidWorkoutOnDate が true を返す → hasWorkoutForDate=true (パス1 再現)
+        const { result } = renderHook(() =>
+            useHistorySave({
+                pendingWorkoutContentChangeDatesRef: pendingRef,
+                explicitWorkoutEditDatesRef: { current: new Map() },
+                user: { id: USER_ID },
+                latestUserIdRef: { current: USER_ID },
+                applyTrustedWorkoutRowsSnapshot: jest.fn(),
+                setSyncFailuresByDate: jest.fn(),
+                getTodayKey: () => HARNESS_TODAY,
+                getRuntimeEnvironmentLabel,
+                EXPLICIT_SET_EDIT_REASONS,
+                EXPLICIT_WORKOUT_EDIT_REASONS,
+                isExplicitWorkoutEditChange,
+                logRecordFetchError,
+                logWorkoutPersistenceDecision: jest.fn(),
+                getWorkoutSaveGuardDecision: jest.fn().mockReturnValue({
+                    allowed: true, blocked: false,
+                    details: { removedExerciseNames: [] }, allowedReason: "test",
+                }),
+                getHistoryMetricsForDate,
+                getEmptyWorkoutMetrics: jest.fn().mockReturnValue({
+                    hasWorkout: true, exerciseCount: 2, setCount: 3,
+                    volume: 100, exerciseNames: ["インクラインダンベルプレス", "ペックフライ"],
+                }),
+                getWorkoutSummaryMetrics: jest.fn().mockReturnValue({}),
+                getWorkoutPayloadMetrics: jest.fn().mockReturnValue({}),
+                isMetricPersistenceMismatch: jest.fn().mockReturnValue(false),
+                getHistoryDebugSummaryForDate: jest.fn().mockReturnValue({}),
+                getHistoryDebugDiffForDate: jest.fn().mockReturnValue({}),
+                applyPreferredHistoryDates: jest.fn().mockImplementation((base, src) => src || {}),
+                normalizeExerciseName: jest.fn((name) => name),
+                mergeHistoryMaps: jest.fn().mockReturnValue({}),
+                hasValidWorkoutOnDate: jest.fn().mockReturnValue(true), // ← 非空 (パス1)
+                findEditedSetInHistory: jest.fn().mockReturnValue(null),
+                isEditedSetPersisted: jest.fn().mockReturnValue(false),
+                getSetEditSummary: jest.fn().mockReturnValue(''),
+                getSetEditUnit: jest.fn().mockReturnValue('kg'),
+                buildHistoryFromWorkoutSessionRows: jest.fn().mockReturnValue({}),
+                describeHistoryRecordsForDate,
+                clearHistoryDeleteMarkerForDate: null,
+                pendingSavePayloadsRef: { current: new Map() },
+                onPersistentDeleteChanged: jest.fn(),
+                loadDraftForDate: jest.fn().mockReturnValue(null), // no draft → payloadSource="history"
+                hasDraftContent: jest.fn().mockReturnValue(false),
+                historyRemoteReady: true, // true でも G15 が発動することを示す
+                historyDisplayFromCache: false,
+            })
+        );
+
+        let syncResults;
+        await act(async () => {
+            syncResults = await result.current.syncWorkoutRowsForDates(
+                USER_ID,
+                {}, // historyMap
+                [DATE]
+            );
+        });
+
+        // G15 が発動 — hasWorkoutForDate=true でも historyRemoteReady=true でも保留される
+        expect(syncResults.g15HeldDates).toContain(DATE);
+        expect(syncResults.heldDates).not.toContain(DATE);
+        expect(syncResults.syncedDates).not.toContain(DATE);
+        expect(saveWorkoutForDate).not.toHaveBeenCalled();
+
+        const g15Call = logWriteTrace.mock.calls.find(
+            ([tag]) => tag === "G15:history-not-loaded-guard"
+        );
+        expect(g15Call).toBeDefined();
+        expect(g15Call[1].decision).toBe("hold");
+        // hasWorkoutForDate は extra に記録されている（追跡用）
+        expect(g15Call[1].extra?.hasWorkoutForDate).toBe(true);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// J-8 / J-9: date_delete 経路の空ドラフト書き込み + undo 巻き戻し
+// useHistoryHandlers の deleteAllHistoryForDate / undoDeleteAllHistoryForDate を対象とする
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** J-8/J-9 用: useHistoryHandlers を最小限の props でレンダリングする */
+function makeHistoryHandlersHook({ saveDraftForDate, clearDraftForDate, loadDraftForDate } = {}) {
+    const _saveDraftForDate = saveDraftForDate || jest.fn();
+    const _clearDraftForDate = clearDraftForDate || jest.fn();
+    const _loadDraftForDate = loadDraftForDate || jest.fn().mockReturnValue({
+        sessionEx: null,
+        logData: {},
+        exerciseUnits: {},
+        todayLabels: [],
+        meta: { source: "empty_draft", hasUnsavedChanges: false, contentOrigin: "empty" },
+    });
+    const pendingDeleteUndoRef = { current: null };
+
+    const { result } = renderHook(() =>
+        useHistoryHandlers({
+            user: { id: USER_ID },
+            history: {},
+            latestHistoryRef: { current: {} },
+            historyRevisionRef: { current: 0 },
+            persistHistoryForUser: jest.fn(),
+            syncWorkoutRowsForDates: jest.fn().mockResolvedValue({
+                syncedDates: [], failedDates: [], skippedDates: [], heldDates: [],
+            }),
+            syncWorkoutSessionSnapshot: jest.fn().mockResolvedValue({ synced: true }),
+            deleteRemoteWorkoutArtifactsForDate: jest.fn().mockResolvedValue({}),
+            appendHistoryDeleteMarkers: jest.fn(),
+            commitHistoryDeleteMarkers: jest.fn(),
+            historyDeleteMarkersRef: { current: { dates: [], records: [] } },
+            clearDraftForDate: _clearDraftForDate,
+            saveDraftForDate: _saveDraftForDate,
+            loadDraftForDate: _loadDraftForDate,
+            applyLogDraftState: jest.fn(),
+            setHistory: jest.fn(),
+            logDate: HARNESS_TODAY,
+            setLogDate: jest.fn(),
+            setLogMode: jest.fn(),
+            setScreen: jest.fn(),
+            summary: null,
+            setSummary: jest.fn(),
+            workoutDayShareTarget: null,
+            setWorkoutDayShareTarget: jest.fn(),
+            workoutStartedForDate: null,
+            resetWorkoutElapsedTimer: jest.fn(),
+            savedWorkoutDurationSecByDate: {},
+            setSavedWorkoutDurationSecByDate: jest.fn(),
+            queueWorkoutSessionSync: jest.fn(),
+            pendingWorkoutContentChangeDatesRef: { current: new Map() },
+            pendingWorkoutSessionSyncDatesRef: { current: new Set() },
+            explicitWorkoutEditDatesRef: { current: new Map() },
+            clearSyncFailure: jest.fn(),
+            recordSyncFailure: jest.fn(),
+            refreshHistorySyncDiagnostic: jest.fn().mockResolvedValue({}),
+            applyWorkoutsDataHistorySnapshot: jest.fn().mockReturnValue(false),
+            workoutsDataHistoryRef: { current: {} },
+            markWorkoutContentChanged: jest.fn(),
+            applyTrustedWorkoutRowsSnapshot: jest.fn(),
+            trustedWorkoutRowsRef: { current: [] },
+            applyTrustedSessionRowsSnapshot: jest.fn(),
+            trustedSessionRows: [],
+            onPersistentDeleteChanged: jest.fn(),
+            pendingSavePayloadsRef: { current: new Map() },
+            buildSavedWorkoutDraftForDate: jest.fn().mockReturnValue({
+                hasSavedWorkout: false, sessionEx: [], logData: {}, exerciseUnits: {},
+            }),
+            setSessionSyncVersion: jest.fn(),
+            pendingDeleteUndoRef,
+            setPendingDeleteUndo: jest.fn(),
+            hasDraftContent: jest.fn().mockReturnValue(false),
+            normalizeDraftDateKey: (d) => String(d || "").slice(0, 10),
+            withDraftDateMeta: (date, draft, meta) => ({
+                ...(draft || {}),
+                meta: { ...(draft?.meta || {}), ...meta, date },
+            }),
+            getCurrentLogDraftSnapshot: jest.fn().mockReturnValue({}),
+            latestLogDraftRef: { current: null },
+            getTodayKey: () => HARNESS_TODAY,
+            trustedHistory: {},
+            getDraftMetricsForDate: jest.fn().mockReturnValue({ exerciseCount: 0, setCount: 0, volume: 0 }),
+            getExUnit: jest.fn().mockReturnValue('kg'),
+            isExplicitWorkoutEditChange: jest.fn().mockReturnValue(false),
+            isCleanPersistedDraft: jest.fn().mockReturnValue(false),
+            isDestructiveWorkoutRegression: jest.fn().mockReturnValue(false),
+            shouldPreserveRawDraftOverIncoming: jest.fn().mockReturnValue({
+                preserve: false, localRawMetrics: {}, incomingRawMetrics: {}, removedExerciseNames: [],
+            }),
+            isUnsavedUserWorkoutDraft: jest.fn().mockReturnValue(false),
+            logRestoreDecision: jest.fn(),
+            getDraftDateValidation: jest.fn().mockReturnValue({ accepted: true }),
+            getDraftKey: (base, date) => `${base}_${date}`,
+            getDraftPayloadDate: jest.fn().mockReturnValue(null),
+            getRuntimeEnvironmentLabel: jest.fn().mockReturnValue("test"),
+            buildWorkoutDraftForDateFromHistory: jest.fn().mockReturnValue({
+                hasSavedWorkout: false, sessionEx: [], logData: {},
+            }),
+            withDraftMeta: (draft, meta) => ({ ...(draft || {}), meta: { ...(draft?.meta || {}), ...meta } }),
+            applyLocalHistoryDates: jest.fn().mockReturnValue({}),
+            buildHistoryRecordDeleteKey: jest.fn().mockImplementation((date, ex) => `${date}::${ex}`),
+            removeHistoryDate: jest.fn().mockImplementation((history) => history || {}),
+            onDeleteDateClearCompletion: jest.fn(),
+            invalidateSupabaseFetchFreshByPrefix: jest.fn().mockReturnValue([]),
+        })
+    );
+
+    return { result, pendingDeleteUndoRef, saveDraftForDate: _saveDraftForDate, clearDraftForDate: _clearDraftForDate };
+}
+
+describe("J-8: date_delete 経路で空ドラフトが書かれる", () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    it("fix: deleteAllHistoryForDate が saveDraftForDate に sessionEx=[] + meta.explicitDelete=true を渡す", () => {
+        const saveDraftForDate = jest.fn();
+        const clearDraftForDate = jest.fn();
+
+        const { result } = makeHistoryHandlersHook({ saveDraftForDate, clearDraftForDate });
+
+        act(() => {
+            result.current.deleteAllHistoryForDate(DATE);
+        });
+
+        // saveDraftForDate が空ドラフトで呼ばれている
+        const saveCall = saveDraftForDate.mock.calls.find(([date]) => date === DATE);
+        expect(saveCall).toBeDefined();
+        const savedDraft = saveCall[1];
+        expect(savedDraft.sessionEx).toEqual([]);
+        expect(savedDraft.meta?.explicitDelete).toBe(true);
+        expect(savedDraft.meta?.source).toBe("date_delete");
+
+        // clearDraftForDate は対象日付では呼ばれていない（replace → not clear）
+        const clearCall = clearDraftForDate.mock.calls.find(([date]) => date === DATE);
+        expect(clearCall).toBeUndefined();
+    });
+});
+
+describe("J-9: undoDeleteAllHistoryForDate で previousDraft が復元される", () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    it("J-9a fix: previousDraft あり → saveDraftForDate でそのまま復元する", () => {
+        const previousDraft = {
+            sessionEx: [{ name: "インクラインダンベルプレス" }, { name: "ペックフライ" }],
+            logData: {
+                "インクラインダンベルプレス": [{ weight: "60", reps: "10" }],
+                "ペックフライ": [{ weight: "40", reps: "12" }],
+            },
+            exerciseUnits: {},
+            todayLabels: [],
+            meta: { source: "local_draft", hasUnsavedChanges: false },
+        };
+
+        const saveDraftForDate = jest.fn();
+        const clearDraftForDate = jest.fn();
+        const loadDraftForDate = jest.fn().mockReturnValue(previousDraft);
+
+        const { result, pendingDeleteUndoRef } = makeHistoryHandlersHook({
+            saveDraftForDate,
+            clearDraftForDate,
+            loadDraftForDate,
+        });
+
+        act(() => { result.current.deleteAllHistoryForDate(DATE); });
+
+        expect(pendingDeleteUndoRef.current?.previousDraft).toBe(previousDraft);
+
+        act(() => { result.current.undoDeleteAllHistoryForDate(); });
+
+        // undo 後: saveDraftForDate の最後の呼び出しが previousDraft を渡している
+        const saveCalls = saveDraftForDate.mock.calls.filter(([date]) => date === DATE);
+        expect(saveCalls.length).toBeGreaterThanOrEqual(2);
+        expect(saveCalls[saveCalls.length - 1][1]).toBe(previousDraft);
+
+        // clearDraftForDate は undo で呼ばれていない（previousDraft があるので）
+        expect(clearDraftForDate).not.toHaveBeenCalledWith(DATE);
+    });
+
+    it("J-9b fix: previousDraft なし（ドラフト未作成日） → clearDraftForDate を呼ぶ（{} を書かない）", () => {
+        // 削除前にドラフトが存在しない状態: loadDraftForDate は emptyDraft を返す
+        const emptyDraftPlaceholder = {
+            sessionEx: null,
+            logData: {},
+            exerciseUnits: {},
+            todayLabels: [],
+            meta: { source: "empty_draft", hasUnsavedChanges: false, contentOrigin: "empty" },
+        };
+        // loadDraftForDate が emptyDraft を返す = previousDraft = emptyDraft（null ではない）
+        // useHistoryHandlers では loadDraftForDate の戻り値をそのまま previousDraft に保存する。
+        // useDraftStore の実装では「ドラフトなし」でも emptyDraft を返すため、
+        // previousDraft は emptyDraft オブジェクト（null にはならない）になる。
+        //
+        // ここでは "ドラフト未作成 = previousDraft が emptyDraft" の代わりに、
+        // undoDeleteAllHistoryForDate の内部で previousDraft が null/undefined のとき
+        // clearDraftForDate が呼ばれることを直接検証するため、
+        // pendingDeleteUndoRef を手動で null に設定するパスを通す。
+        //
+        // NOTE: deleteAllHistoryForDate は常に loadDraftForDate 結果（emptyDraft）を
+        // previousDraft に保存するため、現実の null ケースは pendingDeleteUndoRef を
+        // 外部から操作するシナリオのみ。ここでは undoDeleteAllHistoryForDate の
+        // 分岐ロジックをユニットテストする。
+
+        const saveDraftForDate = jest.fn();
+        const clearDraftForDate = jest.fn();
+
+        const { result, pendingDeleteUndoRef } = makeHistoryHandlersHook({
+            saveDraftForDate,
+            clearDraftForDate,
+        });
+
+        // pendingDeleteUndoRef を手動で null previousDraft のケースに設定する
+        act(() => {
+            pendingDeleteUndoRef.current = {
+                date: DATE,
+                previousHistory: {},
+                previousDraft: null, // ← ドラフトなし
+                previousDurationSec: 0,
+                timeoutId: null,
+            };
+        });
+
+        act(() => { result.current.undoDeleteAllHistoryForDate(); });
+
+        // clearDraftForDate が対象日付で呼ばれている
+        expect(clearDraftForDate).toHaveBeenCalledWith(DATE);
+
+        // saveDraftForDate は呼ばれていない（{} を書かない）
+        const emptySaveCall = saveDraftForDate.mock.calls.find(
+            ([date, draft]) => date === DATE && (!draft || Object.keys(draft).length === 0)
+        );
+        expect(emptySaveCall).toBeUndefined();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// J-10: シート削除 オフライン → タスクキル → 再起動 → 削除完了（end-to-end）
+// G で実際に失敗した「空ドラフトがタスクキルを越えて残り再起動後に読み戻される」経路
+// ─────────────────────────────────────────────────────────────────────────────
+describe("J-10: シート削除 オフライン → 再起動後に payloadSource=draft で削除が完了する", () => {
+    it("fix: date_delete が書いた空ドラフトを再起動後に loadDraftForDate が返し、payloadSource=draft で削除が完了する", async () => {
+        // ── Step 1: date_delete 経路が localStorage に空ドラフトを書く ────────
+        const userIdRef = { current: USER_ID };
+        const { result: draftResult } = renderHook(() =>
+            useDraftStore({ userIdRef })
+        );
+
+        act(() => {
+            draftResult.current.saveDraftForDate(DATE, {
+                sessionEx: [],
+                logData: {},
+                exerciseUnits: {},
+                todayLabels: [],
+                meta: {
+                    source: "date_delete",
+                    hasUnsavedChanges: false,
+                    explicitDelete: true,
+                },
+            });
+        });
+
+        // ── Step 2: 再起動を模したリセット ──────────────────────────────────
+        // localStorage は保持したまま ref 類（pendingSavePayloadsRef など）はクリア
+        // pendingWorkoutContentChangeDatesRef にはアウトボックスの再生エントリを置く
+        const pendingRef = { current: new Map() };
+        pendingRef.current.set(DATE, {
+            reason: "startup_replay",
+            explicitEdit: false,
+            explicitDelete: true,
+            deleteScope: "date",
+            updatedAt: new Date().toISOString(),
+        });
+
+        // ── Step 3: loadDraftForDate が null でないことを確認 ────────────────
+        let loadedDraft;
+        act(() => {
+            loadedDraft = draftResult.current.loadDraftForDate(DATE);
+        });
+        expect(loadedDraft).not.toBeNull();
+        // contentOrigin が "empty" でないこと（G で崩れていた箇所）
+        expect(loadedDraft?.meta?.contentOrigin).not.toBe("empty");
+
+        // ── Step 4: syncWorkoutRowsForDates で payloadSource="draft" を確認 ──
+        // useHistorySave に実 loadDraftForDate を渡す
+        const { result } = makeHistorySaveHook({
+            pendingWorkoutContentChangeDatesRef: pendingRef,
+            loadDraftForDate: draftResult.current.loadDraftForDate,
+            historyRemoteReady: true,
+            historyDisplayFromCache: false,
+        });
+
+        // staleHistory = 削除前の状態（再起動後の history に残っている可能性がある）
+        const staleHistory = {
+            "インクラインダンベルプレス": [
+                { date: DATE, sets: [{ weight: "80", reps: "5" }] },
+            ],
+            "ペックフライ": [
+                { date: DATE, sets: [{ weight: "40", reps: "12" }] },
+            ],
+        };
+
+        let syncResults;
+        await act(async () => {
+            syncResults = await result.current.syncWorkoutRowsForDates(
+                USER_ID,
+                staleHistory,
+                [DATE]
+            );
+        });
+
+        // payloadSource="draft" で同期が進んだ（stale history は採用されていない）
+        const syncRowCall = logWriteTrace.mock.calls.find(
+            ([tag]) => tag === "syncWorkoutRows"
+        );
+        expect(syncRowCall).toBeDefined();
+        expect(syncRowCall[1].extra?.payloadSource).toBe("draft"); // 手順4
+
+        // G15 の hold は発動していない（payloadSource が "history" でないため）
+        expect(syncResults.g15HeldDates).not.toContain(DATE);
+
+        // saveWorkoutForDate が呼ばれている（sync が完了した）
+        expect(saveWorkoutForDate).toHaveBeenCalled();
+        expect(syncResults.syncedDates).toContain(DATE);
     });
 });

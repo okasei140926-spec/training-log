@@ -793,22 +793,23 @@ export function useHistorySave({
                             setCount: incomingMetrics.setCount ?? 0,
                             extra: { payloadSource, historyRemoteReady },
                         });
-                    } else if (!hasWorkoutForDate && Boolean(pendingChange.explicitDelete) && g15HistorySource && !historyRemoteReady) {
+                    } else if (Boolean(pendingChange.explicitDelete) && g15HistorySource) {
                         logWriteTrace("G15:history-not-loaded-guard", {
                             date: workoutDate,
                             decision: "hold",
-                            reason: "explicitDelete + history payload — remote history not yet loaded, holding for retry",
+                            reason: "explicitDelete + history/history_cache payload — must not use history as delete payload",
                             flags: { explicitEdit, explicitDelete: true, source: pendingChange.reason },
                             exerciseCount: incomingMetrics.exerciseCount ?? 0,
                             setCount: incomingMetrics.setCount ?? 0,
-                            extra: { payloadSource, historyRemoteReady },
+                            extra: { payloadSource, historyRemoteReady, hasWorkoutForDate },
                         });
-                        console.warn("[save guard] G15: holding explicitDelete + history payload — history not loaded yet", {
+                        console.warn("[save guard] G15: holding explicitDelete + history payload — history must not be used as delete payload", {
                             env: getRuntimeEnvironmentLabel(),
                             user_id: userId,
                             date: workoutDate,
                             payloadSource,
                             historyRemoteReady,
+                            hasWorkoutForDate,
                             reason: pendingChange.reason,
                         });
                         results.g15HeldDates.push(workoutDate);
