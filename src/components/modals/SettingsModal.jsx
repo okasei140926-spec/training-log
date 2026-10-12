@@ -214,6 +214,7 @@ export default function SettingsModal({
   onSaveProfileField,
   onSaveBodyWeight,
   onSaveCustomSplit,
+  autoSaveRef = null,
 }) {
   const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
   const [showProManager, setShowProManager] = useState(false);
@@ -446,6 +447,48 @@ export default function SettingsModal({
   };
 
   const isCustomSplitValid = customDays.length > 0 && customDays.every(d => d.bodyParts.size > 0);
+
+  // Rebuild auto-save closure on every render so the useEffect always has
+  // the latest state via the ref (avoids stale-closure issues).
+  {
+    let _fn = null;
+    if (profileEditorField) {
+      if (showCustomSplitEditor) {
+        if (isCustomSplitValid) {
+          const seq = customDays.map((d, i) => ({
+            label: d.label.trim() || `Day${i + 1}`,
+            bodyParts: [...d.bodyParts],
+          }));
+          _fn = () => onSaveCustomSplit?.(seq);
+        }
+        // else: incomplete custom split → discard (same as disabled 保存 button)
+      } else if (profileEditorField.type === "bodyweight_input") {
+        const n = Number(profileEditorValue);
+        if (n > 0) _fn = () => onSaveBodyWeight?.(n);
+      } else if (profileEditorField.type === "birthdate") {
+        const y = parseInt(profileEditorBirthYear, 10);
+        const m = parseInt(profileEditorBirthMonth, 10);
+        const d = parseInt(profileEditorBirthDay, 10);
+        if (y && m && d) {
+          const val = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          if (!isNaN(new Date(val).getTime())) {
+            _fn = () => onSaveProfileField?.(profileEditorField.id, val);
+          }
+        }
+        // else: incomplete birthdate → discard (consistent with 保存 button)
+      } else {
+        // single, frequency, and any other types
+        const val = profileEditorValue;
+        if (val !== null && val !== undefined) {
+          _fn = () => onSaveProfileField?.(profileEditorField.id, val);
+        }
+      }
+    }
+    // autoSaveRef is written on every render so onSelectTab always invokes
+    // the latest closure. Only the parent's BottomNav path calls this ref —
+    // the × button never triggers it, preserving the discard-on-cancel behaviour.
+    if (autoSaveRef) autoSaveRef.current = _fn;
+  }
 
   if (!isOpen) return null;
 

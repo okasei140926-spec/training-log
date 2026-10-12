@@ -661,50 +661,109 @@ export default function GymApp() {
             root.style.setProperty("--app-height", `${Math.round(viewportHeight)}px`);
         };
 
-        // iOS PWA: env(safe-area-inset-bottom) may return 0 on initial render
-        // before the browser has finalized safe area metrics. Use a probe element
-        // to read the computed value and set it explicitly as a px value.
-        const applySafeBottom = () => {
-            const probe = document.createElement("div");
-            probe.style.cssText = "position:fixed;bottom:0;left:0;width:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden;";
-            root.appendChild(probe);
-            const safeBottom = parseFloat(getComputedStyle(probe).height) || 0;
-            root.removeChild(probe);
+        // iOS PWA / Capacitor WKWebView: env(safe-area-inset-*) may return 0 at
+        // CSS parse time and on initial render before the WebView has reported
+        // safe-area metrics. Use DOM probes to read the resolved values and
+        // write them back as explicit px variables.
+        //
+        // applySafeAreas handles both --safe-top and --safe-bottom.
+        //   shouldLog=true  → also records a "safeArea:probe" trace entry.
+        //   shouldLog=false → probe + apply only (used for the 80 ms rAF retry
+        //                     to avoid spamming the log on every resize frame).
+        const applySafeAreas = (trigger, shouldLog) => {
+            // Height probe: safe-area-inset-top
+            const topProbe = document.createElement("div");
+            topProbe.style.cssText = "position:fixed;top:0;left:0;width:0;height:env(safe-area-inset-top,0px);pointer-events:none;visibility:hidden;";
+            root.appendChild(topProbe);
+            const safeTop = parseFloat(getComputedStyle(topProbe).height) || 0;
+            root.removeChild(topProbe);
+
+            // Height probe: safe-area-inset-bottom (original applySafeBottom approach)
+            const bottomProbe = document.createElement("div");
+            bottomProbe.style.cssText = "position:fixed;bottom:0;left:0;width:0;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden;";
+            root.appendChild(bottomProbe);
+            const safeBottom = parseFloat(getComputedStyle(bottomProbe).height) || 0;
+            root.removeChild(bottomProbe);
+
+            if (shouldLog) {
+                // Position-based probe for top: alternative CSS mechanism for
+                // cross-validating the height-probe value above.
+                // If cssEnvTop !== probeTop the two CSS evaluation paths diverge.
+                const bcrProbe = document.createElement("div");
+                bcrProbe.style.cssText = "position:fixed;top:env(safe-area-inset-top,0px);left:0;width:1px;height:1px;pointer-events:none;visibility:hidden;";
+                root.appendChild(bcrProbe);
+                const cssEnvTop = Math.round(bcrProbe.getBoundingClientRect().top * 10) / 10;
+                root.removeChild(bcrProbe);
+
+                // Read current CSS var values BEFORE applying the new probe
+                // results — this shows whether correction was needed.
+                const prevTop = parseFloat(root.style.getPropertyValue("--safe-top")) || 0;
+                const prevBottom = parseFloat(root.style.getPropertyValue("--safe-bottom")) || 0;
+
+                logWriteTrace("safeArea:probe", {
+                    date: null,
+                    decision: "executed",
+                    extra: {
+                        trigger,
+                        probeTop: safeTop,
+                        probeBottom: safeBottom,
+                        cssEnvTop,
+                        innerWidth: window.innerWidth,
+                        innerHeight: window.innerHeight,
+                        changedTop: safeTop !== prevTop,
+                        changedBottom: safeBottom !== prevBottom,
+                    },
+                });
+            }
+
+            root.style.setProperty("--safe-top", `${safeTop}px`);
             root.style.setProperty("--safe-bottom", `${safeBottom}px`);
         };
 
-        const scheduleViewportHeightUpdate = () => {
+        const scheduleViewportHeightUpdate = (trigger) => {
             cancelAnimationFrame(rafId);
             clearTimeout(timeoutId);
             rafId = window.requestAnimationFrame(() => {
                 applyViewportHeight();
-                applySafeBottom();
+                applySafeAreas(trigger, true);
                 timeoutId = window.setTimeout(() => {
                     applyViewportHeight();
-                    applySafeBottom();
+                    // Retry without logging to avoid duplicate entries per event
+                    applySafeAreas(trigger, false);
                 }, 80);
             });
         };
 
         applyViewportHeight();
-        applySafeBottom();
-        scheduleViewportHeightUpdate();
-        // Re-apply after 200ms to catch iOS PWA delayed safe area resolution
-        safeTimerId = window.setTimeout(applySafeBottom, 200);
+        applySafeAreas("initial", true);
+        scheduleViewportHeightUpdate("initial");
+        // Re-apply after 200ms to catch iOS PWA / Capacitor delayed safe area
+        // resolution (same rationale as the original applySafeBottom timer).
+        safeTimerId = window.setTimeout(() => applySafeAreas("initial", true), 200);
 
-        window.addEventListener("resize", scheduleViewportHeightUpdate);
-        window.addEventListener("orientationchange", scheduleViewportHeightUpdate);
-        window.visualViewport?.addEventListener("resize", scheduleViewportHeightUpdate);
-        window.visualViewport?.addEventListener("scroll", scheduleViewportHeightUpdate);
+        const onResize = () => scheduleViewportHeightUpdate("resize");
+        const onOrientationChange = () => scheduleViewportHeightUpdate("orientationchange");
+        // Re-probe on app resume: WebView may finalize safe-area only after
+        // returning from background (observed with Capacitor on iOS).
+        const onVisibilityChange = () => {
+            if (document.visibilityState === "visible") scheduleViewportHeightUpdate("resume");
+        };
+
+        window.addEventListener("resize", onResize);
+        window.addEventListener("orientationchange", onOrientationChange);
+        window.visualViewport?.addEventListener("resize", onResize);
+        window.visualViewport?.addEventListener("scroll", onResize);
+        document.addEventListener("visibilitychange", onVisibilityChange);
 
         return () => {
             cancelAnimationFrame(rafId);
             clearTimeout(timeoutId);
             clearTimeout(safeTimerId);
-            window.removeEventListener("resize", scheduleViewportHeightUpdate);
-            window.removeEventListener("orientationchange", scheduleViewportHeightUpdate);
-            window.visualViewport?.removeEventListener("resize", scheduleViewportHeightUpdate);
-            window.visualViewport?.removeEventListener("scroll", scheduleViewportHeightUpdate);
+            window.removeEventListener("resize", onResize);
+            window.removeEventListener("orientationchange", onOrientationChange);
+            window.visualViewport?.removeEventListener("resize", onResize);
+            window.visualViewport?.removeEventListener("scroll", onResize);
+            document.removeEventListener("visibilitychange", onVisibilityChange);
         };
     }, []);
 
@@ -751,6 +810,7 @@ export default function GymApp() {
     const [summary, setSummary] = useState(null);
     const [workoutDayShareTarget, setWorkoutDayShareTarget] = useState(null);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const settingsModalAutoSaveRef = useRef(null);
     const [forceSyncVersion, setForceSyncVersion] = useState(0);
     const [syncFailuresByDate, setSyncFailuresByDate] = useState({});
     const [syncRetrying, setSyncRetrying] = useState(false);
@@ -3935,6 +3995,7 @@ export default function GymApp() {
                         onSaveProfileField={handleSaveProfileField}
                         onSaveBodyWeight={handleSaveBodyWeight}
                         onSaveCustomSplit={handleSaveCustomSplit}
+                        autoSaveRef={settingsModalAutoSaveRef}
                     />
                     {showAuth && (
                         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "var(--bg)", zIndex: 100 }}>
@@ -4014,6 +4075,18 @@ export default function GymApp() {
                                 });
                             });
                         };
+                        // Close overlays that sit below z=520 (BottomNav) and
+                        // stay open during navigation without this explicit close.
+                        // ProPaywallModal is intentionally excluded: closing it
+                        // mid-purchase would interrupt the transaction.
+                        if (showSettingsModal) {
+                            // Auto-save any in-progress profile editor input before
+                            // closing. The × button path never calls this ref.
+                            settingsModalAutoSaveRef.current?.();
+                            setShowSettingsModal(false);
+                        }
+                        if (workoutDayShareTarget) setWorkoutDayShareTarget(null);
+
                         if (nextScreen === "log") {
                             const activeDate = (workoutStartedForDate && !workoutIsFinished) ? workoutStartedForDate : null;
                             handleLogForDate(activeDate || getTodayKey());
