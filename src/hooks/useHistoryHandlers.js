@@ -909,6 +909,14 @@ export function useHistoryHandlers({
         } else {
             clearDraftForDate(pending.date);
         }
+        // Remove the delete intent from the pending queue.
+        // After undo, the outbox still holds explicitDelete:true from the original delete.
+        // Without this call, a subsequent sync would see explicitDelete:true + payloadSource="history"
+        // and G15 would hold it indefinitely (especially if previousDraft is null).
+        markWorkoutContentChanged(pending.date, "date_delete_undo", {
+            explicitEdit: true,
+            explicitDelete: false,
+        });
         if (logDate === pending.date) {
             applyLogDraftState(pending.previousDraft || {
                 todayLabels: [],
@@ -944,6 +952,7 @@ export function useHistoryHandlers({
         historyRevisionRef,
         latestHistoryRef,
         logDate,
+        markWorkoutContentChanged,
         onPersistentDeleteChanged,
         pendingDeleteUndoRef,
         persistHistoryForUser,
