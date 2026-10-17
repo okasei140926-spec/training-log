@@ -368,7 +368,7 @@ export default function WorkoutSessionShareModal({
                         overflowY: "auto",
                         WebkitOverflowScrolling: "touch",
                         overscrollBehavior: "contain",
-                        padding: "0 18px calc(18px + var(--safe-bottom, 0px))",
+                        padding: "0 18px var(--bottom-nav-height)",
                     }}
                 >
                     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>

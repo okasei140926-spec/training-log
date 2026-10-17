@@ -822,7 +822,7 @@ export default function SettingsModal({
             overflowY: "auto",
             WebkitOverflowScrolling: "touch",
             overscrollBehavior: "contain",
-            padding: "18px 16px calc(22px + var(--safe-bottom, 0px))",
+            padding: "18px 16px var(--bottom-nav-height)",
             boxSizing: "border-box",
           }}
         >

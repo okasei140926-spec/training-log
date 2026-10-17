@@ -230,7 +230,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             flex: 1,
             minHeight: 0,
             overflowY: "auto",
-            padding: "18px 16px calc(24px + var(--safe-bottom, 0px))",
+            padding: "18px 16px var(--bottom-nav-height)",
             boxSizing: "border-box",
             overscrollBehavior: "contain",
             overscrollBehaviorX: "none",

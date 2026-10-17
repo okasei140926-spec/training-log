@@ -3,7 +3,7 @@ import { QUICK_LABELS } from "../../constants/suggestions";
 export default function DayEditModal({ dayName, labels, toggleLabel, customLabel, setCustomLabel, onConfirm, onClose, onClear }) {
     return (
         <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "flex-end" }}>
-            <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px var(--bottom-nav-height)", maxHeight: "80vh", overflowY: "auto" }}>
                 <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4, color: "var(--text)" }}>{dayName}曜日の部位</div>
                 <div style={{ fontSize: 12, color: "var(--text2)", marginBottom: 16 }}>複数タップで組み合わせ可能</div>
 

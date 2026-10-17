@@ -36,7 +36,7 @@ export default function HistoryEditModal({ exName, record, onSave, onDelete, onC
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 300, display: "flex", alignItems: "flex-end" }}
       onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px 36px", maxHeight: "80vh", overflowY: "auto" }}
+      <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px var(--bottom-nav-height)", maxHeight: "80vh", overflowY: "auto" }}
         onClick={e => e.stopPropagation()}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
