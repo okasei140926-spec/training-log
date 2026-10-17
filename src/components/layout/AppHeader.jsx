@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { S } from "../../utils/styles";
+import { logWriteTrace } from "../../utils/writeTrace";
 
 export default function AppHeader({
     title,
@@ -22,10 +23,26 @@ export default function AppHeader({
         const el = headerRef.current;
         if (!el) return;
         const update = () => {
-            document.documentElement.style.setProperty(
-                "--app-header-height",
-                `${el.getBoundingClientRect().height}px`
-            );
+            const root = document.documentElement;
+            const newH = el.getBoundingClientRect().height;
+            const prevH = parseFloat(root.style.getPropertyValue("--app-header-height")) || 0;
+            const safeTop = parseFloat(root.style.getPropertyValue("--safe-top")) || 0;
+            // Loop-safe: applySafeAreas may already have written the correct value
+            // via its defensive re-measure. Skip write when value is unchanged.
+            const changed = Math.round(newH) !== Math.round(prevH);
+            if (changed) {
+                root.style.setProperty("--app-header-height", `${newH}px`);
+            }
+            logWriteTrace("appHeader:measure", {
+                date: null,
+                decision: "executed",
+                extra: {
+                    measuredHeight: newH,
+                    safeTop,
+                    writtenHeight: changed ? newH : null,
+                    prevHeight: prevH,
+                },
+            });
         };
         update();
         const ro = new ResizeObserver(update);

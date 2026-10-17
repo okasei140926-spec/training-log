@@ -693,6 +693,13 @@ export default function GymApp() {
                 const prevTop = parseFloat(root.style.getPropertyValue("--safe-top")) || 0;
                 const prevBottom = parseFloat(root.style.getPropertyValue("--safe-bottom")) || 0;
 
+                // --app-header-height: read via getComputedStyle so we capture the
+                // CSS fallback value (calc(63px + var(--safe-top))) before AppHeader's
+                // ResizeObserver has written a fixed px value. Returns null when the
+                // value is not a plain number (e.g. calc() string not yet overridden).
+                const appHeaderHeightStr = getComputedStyle(root).getPropertyValue("--app-header-height").trim();
+                const appHeaderHeight = parseFloat(appHeaderHeightStr) || null;
+
                 logWriteTrace("safeArea:probe", {
                     date: null,
                     decision: "executed",
@@ -704,12 +711,28 @@ export default function GymApp() {
                         innerHeight: window.innerHeight,
                         changedTop: safeTop !== prevTop,
                         changedBottom: safeBottom !== prevBottom,
+                        appHeaderHeight,
                     },
                 });
             }
 
             root.style.setProperty("--safe-top", `${safeTop}px`);
             root.style.setProperty("--safe-bottom", `${safeBottom}px`);
+
+            // Defensive re-measure: force --app-header-height to update synchronously
+            // after --safe-top changes, guarding against WKWebView delaying the
+            // ResizeObserver callback for CSS-variable-induced size changes.
+            // getBoundingClientRect() triggers a forced synchronous reflow so the
+            // returned height already reflects the new --safe-top value.
+            // Loop-safe: only writes when the measured value actually differs.
+            const headerEl = document.querySelector('[data-app-header="true"]');
+            if (headerEl) {
+                const newH = headerEl.getBoundingClientRect().height;
+                const curH = parseFloat(root.style.getPropertyValue("--app-header-height")) || 0;
+                if (Math.round(newH) !== Math.round(curH)) {
+                    root.style.setProperty("--app-header-height", `${newH}px`);
+                }
+            }
         };
 
         const scheduleViewportHeightUpdate = (trigger) => {
