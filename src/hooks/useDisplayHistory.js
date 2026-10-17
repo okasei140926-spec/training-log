@@ -103,6 +103,7 @@ export function useDisplayHistory({
         workoutLogExercises,
         workoutStartedForDate,
         // refs and module-level fns are stable; listed for completeness
+        liveExercisesDateRef,
         pendingWorkoutContentChangeDatesRef,
         workoutTimerStateRef,
         buildDraftHistoryForDate,
