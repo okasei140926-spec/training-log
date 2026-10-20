@@ -149,7 +149,7 @@ export default function WorkoutDaySummaryModal({
           </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-            {summary.durationSec > 0 && (
+            {Number(summary.durationSec) >= 60 && (
               <div
                 style={{
                   padding: "4px 8px",
@@ -194,7 +194,7 @@ export default function WorkoutDaySummaryModal({
                 lineHeight: 1.2,
               }}
             >
-              {summary.setCount}セット
+              合計{summary.setCount}セット
             </div>
             <div
               style={{

@@ -931,7 +931,7 @@ export default function LogScreen({
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
                     {[
                         ...setCountByBodyPart.map((item) => `${item.bodyPart} ${item.count}セット`),
-                        `${setCount}セット`,
+                        `合計${setCount}セット`,
                         `PR ${prCount}件`,
                     ].map((item) => (
                         <div
