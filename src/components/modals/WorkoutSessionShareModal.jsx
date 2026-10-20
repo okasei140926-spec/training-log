@@ -82,14 +82,18 @@ const getBodyPartCards = (summary, items) => {
             bodyPart: item.bodyPart || item.body_part || "その他",
             count: Number(item.count ?? item.set_count ?? 0),
         }))
-        .filter((item) => Number.isFinite(item.count) && item.count > 0)
-        .slice(0, 3);
+        .filter((item) => Number.isFinite(item.count) && item.count > 0);
 };
 
-const formatBodyPartBreakdown = (bodyPartCards) =>
-    (bodyPartCards || [])
-        .map((item) => `${item.bodyPart} ${item.count}セット`)
-        .join(" / ");
+// 全部位を短縮形式で表示。6部位以上は先頭5件 + "他N"
+const formatBodyPartBreakdown = (bodyPartCards) => {
+    const all = bodyPartCards || [];
+    const MAX_VISIBLE = 5;
+    const visible = all.length > MAX_VISIBLE ? all.slice(0, MAX_VISIBLE) : all;
+    const hidden = all.length - visible.length;
+    const parts = visible.map((item) => `${item.bodyPart}${item.count}`).join(" / ");
+    return hidden > 0 ? `${parts} / 他${hidden}` : parts;
+};
 
 const normalizeUnitLabel = (unit) => {
     const value = String(unit || "kg").toLowerCase();
@@ -477,14 +481,11 @@ export default function WorkoutSessionShareModal({
                                         <div style={{ fontSize: isStory ? 22 : 16, color: "#fff", fontWeight: 950 }}>
                                             {durationLabel || "-"}
                                         </div>
-                                        <div style={{ fontSize: isStory ? 15 : 11, color: "rgba(255,255,255,0.48)", fontWeight: 900 }}>
-                                            TIME
-                                        </div>
                                     </div>
 
                                     {isStory && prLabel && (
-                                        <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#dff8ff", padding: "8px 11px", fontSize: 12, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 10 }}>
-                                            PR <span style={{ color: "#62caff", marginLeft: 4 }}>{prLabel}</span>
+                                        <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#62caff", padding: "8px 11px", fontSize: 12, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 10 }}>
+                                            {prLabel}
                                         </div>
                                     )}
 
@@ -518,9 +519,13 @@ export default function WorkoutSessionShareModal({
 
                                     {!isStory && (
                                         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 8, minHeight: 0 }}>
-                                            {bodyPartCards.length > 0 && (
-                                                <div style={{ display: "flex", gap: 20 }}>
-                                                    {bodyPartCards.map((item) => (
+                                            {bodyPartCards.length > 0 && (() => {
+                                                const SQUARE_MAX = 4;
+                                                const visibleCards = bodyPartCards.slice(0, SQUARE_MAX);
+                                                const hiddenCount = bodyPartCards.length - visibleCards.length;
+                                                return (
+                                                <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
+                                                    {visibleCards.map((item) => (
                                                         <div key={item.bodyPart}>
                                                             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.42)", fontWeight: 800, letterSpacing: 0.5 }}>
                                                                 {item.bodyPart}
@@ -533,10 +538,18 @@ export default function WorkoutSessionShareModal({
                                                             </div>
                                                         </div>
                                                     ))}
+                                                    {hiddenCount > 0 && (
+                                                        <div>
+                                                            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.42)", fontWeight: 800, letterSpacing: 0.5 }}>
+                                                                他{hiddenCount}部位
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
+                                                );
+                                            })()}
                                             {squareExerciseNameLine && (
-                                                <div style={{ color: "rgba(255,255,255,0.36)", fontSize: 9, fontWeight: 800, lineHeight: 1.7 }}>
+                                                <div style={{ color: "rgba(255,255,255,0.36)", fontSize: 9, fontWeight: 800, lineHeight: 1.7, wordBreak: "keep-all" }}>
                                                     {squareExerciseNameLine}
                                                 </div>
                                             )}
