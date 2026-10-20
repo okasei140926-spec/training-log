@@ -952,7 +952,7 @@ export default function LogScreen({
                     ))}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 700 }}>
-                    合計Volume <span style={{ color: "var(--text)", fontSize: 14 }}>{formattedVolumeKg}kg</span>
+                    合計ボリューム <span style={{ color: "var(--text)", fontSize: 14 }}>{formattedVolumeKg}kg</span>
                 </div>
                 {sessionSharePayload && (
                     <button
@@ -969,7 +969,7 @@ export default function LogScreen({
                             fontWeight: 800,
                         }}
                     >
-                        今日の記録をシェア
+                        画像でシェア
                     </button>
                 )}
             </div>

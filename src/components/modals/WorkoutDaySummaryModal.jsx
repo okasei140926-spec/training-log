@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { formatWorkoutDaySummaryDuration } from "../../utils/workoutDaySummary";
-import { getSetCountTotal } from "../../utils/setCountByBodyPart";
 
 const formatDateLabel = (date) => {
   const value = String(date || "").trim();
@@ -59,53 +58,6 @@ export default function WorkoutDaySummaryModal({
       window.scrollTo(0, scrollLock.top || 0);
     };
   }, [isOpen]);
-
-  const statItems = useMemo(() => {
-    if (!summary) return [];
-
-    const base = [
-      summary.durationSec > 0
-        ? { key: "duration", label: "時間", value: formatWorkoutDaySummaryDuration(summary.durationSec) }
-        : null,
-      { key: "volume", label: "Volume", value: formatVolume(summary.totalVolume) },
-      { key: "setCount", label: "セット数", value: `${summary.setCount}` },
-      {
-        key: "exerciseCount",
-        label: "部位別セット",
-        valueNode:
-          summary.setCountByBodyPart?.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {summary.setCountByBodyPart.map((item) => (
-                <span
-                  key={`set-count-${item.bodyPart}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "4px 8px",
-                    borderRadius: 999,
-                    background: "rgba(18, 199, 194, 0.08)",
-                    border: "1px solid rgba(18, 199, 194, 0.14)",
-                    color: "var(--accent-strong, var(--accent))",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  {item.bodyPart} {item.count}セット
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text)" }}>
-              {getSetCountTotal(summary.setCountByBodyPart || [])}
-            </div>
-          ),
-      },
-      { key: "prCount", label: "PR", value: `${summary.prCount}件` },
-    ];
-    return base.filter(Boolean);
-  }, [summary]);
 
   if (!isOpen || !summary) return null;
 
@@ -196,64 +148,72 @@ export default function WorkoutDaySummaryModal({
             </button>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            {statItems.map((item) => (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+            {summary.durationSec > 0 && (
               <div
-                key={item.key}
                 style={{
-                  background: "linear-gradient(180deg, rgba(18, 199, 194, 0.05), rgba(18, 199, 194, 0.015))",
-                  borderRadius: 18,
-                  border: "1px solid rgba(18, 199, 194, 0.12)",
-                  padding: "12px 12px 11px",
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  background: "rgba(18, 199, 194, 0.08)",
+                  border: "1px solid rgba(18, 199, 194, 0.14)",
+                  color: "var(--text2)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
                 }}
               >
-                <div style={{ fontSize: 11, color: "var(--text3)", fontWeight: 700 }}>{item.label}</div>
-                {item.valueNode ? (
-                  <div style={{ marginTop: 8 }}>{item.valueNode}</div>
-                ) : (
-                  <div style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", marginTop: 6 }}>
-                    {item.value}
-                  </div>
-                )}
+                {formatWorkoutDaySummaryDuration(summary.durationSec)}
+              </div>
+            )}
+            {(summary.setCountByBodyPart || []).map((item) => (
+              <div
+                key={item.bodyPart}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  background: "rgba(18, 199, 194, 0.08)",
+                  border: "1px solid rgba(18, 199, 194, 0.14)",
+                  color: "var(--text2)",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                }}
+              >
+                {item.bodyPart} {item.count}セット
               </div>
             ))}
-          </div>
-
-          {summary.bodyParts?.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: "var(--text3)", fontWeight: 700, marginBottom: 8 }}>
-                実施部位
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                {summary.bodyParts.map((bodyPart) => (
-                  <span
-                    key={bodyPart}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "5px 10px",
-                      borderRadius: 999,
-                      background: "rgba(18, 199, 194, 0.08)",
-                      border: "1px solid rgba(18, 199, 194, 0.16)",
-                      color: "var(--accent-strong, var(--accent))",
-                      fontSize: 11,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {bodyPart}
-                  </span>
-                ))}
-              </div>
+            <div
+              style={{
+                padding: "4px 8px",
+                borderRadius: 999,
+                background: "rgba(18, 199, 194, 0.08)",
+                border: "1px solid rgba(18, 199, 194, 0.14)",
+                color: "var(--text2)",
+                fontSize: 11,
+                fontWeight: 700,
+                lineHeight: 1.2,
+              }}
+            >
+              {summary.setCount}セット
             </div>
-          )}
+            <div
+              style={{
+                padding: "4px 8px",
+                borderRadius: 999,
+                background: "rgba(18, 199, 194, 0.08)",
+                border: "1px solid rgba(18, 199, 194, 0.14)",
+                color: "var(--text2)",
+                fontSize: 11,
+                fontWeight: 700,
+                lineHeight: 1.2,
+              }}
+            >
+              PR {summary.prCount}件
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text2)", fontWeight: 700, marginBottom: 16 }}>
+            合計ボリューム <span style={{ color: "var(--text)", fontSize: 14 }}>{formatVolume(summary.totalVolume)}</span>
+          </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {summary.items?.map((item) => (
@@ -311,12 +271,33 @@ export default function WorkoutDaySummaryModal({
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: onOpenWorkout ? "1fr 1fr" : "1fr 1fr", gap: 10, marginTop: 18 }}>
-            {onOpenWorkout ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+            {summary?.shareTarget && (
+              <button
+                type="button"
+                onClick={onShare}
+                disabled={!onShare}
+                style={{
+                  width: "100%",
+                  padding: "13px 14px",
+                  borderRadius: 16,
+                  border: "none",
+                  background: "linear-gradient(135deg, #12C7C2, #33E1DB)",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  boxShadow: "0 14px 26px rgba(18, 199, 194, 0.18)",
+                }}
+              >
+                画像でシェア
+              </button>
+            )}
+            {onOpenWorkout && (
               <button
                 type="button"
                 onClick={onOpenWorkout}
                 style={{
+                  width: "100%",
                   padding: "13px 14px",
                   borderRadius: 16,
                   border: "1px solid rgba(18, 199, 194, 0.12)",
@@ -328,66 +309,24 @@ export default function WorkoutDaySummaryModal({
               >
                 記録を開く
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onClose}
-                style={{
-                  padding: "13px 14px",
-                  borderRadius: 16,
-                  border: "1px solid rgba(18, 199, 194, 0.12)",
-                  background: "rgba(18, 199, 194, 0.03)",
-                  color: "var(--text2)",
-                  fontSize: 14,
-                  fontWeight: 800,
-                }}
-              >
-                閉じる
-              </button>
             )}
-            <button
-              type="button"
-              onClick={summary.isShared ? undefined : onShare}
-              disabled={summary.isShared || !onShare}
-              style={{
-                padding: "13px 14px",
-                borderRadius: 16,
-                border: summary.isShared
-                  ? "1px solid rgba(18, 199, 194, 0.12)"
-                  : "1px solid rgba(18, 199, 194, 0.18)",
-                background: summary.isShared
-                  ? "rgba(18, 199, 194, 0.07)"
-                  : "linear-gradient(135deg, #12C7C2, #33E1DB)",
-                color: summary.isShared ? "var(--text2)" : "#fff",
-                fontSize: 14,
-                fontWeight: 800,
-                boxShadow: summary.isShared ? "none" : "0 14px 26px rgba(18, 199, 194, 0.18)",
-                opacity: summary.isShared || !onShare ? 1 : 1,
-              }}
-            >
-              {summary.isShared ? "投稿済み" : "フィードにシェア"}
-            </button>
-          </div>
-
-          {onOpenWorkout && (
             <button
               type="button"
               onClick={onClose}
               style={{
-                width: "100%",
-                marginTop: 10,
-                padding: "12px 14px",
-                borderRadius: 16,
-                border: "1px solid rgba(18, 199, 194, 0.12)",
-                background: "rgba(18, 199, 194, 0.03)",
+                background: "none",
+                border: "none",
                 color: "var(--text3)",
                 fontSize: 13,
-                fontWeight: 800,
+                fontWeight: 700,
+                padding: "6px 0",
+                textAlign: "center",
+                width: "100%",
               }}
             >
               閉じる
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>

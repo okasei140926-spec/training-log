@@ -3969,7 +3969,7 @@ export default function GymApp() {
                                 : undefined
                         }
                         onShare={
-                            summary?.shareTarget && !summary?.isShared
+                            summary?.shareTarget
                                 ? () => openWorkoutDayShareModal(summary.shareTarget)
                                 : undefined
                         }
