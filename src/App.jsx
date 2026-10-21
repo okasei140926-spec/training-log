@@ -2609,7 +2609,27 @@ export default function GymApp() {
         window.visualViewport?.addEventListener("scroll", syncKeyboardState);
         syncKeyboardState();
 
+        let missCount = 0;
+        const watchdog = setInterval(() => {
+            if (document.body?.getAttribute("data-log-set-input-active") !== "true") {
+                missCount = 0;
+                return;
+            }
+            if (document.activeElement?.closest("[data-log-set-input='true']")) {
+                missCount = 0;
+                return;
+            }
+            missCount += 1;
+            if (missCount >= 2) {
+                document.body?.removeAttribute("data-log-set-input-active");
+                setFocusedLogSetInputId(null);
+                setIsLogKeyboardOpen(false);
+                missCount = 0;
+            }
+        }, 500);
+
         return () => {
+            clearInterval(watchdog);
             document.removeEventListener("focusin", handleFocusIn, true);
             document.removeEventListener("touchstart", handleTouchStart, true);
             document.removeEventListener("pointerdown", handlePointerDown, true);

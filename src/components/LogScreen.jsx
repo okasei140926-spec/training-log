@@ -1380,7 +1380,12 @@ export default function LogScreen({
                                                                 borderColor: memos[ex.name] ? "var(--accent)" : softBorderColor,
                                                             }}
                                                         >メモ</button>
-                                                        <button onClick={() => removeEx(ex.id, ex.name)} style={{ ...compactIconButtonStyle, color: "var(--text2)", borderColor: softBorderColor }}>×</button>
+                                                        <button onClick={() => {
+                                                            removeEx(ex.id, ex.name);
+                                                            if (!document.activeElement?.closest("[data-log-set-input='true']")) {
+                                                                document.body?.removeAttribute("data-log-set-input-active");
+                                                            }
+                                                        }} style={{ ...compactIconButtonStyle, color: "var(--text2)", borderColor: softBorderColor }}>×</button>
                                                     </>
                                                 )}
                                             </div>
