@@ -51,7 +51,7 @@ export default function PrDetailView({
       ref={screenScrollRef}
       onTouchStart={handlePrDetailTouchStart}
       onTouchEnd={handlePrDetailTouchEnd}
-      style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}
+      style={{ padding: "20px 20px var(--bottom-nav-scroll-padding)", display: "flex", flexDirection: "column", gap: 16 }}
     >
       <button
         onClick={() => setSelectedExerciseKey(null)}
