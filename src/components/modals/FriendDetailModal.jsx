@@ -5,9 +5,9 @@ export default function FriendDetailModal({ friend, onClose, onCopyMenu }) {
   ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 200, display: "flex", alignItems: "flex-end" }}
+    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 630, display: "flex", alignItems: "flex-end" }}
       onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px var(--bottom-nav-height)", maxHeight: "85vh", overflowY: "auto" }}
+      <div style={{ width: "100%", maxWidth: 430, margin: "0 auto", background: "var(--card-modal)", borderRadius: "20px 20px 0 0", padding: "24px 20px calc(20px + var(--safe-bottom, 0px))", maxHeight: "85vh", overflowY: "auto" }}
         onClick={e => e.stopPropagation()}>
 
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24 }}>

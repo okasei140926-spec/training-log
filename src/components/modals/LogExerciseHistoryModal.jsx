@@ -172,8 +172,8 @@ export default function LogExerciseHistoryModal({
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
-        zIndex: 400,
-        padding: "16px",
+        zIndex: 830,
+        padding: "16px 0 0",
       }}
     >
       <div
@@ -182,9 +182,9 @@ export default function LogExerciseHistoryModal({
           width: "100%",
           maxWidth: 430,
           background: "var(--card-modal)",
-          borderRadius: 20,
+          borderRadius: "20px 20px 0 0",
           border: "1px solid var(--border2)",
-          padding: "18px 16px var(--bottom-nav-height)",
+          padding: "18px 16px calc(20px + var(--safe-bottom, 0px))",
           maxHeight: "80vh",
           overflowY: "auto",
           boxShadow: "0 12px 40px rgba(0,0,0,0.25)",

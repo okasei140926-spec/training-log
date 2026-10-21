@@ -792,12 +792,12 @@ export default function SettingsModal({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 400,
+        zIndex: 830,
         background: "rgba(15, 23, 42, 0.44)",
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
-        padding: "calc(16px + var(--safe-top, 0px)) 12px calc(12px + var(--safe-bottom, 0px))",
+        padding: "calc(16px + var(--safe-top, 0px)) 0 0",
       }}
     >
       <div
@@ -806,10 +806,10 @@ export default function SettingsModal({
           width: "100%",
           maxWidth: 430,
           background: "var(--card-modal)",
-          borderRadius: 28,
+          borderRadius: "28px 28px 0 0",
           border: "1px solid rgba(18, 199, 194, 0.12)",
           boxShadow: "0 22px 44px rgba(15, 23, 42, 0.16)",
-          maxHeight: "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
+          maxHeight: "calc(100dvh - 16px - var(--safe-top, 0px))",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -822,7 +822,7 @@ export default function SettingsModal({
             overflowY: "auto",
             WebkitOverflowScrolling: "touch",
             overscrollBehavior: "contain",
-            padding: "18px 16px var(--bottom-nav-height)",
+            padding: "18px 16px calc(20px + var(--safe-bottom, 0px))",
             boxSizing: "border-box",
           }}
         >
@@ -1364,7 +1364,7 @@ export default function SettingsModal({
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 401,
+            zIndex: 831,
             background: "rgba(15, 23, 42, 0.54)",
             display: "flex",
             alignItems: "flex-end",

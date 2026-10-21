@@ -191,12 +191,11 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 360,
+        zIndex: 790,
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
-        padding:
-          "calc(16px + var(--safe-top, 0px)) 12px calc(12px + var(--safe-bottom, 0px))",
+        padding: "calc(16px + var(--safe-top, 0px)) 0 0",
         boxSizing: "border-box",
       }}
     >
@@ -213,10 +212,9 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
           position: "relative",
           width: "100%",
           maxWidth: 440,
-          maxHeight:
-            "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 28px)",
+          maxHeight: "calc(100dvh - 16px - var(--safe-top, 0px))",
           background: "var(--card-modal)",
-          borderRadius: 24,
+          borderRadius: "24px 24px 0 0",
           boxShadow: "0 24px 56px rgba(15, 23, 42, 0.22)",
           overflow: "hidden",
           overscrollBehaviorX: "none",
@@ -230,7 +228,7 @@ export default function TrainingSummaryModal({ isOpen, onClose, summary }) {
             flex: 1,
             minHeight: 0,
             overflowY: "auto",
-            padding: "18px 16px var(--bottom-nav-height)",
+            padding: "18px 16px calc(20px + var(--safe-bottom, 0px))",
             boxSizing: "border-box",
             overscrollBehavior: "contain",
             overscrollBehaviorX: "none",

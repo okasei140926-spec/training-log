@@ -323,12 +323,11 @@ export default function WorkoutSessionShareModal({
                 position: "fixed",
                 inset: 0,
                 background: "rgba(15, 23, 42, 0.72)",
-                zIndex: 320,
+                zIndex: 750,
                 display: "flex",
                 alignItems: "flex-end",
                 justifyContent: "center",
-                padding:
-                    "calc(16px + var(--safe-top, 0px)) 12px calc(12px + var(--safe-bottom, 0px))",
+                padding: "calc(16px + var(--safe-top, 0px)) 0 0",
             }}
             onClick={onClose}
         >
@@ -337,12 +336,11 @@ export default function WorkoutSessionShareModal({
                     width: "100%",
                     maxWidth: 420,
                     background: "var(--card-modal)",
-                    borderRadius: 24,
+                    borderRadius: "24px 24px 0 0",
                     border: "1px solid var(--border2)",
                     boxShadow: "0 22px 44px rgba(15, 23, 42, 0.18)",
                     boxSizing: "border-box",
-                    maxHeight:
-                        "calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 24px)",
+                    maxHeight: "calc(100dvh - 16px - var(--safe-top, 0px))",
                     display: "flex",
                     flexDirection: "column",
                     overflow: "hidden",
@@ -372,7 +370,7 @@ export default function WorkoutSessionShareModal({
                         overflowY: "auto",
                         WebkitOverflowScrolling: "touch",
                         overscrollBehavior: "contain",
-                        padding: "0 18px var(--bottom-nav-height)",
+                        padding: "0 18px calc(20px + var(--safe-bottom, 0px))",
                     }}
                 >
                     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
