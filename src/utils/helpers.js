@@ -580,12 +580,13 @@ export function buildHistoryFromWorkoutRows(rows) {
 
 export const PR_UPDATE_TOLERANCE_KG = 0.15;
 
-export function getBestRmSet(sets, { allowBodyweight = false } = {}) {
-  const validSets = sanitizeWorkoutSets(sets, { allowBodyweight });
+export function getBestRmSet(sets, { allowBodyweight = false, bodyWeightKg = null } = {}) {
+  const effectiveAllowBodyweight = allowBodyweight || bodyWeightKg != null;
+  const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: effectiveAllowBodyweight });
   if (!validSets.length) return null;
 
   return validSets.reduce((best, set) => {
-    const rm = calc1RM([set]);
+    const rm = calc1RM([set], { bodyWeightKg });
     if (!best || rm > best.rm) {
       return {
         ...set,
@@ -596,9 +597,9 @@ export function getBestRmSet(sets, { allowBodyweight = false } = {}) {
   }, null);
 }
 
-export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = null, tolerance = PR_UPDATE_TOLERANCE_KG) {
-  const currentTopSet = getBestRmSet(currentSets, { allowBodyweight: false });
-  const previousTopSet = getBestRmSet(previousSets, { allowBodyweight: false });
+export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = null, tolerance = PR_UPDATE_TOLERANCE_KG, { bodyWeightKg = null } = {}) {
+  const currentTopSet = getBestRmSet(currentSets, { allowBodyweight: true, bodyWeightKg });
+  const previousTopSet = getBestRmSet(previousSets, { allowBodyweight: true, bodyWeightKg });
 
   if (!currentTopSet || !previousTopSet) return false;
 
@@ -617,14 +618,23 @@ export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = 
 }
 
 // ─── 推定1RM計算（Epley式）────────────────────────────
-export function calc1RM(sets) {
-  const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: false });
+export function calc1RM(sets, { bodyWeightKg = null } = {}) {
+  const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: true });
   if (!validSets.length) return 0;
 
   return Math.max(...validSets.map((s) => {
-    const weight = Number(s.weight);
+    let weight = Number(s.weight);
     const reps = Number(s.reps);
-    if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) return 0;
+    if (!Number.isFinite(reps) || reps <= 0) return 0;
+    if (!Number.isFinite(weight) || weight <= 0) {
+      if (s.weight === "BW") {
+        const bw = s.body_weight_kg ?? bodyWeightKg;
+        weight = (bw != null && bw > 0) ? bw : 0;
+        if (weight <= 0) return 0;
+      } else {
+        return 0;
+      }
+    }
     if (reps === 1) return weight;
     return weight * (1 + reps / 30);
   }));

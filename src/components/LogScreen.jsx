@@ -602,13 +602,14 @@ export default function LogScreen({
 
         const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
         const prSets = pr?.sets?.filter((s) => {
+            if (s.weight === "BW") return Number(s.reps) > 0;
             const w = Number(s.weight);
             const r = Number(s.reps);
             return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
         }) || [];
 
-        const pr1RM = pr?.rm ?? calc1RM(prSets);
-        const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG);
+        const pr1RM = pr?.rm ?? calc1RM(prSets, { bodyWeightKg });
+        const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG, { bodyWeightKg });
 
         const exVolumeKg = doneSets.reduce((sum, s) => {
             let w = Number(s.weight);
@@ -1157,7 +1158,7 @@ export default function LogScreen({
                         const completedSetEntries = doneSets.map((normalizedSet) => ({
                             sourceSet: normalizedSet,
                             normalizedSet,
-                            rm: calc1RM([normalizedSet]),
+                            rm: calc1RM([normalizedSet], { bodyWeightKg }),
                         }));
                         const currentTopSetEntry = completedSetEntries.reduce((best, entry) => {
                             if (!best || entry.rm > best.rm) return entry;
@@ -1167,15 +1168,16 @@ export default function LogScreen({
                             ? getSetDisplayUnit(currentTopSetEntry.sourceSet, displayUnit)
                             : displayUnit;
 
-                        const cur1RM = calc1RM(doneSets);
+                        const cur1RM = calc1RM(doneSets, { bodyWeightKg });
 
                         const prSets = pr?.sets?.filter(s => {
+                            if (s.weight === "BW") return Number(s.reps) > 0;
                             const w = Number(s.weight);
                             const r = Number(s.reps);
                             return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
                         }) || [];
 
-                        const pr1RM = pr?.rm ?? calc1RM(prSets);
+                        const pr1RM = pr?.rm ?? calc1RM(prSets, { bodyWeightKg });
                         const rawPrDiff = cur1RM - pr1RM;
                         const prDiff = rawPrDiff > PR_UPDATE_TOLERANCE_KG
                             ? roundTo1Decimal(rawPrDiff)
@@ -1184,10 +1186,10 @@ export default function LogScreen({
                             ? roundTo1Decimal(convertKgValueForDisplayUnit(prDiff, currentTopDisplayUnit))
                             : 0;
 
-                        const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG);
+                        const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG, { bodyWeightKg });
 
                         // PR の実際のトップセット（1RM換算が最大のセット）
-                        const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: false });
+                        const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: true, bodyWeightKg });
                         const prTopSetLabel = prTopSet
                             ? (normalizeWeightUnit(displayUnit) === "BW"
                                 ? "自重"

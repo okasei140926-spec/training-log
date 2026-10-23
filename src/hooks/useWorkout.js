@@ -17,9 +17,10 @@ export const useWorkout = ({
     muscleEx = {},
     exerciseBodyPartOverrides = {},
     prCache = {},
+    bodyWeightKg = null,
 }) => {
     const buildValidSets = (record) => {
-        return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
+        return sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
     };
 
     const getRecordScopeFlags = (record) => {
@@ -63,7 +64,7 @@ export const useWorkout = ({
 
     const getBestRmSet = (sets = []) => {
         return (sets || []).reduce((best, set) => {
-            const rm = calc1RM([set]);
+            const rm = calc1RM([set], { bodyWeightKg });
             if (!Number.isFinite(rm) || rm <= 0) return best;
             if (!best || rm > best.rm) return { set, rm };
             return best;
@@ -144,7 +145,7 @@ export const useWorkout = ({
                 if (!isTargetMatch(key, targetInfo)) return;
 
                 const validSets = buildValidSets(r);
-                const rm = calc1RM(validSets);
+                const rm = calc1RM(validSets, { bodyWeightKg });
                 if (!validSets.length || !Number.isFinite(rm) || rm <= 0) return;
 
                 const scopeFlags = getRecordScopeFlags(r);

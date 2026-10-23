@@ -2497,6 +2497,7 @@ export default function GymApp() {
         muscleEx,
         exerciseBodyPartOverrides,
         prCache,
+        bodyWeightKg,
     });
 
     const { handleFinishWorkoutTimerAndShowSummary } = useWorkoutDaySummaryBuilder({
