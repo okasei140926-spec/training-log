@@ -1182,7 +1182,8 @@ export default function LogScreen({
                         const prDiff = rawPrDiff > PR_UPDATE_TOLERANCE_KG
                             ? roundTo1Decimal(rawPrDiff)
                             : 0;
-                        const prDiffDisplay = prDiff > 0
+                        const isBWExercise = normalizeWeightUnit(currentTopDisplayUnit) === "BW";
+                        const prDiffDisplay = (prDiff > 0 && !isBWExercise)
                             ? roundTo1Decimal(convertKgValueForDisplayUnit(prDiff, currentTopDisplayUnit))
                             : 0;
 
@@ -1308,7 +1309,7 @@ export default function LogScreen({
                                                                         🏆 {compactPrLabel}
                                                                     </span>
                                                                 )}
-                                                                {isPR && prDiff > 0 && (
+                                                                {isPR && prDiff > 0 && !isBWExercise && (
                                                                     <span style={{
                                                                         display: "inline-flex",
                                                                         alignItems: "center",
@@ -1326,6 +1327,28 @@ export default function LogScreen({
                                                                         PR更新 +{prDiffDisplay.toFixed(1)}{formatWeightUnit(currentTopDisplayUnit)}
                                                                     </span>
                                                                 )}
+                                                                {isPR && prDiff > 0 && isBWExercise && (() => {
+                                                                    const repDiff = (currentTopSetEntry?.sourceSet?.reps ?? 0) - (prTopSet?.reps ?? 0);
+                                                                    if (repDiff <= 0) return null;
+                                                                    return (
+                                                                        <span style={{
+                                                                            display: "inline-flex",
+                                                                            alignItems: "center",
+                                                                            padding: "3px 8px",
+                                                                            borderRadius: 999,
+                                                                            background: "linear-gradient(135deg, rgba(234,179,8,0.18), rgba(18,199,194,0.14))",
+                                                                            border: "1px solid rgba(234,179,8,0.4)",
+                                                                            boxShadow: "0 2px 8px rgba(234,179,8,0.18)",
+                                                                            fontSize: 12,
+                                                                            fontWeight: 800,
+                                                                            color: "#FACC15",
+                                                                            lineHeight: 1.2,
+                                                                            animation: "prBadgeIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both",
+                                                                        }}>
+                                                                            PR更新 +{repDiff}rep
+                                                                        </span>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         )}
                                                     </div>

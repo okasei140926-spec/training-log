@@ -67,11 +67,19 @@ export default function LogExerciseHistoryModal({
     : normalizedPastRecords;
 
   const allSets = normalizedRecords.flatMap((record) => record.sets);
-  const numericSets = allSets.filter((set) => set.weight !== "BW");
   const hasBodyweightSet = allSets.some((set) => set.weight === "BW");
 
-  const maxWeight = numericSets.length > 0
-    ? Math.max(...numericSets.map((set) => Number(set.weight)))
+  const effectiveWeights = allSets.map((set) => {
+    if (set.weight === "BW") {
+      const bw = set.body_weight_kg ?? bodyWeightKg;
+      return (bw != null && bw > 0) ? bw : null;
+    }
+    const w = Number(set.weight);
+    return (Number.isFinite(w) && w > 0) ? w : null;
+  }).filter((w) => w !== null);
+
+  const maxWeight = effectiveWeights.length > 0
+    ? Math.max(...effectiveWeights)
     : null;
   const maxEstimated1RM = normalizedRecords.length > 0
     ? Math.max(...normalizedRecords.map((record) => calc1RM(record.sets, { bodyWeightKg })), 0)
@@ -85,7 +93,11 @@ export default function LogExerciseHistoryModal({
   normalizedRecords.forEach((record) => {
     record.sets.forEach((set) => {
       if (set.weight === "BW") {
-        if (fallbackBodyweightSet === null || set.reps > fallbackBodyweightReps) {
+        const score = calc1RM([set], { bodyWeightKg });
+        if (score > 0 && score > bestSetScore) {
+          bestSet = set;
+          bestSetScore = score;
+        } else if (fallbackBodyweightSet === null || set.reps > fallbackBodyweightReps) {
           fallbackBodyweightSet = set;
           fallbackBodyweightReps = set.reps;
         }
