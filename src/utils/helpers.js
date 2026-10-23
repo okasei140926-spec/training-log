@@ -617,6 +617,18 @@ export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = 
   return currentTopSet.rm - baselineRM > tolerance;
 }
 
+// ─── 自重セットの実効重量を解決 ──────────────────────────
+// "BW" セット: set.body_weight_kg → bodyWeightKg の順で解決。有効値なければ null
+// 数値セット: Number(set.weight) が正有限値なら返す。無効なら null
+export function resolveEffectiveWeightKg(set, bodyWeightKg = null) {
+  if (set?.weight === "BW") {
+    const bw = set.body_weight_kg ?? bodyWeightKg;
+    return (bw != null && bw > 0) ? bw : null;
+  }
+  const weight = Number(set?.weight);
+  return (Number.isFinite(weight) && weight > 0) ? weight : null;
+}
+
 // ─── 推定1RM計算（Epley式）────────────────────────────
 export function calc1RM(sets, { bodyWeightKg = null } = {}) {
   const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: true });
@@ -628,9 +640,9 @@ export function calc1RM(sets, { bodyWeightKg = null } = {}) {
     if (!Number.isFinite(reps) || reps <= 0) return 0;
     if (!Number.isFinite(weight) || weight <= 0) {
       if (s.weight === "BW") {
-        const bw = s.body_weight_kg ?? bodyWeightKg;
-        weight = (bw != null && bw > 0) ? bw : 0;
-        if (weight <= 0) return 0;
+        const effective = resolveEffectiveWeightKg(s, bodyWeightKg);
+        if (effective === null) return 0;
+        weight = effective;
       } else {
         return 0;
       }

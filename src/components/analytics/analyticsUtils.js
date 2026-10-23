@@ -1,4 +1,4 @@
-import { calc1RM, countValidSets, getRecordSourceSets, sanitizeWorkoutSet, sanitizeWorkoutSets } from "../../utils/helpers";
+import { calc1RM, countValidSets, getRecordSourceSets, resolveEffectiveWeightKg, sanitizeWorkoutSet, sanitizeWorkoutSets } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import { buildBodyPartExerciseKey, normalizeBodyPartLabel, resolveRecordBodyPartLabel } from "../../utils/bodyPartClassification";
 
@@ -186,7 +186,7 @@ export const formatPrSetLabel = (item) => {
 };
 
 export const buildValidSets = (record) =>
-  sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: false });
+  sanitizeWorkoutSets(getRecordSourceSets(record), { allowBodyweight: true });
 
 export const getRecordScopeFlags = (record) => {
   const sourceText = String(
@@ -264,17 +264,19 @@ export const filterAnalyticsPrCandidates = (candidates = [], key = "") => {
   });
 };
 
-export const getBestSet = (validSets = [], fallbackUnit = "kg", setEntries = []) =>
+export const getBestSet = (validSets = [], fallbackUnit = "kg", setEntries = [], bodyWeightKg = null) =>
   validSets.reduce((best, set, index) => {
-    const score = calc1RM([set]);
+    const score = calc1RM([set], { bodyWeightKg });
     if (!best || score > best.score) {
       const entry = setEntries[index];
       const displayUnit = entry?.displayUnit || getSetDisplayUnit(set, fallbackUnit);
       const displayWeight = entry?.displayWeight ?? getSetDisplayWeight(set);
+      const isBW = set.weight === "BW";
+      const effectiveKg = resolveEffectiveWeightKg(set, bodyWeightKg);
       return {
-        weight: Number(set.weight),
-        normalizedKgValue: Number(set.weight),
-        normalizedKg: Number(set.weight),
+        weight: isBW ? "BW" : Number(set.weight),
+        normalizedKgValue: effectiveKg,
+        normalizedKg: effectiveKg,
         originalWeight: set.originalWeight ?? set.displayWeight ?? set.weight,
         originalUnit: displayUnit,
         displayWeight,
@@ -286,9 +288,9 @@ export const getBestSet = (validSets = [], fallbackUnit = "kg", setEntries = [])
     return best;
   }, null);
 
-export const formatSetsText = (sets = [], fallbackUnit = "kg", setEntries = []) =>
+export const formatSetsText = (sets = [], fallbackUnit = "kg", setEntries = [], bodyWeightKg = null) =>
   sets.map((set, index) => formatPrSetLabel({
-    weight: Number(set.weight),
+    weight: resolveEffectiveWeightKg(set, bodyWeightKg) ?? set.weight,
     displayWeight: setEntries[index]?.displayWeight ?? getSetDisplayWeight(set),
     displayUnit: setEntries[index]?.displayUnit || getSetDisplayUnit(set, fallbackUnit),
     reps: Number(set.reps),
@@ -343,6 +345,7 @@ export const resolveAnalyticsBodyPart = (record, exerciseName, ctx) => {
 };
 
 export const buildHistoryBestMap = (history = {}, ctx) => {
+  const bodyWeightKg = ctx?.bodyWeightKg ?? null;
   const candidateMap = {};
 
   Object.entries(history || {}).forEach(([exerciseName, records]) => {
@@ -352,10 +355,10 @@ export const buildHistoryBestMap = (history = {}, ctx) => {
       const bodyPart = resolveAnalyticsBodyPart(record, exerciseName, ctx);
       if (!bodyPart) return;
 
-      const setEntries = buildValidSetEntries(record, { allowBodyweight: false });
+      const setEntries = buildValidSetEntries(record, { allowBodyweight: true });
       const validSets = setEntries.map((entry) => entry.set);
-      const rm = calc1RM(validSets);
-      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries);
+      const rm = calc1RM(validSets, { bodyWeightKg });
+      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries, bodyWeightKg);
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
@@ -446,6 +449,7 @@ export const buildHistoryBestMap = (history = {}, ctx) => {
 };
 
 export const buildManualBestMap = (manualBests = [], ctx) => {
+  const bodyWeightKg = ctx?.bodyWeightKg ?? null;
   const bestMap = {};
 
   (manualBests || []).forEach((entry) => {
@@ -455,7 +459,7 @@ export const buildManualBestMap = (manualBests = [], ctx) => {
     if (!bodyPart) return;
 
     const validSets = buildValidSets({ weight: entry.weight, reps: entry.reps });
-    const rm = calc1RM(validSets);
+    const rm = calc1RM(validSets, { bodyWeightKg });
     if (!validSets.length || rm <= 0) return;
 
     const key = getCompositeKey(bodyPart, normalizedName);
@@ -481,6 +485,7 @@ export const buildManualBestMap = (manualBests = [], ctx) => {
 };
 
 export const buildHistoryRecordMap = (history = {}, ctx) => {
+  const bodyWeightKg = ctx?.bodyWeightKg ?? null;
   const candidateMap = {};
 
   Object.entries(history || {}).forEach(([exerciseName, records]) => {
@@ -490,10 +495,10 @@ export const buildHistoryRecordMap = (history = {}, ctx) => {
       const bodyPart = resolveAnalyticsBodyPart(record, exerciseName, ctx);
       if (!bodyPart) return;
 
-      const setEntries = buildValidSetEntries(record, { allowBodyweight: false });
+      const setEntries = buildValidSetEntries(record, { allowBodyweight: true });
       const validSets = setEntries.map((entry) => entry.set);
-      const rm = calc1RM(validSets);
-      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries);
+      const rm = calc1RM(validSets, { bodyWeightKg });
+      const bestSet = getBestSet(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries, bodyWeightKg);
       if (!bestSet || rm <= 0) return;
 
       const key = getCompositeKey(bodyPart, normalizedName);
@@ -510,7 +515,7 @@ export const buildHistoryRecordMap = (history = {}, ctx) => {
         displayUnit: bestSet.displayUnit,
         reps: bestSet.reps,
         estimated1RM: Math.round(rm),
-        setsText: formatSetsText(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries),
+        setsText: formatSetsText(validSets, record?.displayUnit || record?.unit || record?.weightUnit || record?.weight_unit || "kg", setEntries, bodyWeightKg),
         source: "workouts.data",
         sourceLabel: null,
         score: rm,
@@ -562,6 +567,7 @@ export const buildHistoryRecordMap = (history = {}, ctx) => {
 };
 
 export const buildManualRecordMap = (manualBests = [], ctx) => {
+  const bodyWeightKg = ctx?.bodyWeightKg ?? null;
   const recordMap = {};
 
   (manualBests || []).forEach((entry, index) => {
@@ -571,7 +577,7 @@ export const buildManualRecordMap = (manualBests = [], ctx) => {
     if (!bodyPart) return;
 
     const validSets = buildValidSets({ weight: entry.weight, reps: entry.reps });
-    const rm = calc1RM(validSets);
+    const rm = calc1RM(validSets, { bodyWeightKg });
     if (!validSets.length || rm <= 0) return;
 
     const key = getCompositeKey(bodyPart, normalizedName);

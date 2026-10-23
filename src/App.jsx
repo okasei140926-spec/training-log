@@ -892,7 +892,7 @@ export default function GymApp() {
         activateStripeCheckoutSession,
         openStripePortal,
         updateWeeklyContext,
-    } = useAI({ loadConversationsOnMount: screen === "ai" });
+    } = useAI({ loadConversationsOnMount: screen === "ai", bodyWeightKg });
 
     // Per-user billing flag: true when BILLING_ENABLED or user is in test list
     const billingEnabled = isBillingEnabled(user?.id);

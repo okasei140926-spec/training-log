@@ -3,6 +3,7 @@ import {
   buildHistoryFromWorkoutRows,
   calc1RM,
   formatDateKey,
+  resolveEffectiveWeightKg,
   sanitizeHistoryRecord,
 } from "../utils/helpers";
 import { normalizeExerciseName } from "../utils/exerciseName";
@@ -587,7 +588,7 @@ const getExercisePriorityScore = (exerciseName, bodyPart, message) => {
   return score;
 };
 
-const buildExerciseHistoryStats = (history, message) => {
+const buildExerciseHistoryStats = (history, message, bodyWeightKg = null) => {
   const stats = [];
 
   Object.entries(history || {}).forEach(([exerciseName, records]) => {
@@ -604,13 +605,20 @@ const buildExerciseHistoryStats = (history, message) => {
         date: record.date,
       }))
     );
-    const weightedSets = allSets.filter((set) => set.weight !== "BW" && Number(set.weight) > 0 && Number(set.reps) > 0);
-    const bestSet = weightedSets.reduce((best, set) => {
-      const estimated1RM = calc1RM([set]);
+    const scorableSets = allSets.filter((set) => {
+      const reps = Number(set.reps);
+      if (!Number.isFinite(reps) || reps <= 0) return false;
+      if (set.weight === "BW") return true;
+      const weight = Number(set.weight);
+      return Number.isFinite(weight) && weight > 0;
+    });
+    const bestSet = scorableSets.reduce((best, set) => {
+      const estimated1RM = calc1RM([set], { bodyWeightKg });
       if (!best || estimated1RM > best.estimated1RM) {
         return {
           date: set.date,
-          weight: Number(set.weight),
+          weight: set.weight === "BW" ? "BW" : Number(set.weight),
+          effectiveKg: resolveEffectiveWeightKg(set, bodyWeightKg),
           reps: Number(set.reps),
           estimated1RM,
         };
@@ -741,8 +749,11 @@ const summarizeBig3Matches = (stats, message) => {
 
 const formatBig3MatchedExercise = (item) => {
   const latestSets = (item.latestSets || []).map((set) => set.label).join(" / ");
+  const prWeightLabel = item.pr?.weight === "BW"
+    ? (item.pr.effectiveKg != null ? `自重(${item.pr.effectiveKg}kg)` : "自重")
+    : `${item.pr?.weight}kg`;
   const prText = item.pr
-    ? `PR ${item.pr.weight}kg×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
+    ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
     : "PRなし";
   const rec = item.recommendedWorkingSets;
   const recommendationText = rec
@@ -791,8 +802,11 @@ const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = 
     const recentRecords = item.recentRecords
       .map((record) => `${record.date} ${record.setCount}セット ${record.sets.map((set) => set.label).join(" / ")}`)
       .join(" ; ");
+    const prWeightLabel = item.pr?.weight === "BW"
+      ? (item.pr.effectiveKg != null ? `自重(${item.pr.effectiveKg}kg)` : "自重")
+      : `${item.pr?.weight}kg`;
     const prText = item.pr
-      ? `PR ${item.pr.weight}kg×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
+      ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
       : "PRなし";
     const rec = item.recommendedWorkingSets;
     const recommendationText = rec
@@ -812,7 +826,7 @@ const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = 
   return [big3Context, exerciseContext].filter(Boolean).join("\n");
 };
 
-export function useAI({ loadConversationsOnMount = false } = {}) {
+export function useAI({ loadConversationsOnMount = false, bodyWeightKg = null } = {}) {
   const initialAiUsageDate = getTodayKey();
   const [aiMsgs, setAiMsgs] = useState([INITIAL_AI_MESSAGE]);
   const [aiInput, setAiInput] = useState("");
@@ -1611,7 +1625,7 @@ export function useAI({ loadConversationsOnMount = false } = {}) {
       const targetWorkoutSummary = targetDateKey ? summarizeWorkoutDay(requestGroupedHistory, targetDateKey) : null;
       const latestDateKey = Array.from(requestGroupedHistory.keys()).sort().slice(-1)[0] || "";
       const latestWorkoutSummary = latestDateKey ? summarizeWorkoutDay(requestGroupedHistory, latestDateKey) : null;
-      const exerciseHistoryStats = buildExerciseHistoryStats(aiHistory, userMsg);
+      const exerciseHistoryStats = buildExerciseHistoryStats(aiHistory, userMsg, bodyWeightKg);
       const big3MatchSummary = summarizeBig3Matches(exerciseHistoryStats, userMsg);
       const exerciseHistoryContext = buildExerciseHistoryContextTextFromStats(exerciseHistoryStats, userMsg, big3MatchSummary);
       const allExerciseNames = Object.keys(aiHistory || {}).sort((a, b) => a.localeCompare(b, "ja"));

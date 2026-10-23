@@ -74,8 +74,9 @@ export default function AnalyticsScreen({
       exerciseBodyPartOverrides,
       hiddenSet: new Set(hiddenBodyParts || []),
       historySource: "canonicalDisplayHistory/buildTrustedHistory",
+      bodyWeightKg: bodyWeightKg ?? null,
     }),
-    [muscleEx, exerciseBodyPartOverrides, hiddenBodyParts]
+    [muscleEx, exerciseBodyPartOverrides, hiddenBodyParts, bodyWeightKg]
   );
 
   const historyBestMap = useMemo(
