@@ -519,7 +519,7 @@ export function useFriendsData({
             const previousMonthStart = prevMonthDate.toISOString().slice(0, 10).slice(0, 7) + "-01";
             const [profilesRes, workoutsRes, friendSessionsRes] = await Promise.all([
                 supabase
-                    .from("profiles")
+                    .from("public_profiles")
                     .select("id, username, avatar1_url")
                     .in("id", nextFriendIds),
                 supabase
@@ -948,7 +948,7 @@ export function useFriendsData({
                         .lte("date", today)
                     : Promise.resolve({ data: [], error: null }),
                 profileIds.length
-                    ? supabase.from("profiles").select("id, username, avatar1_url").in("id", profileIds)
+                    ? supabase.from("public_profiles").select("id, username, avatar1_url").in("id", profileIds)
                     : Promise.resolve({ data: [], error: null }),
             ]);
             debugTimeEnd("[feed] fetch own");

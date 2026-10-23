@@ -60,7 +60,7 @@ export default function WorkoutCommentsModal({
       const userIds = [...new Set((commentRows || []).map((row) => row.user_id).filter(Boolean))];
       const { data: profiles, error: profilesError } = userIds.length
         ? await supabase
-            .from("profiles")
+            .from("public_profiles")
             .select("id, username, avatar1_url")
             .in("id", userIds)
         : { data: [], error: null };

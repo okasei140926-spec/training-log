@@ -69,7 +69,7 @@ export async function processPendingInviteForUser({
 
   const selectColumns = "id, username";
   const profileLookup = await supabase
-    .from("profiles")
+    .from("public_profiles")
     .select(selectColumns)
     .eq("id", inviteCode)
     .maybeSingle();
