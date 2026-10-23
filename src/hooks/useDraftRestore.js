@@ -37,6 +37,7 @@ export function useDraftRestore({
     applyCurrentLogDraft,
     markWorkoutContentChanged,
     saveDraftForDate,
+    bodyWeightKg = null,
 }) {
     const logRestoreDecision = useCallback((dateStr, savedDraft, localDraft, finalDraft, source) => {
         if (!shouldLogPerfDebug()) return;
@@ -57,24 +58,27 @@ export function useDraftRestore({
                 logData: savedDraft?.logData || {},
                 getExUnit: metricGetExUnit,
                 workoutDate: dateStr,
+                bodyWeightKg,
             }),
             localMetrics: getDraftMetricsForDate({
                 exercises: localDraft?.sessionEx || [],
                 logData: localDraft?.logData || {},
                 getExUnit: metricGetExUnit,
                 workoutDate: dateStr,
+                bodyWeightKg,
             }),
             finalMetrics: getDraftMetricsForDate({
                 exercises: finalDraft?.sessionEx || [],
                 logData: finalDraft?.logData || {},
                 getExUnit: metricGetExUnit,
                 workoutDate: dateStr,
+                bodyWeightKg,
             }),
         });
         console.log("[restore] supabase exercises", (savedDraft?.sessionEx || []).map((ex) => ex.name));
         console.log("[restore] local draft exercises", (localDraft?.sessionEx || []).map((ex) => ex.name));
         console.log("[restore] final exercises", (finalDraft?.sessionEx || []).map((ex) => ex.name));
-    }, [getExUnit, user?.id]);
+    }, [bodyWeightKg, getExUnit, user?.id]);
 
     useEffect(() => {
         if (screen !== "log" || !historySyncReady || !logDate) return;
@@ -155,12 +159,14 @@ export function useDraftRestore({
             logData: savedDraftForDate.logData,
             getExUnit,
             workoutDate: normalizedLogDate,
+            bodyWeightKg,
         });
         const localMetrics = getDraftMetricsForDate({
             exercises: localDraft.sessionEx || [],
             logData: localDraft.logData || {},
             getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
             workoutDate: normalizedLogDate,
+            bodyWeightKg,
         });
         const explicitLocalEdit = Boolean(explicitWorkoutEditDatesRef.current.has(normalizedLogDate));
         const localDraftIsCleanPersisted = isCleanPersistedDraft(localDraft);

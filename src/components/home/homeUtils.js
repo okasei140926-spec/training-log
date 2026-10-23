@@ -84,8 +84,10 @@ export function isLbsValue(value) {
     return raw.includes("lbs") || raw.includes("lb");
 }
 
-export function weightToKg(value) {
-    if (isBodyWeight(value)) return 0;
+export function weightToKg(value, bodyWeightKg = null) {
+    if (isBodyWeight(value)) {
+        return (bodyWeightKg != null && bodyWeightKg > 0) ? bodyWeightKg : 0;
+    }
     const n = toNumber(value);
     return isLbsValue(value) ? n * 0.45359237 : n;
 }
@@ -169,9 +171,9 @@ export function getRecordSetCount(record) {
     return getRecordSets(record).length;
 }
 
-export function getRecordVolume(record) {
+export function getRecordVolume(record, bodyWeightKg = null) {
     return getRecordSets(record).reduce((sum, s) => {
-        const weight = weightToKg(s?.weight);
+        const weight = weightToKg(s?.weight, s?.body_weight_kg ?? bodyWeightKg);
         const reps = toNumber(s?.reps);
         return sum + weight * reps;
     }, 0);
@@ -369,7 +371,7 @@ export function collectWeeklyAggregationDebug(history, muscleEx, overrides) {
     };
 }
 
-export function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecByDate = {}) {
+export function collectRecentSessions(history, muscleEx, overrides, workoutDurationSecByDate = {}, bodyWeightKg = null) {
     const sessions = {};
 
     Object.entries(history || {}).forEach(([exName, records]) => {
@@ -408,7 +410,7 @@ export function collectRecentSessions(history, muscleEx, overrides, workoutDurat
             const bp = resolveBodyPart(exName, muscleEx, overrides, record);
             if (bp !== "その他") sessions[dateKey].parts.add(bp);
 
-            const volume = getRecordVolume(record);
+            const volume = getRecordVolume(record, bodyWeightKg);
 
             sessions[dateKey].sets += setCount;
             sessions[dateKey].volume += volume;
@@ -599,7 +601,7 @@ export function formatDate(dateStr) {
     return `${d.getMonth() + 1}/${d.getDate()} (${days[d.getDay()]})`;
 }
 
-export function collectPartDetail(history, muscleEx, overrides, targetPart) {
+export function collectPartDetail(history, muscleEx, overrides, targetPart, bodyWeightKg = null) {
     const now = Date.now();
     const recent = [];
     let totalSets7d = 0;
@@ -617,7 +619,7 @@ export function collectPartDetail(history, muscleEx, overrides, targetPart) {
             const d = new Date(record.date + "T00:00:00");
             if (Number.isNaN(d.getTime())) return;
 
-            const volume = getRecordVolume(record);
+            const volume = getRecordVolume(record, bodyWeightKg);
             const hoursAgo = (now - d.getTime()) / 3600000;
 
             if (hoursAgo <= 168) {

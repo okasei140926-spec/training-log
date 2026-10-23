@@ -29,6 +29,7 @@ export function useWorkoutLogBridge({
     startWorkoutTimerIfNeeded,
     clearTrustedRowsForDate,
     applyExerciseDeleteToHistoryRef,
+    bodyWeightKg = null,
 }) {
     const handleWorkoutLogDraftChange = useCallback((nextDraft, mutation = {}) => {
         const normalizedDate = normalizeDraftDateKey(nextDraft?.date || logDate);
@@ -214,6 +215,7 @@ export function useWorkoutLogBridge({
         debounceMs: 350,
         onDraftChange: handleWorkoutLogDraftChange,
         onDraftPersist: handleWorkoutLogDraftPersist,
+        bodyWeightKg,
     });
 
     return {

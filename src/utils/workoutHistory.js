@@ -50,10 +50,18 @@ export const getHistoryMetricsForDate = (historyMap, targetDate) => {
       exerciseNames.push(exerciseName);
       setCount += countValidSets(getRecordSourceSets(record));
       volume += sets.reduce((sum, set) => {
-        const weight = Number(set?.weight);
+        let weightNum = Number(set?.weight);
+        if (!Number.isFinite(weightNum) || weightNum <= 0) {
+          if (set?.weight === "BW") {
+            const bw = set?.body_weight_kg ?? null;
+            weightNum = (bw != null && bw > 0) ? bw : 0;
+          } else {
+            return sum;
+          }
+        }
         const reps = Number(set?.reps);
-        if (!Number.isFinite(weight) || !Number.isFinite(reps)) return sum;
-        return sum + (weight > 0 && reps > 0 ? weight * reps : 0);
+        if (!Number.isFinite(reps) || reps <= 0) return sum;
+        return sum + weightNum * reps;
       }, 0);
     });
   });

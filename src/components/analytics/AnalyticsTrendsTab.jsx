@@ -1,7 +1,10 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import PeriodSegmentedControl from "./PeriodSegmentedControl";
+import { useUserSettings } from "../../context/UserSettingsContext";
 
 export default function AnalyticsTrendsTab({ history, selectedTrendMonth, setSelectedTrendMonth }) {
+  const { bodyWeightKg } = useUserSettings();
+
   // 月別集計
   const monthlyMap = {};
   Object.values(history || {}).forEach((records) => {
@@ -10,8 +13,17 @@ export default function AnalyticsTrendsTab({ history, selectedTrendMonth, setSel
       const month = record.date.slice(0, 7);
       if (!monthlyMap[month]) monthlyMap[month] = { volume: 0, sets: 0, workouts: new Set() };
       monthlyMap[month].volume += (record.sets || []).reduce((s, set) => {
-        const w = Number(set.weight); const r = Number(set.reps);
-        return s + (Number.isFinite(w) && Number.isFinite(r) ? w * r : 0);
+        let w = Number(set.weight);
+        if (!Number.isFinite(w) || w <= 0) {
+          if (set.weight === "BW") {
+            const bw = set.body_weight_kg ?? bodyWeightKg;
+            w = (bw != null && bw > 0) ? bw : 0;
+          } else {
+            w = 0;
+          }
+        }
+        const r = Number(set.reps);
+        return s + (w > 0 && Number.isFinite(r) && r > 0 ? w * r : 0);
       }, 0);
       monthlyMap[month].sets += (record.sets || []).length || 1;
       monthlyMap[month].workouts.add(record.date);

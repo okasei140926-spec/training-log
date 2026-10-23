@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useUserSettings } from "../context/UserSettingsContext";
 import { sanitizeHistoryRecord } from "../utils/helpers";
 import {
     DEFAULT_PARTS,
@@ -46,6 +47,7 @@ export default function HomeScreen({
     onStartNextPlanDay,
 }) {
     const renderStartedAt = getPerfNow();
+    const { bodyWeightKg } = useUserSettings();
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedRecovery, setSelectedRecovery] = useState(null);
     const [selectedWeeklyPart, setSelectedWeeklyPart] = useState(null);
@@ -87,9 +89,9 @@ export default function HomeScreen({
 
     const allSessions = useMemo(() => (
         homeMetricsReady && !recordsLoading
-            ? collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate)
+            ? collectRecentSessions(history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate, bodyWeightKg)
             : []
-    ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate]);
+    ), [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, workoutDurationSecByDate, bodyWeightKg]);
 
     const incomingWeeklySessions = useMemo(() => (
         allSessions.filter((session) => session.date >= week.start && session.date <= week.end)
@@ -450,7 +452,7 @@ export default function HomeScreen({
                     return (
                         <div
                             onClick={() => {
-                                const detail = collectPartDetail(history, muscleEx, exerciseBodyPartOverrides, item.part);
+                                const detail = collectPartDetail(history, muscleEx, exerciseBodyPartOverrides, item.part, bodyWeightKg);
                                 setSelectedRecovery({ ...item, detail });
                             }}
                             style={{ cursor: "pointer", padding: "0 2px" }}

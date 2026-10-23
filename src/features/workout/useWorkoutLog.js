@@ -253,6 +253,7 @@ export function useWorkoutLog({
   debounceMs = 350,
   onDraftChange,
   onDraftPersist,
+  bodyWeightKg = null,
 } = {}) {
   const normalizedDate = normalizeDateKey(date);
   const externalDraft = useMemo(() => {
@@ -266,6 +267,8 @@ export function useWorkoutLog({
   const lastMutationRef = useRef(null);
   const lastNotifiedHashRef = useRef("");
   const lastSavedHashRef = useRef("");
+  const bodyWeightKgRef = useRef(bodyWeightKg);
+  bodyWeightKgRef.current = bodyWeightKg;
 
   useEffect(() => {
     const externalHash = getWorkoutDraftSnapshotHash(externalDraft);
@@ -349,7 +352,7 @@ export function useWorkoutLog({
         exerciseCount: (draftToPersist.exercises || []).length,
         setCount: Object.values(draftToPersist.logData || {}).reduce((s, sets) => s + (Array.isArray(sets) ? sets.length : 0), 0),
       });
-      saveWorkoutDraft(normalizedDate, draftToPersist, { storage, logger });
+      saveWorkoutDraft(normalizedDate, draftToPersist, { storage, logger, bodyWeightKg: bodyWeightKgRef.current });
       onDraftPersist?.(draftToPersist, { source: "useWorkoutLog", hash: draftHash });
       lastSavedHashRef.current = draftHash;
       return undefined;
@@ -364,7 +367,7 @@ export function useWorkoutLog({
         exerciseCount: (draftToPersist.exercises || []).length,
         setCount: Object.values(draftToPersist.logData || {}).reduce((s, sets) => s + (Array.isArray(sets) ? sets.length : 0), 0),
       });
-      saveWorkoutDraft(normalizedDate, draftToPersist, { storage, logger });
+      saveWorkoutDraft(normalizedDate, draftToPersist, { storage, logger, bodyWeightKg: bodyWeightKgRef.current });
       onDraftPersist?.(draftToPersist, {
         source: "useWorkoutLog",
         hash: draftHash,

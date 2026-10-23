@@ -198,6 +198,7 @@ export function saveWorkoutDraft(date, draft, {
   logger = console,
   log = false,
   skipIfSame = true,
+  bodyWeightKg = null,
 } = {}) {
   const normalizedDate = normalizeDateKey(date);
   const store = getStorage(storage);
@@ -348,7 +349,19 @@ export function saveWorkoutDraft(date, draft, {
     }
   }
 
-  store.setItem(key, JSON.stringify(nextDraft));
+  let draftToStore = nextDraft;
+  if (bodyWeightKg != null && bodyWeightKg > 0 && Object.keys(nextDraft.logData || {}).length > 0) {
+    const stampedLogData = {};
+    for (const [name, sets] of Object.entries(nextDraft.logData)) {
+      stampedLogData[name] = (sets || []).map((set) =>
+        set.weight === "BW" && !set.body_weight_kg
+          ? { ...set, body_weight_kg: bodyWeightKg }
+          : set
+      );
+    }
+    draftToStore = { ...nextDraft, logData: stampedLogData };
+  }
+  store.setItem(key, JSON.stringify(draftToStore));
   if (log && logger?.log) {
     logger.log("[workout draft] saved", {
       action: "workout_draft_store_save",

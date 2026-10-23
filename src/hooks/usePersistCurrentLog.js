@@ -49,6 +49,7 @@ export function usePersistCurrentLog({
     getDraftKey,
     pendingSavePayloadsRef,
     setHistory,
+    bodyWeightKg = null,
 }) {
     const persistCurrentLog = useCallback(() => {
         // Use logDateRef.current (always the latest) to avoid stale-closure contamination.
@@ -195,6 +196,7 @@ export function usePersistCurrentLog({
             logData: saveLogData,
             getExUnit: getSaveExUnit,
             workoutDate: normalizedLogDate,
+            bodyWeightKg,
         });
         const existingMetrics = getHistoryMetricsForDate(latestHistoryRef.current || {}, normalizedLogDate);
         logWriteTrace("remoteSnapshot:update", {
@@ -513,7 +515,7 @@ export function usePersistCurrentLog({
     // `logDate` is intentionally excluded — we read it via `logDateRef.current` to prevent
     // stale-closure contamination where exercises from date A are saved under date B's key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [applyWorkoutsDataHistorySnapshot, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, logData, pendingSavePayloadsRef, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
+    }, [applyWorkoutsDataHistorySnapshot, bodyWeightKg, exerciseUnits, exercises, getDraftKey, getExUnit, getTodayKey, hasDraftContent, historyRevisionRef, logData, pendingSavePayloadsRef, queueWorkoutSessionSync, saveDraftForDate, savedWorkoutDurationSecByDate, todayLabels, user?.id, workoutStartedForDate, workoutTimerStateRef]);
 
     return { persistCurrentLog };
 }

@@ -19,7 +19,7 @@ import {
     withDraftDateMeta,
 } from "../utils/appHelpers";
 
-export function useDraftStore({ userIdRef } = {}) {
+export function useDraftStore({ userIdRef, bodyWeightKgRef = null } = {}) {
     const getDraftKey = useCallback((baseKey, dateStr) => `${baseKey}_${dateStr}`, []);
 
     const loadDraftForDate = useCallback((dateStr) => {
@@ -322,6 +322,7 @@ export function useDraftStore({ userIdRef } = {}) {
         saveStoredWorkoutDraft(normalizedDate, nextStoredDraft, {
             logger: console,
             log: shouldLogPerfDebug(),
+            bodyWeightKg: bodyWeightKgRef?.current ?? null,
         });
 
         save(getDraftKey("draft_todayLabels", normalizedDate), todayLabels);

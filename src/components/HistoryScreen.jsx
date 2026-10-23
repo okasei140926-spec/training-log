@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useUserSettings } from "../context/UserSettingsContext";
 import { supabase } from "../utils/supabase";
 import CalendarView from "./CalendarView";
 import HistoryEditModal from "./modals/HistoryEditModal";
@@ -140,6 +141,7 @@ export default function HistoryScreen({
   onCopyExercises,
   onMonthChange = null,
 }) {
+  const { bodyWeightKg } = useUserSettings();
   const [editTarget, setEditTarget] = useState(null);
   const [showManualBestModal, setShowManualBestModal] = useState(false);
   const [showManualBestManager, setShowManualBestManager] = useState(false);
@@ -276,9 +278,16 @@ export default function HistoryScreen({
           if (!bodyPart) return null;
 
           const volume = sanitized.sets.reduce((sum, set) => {
-            const weight = Number(set?.weight);
+            let weight = Number(set?.weight);
+            if (!Number.isFinite(weight) || weight <= 0) {
+              if (set?.weight === "BW") {
+                const bw = set?.body_weight_kg ?? bodyWeightKg;
+                weight = (bw != null && bw > 0) ? bw : 0;
+              } else {
+                return sum;
+              }
+            }
             const reps = Number(set?.reps);
-            if (!Number.isFinite(weight) || weight <= 0) return sum;
             if (!Number.isFinite(reps) || reps <= 0) return sum;
             return sum + weight * reps;
           }, 0);
@@ -305,7 +314,7 @@ export default function HistoryScreen({
       )
       .filter(Boolean)
       .sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order);
-  }, [exerciseBodyPartOverrides, hiddenBodyParts, history, muscleEx]);
+  }, [bodyWeightKg, exerciseBodyPartOverrides, hiddenBodyParts, history, muscleEx]);
 
   const todayEntries = useMemo(
     () =>

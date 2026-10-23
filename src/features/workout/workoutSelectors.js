@@ -42,8 +42,11 @@ const getDisplayWeight = (set) => {
   return Number.isFinite(numeric) ? roundMetric(numeric) : value;
 };
 
-const getWeightKgForCalculation = (set) => {
-  if (!set || set.weight === "BW" || getDisplayUnit(set) === "BW") return 0;
+const getWeightKgForCalculation = (set, bodyWeightKg = null) => {
+  if (!set || set.weight === "BW" || getDisplayUnit(set) === "BW") {
+    const bw = set?.body_weight_kg ?? bodyWeightKg;
+    return (bw != null && bw > 0) ? bw : 0;
+  }
 
   const displayUnit = getDisplayUnit(set);
   const displayWeight = getNumericValue(set.displayWeight ?? set.originalWeight ?? set.inputWeight);
@@ -67,7 +70,7 @@ const calcEstimated1RMFromKg = (weightKg, reps) => {
   return weight * (1 + repCount / 30);
 };
 
-export function historyToWorkoutSessions(trustedHistory = {}) {
+export function historyToWorkoutSessions(trustedHistory = {}, { bodyWeightKg = null } = {}) {
   const byDate = new Map();
 
   Object.entries(trustedHistory || {}).forEach(([exerciseName, records]) => {
@@ -86,7 +89,7 @@ export function historyToWorkoutSessions(trustedHistory = {}) {
       const sets = sanitized.sets || [];
       const bodyPart = normalizeBodyPartLabel(sanitized.bodyPart || record?.bodyPart || record?.body_part, "その他");
       const volume = sets.reduce((sum, set) => {
-        const weight = getWeightKgForCalculation(set);
+        const weight = getWeightKgForCalculation(set, bodyWeightKg);
         const reps = Number(set?.reps);
         if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) return sum;
         return sum + weight * reps;
@@ -117,21 +120,22 @@ export function historyToWorkoutSessions(trustedHistory = {}) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export function selectSessionsInRange(trustedHistory, { startDate = "", endDate = "" } = {}) {
-  return historyToWorkoutSessions(trustedHistory).filter((session) =>
+export function selectSessionsInRange(trustedHistory, { startDate = "", endDate = "", bodyWeightKg = null } = {}) {
+  return historyToWorkoutSessions(trustedHistory, { bodyWeightKg }).filter((session) =>
     isInRange(session.date, startDate, endDate)
   );
 }
 
-export function selectRecentRecords(trustedHistory, { limit = 5 } = {}) {
-  return historyToWorkoutSessions(trustedHistory).slice(0, limit);
+export function selectRecentRecords(trustedHistory, { limit = 5, bodyWeightKg = null } = {}) {
+  return historyToWorkoutSessions(trustedHistory, { bodyWeightKg }).slice(0, limit);
 }
 
 export function selectHomeWeeklySummary(trustedHistory, {
   startDate,
   endDate,
+  bodyWeightKg = null,
 } = {}) {
-  const sessions = selectSessionsInRange(trustedHistory, { startDate, endDate });
+  const sessions = selectSessionsInRange(trustedHistory, { startDate, endDate, bodyWeightKg });
   const entries = sessions.flatMap((session) =>
     session.exercises.map((exercise) => ({
       ...exercise,
@@ -158,8 +162,9 @@ export function selectHomeWeeklySummary(trustedHistory, {
 export function selectCalendarSummaries(trustedHistory, {
   startDate = "",
   endDate = "",
+  bodyWeightKg = null,
 } = {}) {
-  return selectSessionsInRange(trustedHistory, { startDate, endDate }).reduce((acc, session) => {
+  return selectSessionsInRange(trustedHistory, { startDate, endDate, bodyWeightKg }).reduce((acc, session) => {
     acc[session.date] = {
       date: session.date,
       totalSets: session.totalSets,
@@ -174,8 +179,9 @@ export function selectCalendarSummaries(trustedHistory, {
 export function selectAnalyticsSummary(trustedHistory, {
   startDate = "",
   endDate = "",
+  bodyWeightKg = null,
 } = {}) {
-  const sessions = selectSessionsInRange(trustedHistory, { startDate, endDate });
+  const sessions = selectSessionsInRange(trustedHistory, { startDate, endDate, bodyWeightKg });
   const entries = sessions.flatMap((session) => session.exercises);
 
   return {

@@ -84,6 +84,7 @@ export function useHistoryHandlers({
     removeHistoryDate,
     onDeleteDateClearCompletion,
     invalidateSupabaseFetchFreshByPrefix,
+    bodyWeightKg = null,
 }) {
     const handleLogForDate = (dateStr) => {
         const requestedDate = normalizeDraftDateKey(dateStr);
@@ -116,12 +117,14 @@ export function useHistoryHandlers({
             logData: savedDraftForDate.logData,
             getExUnit,
             workoutDate: requestedDate,
+            bodyWeightKg,
         });
         const localMetrics = getDraftMetricsForDate({
             exercises: draftForDate.sessionEx || [],
             logData: draftForDate.logData || {},
             getExUnit: (name) => draftForDate.exerciseUnits?.[name] || getExUnit(name),
             workoutDate: requestedDate,
+            bodyWeightKg,
         });
         const isActiveLocalRecording =
             requestedDate === currentLogDate &&

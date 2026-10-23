@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useUserSettings } from "../context/UserSettingsContext";
 import { supabase } from "../utils/supabase";
 import { getBig3ExerciseKey } from "../utils/exerciseName";
 import {
@@ -168,6 +169,7 @@ export function useFriendsData({
     volumePeriod,
     onOpenRecord,
 }) {
+    const { bodyWeightKg } = useUserSettings();
     const [friends, setFriends] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.friends || []);
     const [friendIds, setFriendIds] = useState(() => FRIENDS_SCREEN_CACHE.friendsData.friendIds || []);
     const [, setTodayActiveMap] = useState({});
@@ -294,9 +296,16 @@ export function useFriendsData({
                     if (!recordDate || recordDate < range.start || recordDate > range.end) return recordTotal;
 
                     const setVolume = getRecordSets(record).reduce((sum, set) => {
-                        const weight = Number(set?.weight);
+                        let weight = Number(set?.weight);
+                        if (!Number.isFinite(weight) || weight <= 0) {
+                            if (set?.weight === "BW") {
+                                const bw = set?.body_weight_kg ?? bodyWeightKg;
+                                weight = (bw != null && bw > 0) ? bw : 0;
+                            } else {
+                                return sum;
+                            }
+                        }
                         const reps = Number(set?.reps);
-                        if (!Number.isFinite(weight) || weight <= 0) return sum;
                         if (!Number.isFinite(reps) || reps <= 0) return sum;
                         if (weight > MAX_RANKING_SET_WEIGHT_KG) return sum;
                         if (reps > MAX_RANKING_SET_REPS) return sum;
@@ -317,7 +326,7 @@ export function useFriendsData({
         if (totalVolume > MAX_RANKING_MONTHLY_VOLUME_KG) return null;
 
         return Math.round(totalVolume);
-    }, [getRecordSets]);
+    }, [bodyWeightKg, getRecordSets]);
 
     const matchBig3Exercise = useCallback((name) => {
         return getBig3ExerciseKey(name);

@@ -54,7 +54,13 @@ export function useLogDateRefresh({
     setHistoryLoadError,
     getCurrentHistoryDeleteMarkers,
     getHistoryDeleteMarkerDebugInfo = null,
+    bodyWeightKg = null,
 }) {
+    // bodyWeightKg is intentionally read via a ref so changes to body weight
+    // do not re-trigger the Supabase date-refresh effect (see ■1 comment below).
+    const _bodyWeightKgRef = useRef(bodyWeightKg);
+    _bodyWeightKgRef.current = bodyWeightKg;
+
     // Tracks the last timestamp at which a phantom draft was cleared per date,
     // so we can suppress duplicate log entries and avoid clearing the same date
     // twice within a short window even if the effect fires multiple times rapidly.
@@ -368,6 +374,7 @@ export function useLogDateRefresh({
                 );
                 const remoteMetrics = getHistoryMetricsForDate(remoteHistory, normalizedDate, {
                     updatedAt: null,
+                    bodyWeightKg: _bodyWeightKgRef.current,
                 });
                 const localDraft = loadDraftForDate(normalizedDate);
                 const localMetrics = getDraftMetricsForDate({
@@ -375,6 +382,7 @@ export function useLogDateRefresh({
                     logData: localDraft.logData || {},
                     getExUnit: (name) => localDraft.exerciseUnits?.[name] || getExUnit(name),
                     workoutDate: normalizedDate,
+                    bodyWeightKg: _bodyWeightKgRef.current,
                 });
                 const remoteDraftForDate = buildSavedWorkoutDraftForDate(normalizedDate, remoteHistory);
                 const remoteDraftValidation = getDraftDateValidation(normalizedDate, remoteDraftForDate, normalizedDate);

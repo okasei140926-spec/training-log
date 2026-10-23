@@ -859,7 +859,7 @@ export const getEmptyWorkoutMetrics = (updatedAt = null) => ({
 
 export const roundWorkoutMetric = (value) => Math.round(Number(value || 0) * 10) / 10;
 
-export const getHistoryMetricsForDate = (historyMap, targetDate, { updatedAt = null } = {}) => {
+export const getHistoryMetricsForDate = (historyMap, targetDate, { updatedAt = null, bodyWeightKg = null } = {}) => {
     const normalizedDate = String(targetDate || "").slice(0, 10);
     if (!normalizedDate) return getEmptyWorkoutMetrics(updatedAt);
 
@@ -876,10 +876,18 @@ export const getHistoryMetricsForDate = (historyMap, targetDate, { updatedAt = n
             exerciseNames.push(exerciseName);
             setCount += sets.length;
             volume += sets.reduce((sum, set) => {
-                const weight = Number(set?.weight);
-                const reps = Number(set?.reps);
-                if (!Number.isFinite(weight) || !Number.isFinite(reps)) return sum;
-                return sum + (weight > 0 && reps > 0 ? weight * reps : 0);
+                let weightNum = Number(set?.weight);
+                if (!Number.isFinite(weightNum) || weightNum <= 0) {
+                    if (set?.weight === "BW") {
+                        const bw = set?.body_weight_kg ?? bodyWeightKg;
+                        weightNum = (bw != null && bw > 0) ? bw : 0;
+                    } else {
+                        return sum;
+                    }
+                }
+                const repsNum = Number(set?.reps);
+                if (!Number.isFinite(repsNum) || repsNum <= 0) return sum;
+                return sum + weightNum * repsNum;
             }, 0);
         });
     });
@@ -930,12 +938,13 @@ export const getWorkoutPayloadMetrics = (payload, { updatedAt = null } = {}) =>
         updatedAt,
     });
 
-export const getDraftMetricsForDate = ({ exercises = [], logData = {}, getExUnit, workoutDate }) => {
+export const getDraftMetricsForDate = ({ exercises = [], logData = {}, getExUnit, workoutDate, bodyWeightKg = null }) => {
     const payload = buildWorkoutSessionPayloadFromDraft({
         exercises: mergeDraftExercisesWithLogData(exercises, logData),
         logData,
         getExUnit,
         workoutDate,
+        bodyWeightKg,
     });
     return getWorkoutPayloadMetrics(payload);
 };

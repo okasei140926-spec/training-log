@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useUserSettings } from "../context/UserSettingsContext";
 import { calc1RM, countValidSets, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
@@ -68,9 +69,21 @@ const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
  */
 const buildNormalizedDoneSets = (sets, exUnit) =>
     sets.map((s) => {
-        const w = Number(getSetStoredWeightKg(s, exUnit));
+        const raw = getSetStoredWeightKg(s, exUnit);
         const r = Number(s.reps);
-        if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) return null;
+        if (!Number.isFinite(r) || r <= 0) return null;
+
+        if (raw === "BW") {
+            return {
+                ...s,
+                weight: "BW",
+                displayWeight: s.displayWeight ?? "BW",
+                displayUnit: "BW",
+            };
+        }
+
+        const w = Number(raw);
+        if (!Number.isFinite(w) || w <= 0) return null;
         return {
             ...s,
             weight: w,
@@ -404,6 +417,7 @@ export default function LogScreen({
     onUnfinishWorkout,
     isAiPlanDay = false,
 }) {
+    const { bodyWeightKg } = useUserSettings();
 
     const COMPLETED_WORKOUT_DATES_KEY = "pump_completed_workout_dates";
 
@@ -597,9 +611,17 @@ export default function LogScreen({
         const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG);
 
         const exVolumeKg = doneSets.reduce((sum, s) => {
-            const w = Number(s.weight);
+            let w = Number(s.weight);
+            if (!Number.isFinite(w) || w <= 0) {
+                if (s.weight === "BW") {
+                    const bw = s.body_weight_kg ?? bodyWeightKg;
+                    w = (bw != null && bw > 0) ? bw : 0;
+                } else {
+                    return sum;
+                }
+            }
             const r = Number(s.reps);
-            if (!Number.isFinite(w) || !Number.isFinite(r) || w <= 0 || r <= 0) return sum;
+            if (!Number.isFinite(r) || r <= 0) return sum;
             return sum + w * r;
         }, 0);
 
@@ -619,6 +641,7 @@ export default function LogScreen({
         getExUnit,
         workoutDate: logDate,
         durationSec: shareDurationSec,
+        bodyWeightKg,
     });
     const sessionSharePayload = rawSessionSharePayload
         ? {

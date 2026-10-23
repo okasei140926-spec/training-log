@@ -55,6 +55,7 @@ export function useWorkoutHistory({
   deletedDates = {},
   calledFrom = "useWorkoutHistory",
   log = false,
+  bodyWeightKg = null,
 } = {}) {
   const renderCountRef = useRef(0);
   const cacheRef = useRef(null);
@@ -167,7 +168,8 @@ export function useWorkoutHistory({
   const selectorCacheRef = useRef(new Map());
   const runSelector = useCallback((selectorName, selector, options = {}) => {
     const startedAt = getPerfNow();
-    const cacheKey = `${selectorName}:${trustedHistoryHash}:${hashOptions(options)}`;
+    const mergedOptions = { bodyWeightKg, ...options };
+    const cacheKey = `${selectorName}:${trustedHistoryHash}:${hashOptions(mergedOptions)}`;
     if (selectorCacheRef.current.has(cacheKey)) {
       const cached = selectorCacheRef.current.get(cacheKey);
       if (log) {
@@ -181,7 +183,7 @@ export function useWorkoutHistory({
       }
       return cached;
     }
-    const result = selector(trustedHistory, options);
+    const result = selector(trustedHistory, mergedOptions);
     selectorCacheRef.current.set(cacheKey, result);
     if (selectorCacheRef.current.size > 20) {
       const firstKey = selectorCacheRef.current.keys().next().value;
@@ -197,7 +199,7 @@ export function useWorkoutHistory({
       });
     }
     return result;
-  }, [log, trustedHistory, trustedHistoryHash]);
+  }, [bodyWeightKg, log, trustedHistory, trustedHistoryHash]);
 
   return {
     trustedHistory,

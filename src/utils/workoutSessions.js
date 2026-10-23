@@ -177,6 +177,7 @@ export function buildWorkoutSessionEntriesFromDraft({
 }
 
 export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, options = {}) {
+  const { bodyWeightKg = null } = options;
   const sortedEntries = [...(entries || [])].sort((a, b) => {
     const orderDiff = (a.order ?? 999) - (b.order ?? 999);
     if (orderDiff !== 0) return orderDiff;
@@ -193,10 +194,18 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
   sortedEntries.forEach((entry) => {
     const key = buildSessionExerciseKey(entry.exerciseName, entry.bodyPart);
     const numericVolume = entry.sets.reduce((sum, set) => {
-      const weightNum = Number(set.weight);
+      let weightNum = Number(set.weight);
+      if (!Number.isFinite(weightNum) || weightNum <= 0) {
+        if (set.weight === "BW") {
+          const bw = set.body_weight_kg ?? bodyWeightKg;
+          weightNum = (bw != null && bw > 0) ? bw : 0;
+        } else {
+          return sum;
+        }
+      }
       const repsNum = Number(set.reps);
-      if (!Number.isFinite(weightNum) || !Number.isFinite(repsNum)) return sum;
-      return sum + (weightNum > 0 && repsNum > 0 ? weightNum * repsNum : 0);
+      if (!Number.isFinite(repsNum) || repsNum <= 0) return sum;
+      return sum + weightNum * repsNum;
     }, 0);
     const maxWeight = entry.sets.reduce((max, set) => {
       const weightNum = Number(set.weight);
@@ -326,6 +335,7 @@ export function buildWorkoutSessionPayloadFromDraft(args) {
       photoVisibility: args.photoVisibility,
       photoId: args.photoId,
       durationSec: args.durationSec,
+      bodyWeightKg: args.bodyWeightKg ?? null,
     }
   );
 }

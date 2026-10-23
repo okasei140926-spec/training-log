@@ -40,6 +40,7 @@ export function useDisplayHistory({
 
     // 永続削除リスト: session fallback が削除済み日付を再注入しないよう buildTrustedHistory に渡す
     deletedDates = {},
+    bodyWeightKg = null,
 }) {
     const displayHistory = useMemo(() => {
         if (!logDate) return history;
@@ -118,6 +119,7 @@ export function useDisplayHistory({
         deletedDates,
         calledFrom: "trustedHistory",
         log: shouldLogPerfDebug(),
+        bodyWeightKg,
     });
 
     const trustedHistory = workoutHistoryView.trustedHistory;

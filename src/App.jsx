@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from "react";
+import { UserSettingsProvider } from "./context/UserSettingsContext";
 import { isSupabaseConfigured, missingSupabaseEnvKeys, supabase, supabaseConfigError } from "./utils/supabase";
 import {
     load,
@@ -183,7 +184,8 @@ export default function GymApp() {
     }, []);
 
     const draftStoreUserIdRef = useRef(null);
-    const { getDraftKey, loadDraftForDate, hasDraftContent, makeDefaultDraftSets, saveDraftForDate, clearDraftForDate } = useDraftStore({ userIdRef: draftStoreUserIdRef });
+    const bodyWeightKgRef = useRef(null);
+    const { getDraftKey, loadDraftForDate, hasDraftContent, makeDefaultDraftSets, saveDraftForDate, clearDraftForDate } = useDraftStore({ userIdRef: draftStoreUserIdRef, bodyWeightKgRef });
 
     const removeHistoryDate = useCallback((historyMap, targetDate) => {
         const normalizedDate = String(targetDate || "").slice(0, 10);
@@ -233,6 +235,7 @@ export default function GymApp() {
         const v = Number(answers?.bodyWeight);
         return Number.isFinite(v) && v > 0 ? v : null;
     });
+    bodyWeightKgRef.current = bodyWeightKg;
     const [bodyWeightUpdatedAt, setBodyWeightUpdatedAt] = useState(() =>
         load("onboardingAnswers", null)?.bodyWeightUpdatedAt || null
     );
@@ -529,6 +532,7 @@ export default function GymApp() {
         getExUnit,
         onWorkoutContentChange: markLogWorkoutContentChanged,
         userId: user?.id || null,
+        bodyWeightKg,
     });
 
     const handleSaveLog = useCallback(() => {
@@ -2107,6 +2111,7 @@ export default function GymApp() {
         startWorkoutTimerIfNeeded,
         clearTrustedRowsForDate,
         applyExerciseDeleteToHistoryRef,
+        bodyWeightKg,
     });
 
 
@@ -2161,6 +2166,7 @@ export default function GymApp() {
         getCurrentWeekRangeForHomeSummary,
         shouldLogPerfDebug,
         deletedDates: persistentDeletedDates,
+        bodyWeightKg,
     });
 
     // Keep latestCanonicalHistoryRef in sync (used in handleFinishWorkout callback)
@@ -2393,6 +2399,7 @@ export default function GymApp() {
         getDraftKey,
         pendingSavePayloadsRef,
         setHistory,
+        bodyWeightKg,
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2512,6 +2519,7 @@ export default function GymApp() {
         setSavedWorkoutDurationSecByDate,
         setSummary,
         setHistory,
+        bodyWeightKg,
     });
 
 
@@ -2997,6 +3005,7 @@ export default function GymApp() {
         applyCurrentLogDraft,
         markWorkoutContentChanged,
         saveDraftForDate,
+        bodyWeightKg,
     });
 
 
@@ -3026,6 +3035,7 @@ export default function GymApp() {
         setHistoryLoadError,
         getCurrentHistoryDeleteMarkers,
         getHistoryDeleteMarkerDebugInfo,
+        bodyWeightKg,
     });
 
     const {
@@ -3112,6 +3122,7 @@ export default function GymApp() {
         removeHistoryDate,
         onDeleteDateClearCompletion: unmarkPlanDayCompleted,
         invalidateSupabaseFetchFreshByPrefix,
+        bodyWeightKg,
     });
 
     applyExerciseDeleteToHistoryRef.current = applyExerciseDeleteToHistory;
@@ -3329,6 +3340,7 @@ export default function GymApp() {
     }
 
     return (
+        <UserSettingsProvider bodyWeightKg={bodyWeightKg}>
         <>
             <div className={appThemeClassName} style={S.root}>
                 <style>{css}</style>
@@ -4138,5 +4150,6 @@ export default function GymApp() {
                 />
             )}
         </>
+        </UserSettingsProvider>
     );
 }
