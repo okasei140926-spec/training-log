@@ -628,31 +628,61 @@ const buildExerciseHistoryStats = (history, message, bodyWeightKg = null) => {
     const latestRecord = sanitizedRecords[0];
     const latestWeightedSets = latestRecord.sets.filter((set) => set.weight !== "BW" && Number(set.weight) > 0);
     const latestMaxWeight = latestWeightedSets.reduce((max, set) => Math.max(max, Number(set.weight || 0)), 0);
+    const isBWOnlyLatest = latestWeightedSets.length === 0 && latestRecord.sets.some((set) => set.weight === "BW");
+    const recentMaxWeightLabel = (() => {
+      if (isBWOnlyLatest) {
+        const bwSet = latestRecord.sets.find((set) => set.weight === "BW");
+        const effectiveKg = resolveEffectiveWeightKg(bwSet, bodyWeightKg);
+        return effectiveKg != null ? `自重(${effectiveKg}kg)` : "自重";
+      }
+      return `${latestMaxWeight}kg`;
+    })();
     const bodyPart = normalizeAiBodyPart(
       latestRecord.bodyPart ||
       sanitizedRecords.find((record) => normalizeAiBodyPart(record.bodyPart) !== "その他")?.bodyPart ||
       "その他"
     );
+    const isBWExercise = bestSet?.weight === "BW";
     const estimated1RM = Number(bestSet?.estimated1RM || 0);
-    const recommendations = estimated1RM > 0
-      ? {
-          hypertrophy: {
-            weight: roundToNearest(estimated1RM * 0.8),
-            reps: "6〜8",
-            sets: 3,
-          },
-          light: {
-            weight: roundToNearest(estimated1RM * 0.72),
-            reps: "8〜10",
+    const recommendations = (() => {
+      if (isBWExercise) {
+        const prReps = Number(bestSet?.reps) || 0;
+        if (prReps <= 0) return null;
+        const volLow = Math.max(1, Math.round(prReps * 0.6));
+        const volHigh = Math.max(1, Math.round(prReps * 0.75));
+        const hiLow = Math.max(1, Math.round(prReps * 0.85));
+        const hiHigh = Math.max(1, prReps);
+        return {
+          volume: {
+            reps: volLow < volHigh ? `${volLow}〜${volHigh}` : `${volHigh}`,
             sets: 3,
           },
           highIntensity: {
-            weight: roundToNearest(estimated1RM * 0.87),
-            reps: "4〜6",
+            reps: hiLow < hiHigh ? `${hiLow}〜${hiHigh}` : `${hiHigh}`,
             sets: 3,
           },
-        }
-      : null;
+        };
+      }
+      return estimated1RM > 0
+        ? {
+            hypertrophy: {
+              weight: roundToNearest(estimated1RM * 0.8),
+              reps: "6〜8",
+              sets: 3,
+            },
+            light: {
+              weight: roundToNearest(estimated1RM * 0.72),
+              reps: "8〜10",
+              sets: 3,
+            },
+            highIntensity: {
+              weight: roundToNearest(estimated1RM * 0.87),
+              reps: "4〜6",
+              sets: 3,
+            },
+          }
+        : null;
+    })();
 
     stats.push({
       exerciseName,
@@ -681,11 +711,13 @@ const buildExerciseHistoryStats = (history, message, bodyWeightKg = null) => {
         ? {
             date: bestSet.date,
             weight: bestSet.weight,
+            effectiveKg: bestSet.effectiveKg ?? null,
             reps: bestSet.reps,
             estimated1RM: Math.round(bestSet.estimated1RM * 10) / 10,
           }
         : null,
       recentMaxWeight: latestMaxWeight,
+      recentMaxWeightLabel,
       estimated1RM: Math.round(estimated1RM * 10) / 10,
       recommendedWorkingSets: recommendations,
       priorityScore: getExercisePriorityScore(exerciseName, bodyPart, message),
@@ -731,6 +763,7 @@ const summarizeBig3Matches = (stats, message) => {
         recentRecords: item.recentRecords,
         pr: item.pr,
         recentMaxWeight: item.recentMaxWeight,
+        recentMaxWeightLabel: item.recentMaxWeightLabel,
         estimated1RM: item.estimated1RM,
         recommendedWorkingSets: item.recommendedWorkingSets,
       };
@@ -757,10 +790,12 @@ const formatBig3MatchedExercise = (item) => {
     : "PRなし";
   const rec = item.recommendedWorkingSets;
   const recommendationText = rec
-    ? `推奨目安 筋肥大${rec.hypertrophy.weight}kg×${rec.hypertrophy.reps}回×${rec.hypertrophy.sets}セット / 軽め${rec.light.weight}kg×${rec.light.reps}回×${rec.light.sets}セット / 高強度${rec.highIntensity.weight}kg×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
+    ? rec.volume != null
+      ? `推奨目安 ボリューム 自重×${rec.volume.reps}回×${rec.volume.sets}セット / 高強度 自重×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
+      : `推奨目安 筋肥大${rec.hypertrophy.weight}kg×${rec.hypertrophy.reps}回×${rec.hypertrophy.sets}セット / 軽め${rec.light.weight}kg×${rec.light.reps}回×${rec.light.sets}セット / 高強度${rec.highIntensity.weight}kg×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
     : "推奨目安なし";
 
-  return `${item.exerciseName} [${item.category}, ${item.matchType}:${item.aliasMatched}] 最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets} | ${prText} | 直近最高重量 ${item.recentMaxWeight || 0}kg | ${recommendationText}`;
+  return `${item.exerciseName} [${item.category}, ${item.matchType}:${item.aliasMatched}] 最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets} | ${prText} | 直近最高重量 ${item.recentMaxWeightLabel ?? `${item.recentMaxWeight || 0}kg`} | ${recommendationText}`;
 };
 
 const buildBig3HistoryContextText = (big3Summary) => {
@@ -810,14 +845,16 @@ const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = 
       : "PRなし";
     const rec = item.recommendedWorkingSets;
     const recommendationText = rec
-      ? `推奨: 筋肥大${rec.hypertrophy.weight}kg×${rec.hypertrophy.reps}回×${rec.hypertrophy.sets}セット / 軽め${rec.light.weight}kg×${rec.light.reps}回×${rec.light.sets}セット / 高強度${rec.highIntensity.weight}kg×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
+      ? rec.volume != null
+        ? `推奨: ボリューム 自重×${rec.volume.reps}回×${rec.volume.sets}セット / 高強度 自重×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
+        : `推奨: 筋肥大${rec.hypertrophy.weight}kg×${rec.hypertrophy.reps}回×${rec.hypertrophy.sets}セット / 軽め${rec.light.weight}kg×${rec.light.reps}回×${rec.light.sets}セット / 高強度${rec.highIntensity.weight}kg×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
       : "推奨重量: 自重または重量履歴なし";
 
     return [
       `${item.exerciseName} (${item.bodyPart})`,
       `最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets}`,
       prText,
-      `直近最高重量 ${item.recentMaxWeight || 0}kg`,
+      `直近最高重量 ${item.recentMaxWeightLabel ?? `${item.recentMaxWeight || 0}kg`}`,
       recommendationText,
       `最近: ${recentRecords}`,
     ].join(" | ");
