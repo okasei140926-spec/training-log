@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { calc1RM, dispW } from "../../utils/helpers";
+import { useUserSettings } from "../../context/UserSettingsContext";
 
 const normalizeRecord = (record) => {
   const hasFallbackSet =
@@ -49,6 +50,7 @@ export default function LogExerciseHistoryModal({
   currentSets = [],
   onClose,
 }) {
+  const { bodyWeightKg } = useUserSettings();
   const normalizedPastRecords = (records || [])
     .map(normalizeRecord)
     .filter((record) => record.date && record.sets.length > 0);
@@ -72,7 +74,7 @@ export default function LogExerciseHistoryModal({
     ? Math.max(...numericSets.map((set) => Number(set.weight)))
     : null;
   const maxEstimated1RM = normalizedRecords.length > 0
-    ? Math.max(...normalizedRecords.map((record) => calc1RM(record.sets)), 0)
+    ? Math.max(...normalizedRecords.map((record) => calc1RM(record.sets, { bodyWeightKg })), 0)
     : 0;
 
   let bestSet = null;
@@ -90,7 +92,7 @@ export default function LogExerciseHistoryModal({
         return;
       }
 
-      const score = calc1RM([set]);
+      const score = calc1RM([set], { bodyWeightKg });
       if (score > bestSetScore) {
         bestSet = set;
         bestSetScore = score;
@@ -117,7 +119,7 @@ export default function LogExerciseHistoryModal({
   const chartData = normalizedRecords
     .map((record) => ({
       date: record.date,
-      rm: calc1RM(record.sets),
+      rm: calc1RM(record.sets, { bodyWeightKg }),
     }))
     .filter((point) => point.rm > 0)
     .sort((a, b) => a.date.localeCompare(b.date));

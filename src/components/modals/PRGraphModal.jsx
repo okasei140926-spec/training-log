@@ -1,13 +1,15 @@
 import { calc1RM, KG_TO_LBS } from "../../utils/helpers";
+import { useUserSettings } from "../../context/UserSettingsContext";
 
 export default function PRGraphModal({ exName, history, unit = "kg", onClose }) {
+  const { bodyWeightKg } = useUserSettings();
   const recs = history[exName] || [];
   if (!recs.length) return null;
 
   const toU = (kg) => unit === "lbs" ? kg * KG_TO_LBS : kg;
   const vals = recs.map(r => ({
     date: r.date,
-    rm: Math.round(toU(calc1RM(Array.isArray(r.sets) && r.sets.length ? r.sets : [{ weight: r.weight, reps: r.reps }]))),
+    rm: Math.round(toU(calc1RM(Array.isArray(r.sets) && r.sets.length ? r.sets : [{ weight: r.weight, reps: r.reps }], { bodyWeightKg }))),
     topSet: r.sets?.reduce((best, s) =>
       Number(s.weight) > Number(best?.weight || 0) ? s : best, r.sets[0]),
   }));

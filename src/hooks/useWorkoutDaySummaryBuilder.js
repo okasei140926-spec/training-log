@@ -78,7 +78,12 @@ export function useWorkoutDaySummaryBuilder({
                     return sum + weight * reps;
                 }, 0);
 
-                const validNumericSets = sets.filter((set) => {
+                const validBWSets = sets.filter((set) => {
+                    if (set?.weight === "BW") {
+                        const bw = set?.body_weight_kg ?? bodyWeightKg;
+                        const reps = Number(set?.reps);
+                        return bw != null && bw > 0 && Number.isFinite(reps) && reps > 0;
+                    }
                     const weight = Number(set?.weight);
                     const reps = Number(set?.reps);
                     return Number.isFinite(weight) && weight > 0 && Number.isFinite(reps) && reps > 0;
@@ -88,14 +93,15 @@ export function useWorkoutDaySummaryBuilder({
                     ? getPreviousPR(exercise, { excludeDate: normalizedDate })
                     : (getPR ? getPR(exercise) : null);
                 const previousSets = previousPr?.sets || [];
-                const previousRm = previousPr?.rm ?? calc1RM(previousSets);
+                const previousRm = previousPr?.rm ?? calc1RM(previousSets, { bodyWeightKg });
                 const isPr = Boolean(
-                    validNumericSets.length
+                    validBWSets.length
                     && hasMeaningfulPRIncrease(
-                        validNumericSets,
+                        validBWSets,
                         previousSets,
                         previousRm,
-                        PR_UPDATE_TOLERANCE_KG
+                        PR_UPDATE_TOLERANCE_KG,
+                        { bodyWeightKg }
                     )
                 );
 
