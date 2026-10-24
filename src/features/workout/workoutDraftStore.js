@@ -50,6 +50,8 @@ export const getWorkoutDraftSnapshotHash = (draft = {}) => stableStringify({
       reps: set?.reps ?? "",
       unit: set?.unit || set?.displayUnit || set?.weightUnit || set?.weight_unit || "",
       done: Boolean(set?.done),
+      body_weight_kg: set?.body_weight_kg ?? null,
+      added_weight_kg: set?.added_weight_kg ?? null,
     })),
   })),
   logData: draft?.logData || {},

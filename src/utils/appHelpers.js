@@ -10,6 +10,7 @@ import {
     getRecordSourceSets,
     getValidWorkoutDatesFromHistory,
     mergeHistoryMaps,
+    resolveEffectiveWeightKg, // eslint-disable-line no-unused-vars -- used in getHistoryMetricsForDate BW branch
     sanitizeHistoryRecord,
     sanitizeWorkoutSets,
 } from "./helpers";
@@ -879,8 +880,9 @@ export const getHistoryMetricsForDate = (historyMap, targetDate, { updatedAt = n
                 let weightNum = Number(set?.weight);
                 if (!Number.isFinite(weightNum) || weightNum <= 0) {
                     if (set?.weight === "BW") {
-                        const bw = set?.body_weight_kg ?? bodyWeightKg;
-                        weightNum = (bw != null && bw > 0) ? bw : 0;
+                        const effective = resolveEffectiveWeightKg(set, bodyWeightKg);
+                        if (effective == null) return sum;
+                        weightNum = effective;
                     } else {
                         return sum;
                     }

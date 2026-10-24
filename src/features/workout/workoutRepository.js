@@ -94,14 +94,15 @@ async function saveExercisesAndSets(supabase, workoutId, userId, date, historyFo
     const setsToInsert = record.sets
       .filter(s => s && (Number(s.reps) > 0 || s.weight === "BW"))
       .map((s, idx) => ({
-        exercise_id:    exRow.id,
-        user_id:        userId,
-        set_number:     idx + 1,
-        weight:         s.weight === "BW" ? null : (Number(s.weight) || null),
-        reps:           Number(s.reps) || 0,
-        unit:           s.unit || s.weightUnit || (s.weight === "BW" ? "BW" : "kg"),
-        display_weight: s.displayWeight != null ? Number(s.displayWeight) : (s.weight === "BW" ? null : Number(s.weight) || null),
-        display_unit:   s.displayUnit || s.unit || "kg",
+        exercise_id:      exRow.id,
+        user_id:          userId,
+        set_number:       idx + 1,
+        weight:           s.weight === "BW" ? null : (Number(s.weight) || null),
+        reps:             Number(s.reps) || 0,
+        unit:             s.unit || s.weightUnit || (s.weight === "BW" ? "BW" : "kg"),
+        display_weight:   s.displayWeight != null ? Number(s.displayWeight) : (s.weight === "BW" ? null : Number(s.weight) || null),
+        display_unit:     s.displayUnit || s.unit || "kg",
+        added_weight_kg:  s.added_weight_kg != null ? Number(s.added_weight_kg) : null,
       }));
 
     if (setsToInsert.length > 0) {
@@ -129,12 +130,13 @@ function buildDataFromNormalizedRows(exercises, sets, date) {
       const exSets = (setsByExerciseId[ex.id] || [])
         .sort((a, b) => a.set_number - b.set_number)
         .map(s => ({
-          weight:        s.weight != null ? s.weight : (s.unit === "BW" ? "BW" : 0),
-          reps:          s.reps,
-          unit:          s.unit || "kg",
-          displayWeight: s.display_weight != null ? s.display_weight : s.weight,
-          displayUnit:   s.display_unit || s.unit || "kg",
-          done:          true,
+          weight:           s.weight != null ? s.weight : (s.unit === "BW" ? "BW" : 0),
+          reps:             s.reps,
+          unit:             s.unit || "kg",
+          displayWeight:    s.display_weight != null ? s.display_weight : s.weight,
+          displayUnit:      s.display_unit || s.unit || "kg",
+          added_weight_kg:  s.added_weight_kg ?? null,
+          done:             true,
         }));
 
       if (exSets.length === 0) return;
@@ -176,7 +178,7 @@ async function fetchNormalizedWorkoutRow(supabase, userId, date) {
   const exerciseIds = exercises.map(e => e.id);
   const { data: sets, error: setErr } = await supabase
     .from("workout_sets")
-    .select("id,exercise_id,set_number,weight,reps,unit,display_weight,display_unit")
+    .select("id,exercise_id,set_number,weight,reps,unit,display_weight,display_unit,added_weight_kg")
     .in("exercise_id", exerciseIds);
 
   if (setErr) return { row: null, error: setErr };
@@ -246,7 +248,7 @@ export async function fetchWorkoutRowsForAI({
   const exerciseIds = exercises.map((e) => e.id);
   const { data: sets } = await supabase
     .from("workout_sets")
-    .select("id,exercise_id,set_number,weight,reps,unit,display_weight,display_unit")
+    .select("id,exercise_id,set_number,weight,reps,unit,display_weight,display_unit,added_weight_kg")
     .in("exercise_id", exerciseIds);
 
   // workout_id → exercises のマップ

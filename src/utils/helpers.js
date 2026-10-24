@@ -623,7 +623,9 @@ export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = 
 export function resolveEffectiveWeightKg(set, bodyWeightKg = null) {
   if (set?.weight === "BW") {
     const bw = set.body_weight_kg ?? bodyWeightKg;
-    return (bw != null && bw > 0) ? bw : null;
+    if (bw == null || bw <= 0) return null;
+    const added = Number(set.added_weight_kg);
+    return bw + (Number.isFinite(added) && added > 0 ? added : 0);
   }
   const weight = Number(set?.weight);
   return (Number.isFinite(weight) && weight > 0) ? weight : null;

@@ -4,6 +4,7 @@ import {
   getRecordSourceSets,
   getValidWorkoutDatesFromHistory,
   mergeHistoryMaps,
+  resolveEffectiveWeightKg,
   sanitizeHistoryRecord,
   sanitizeWorkoutSets,
 } from "./helpers";
@@ -31,7 +32,7 @@ const getEmptyHistoryMetrics = () => ({
   exerciseNames: [],
 });
 
-export const getHistoryMetricsForDate = (historyMap, targetDate) => {
+export const getHistoryMetricsForDate = (historyMap, targetDate, { bodyWeightKg = null } = {}) => {
   const normalizedDate = normalizeDateKey(targetDate);
   if (!normalizedDate) return getEmptyHistoryMetrics();
 
@@ -53,8 +54,9 @@ export const getHistoryMetricsForDate = (historyMap, targetDate) => {
         let weightNum = Number(set?.weight);
         if (!Number.isFinite(weightNum) || weightNum <= 0) {
           if (set?.weight === "BW") {
-            const bw = set?.body_weight_kg ?? null;
-            weightNum = (bw != null && bw > 0) ? bw : 0;
+            const effective = resolveEffectiveWeightKg(set, bodyWeightKg);
+            if (effective == null) return sum;
+            weightNum = effective;
           } else {
             return sum;
           }
