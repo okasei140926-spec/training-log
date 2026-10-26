@@ -118,7 +118,7 @@ export default function SetRow({
     const weightControlStyle = {
         position: "relative",
         display: "grid",
-        gridTemplateColumns: isBodyweight ? "1fr" : "minmax(78px, 1fr) 38px",
+        gridTemplateColumns: isBodyweight ? "20px minmax(44px, 1fr) 44px" : "minmax(78px, 1fr) 38px",
         minWidth: 0,
         borderRadius: 16,
         boxShadow: "var(--shadow-soft)",
@@ -162,20 +162,48 @@ export default function SetRow({
         justifyContent: "center",
         whiteSpace: "nowrap",
     };
-    const bodyweightChipStyle = {
-        width: "100%",
+    // 加重自重 UI: 「自重 +」ラベル（左）・追加重量入力（中）・「自重▼」チップ（右）
+    const bwLabelStyle = {
         minHeight: 48,
-        borderRadius: 16,
-        border: "1px solid rgba(18, 199, 194, 0.30)",
-        background: "linear-gradient(135deg, rgba(15, 94, 99, 0.50), rgba(18, 199, 194, 0.38))",
-        color: "var(--text)",
+        border: "1px solid var(--border2)",
+        borderTopLeftRadius: 16,
+        borderBottomLeftRadius: 16,
+        borderTopRightRadius: 0,
+        borderBottomRightRadius: 0,
+        borderRight: "none",
+        background: "var(--card2)",
+        color: "var(--text2)",
         fontSize: 14,
         fontWeight: 900,
+        padding: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    };
+    const bwAddedInputStyle = {
+        ...inputStyle,
+        borderRadius: 0,
+        borderLeft: "none",
+        borderRight: "none",
+    };
+    const bwChipStyle = {
+        minHeight: 48,
+        border: "1px solid rgba(18, 199, 194, 0.30)",
+        borderTopRightRadius: 16,
+        borderBottomRightRadius: 16,
+        borderTopLeftRadius: 0,
+        borderBottomLeftRadius: 0,
+        background: "linear-gradient(135deg, rgba(15, 94, 99, 0.50), rgba(18, 199, 194, 0.38))",
+        color: "var(--text)",
+        fontSize: 11,
+        fontWeight: 900,
+        padding: "0 4px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         boxShadow: "0 8px 18px rgba(15, 94, 99, 0.10)",
         cursor: "pointer",
+        whiteSpace: "nowrap",
     };
     const repsSuffixStyle = {
         position: "absolute",
@@ -293,10 +321,34 @@ export default function SetRow({
 
             {isBodyweight ? (
                 <div style={weightControlStyle}>
+                    <div style={bwLabelStyle}>+</div>
+                    <input
+                        type="text"
+                        inputMode="decimal"
+                        data-log-set-input="true"
+                        data-log-set-input-id={`${inputId || `${ex?.name || "set"}-${idx}`}:added_weight`}
+                        value={set.added_weight_kg != null ? String(set.added_weight_kg) : ""}
+                        onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === "") {
+                                setField(ex, idx, "added_weight_kg", null);
+                                return;
+                            }
+                            const num = Number(raw);
+                            setField(ex, idx, "added_weight_kg", Number.isFinite(num) && num > 0 ? num : null);
+                        }}
+                        onFocus={() => {
+                            setShowUnitMenu(false);
+                            notifyInputFocus("added_weight");
+                        }}
+                        onBlur={notifyInputBlur}
+                        placeholder="0"
+                        style={bwAddedInputStyle}
+                    />
                     <button
                         type="button"
                         onClick={toggleUnitMenu}
-                        style={bodyweightChipStyle}
+                        style={bwChipStyle}
                     >
                         自重▼
                     </button>

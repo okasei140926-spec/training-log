@@ -617,6 +617,14 @@ export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = 
   return currentTopSet.rm - baselineRM > tolerance;
 }
 
+// ─── added_weight_kg の意味と読み取りルール ──────────────
+// added_weight_kg は weight === "BW" のときのみ有効（懸垂+10kg ベストなど）。
+// ただし数値モードに切り替えても値がセットオブジェクトに残る仕様になっている
+// （ユーザーが BW に戻したときに入力値を復元するため）。
+// そのため weight が数値のセットに added_weight_kg が入っていることがある。
+// この関数以外で added_weight_kg を直接読まないこと。
+// 読む必要がある場合は必ず weight === "BW" であることを確認してから参照すること。
+//
 // ─── 自重セットの実効重量を解決 ──────────────────────────
 // "BW" セット: set.body_weight_kg → bodyWeightKg の順で解決。有効値なければ null
 // 数値セット: Number(set.weight) が正有限値なら返す。無効なら null
