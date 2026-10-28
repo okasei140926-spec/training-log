@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   buildHistoryFromWorkoutRows,
   calc1RM,
+  formatBWSetLabel,
   formatDateKey,
   resolveEffectiveWeightKg,
   sanitizeHistoryRecord,
@@ -157,10 +158,11 @@ const MENU_KEYWORDS = ["メニュー", "組んで", "作って", "何すれば",
 const BEGINNER_KEYWORDS = ["初心者", "初めて", "はじめて", "まずは", "簡単", "やさしく"];
 const ADVANCED_KEYWORDS = ["中級", "上級", "高重量", "高強度"];
 
-const calcSetVolume = (set) => {
+const calcSetVolume = (set, bodyWeightKg = null) => {
   if (!set) return 0;
-  if (set.weight === "BW") return 0;
-  return Number(set.weight || 0) * Number(set.reps || 0);
+  const effectiveKg = resolveEffectiveWeightKg(set, bodyWeightKg);
+  if (effectiveKg == null) return 0;
+  return effectiveKg * Number(set.reps || 0);
 };
 
 const roundToNearest = (value, step = 2.5) => {
@@ -178,11 +180,11 @@ const normalizeAiBodyPart = (bodyPart) => {
 
 const formatSetLabel = (set) => {
   if (!set) return "";
-  const weightLabel = set.weight === "BW" ? "自重" : `${Number(set.weight)}kg`;
+  const weightLabel = formatBWSetLabel(set) ?? `${Number(set.weight)}kg`;
   return `${weightLabel}×${Number(set.reps)}回`;
 };
 
-const flattenHistoryByDate = (history) => {
+const flattenHistoryByDate = (history, bodyWeightKg = null) => {
   const grouped = new Map();
 
   Object.entries(history || {}).forEach(([exerciseName, records]) => {
@@ -199,7 +201,7 @@ const flattenHistoryByDate = (history) => {
         bodyPart: normalizeAiBodyPart(sanitized.bodyPart),
         sets: sanitized.sets,
         setCount: sanitized.sets.length,
-        totalVolume: sanitized.sets.reduce((sum, set) => sum + calcSetVolume(set), 0),
+        totalVolume: sanitized.sets.reduce((sum, set) => sum + calcSetVolume(set, bodyWeightKg), 0),
         totalReps: sanitized.sets.reduce((sum, set) => sum + Number(set.reps || 0), 0),
         maxWeight: sanitized.sets.reduce((max, set) => {
           if (set.weight === "BW") return max;
@@ -618,6 +620,7 @@ const buildExerciseHistoryStats = (history, message, bodyWeightKg = null) => {
         return {
           date: set.date,
           weight: set.weight === "BW" ? "BW" : Number(set.weight),
+          added_weight_kg: set.added_weight_kg,
           effectiveKg: resolveEffectiveWeightKg(set, bodyWeightKg),
           reps: Number(set.reps),
           estimated1RM,
@@ -633,7 +636,8 @@ const buildExerciseHistoryStats = (history, message, bodyWeightKg = null) => {
       if (isBWOnlyLatest) {
         const bwSet = latestRecord.sets.find((set) => set.weight === "BW");
         const effectiveKg = resolveEffectiveWeightKg(bwSet, bodyWeightKg);
-        return effectiveKg != null ? `自重(${effectiveKg}kg)` : "自重";
+        const bwLabel = formatBWSetLabel(bwSet) ?? "自重";
+        return effectiveKg != null ? `${bwLabel}(${effectiveKg}kg)` : bwLabel;
       }
       return `${latestMaxWeight}kg`;
     })();
@@ -711,6 +715,7 @@ const buildExerciseHistoryStats = (history, message, bodyWeightKg = null) => {
         ? {
             date: bestSet.date,
             weight: bestSet.weight,
+            added_weight_kg: bestSet.added_weight_kg,
             effectiveKg: bestSet.effectiveKg ?? null,
             reps: bestSet.reps,
             estimated1RM: Math.round(bestSet.estimated1RM * 10) / 10,
@@ -783,7 +788,11 @@ const summarizeBig3Matches = (stats, message) => {
 const formatBig3MatchedExercise = (item) => {
   const latestSets = (item.latestSets || []).map((set) => set.label).join(" / ");
   const prWeightLabel = item.pr?.weight === "BW"
-    ? (item.pr.effectiveKg != null ? `自重(${item.pr.effectiveKg}kg)` : "自重")
+    ? (() => {
+        const added = Number(item.pr?.added_weight_kg);
+        const bwLabel = added > 0 ? `自重+${added}kg` : "自重";
+        return item.pr.effectiveKg != null ? `${bwLabel}(${item.pr.effectiveKg}kg)` : bwLabel;
+      })()
     : `${item.pr?.weight}kg`;
   const prText = item.pr
     ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
@@ -838,7 +847,11 @@ const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = 
       .map((record) => `${record.date} ${record.setCount}セット ${record.sets.map((set) => set.label).join(" / ")}`)
       .join(" ; ");
     const prWeightLabel = item.pr?.weight === "BW"
-      ? (item.pr.effectiveKg != null ? `自重(${item.pr.effectiveKg}kg)` : "自重")
+      ? (() => {
+          const added = Number(item.pr?.added_weight_kg);
+          const bwLabel = added > 0 ? `自重+${added}kg` : "自重";
+          return item.pr.effectiveKg != null ? `${bwLabel}(${item.pr.effectiveKg}kg)` : bwLabel;
+        })()
       : `${item.pr?.weight}kg`;
     const prText = item.pr
       ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
@@ -1658,7 +1671,7 @@ export function useAI({ loadConversationsOnMount = false, bodyWeightKg = null } 
 
       const aiHistory = latestWorkoutFetch.history;
       const contextSource = latestWorkoutFetch.source;
-      const requestGroupedHistory = flattenHistoryByDate(aiHistory);
+      const requestGroupedHistory = flattenHistoryByDate(aiHistory, bodyWeightKg);
       const targetWorkoutSummary = targetDateKey ? summarizeWorkoutDay(requestGroupedHistory, targetDateKey) : null;
       const latestDateKey = Array.from(requestGroupedHistory.keys()).sort().slice(-1)[0] || "";
       const latestWorkoutSummary = latestDateKey ? summarizeWorkoutDay(requestGroupedHistory, latestDateKey) : null;

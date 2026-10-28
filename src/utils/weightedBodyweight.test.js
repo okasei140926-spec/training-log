@@ -3,7 +3,7 @@
  * Run with: npm test -- --testPathPattern=weightedBodyweight
  */
 
-import { resolveEffectiveWeightKg } from "./helpers";
+import { formatBWSetLabel, resolveEffectiveWeightKg } from "./helpers";
 import {
   getHistoryMetricsForDate as getHistoryMetricsFromWorkoutHistory,
 } from "./workoutHistory";
@@ -52,6 +52,54 @@ describe("resolveEffectiveWeightKg", () => {
   test("BW + added_weight_kg が 0 → body_weight のみ（0 は未設定と同じ扱い）", () => {
     const set = { weight: "BW", body_weight_kg: 65, added_weight_kg: 0, reps: 5 };
     expect(resolveEffectiveWeightKg(set, null)).toBe(65);
+  });
+});
+
+// ── formatBWSetLabel ──────────────────────────────────────────────────────────
+
+describe("formatBWSetLabel", () => {
+  test("BW のみ → '自重'", () => {
+    expect(formatBWSetLabel({ weight: "BW" })).toBe("自重");
+  });
+
+  test("BW + added_weight_kg=10 → '自重+10kg'", () => {
+    expect(formatBWSetLabel({ weight: "BW", added_weight_kg: 10 })).toBe("自重+10kg");
+  });
+
+  test("BW + added_weight_kg=0 → '自重'", () => {
+    expect(formatBWSetLabel({ weight: "BW", added_weight_kg: 0 })).toBe("自重");
+  });
+
+  test("BW + added_weight_kg=null → '自重'", () => {
+    expect(formatBWSetLabel({ weight: "BW", added_weight_kg: null })).toBe("自重");
+  });
+
+  test("BW + added_weight_kg 負値 → '自重'", () => {
+    expect(formatBWSetLabel({ weight: "BW", added_weight_kg: -5 })).toBe("自重");
+  });
+
+  test("BW + added_weight_kg=5.5 → '自重+5.5kg'", () => {
+    expect(formatBWSetLabel({ weight: "BW", added_weight_kg: 5.5 })).toBe("自重+5.5kg");
+  });
+
+  test("数値セット → null（呼び出し元が処理）", () => {
+    expect(formatBWSetLabel({ weight: 60, reps: 5 })).toBeNull();
+  });
+
+  test("weight=0 → null", () => {
+    expect(formatBWSetLabel({ weight: 0 })).toBeNull();
+  });
+
+  test("set=null → null", () => {
+    expect(formatBWSetLabel(null)).toBeNull();
+  });
+
+  test("set=undefined → null", () => {
+    expect(formatBWSetLabel(undefined)).toBeNull();
+  });
+
+  test("weight フィールドなし → null", () => {
+    expect(formatBWSetLabel({ reps: 10 })).toBeNull();
   });
 });
 

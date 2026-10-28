@@ -22,6 +22,7 @@ import {
   getValidWorkoutDatesFromHistory,
   hasValidWorkoutOnDate,
   hasMeaningfulPRIncrease,
+  resolveEffectiveWeightKg,
   sanitizeHistoryRecord,
   sanitizeWorkoutSets,
 } from "../utils/helpers";
@@ -278,15 +279,8 @@ export default function HistoryScreen({
           if (!bodyPart) return null;
 
           const volume = sanitized.sets.reduce((sum, set) => {
-            let weight = Number(set?.weight);
-            if (!Number.isFinite(weight) || weight <= 0) {
-              if (set?.weight === "BW") {
-                const bw = set?.body_weight_kg ?? bodyWeightKg;
-                weight = (bw != null && bw > 0) ? bw : 0;
-              } else {
-                return sum;
-              }
-            }
+            const weight = resolveEffectiveWeightKg(set, bodyWeightKg);
+            if (weight == null) return sum;
             const reps = Number(set?.reps);
             if (!Number.isFinite(reps) || reps <= 0) return sum;
             return sum + weight * reps;

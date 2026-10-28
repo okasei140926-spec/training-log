@@ -625,6 +625,16 @@ export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = 
 // この関数以外で added_weight_kg を直接読まないこと。
 // 読む必要がある場合は必ず weight === "BW" であることを確認してから参照すること。
 //
+// ─── BW セットの表示ラベル ────────────────────────────────
+// set.weight === "BW" かつ added_weight_kg > 0 → "自重+Xkg"
+// set.weight === "BW" かつ added_weight_kg なし/0/負  → "自重"
+// set.weight !== "BW" → null（呼び出し元が数値フォーマットを担当）
+export function formatBWSetLabel(set) {
+  if (set?.weight !== "BW") return null;
+  const added = Number(set?.added_weight_kg);
+  return added > 0 ? `自重+${added}kg` : "自重";
+}
+
 // ─── 自重セットの実効重量を解決 ──────────────────────────
 // "BW" セット: set.body_weight_kg → bodyWeightKg の順で解決。有効値なければ null
 // 数値セット: Number(set.weight) が正有限値なら返す。無効なら null

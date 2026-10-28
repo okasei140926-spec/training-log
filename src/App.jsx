@@ -5,6 +5,7 @@ import {
     load,
     save,
     KG_TO_LBS,
+    formatBWSetLabel,
     formatDateKey,
     getValidWorkoutDatesFromHistory,
     hasValidWorkoutOnDate,
@@ -85,6 +86,7 @@ import { useDraftStore } from "./hooks/useDraftStore";
 import { useLogDraftApplicator } from "./hooks/useLogDraftApplicator";
 import { useWorkoutsDataHistorySync } from "./hooks/useWorkoutsDataHistorySync";
 import { useAuthSetup } from "./hooks/useAuthSetup";
+import { useProfileSync } from "./hooks/useProfileSync";
 import { useCustomExercises } from "./hooks/useCustomExercises";
 import {
     applyHistoryDeleteMarkers,
@@ -284,6 +286,14 @@ export default function GymApp() {
         setAuthReady,
         setShowAuth,
         setScreen,
+    });
+
+    useProfileSync({
+        user,
+        setOnboardingAnswers,
+        setBodyWeightKg,
+        setBodyWeightUpdatedAt,
+        setMuscleEx,
     });
 
     const {
@@ -3778,7 +3788,7 @@ export default function GymApp() {
                                             const w = s?.weight;
                                             return w === "BW" || (Number.isFinite(Number(w)) && Number(w) > 0);
                                         })
-                                        .map((s) => s?.weight === "BW" ? `自重×${s.reps}回` : `${s.weight}kg×${s.reps}回`)
+                                        .map((s) => `${formatBWSetLabel(s) ?? `${s.weight}kg`}×${s.reps}回`)
                                         .join(", ");
                                     return `${r?.date || ""}: ${setsText || "記録なし"}`;
                                 }).join("\n");

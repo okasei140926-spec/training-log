@@ -1,4 +1,4 @@
-import { sanitizeHistoryRecord } from "../../utils/helpers";
+import { formatBWSetLabel, sanitizeHistoryRecord } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import { normalizeBodyPartLabel } from "../../utils/bodyPartClassification";
 import { getSetCountByBodyPart } from "../../utils/setCountByBodyPart";
@@ -36,7 +36,7 @@ const getDisplayUnit = (set) =>
   normalizeDisplayUnit(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || "kg");
 
 const getDisplayWeight = (set) => {
-  if (set?.weight === "BW" || getDisplayUnit(set) === "BW") return "自重";
+  if (set?.weight === "BW" || getDisplayUnit(set) === "BW") return formatBWSetLabel(set) ?? "自重";
   const value = set?.displayWeight ?? set?.originalWeight ?? set?.inputWeight ?? set?.weight;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? roundMetric(numeric) : value;

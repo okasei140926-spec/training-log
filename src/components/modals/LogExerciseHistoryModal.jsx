@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { calc1RM, dispW } from "../../utils/helpers";
+import { calc1RM, dispW, formatBWSetLabel } from "../../utils/helpers";
 import { useUserSettings } from "../../context/UserSettingsContext";
 
 const normalizeRecord = (record) => {
@@ -25,6 +25,7 @@ const normalizeRecord = (record) => {
     .map((set) => ({
       weight: set.weight === "BW" ? "BW" : Number(set.weight),
       reps: Number(set.reps),
+      added_weight_kg: set.added_weight_kg,
     }));
 
   return {
@@ -33,8 +34,8 @@ const normalizeRecord = (record) => {
   };
 };
 
-const formatWeight = (weight, unit) =>
-  weight === "BW" ? "自重" : `${dispW(weight, unit)}${unit}`;
+const formatWeight = (set, unit) =>
+  formatBWSetLabel(set) ?? `${dispW(set?.weight, unit)}${unit}`;
 const formatShortDate = (date) => {
   if (!date || typeof date !== "string") return "";
   const parts = date.split("-");
@@ -117,12 +118,12 @@ export default function LogExerciseHistoryModal({
   }
 
   const maxWeightLabel = maxWeight !== null
-    ? formatWeight(maxWeight, weightDisplayUnit)
+    ? formatWeight({ weight: maxWeight }, weightDisplayUnit)
     : hasBodyweightSet
       ? "自重"
       : "—";
   const bestSetLabel = bestSet
-    ? `${formatWeight(bestSet.weight, weightDisplayUnit)} × ${bestSet.reps}rep`
+    ? `${formatWeight(bestSet, weightDisplayUnit)} × ${bestSet.reps}rep`
     : "—";
   const maxEstimated1RMLabel = maxEstimated1RM > 0
     ? `${dispW(Math.round(maxEstimated1RM * 10) / 10, weightDisplayUnit)}${weightDisplayUnit}`
@@ -470,7 +471,7 @@ export default function LogExerciseHistoryModal({
                         }}
                       >
                         <span>{idx + 1}セット目</span>
-                        <span>{formatWeight(set.weight, weightDisplayUnit)} × {set.reps}rep</span>
+                        <span>{formatWeight(set, weightDisplayUnit)} × {set.reps}rep</span>
                       </div>
                     ))}
                   </div>

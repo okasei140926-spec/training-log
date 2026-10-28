@@ -1,6 +1,6 @@
 // src/components/home/homeUtils.js
 import { normalizeBodyPartLabel, resolveRecordedBodyPartLabel, resolveVisibleBodyPartLabel } from "../../utils/bodyPartClassification";
-import { formatDateKey, sanitizeHistoryRecord } from "../../utils/helpers";
+import { formatDateKey, resolveEffectiveWeightKg, sanitizeHistoryRecord } from "../../utils/helpers";
 
 export const DEFAULT_PARTS = ["胸", "背中", "肩", "二頭", "三頭", "四頭", "ハム", "腹筋"];
 export const WEEKLY_DEBUG_DATE = "2026-06-03";
@@ -173,8 +173,10 @@ export function getRecordSetCount(record) {
 
 export function getRecordVolume(record, bodyWeightKg = null) {
     return getRecordSets(record).reduce((sum, s) => {
-        const weight = weightToKg(s?.weight, s?.body_weight_kg ?? bodyWeightKg);
+        const weight = resolveEffectiveWeightKg(s, bodyWeightKg);
+        if (weight == null) return sum;
         const reps = toNumber(s?.reps);
+        if (reps <= 0) return sum;
         return sum + weight * reps;
     }, 0);
 }

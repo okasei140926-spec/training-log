@@ -1,4 +1,4 @@
-import { dispW } from "./helpers";
+import { dispW, formatBWSetLabel } from "./helpers";
 import { normalizeExerciseName } from "./exerciseName";
 import { normalizeBodyPartLabel } from "./bodyPartClassification";
 import {
@@ -26,8 +26,10 @@ export const formatWorkoutDaySummaryWeight = (weight, unit = "kg") => {
   return `${displayed}${unit}`;
 };
 
-export const formatWorkoutDaySummarySet = (set, unit = "kg") =>
-  `${formatWorkoutDaySummaryWeight(set?.weight, unit)} × ${Number(set?.reps || 0)}rep`;
+export const formatWorkoutDaySummarySet = (set, unit = "kg") => {
+  const weightLabel = formatBWSetLabel(set) ?? formatWorkoutDaySummaryWeight(set?.weight, unit);
+  return `${weightLabel} × ${Number(set?.reps || 0)}rep`;
+};
 
 export const buildWorkoutDaySummaryPrKey = (bodyPart, exerciseName) =>
   `${normalizeBodyPartLabel(bodyPart, "")}::${normalizeExerciseName(exerciseName)}`;

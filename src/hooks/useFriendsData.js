@@ -14,6 +14,8 @@ import {
     sanitizeWorkoutSets,
     sanitizeHistoryRecord,
     hasMeaningfulPRIncrease,
+    formatBWSetLabel,
+    resolveEffectiveWeightKg,
 } from "../utils/helpers";
 import {
     buildWorkoutSessionEntriesFromHistory,
@@ -296,15 +298,8 @@ export function useFriendsData({
                     if (!recordDate || recordDate < range.start || recordDate > range.end) return recordTotal;
 
                     const setVolume = getRecordSets(record).reduce((sum, set) => {
-                        let weight = Number(set?.weight);
-                        if (!Number.isFinite(weight) || weight <= 0) {
-                            if (set?.weight === "BW") {
-                                const bw = set?.body_weight_kg ?? bodyWeightKg;
-                                weight = (bw != null && bw > 0) ? bw : 0;
-                            } else {
-                                return sum;
-                            }
-                        }
+                        const weight = resolveEffectiveWeightKg(set, bodyWeightKg);
+                        if (weight == null) return sum;
                         const reps = Number(set?.reps);
                         if (!Number.isFinite(reps) || reps <= 0) return sum;
                         if (weight > MAX_RANKING_SET_WEIGHT_KG) return sum;
@@ -737,8 +732,9 @@ export function useFriendsData({
         if (!set) return "";
         const reps = Number(set.reps || 0);
         const repLabel = `${reps}`;
-        if (String(set.weight || "").toUpperCase() === "BW") {
-            return `自重 × ${repLabel}`;
+        const bwLabel = formatBWSetLabel(set);
+        if (bwLabel != null) {
+            return `${bwLabel} × ${repLabel}`;
         }
         const weight = Math.round(Number(set.weight || 0) * 10) / 10;
         return `${weight}kg × ${repLabel}`;

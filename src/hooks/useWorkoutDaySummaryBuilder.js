@@ -5,6 +5,7 @@ import {
     countValidSets,
     hasMeaningfulPRIncrease,
     PR_UPDATE_TOLERANCE_KG,
+    resolveEffectiveWeightKg,
     sanitizeWorkoutSets,
 } from "../utils/helpers";
 import { buildWorkoutSessionPayloadFromDraft } from "../utils/workoutSessions";
@@ -64,29 +65,18 @@ export function useWorkoutDaySummaryBuilder({
 
                 const bodyPart = getExerciseRecordBodyPart(exercise, todayLabels[0] || null);
                 const volume = sets.reduce((sum, set) => {
-                    let weight = Number(set?.weight);
-                    if (!Number.isFinite(weight) || weight <= 0) {
-                        if (set?.weight === "BW") {
-                            const bw = set?.body_weight_kg ?? bodyWeightKg;
-                            weight = (bw != null && bw > 0) ? bw : 0;
-                        } else {
-                            return sum;
-                        }
-                    }
+                    const weight = resolveEffectiveWeightKg(set, bodyWeightKg);
+                    if (weight == null) return sum;
                     const reps = Number(set?.reps);
                     if (!Number.isFinite(reps) || reps <= 0) return sum;
                     return sum + weight * reps;
                 }, 0);
 
                 const validBWSets = sets.filter((set) => {
-                    if (set?.weight === "BW") {
-                        const bw = set?.body_weight_kg ?? bodyWeightKg;
-                        const reps = Number(set?.reps);
-                        return bw != null && bw > 0 && Number.isFinite(reps) && reps > 0;
-                    }
-                    const weight = Number(set?.weight);
+                    const weight = resolveEffectiveWeightKg(set, bodyWeightKg);
+                    if (weight == null) return false;
                     const reps = Number(set?.reps);
-                    return Number.isFinite(weight) && weight > 0 && Number.isFinite(reps) && reps > 0;
+                    return Number.isFinite(reps) && reps > 0;
                 });
 
                 const previousPr = getPreviousPR

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUserSettings } from "../context/UserSettingsContext";
-import { calc1RM, countValidSets, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, storeW } from "../utils/helpers";
+import { calc1RM, countValidSets, formatBWSetLabel, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, resolveEffectiveWeightKg, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -612,15 +612,8 @@ export default function LogScreen({
         const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG, { bodyWeightKg });
 
         const exVolumeKg = doneSets.reduce((sum, s) => {
-            let w = Number(s.weight);
-            if (!Number.isFinite(w) || w <= 0) {
-                if (s.weight === "BW") {
-                    const bw = s.body_weight_kg ?? bodyWeightKg;
-                    w = (bw != null && bw > 0) ? bw : 0;
-                } else {
-                    return sum;
-                }
-            }
+            const w = resolveEffectiveWeightKg(s, bodyWeightKg);
+            if (w == null) return sum;
             const r = Number(s.reps);
             if (!Number.isFinite(r) || r <= 0) return sum;
             return sum + w * r;
@@ -1192,9 +1185,7 @@ export default function LogScreen({
                         // PR の実際のトップセット（1RM換算が最大のセット）
                         const prTopSet = getBestRmSet(pr?.sets, { allowBodyweight: true, bodyWeightKg });
                         const prTopSetLabel = prTopSet
-                            ? (normalizeWeightUnit(displayUnit) === "BW"
-                                ? "自重"
-                                : convertWeightToTargetUnit(prTopSet, displayUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg"))
+                            ? (formatBWSetLabel(prTopSet) ?? convertWeightToTargetUnit(prTopSet, displayUnit, pr?.displayUnit || pr?.unit || pr?.weightUnit || pr?.weight_unit || "kg"))
                             : "";
                         const compactPrLabel = prTopSet
                             ? `PR ${prTopSetLabel} × ${prTopSet.reps}`

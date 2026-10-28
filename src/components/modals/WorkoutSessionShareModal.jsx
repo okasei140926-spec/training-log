@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
+import { formatBWSetLabel } from "../../utils/helpers";
 const CARD_PRESETS = {
     square: {
         key: "square",
@@ -121,7 +122,7 @@ const formatShareSet = (set, index) => {
     const reps = formatWeightValue(set?.reps);
     const rawWeight = set?.displayWeight ?? set?.weight;
     if (String(rawWeight || "").toUpperCase() === "BW") {
-        return `${index + 1}. 自重 × ${reps}`;
+        return `${index + 1}. ${formatBWSetLabel(set) ?? "自重"} × ${reps}`;
     }
 
     const unit = normalizeUnitLabel(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit);

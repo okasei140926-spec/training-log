@@ -1,4 +1,4 @@
-import { calc1RM, countValidSets, getRecordSourceSets, resolveEffectiveWeightKg, sanitizeWorkoutSet, sanitizeWorkoutSets } from "../../utils/helpers";
+import { calc1RM, countValidSets, formatBWSetLabel, getRecordSourceSets, resolveEffectiveWeightKg, sanitizeWorkoutSet, sanitizeWorkoutSets } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import { buildBodyPartExerciseKey, normalizeBodyPartLabel, resolveRecordBodyPartLabel } from "../../utils/bodyPartClassification";
 
@@ -73,8 +73,10 @@ export const getSetDisplayUnit = (set, fallbackUnit = "kg") =>
   normalizePrUnit(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit || fallbackUnit);
 
 export const getSetDisplayWeight = (set) => {
+  const bwLabel = formatBWSetLabel(set);
+  if (bwLabel != null) return bwLabel;
   const unit = getSetDisplayUnit(set);
-  if (unit === "BW" || String(set?.weight || "").toUpperCase() === "BW") return "自重";
+  if (unit === "BW") return "自重";
   return formatPrWeightValue(set?.displayWeight ?? set?.weight);
 };
 
@@ -113,7 +115,7 @@ export const getAnalyticsDisplayUnit = (rawSet = {}, record = {}, fallbackUnit =
 
 export const getAnalyticsDisplayWeight = (rawSet = {}, sanitizedSet = {}, displayUnit = "kg") => {
   if (displayUnit === "BW" || sanitizedSet?.weight === "BW" || String(rawSet?.weight || "").toUpperCase() === "BW") {
-    return "自重";
+    return formatBWSetLabel(rawSet) ?? "自重";
   }
 
   const explicitDisplayWeight = getExplicitDisplayWeight(rawSet);
@@ -178,7 +180,9 @@ export const formatPrSetLabel = (item) => {
   if (!item) return "";
   const unit = normalizePrUnit(item.displayUnit || item.unit || "kg");
   const reps = formatPrWeightValue(item.reps);
-  if (unit === "BW" || item.displayWeight === "自重" || item.weight === "BW") {
+  const bwLabel = formatBWSetLabel(item);
+  if (bwLabel != null) return `${bwLabel} × ${reps}rep`;
+  if (item.displayWeight === "自重") {
     return `自重 × ${reps}rep`;
   }
   const weight = formatPrWeightValue(item.displayWeight ?? item.weight);
@@ -275,6 +279,7 @@ export const getBestSet = (validSets = [], fallbackUnit = "kg", setEntries = [],
       const effectiveKg = resolveEffectiveWeightKg(set, bodyWeightKg);
       return {
         weight: isBW ? "BW" : Number(set.weight),
+        added_weight_kg: set.added_weight_kg,
         normalizedKgValue: effectiveKg,
         normalizedKg: effectiveKg,
         originalWeight: set.originalWeight ?? set.displayWeight ?? set.weight,
@@ -290,7 +295,8 @@ export const getBestSet = (validSets = [], fallbackUnit = "kg", setEntries = [],
 
 export const formatSetsText = (sets = [], fallbackUnit = "kg", setEntries = [], bodyWeightKg = null) =>
   sets.map((set, index) => formatPrSetLabel({
-    weight: resolveEffectiveWeightKg(set, bodyWeightKg) ?? set.weight,
+    weight: set.weight,
+    added_weight_kg: set.added_weight_kg,
     displayWeight: setEntries[index]?.displayWeight ?? getSetDisplayWeight(set),
     displayUnit: setEntries[index]?.displayUnit || getSetDisplayUnit(set, fallbackUnit),
     reps: Number(set.reps),
@@ -406,6 +412,7 @@ export const buildHistoryBestMap = (history = {}, ctx) => {
         displayName: normalizedName,
         bodyPart,
         weight: bestSet.weight,
+        added_weight_kg: bestSet.added_weight_kg,
         displayWeight: bestSet.displayWeight,
         displayUnit: bestSet.displayUnit,
         reps: bestSet.reps,
@@ -511,6 +518,7 @@ export const buildHistoryRecordMap = (history = {}, ctx) => {
         bodyPart,
         date: record?.date || null,
         weight: bestSet.weight,
+        added_weight_kg: bestSet.added_weight_kg,
         displayWeight: bestSet.displayWeight,
         displayUnit: bestSet.displayUnit,
         reps: bestSet.reps,

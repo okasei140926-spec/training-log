@@ -1,3 +1,5 @@
+import { formatBWSetLabel } from "../../utils/helpers";
+
 const fmtKg = (w) => {
     if (w === "BW" || w === null || w === undefined) return null;
     const n = Number(w);
@@ -64,9 +66,7 @@ export default function HistoryExerciseItem({
                         >
                             <span>
                                 {i + 1}{" "}
-                                {s.weight === "BW"
-                                    ? `自重 × ${s.reps}reps`
-                                    : `${fmtKg(s.weight)}kg × ${s.reps}reps`}
+                                {(formatBWSetLabel(s) ?? `${fmtKg(s.weight)}kg`) + ` × ${s.reps}reps`}
                             </span>
 
                             <button

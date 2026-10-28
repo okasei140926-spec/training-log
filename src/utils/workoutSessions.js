@@ -1,6 +1,7 @@
 import {
   calc1RM,
   getRecordSourceSets,
+  resolveEffectiveWeightKg,
   sanitizeWorkoutSets,
   storeW,
 } from "./helpers";
@@ -194,15 +195,8 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
   sortedEntries.forEach((entry) => {
     const key = buildSessionExerciseKey(entry.exerciseName, entry.bodyPart);
     const numericVolume = entry.sets.reduce((sum, set) => {
-      let weightNum = Number(set.weight);
-      if (!Number.isFinite(weightNum) || weightNum <= 0) {
-        if (set.weight === "BW") {
-          const bw = set.body_weight_kg ?? bodyWeightKg;
-          weightNum = (bw != null && bw > 0) ? bw : 0;
-        } else {
-          return sum;
-        }
-      }
+      const weightNum = resolveEffectiveWeightKg(set, bodyWeightKg);
+      if (weightNum == null) return sum;
       const repsNum = Number(set.reps);
       if (!Number.isFinite(repsNum) || repsNum <= 0) return sum;
       return sum + weightNum * repsNum;
@@ -228,6 +222,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
         weight: set.weight,
         reps: set.reps,
         unit: normalizeUnit(set.unit || set.weightUnit || set.weight_unit),
+        added_weight_kg: set.added_weight_kg,
       })),
       best_set_json: bestSet
         ? {
