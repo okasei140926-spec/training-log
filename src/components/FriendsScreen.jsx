@@ -247,7 +247,15 @@ export default function FriendsScreen({
                         setUsernameError(errorMessage);
                         return;
                     }
-                    await supabase.from("profiles").update({ username: trimmed }).eq("id", user.id);
+                    const { error: unErr, count: unCount } = await supabase
+                        .from("profiles")
+                        .update({ username: trimmed }, { count: "exact" })
+                        .eq("id", user.id);
+                    if (unErr) {
+                        console.error("[username] profiles update failed:", unErr?.message, unErr);
+                    } else if (unCount === 0) {
+                        console.error("[username] profiles row not found — update wrote 0 rows", { userId: user.id });
+                    }
                     setMyUsername(trimmed);
                     setUsernameError("");
                     setShowEditName(false);

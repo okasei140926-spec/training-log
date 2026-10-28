@@ -76,7 +76,15 @@ function FeedSection({
         }
 
         const { data: { publicUrl } } = supabase.storage.from("avatars1").getPublicUrl(newPath);
-        await supabase.from("profiles").update({ avatar1_url: publicUrl }).eq("id", user.id);
+        const { error: avatarErr, count: avatarCount } = await supabase
+            .from("profiles")
+            .update({ avatar1_url: publicUrl }, { count: "exact" })
+            .eq("id", user.id);
+        if (avatarErr) {
+            console.error("[avatar] profiles update failed:", avatarErr?.message, avatarErr);
+        } else if (avatarCount === 0) {
+            console.error("[avatar] profiles row not found — update wrote 0 rows", { userId: user.id });
+        }
         setAvatarUrl(publicUrl);
         e.target.value = "";
 

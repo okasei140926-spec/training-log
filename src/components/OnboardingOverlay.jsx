@@ -134,38 +134,41 @@ const QUESTIONS = [
 
 async function saveProfileToSupabase(userId, answers) {
     if (!userId) return;
-    try {
-        const { error } = await supabase.from("profiles").upsert(
-            {
-                id: userId,
-                display_name: answers.name?.trim() || null,
-                gender: answers.gender || null,
-                birth_date: answers.birthdate || null,   // "YYYY-MM-DD"
-                fitness_goal: answers.goal || null,
-                fitness_level: answers.level || null,
-                workout_frequency: answers.frequency
-                    ? parseInt(answers.frequency, 10) : null,
-                training_years: answers.trainingYears || null,
-                workout_location: answers.location || null,
-                has_dumbbells:
-                    answers.location === "自宅"
-                        ? answers.hasDumbbells === "ある"
-                        : null,
-                ai_plan_enabled: answers.aiPlanPreference !== "no",
-                preferred_split: answers.preferredSplit && answers.preferredSplit !== "none"
-                    ? answers.preferredSplit : null,
-                body_weight_kg: answers.bodyWeight
-                    ? (Number(answers.bodyWeight) || null) : null,
-                weight_updated_at: answers.bodyWeight
-                    ? new Date().toISOString() : null,
-                onboarding_completed_at: new Date().toISOString(),
-            },
-            { onConflict: "id" }
-        );
-        if (error) throw error;
-    } catch (err) {
-        // Silently ignore — columns may not exist yet (run the migration SQL first)
-        console.warn("[onboarding] Supabase profile save failed:", err?.message);
+    // upsert は username を含まないと NOT NULL (23502) で失敗する。
+    // プロフィール行は Auth.jsx:203 (email signup) または useAuthSetup.js:66 (OAuth)
+    // で username 付き insert 済みなので update を使う。
+    // OAuth 新規ユーザーの場合 ensureProfileForUser と理論上競合しうるが、
+    // オンボーディングは複数画面を要するため実運用で行未作成のまま完了することはない。
+    const { error, count } = await supabase
+        .from("profiles")
+        .update({
+            display_name: answers.name?.trim() || null,
+            gender: answers.gender || null,
+            birth_date: answers.birthdate || null,   // "YYYY-MM-DD"
+            fitness_goal: answers.goal || null,
+            fitness_level: answers.level || null,
+            workout_frequency: answers.frequency
+                ? parseInt(answers.frequency, 10) : null,
+            training_years: answers.trainingYears || null,
+            workout_location: answers.location || null,
+            has_dumbbells:
+                answers.location === "自宅"
+                    ? answers.hasDumbbells === "ある"
+                    : null,
+            ai_plan_enabled: answers.aiPlanPreference !== "no",
+            preferred_split: answers.preferredSplit && answers.preferredSplit !== "none"
+                ? answers.preferredSplit : null,
+            body_weight_kg: answers.bodyWeight
+                ? (Number(answers.bodyWeight) || null) : null,
+            weight_updated_at: answers.bodyWeight
+                ? new Date().toISOString() : null,
+            onboarding_completed_at: new Date().toISOString(),
+        }, { count: "exact" })
+        .eq("id", userId);
+    if (error) {
+        console.error("[onboarding] Supabase profile save failed:", error?.message, error);
+    } else if (count === 0) {
+        console.error("[onboarding] profiles row not found — update wrote 0 rows", { userId });
     }
 }
 

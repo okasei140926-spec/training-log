@@ -173,13 +173,14 @@ export function useAiPlanProgress({ user }) {
         setAiPlanEnabledState(boolVal);
         save(ENABLED_KEY, boolVal);
         if (user?.id) {
-            try {
-                await supabase.from("profiles").upsert(
-                    { id: user.id, ai_plan_enabled: boolVal },
-                    { onConflict: "id" }
-                );
-            } catch (err) {
-                console.warn("[aiPlan] Supabase sync failed:", err?.message);
+            const { error: aiErr, count: aiCount } = await supabase
+                .from("profiles")
+                .update({ ai_plan_enabled: boolVal }, { count: "exact" })
+                .eq("id", user.id);
+            if (aiErr) {
+                console.error("[aiPlan] Supabase update failed:", aiErr?.message, aiErr);
+            } else if (aiCount === 0) {
+                console.error("[aiPlan] profiles row not found — update wrote 0 rows", { userId: user.id });
             }
         }
     }, [user?.id]);

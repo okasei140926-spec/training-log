@@ -1076,13 +1076,14 @@ export default function GymApp() {
             let dbValue = newValue;
             if (fieldId === "frequency") dbValue = parseInt(newValue, 10) || null;
             if (fieldId === "hasDumbbells") dbValue = newValue === "ある";
-            try {
-                await supabase.from("profiles").upsert(
-                    { id: user.id, [col]: dbValue },
-                    { onConflict: "id" }
-                );
-            } catch (err) {
-                console.warn("[profileField] Supabase update failed:", err?.message);
+            const { error: profileErr, count: profileCount } = await supabase
+                .from("profiles")
+                .update({ [col]: dbValue }, { count: "exact" })
+                .eq("id", user.id);
+            if (profileErr) {
+                console.error("[profileField] Supabase update failed:", profileErr?.message, profileErr);
+            } else if (profileCount === 0) {
+                console.error("[profileField] profiles row not found — update wrote 0 rows", { userId: user.id, col });
             }
         }
 
@@ -1110,13 +1111,14 @@ export default function GymApp() {
         setBodyWeightKg(num);
         setBodyWeightUpdatedAt(now);
         if (user?.id) {
-            try {
-                await supabase.from("profiles").upsert(
-                    { id: user.id, body_weight_kg: num, weight_updated_at: now },
-                    { onConflict: "id" }
-                );
-            } catch (err) {
-                console.warn("[bodyWeight] Supabase update failed:", err?.message);
+            const { error: bwErr, count: bwCount } = await supabase
+                .from("profiles")
+                .update({ body_weight_kg: num, weight_updated_at: now }, { count: "exact" })
+                .eq("id", user.id);
+            if (bwErr) {
+                console.error("[bodyWeight] Supabase update failed:", bwErr?.message, bwErr);
+            } else if (bwCount === 0) {
+                console.error("[bodyWeight] profiles row not found — update wrote 0 rows", { userId: user.id });
             }
         }
     }, [user?.id]);
