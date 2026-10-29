@@ -296,6 +296,9 @@ export default function GymApp() {
         setMuscleEx,
     });
 
+    // eslint-disable-next-line no-unused-vars
+    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding, weekStartDay, setWeekStartDay, weeklySetTargets, setWeeklySetTargets } = useSettings();
+
     const {
         showPushPrompt,
         pushPromptBusy,
@@ -304,7 +307,7 @@ export default function GymApp() {
         enablePushFromPrompt,
         setShowPushPrompt,
         setPushPromptMessage,
-    } = usePushNotifications({ user, screen, showAuth });
+    } = usePushNotifications({ user, screen, showAuth, showOnboarding });
 
     const {
         progress: aiPlanProgress,
@@ -417,8 +420,6 @@ export default function GymApp() {
     const [, setLogMode] = useState("today");
     const [exerciseUnits, setExerciseUnits] = useState(() => loadDraftForDate(getTodayKey()).exerciseUnits);
 
-    // eslint-disable-next-line no-unused-vars
-    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding, weekStartDay, setWeekStartDay, weeklySetTargets, setWeeklySetTargets } = useSettings();
     const appThemeClassName = isDark ? "app-shell" : "theme-light app-shell";
 
     const getExUnit = useCallback((name) => {
@@ -3999,7 +4000,7 @@ export default function GymApp() {
 
                     {/* BottomNav moved outside app-shell to avoid maxWidth/margin containment */}
 
-                    {showOnboarding && <OnboardingOverlay user={user} onDone={() => completeOnboarding()} />}
+                    {showOnboarding && <OnboardingOverlay user={user} isDark={isDark} onDone={() => completeOnboarding()} />}
                     <WorkoutDaySummaryModal
                         isOpen={Boolean(summary)}
                         summary={summary}

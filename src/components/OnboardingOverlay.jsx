@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { save } from "../utils/helpers";
 import { supabase } from "../utils/supabase";
+import Auth from "./Auth";
 import { SUGGESTIONS, QUICK_LABELS } from "../constants/suggestions";
 import { applyOnboardingPlan, SPLIT_TYPE_DESCRIPTIONS } from "../utils/generateOnboardingPlan";
 
@@ -201,9 +202,25 @@ function validateBirthDate(year, month, day) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function OnboardingOverlay({ user, onDone }) {
+export default function OnboardingOverlay({ user, onDone, isDark }) {
     // Welcome screen state
     const [showWelcome, setShowWelcome] = useState(true);
+
+    // Login modal state (shown when existing user taps login link on welcome screen)
+    const [showLoginModal, setShowLoginModal] = useState(false);
+
+    // When user logs in via the login modal, skip onboarding entirely.
+    // showLoginModal is intentionally excluded from the condition: Auth's onClose()
+    // sets it to false before (or in the same render as) the user prop updates,
+    // so user && showLoginModal never becomes true simultaneously.
+    // Guard with ref to prevent double-call on re-render.
+    const loginDoneRef = useRef(false);
+    useEffect(() => {
+        if (!user) return;
+        if (loginDoneRef.current) return;
+        loginDoneRef.current = true;
+        onDone();
+    }, [user, onDone]);
 
     // Question flow state
     const [answers, setAnswers] = useState({});
@@ -352,6 +369,7 @@ export default function OnboardingOverlay({ user, onDone }) {
 
     if (showWelcome) {
         return (
+            <>
             <div style={rootStyle}>
                 <div style={{
                     flex: 1,
@@ -393,8 +411,52 @@ export default function OnboardingOverlay({ user, onDone }) {
                     >
                         はじめる →
                     </button>
+                    <button
+                        onClick={() => setShowLoginModal(true)}
+                        style={{
+                            background: "none",
+                            border: "none",
+                            color: "var(--text3)",
+                            fontSize: 13,
+                            cursor: "pointer",
+                            padding: "16px 8px 0",
+                            textDecoration: "underline",
+                            textUnderlineOffset: 3,
+                        }}
+                    >
+                        すでにアカウントをお持ちの方はログイン
+                    </button>
                 </div>
             </div>
+            {showLoginModal && (
+                <div style={{
+                    position: "fixed", inset: 0,
+                    background: "var(--bg)",
+                    zIndex: 1200,
+                    display: "flex",
+                    flexDirection: "column",
+                }}>
+                    <button
+                        onClick={() => setShowLoginModal(false)}
+                        style={{
+                            position: "absolute",
+                            top: "calc(16px + env(safe-area-inset-top, 0px))",
+                            left: 16,
+                            background: "none",
+                            border: "none",
+                            color: "var(--text2)",
+                            fontSize: 22,
+                            cursor: "pointer",
+                            padding: "4px 8px",
+                            zIndex: 1,
+                        }}
+                    >
+                        ‹
+                    </button>
+                    <Auth onClose={() => setShowLoginModal(false)} isDark={isDark} />
+                </div>
+            )}
+            </>
         );
     }
 

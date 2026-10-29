@@ -8,7 +8,7 @@ import {
 import { formatDateKey, load, save } from "../utils/helpers";
 import { PUSH_PROMPT_LATER_KEY } from "../utils/appHelpers";
 
-export function usePushNotifications({ user, screen, showAuth }) {
+export function usePushNotifications({ user, screen, showAuth, showOnboarding }) {
     const [showPushPrompt, setShowPushPrompt] = useState(false);
     const [pushPromptBusy, setPushPromptBusy] = useState(false);
     const [pushPromptMessage, setPushPromptMessage] = useState("");
@@ -58,6 +58,7 @@ export function usePushNotifications({ user, screen, showAuth }) {
                 const shouldShow =
                     screen === "history" &&
                     !showAuth &&
+                    !showOnboarding &&
                     !nextStatus.enabled &&
                     !nextStatus.support?.isNative &&
                     laterDate !== todayStr;
@@ -77,7 +78,7 @@ export function usePushNotifications({ user, screen, showAuth }) {
                     permission,
                     support,
                 });
-                setShowPushPrompt(screen === "history" && !showAuth && !support.isNative && laterDate !== todayStr);
+                setShowPushPrompt(screen === "history" && !showAuth && !showOnboarding && !support.isNative && laterDate !== todayStr);
             }
         };
 
@@ -86,7 +87,7 @@ export function usePushNotifications({ user, screen, showAuth }) {
         return () => {
             isActive = false;
         };
-    }, [user?.id, screen, showAuth]);
+    }, [user?.id, screen, showAuth, showOnboarding]);
 
     const enablePushFromPrompt = useCallback(async () => {
         if (!user?.id || pushPromptBusy) return;
