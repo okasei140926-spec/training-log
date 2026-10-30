@@ -7,8 +7,14 @@ import {
   withWorkoutDraftMeta,
 } from "./workoutDraftStore";
 import { logWriteTrace } from "../../utils/writeTrace";
+import { isBodyweightExerciseName } from "../../utils/aiWorkoutPlan";
 
 const normalizeDateKey = (value) => String(value || "").slice(0, 10);
+
+// ユーザー保存値がなければ種目名でデフォルト単位を決める。
+// exerciseUnits[name] が存在する場合はそちらを優先する（ユーザーの選択が勝つ）。
+export const getDefaultUnitForExercise = (name, exerciseUnits = {}) =>
+  exerciseUnits[name] || (isBodyweightExerciseName(name) ? "BW" : "kg");
 
 const normalizeWeightMode = (value) => {
   const unit = String(value || "kg").toLowerCase();
@@ -89,7 +95,7 @@ const makeExercise = (exercise = {}, {
     || fallbackLabel
     || ""
   ).trim();
-  const fallbackUnit = exerciseUnits[name] || "kg";
+  const fallbackUnit = getDefaultUnitForExercise(name, exerciseUnits);
   const setsSource = Array.isArray(exercise.sets) && exercise.sets.length
     ? exercise.sets
     : (Array.isArray(logData[name]) && logData[name].length ? logData[name] : null);
@@ -548,13 +554,17 @@ export function useWorkoutLog({
     const exerciseName = String(exerciseInput?.name || exerciseInput || "").trim();
     if (!exerciseName) return;
 
+    // draft.exerciseUnits を閉じ込める（deps に含めることで stale closure を防ぐ）。
+    // この経路（currentSets.length === 0 のとき savedExerciseUnits を使う分岐）は
+    // renderHook を使ったフックテストがなく、自動テストで保護されていない。
+    const savedExerciseUnits = draft.exerciseUnits || {};
     mutateExercises("set_add", (exercises) =>
       exercises.map((exercise) => {
         if (normalizeExerciseName(exercise.name) !== normalizeExerciseName(exerciseName)) return exercise;
         const currentSets = exercise.sets || [];
         const defaultUnit = currentSets.length
           ? getSetWeightMode(currentSets[0], "kg")
-          : "kg";
+          : getDefaultUnitForExercise(exerciseName, savedExerciseUnits);
         return {
           ...exercise,
           sets: [...currentSets, makeSet({}, defaultUnit)],
@@ -563,7 +573,7 @@ export function useWorkoutLog({
         details: { exerciseName },
       }
     );
-  }, [mutateExercises]);
+  }, [mutateExercises, draft.exerciseUnits]);
 
   const removeSet = useCallback((exerciseInput, setIndex) => {
     const exerciseName = String(exerciseInput?.name || exerciseInput || "").trim();
