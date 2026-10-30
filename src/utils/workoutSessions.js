@@ -23,6 +23,19 @@ const normalizeUnit = (value) => {
   return "kg";
 };
 
+// ─── セット配列の共通ビルダー ──────────────────────────────────────────────────
+// preview_items.sets と summary_json.items[].sets の両方をここから生成する。
+// 片方だけを変更して片方が壊れるのを防ぐ。
+// 含めるフィールド: weight / reps / unit / added_weight_kg の4つのみ。
+// body_weight_kg は含めない（フレンドに体重が漏れる）。
+export const buildSessionItemSets = (sets) =>
+  (Array.isArray(sets) ? sets : []).map((set) => ({
+    weight: set.weight,
+    reps: set.reps,
+    unit: normalizeUnit(set.unit || set.weightUnit || set.weight_unit),
+    added_weight_kg: set.added_weight_kg,
+  }));
+
 const getSetUnit = (set, fallbackUnit = "kg") =>
   normalizeUnit(
     set?.weightMode
@@ -211,6 +224,8 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
     totalSetCount += entry.sets.length;
     totalVolume += numericVolume;
 
+    const entrySets = buildSessionItemSets(entry.displaySets || entry.sets);
+
     previewItems.push({
       exercise_name: entry.exerciseName,
       body_part: sanitizeBodyPart(entry.bodyPart),
@@ -218,12 +233,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
       set_count: entry.sets.length,
       max_weight: roundNumeric(maxWeight, 1),
       volume: roundNumeric(numericVolume, 1),
-      sets: (entry.displaySets || entry.sets).map((set) => ({
-        weight: set.weight,
-        reps: set.reps,
-        unit: normalizeUnit(set.unit || set.weightUnit || set.weight_unit),
-        added_weight_kg: set.added_weight_kg,
-      })),
+      sets: entrySets,
       best_set_json: bestSet
         ? {
             weight: bestSet.weight,
@@ -242,6 +252,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
         max_weight: 0,
         volume: 0,
         best_set_json: {},
+        sets: [],
       });
     }
 
@@ -249,6 +260,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
     aggregate.set_count += entry.sets.length;
     aggregate.max_weight = Math.max(aggregate.max_weight, maxWeight);
     aggregate.volume += numericVolume;
+    aggregate.sets.push(...entrySets);
 
     if (bestSet) {
       const currentBestRm = Number(aggregate.best_set_json?.rm || 0);
@@ -275,6 +287,7 @@ export function buildWorkoutSessionPayloadFromEntries(entries, workoutDate, opti
       max_weight: roundNumeric(item.max_weight, 1),
       volume: roundNumeric(item.volume, 1),
       best_set_json: item.best_set_json || {},
+      sets: item.sets || [],
     }));
   const exerciseCountByBodyPart = getExerciseCountByBodyPart(exercises, {
     sort: "fixed",
