@@ -406,7 +406,7 @@ function FeedSection({
                                                                         <div style={{ fontSize: 13, color: "var(--text2)", marginTop: 2, lineHeight: 1.45 }}>
                                                                             {Array.isArray(summaryItem.sets) && summaryItem.sets.length
                                                                                 ? summaryItem.sets.map(formatSessionSetDisplay).join(" / ")
-                                                                                : `${Math.round(Number(summaryItem.max_weight || 0) * 10) / 10 || 0}kg × ${summaryItem.set_count}`}
+                                                                                : formatSummaryItemSetsText(summaryItem)}
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -731,5 +731,10 @@ const buildSessionSummary = (detailedExercises) => {
         : totalVolume > 0 ? `${Math.round(totalVolume)}kg` : null;
     return { bpText, totalSets, volText };
 };
+
+export const formatSummaryItemSetsText = (summaryItem) =>
+    summaryItem.max_weight
+        ? `${Math.round(Number(summaryItem.max_weight) * 10) / 10}kg × ${summaryItem.set_count}`
+        : `${summaryItem.set_count}セット`;
 
 export default FeedSection;
