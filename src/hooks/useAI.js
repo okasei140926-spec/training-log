@@ -4,6 +4,7 @@ import {
   calc1RM,
   formatBWSetLabel,
   formatDateKey,
+  formatKg,
   resolveEffectiveWeightKg,
   sanitizeHistoryRecord,
 } from "../utils/helpers";
@@ -180,7 +181,7 @@ const normalizeAiBodyPart = (bodyPart) => {
 
 const formatSetLabel = (set) => {
   if (!set) return "";
-  const weightLabel = formatBWSetLabel(set) ?? `${Number(set.weight)}kg`;
+  const weightLabel = formatBWSetLabel(set) ?? `${formatKg(set.weight)}kg`;
   return `${weightLabel}×${Number(set.reps)}回`;
 };
 
@@ -637,9 +638,9 @@ const buildExerciseHistoryStats = (history, message, bodyWeightKg = null) => {
         const bwSet = latestRecord.sets.find((set) => set.weight === "BW");
         const effectiveKg = resolveEffectiveWeightKg(bwSet, bodyWeightKg);
         const bwLabel = formatBWSetLabel(bwSet) ?? "自重";
-        return effectiveKg != null ? `${bwLabel}(${effectiveKg}kg)` : bwLabel;
+        return effectiveKg != null ? `${bwLabel}(${formatKg(effectiveKg)}kg)` : bwLabel;
       }
-      return `${latestMaxWeight}kg`;
+      return `${formatKg(latestMaxWeight)}kg`;
     })();
     const bodyPart = normalizeAiBodyPart(
       latestRecord.bodyPart ||
@@ -790,10 +791,10 @@ const formatBig3MatchedExercise = (item) => {
   const prWeightLabel = item.pr?.weight === "BW"
     ? (() => {
         const added = Number(item.pr?.added_weight_kg);
-        const bwLabel = added > 0 ? `自重+${added}kg` : "自重";
-        return item.pr.effectiveKg != null ? `${bwLabel}(${item.pr.effectiveKg}kg)` : bwLabel;
+        const bwLabel = added > 0 ? `自重+${formatKg(added)}kg` : "自重";
+        return item.pr.effectiveKg != null ? `${bwLabel}(${formatKg(item.pr.effectiveKg)}kg)` : bwLabel;
       })()
-    : `${item.pr?.weight}kg`;
+    : `${formatKg(item.pr?.weight)}kg`;
   const prText = item.pr
     ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
     : "PRなし";
@@ -804,7 +805,7 @@ const formatBig3MatchedExercise = (item) => {
       : `推奨目安 筋肥大${rec.hypertrophy.weight}kg×${rec.hypertrophy.reps}回×${rec.hypertrophy.sets}セット / 軽め${rec.light.weight}kg×${rec.light.reps}回×${rec.light.sets}セット / 高強度${rec.highIntensity.weight}kg×${rec.highIntensity.reps}回×${rec.highIntensity.sets}セット`
     : "推奨目安なし";
 
-  return `${item.exerciseName} [${item.category}, ${item.matchType}:${item.aliasMatched}] 最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets} | ${prText} | 直近最高重量 ${item.recentMaxWeightLabel ?? `${item.recentMaxWeight || 0}kg`} | ${recommendationText}`;
+  return `${item.exerciseName} [${item.category}, ${item.matchType}:${item.aliasMatched}] 最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets} | ${prText} | 直近最高重量 ${item.recentMaxWeightLabel ?? `${formatKg(item.recentMaxWeight)}kg`} | ${recommendationText}`;
 };
 
 const buildBig3HistoryContextText = (big3Summary) => {
@@ -849,10 +850,10 @@ const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = 
     const prWeightLabel = item.pr?.weight === "BW"
       ? (() => {
           const added = Number(item.pr?.added_weight_kg);
-          const bwLabel = added > 0 ? `自重+${added}kg` : "自重";
-          return item.pr.effectiveKg != null ? `${bwLabel}(${item.pr.effectiveKg}kg)` : bwLabel;
+          const bwLabel = added > 0 ? `自重+${formatKg(added)}kg` : "自重";
+          return item.pr.effectiveKg != null ? `${bwLabel}(${formatKg(item.pr.effectiveKg)}kg)` : bwLabel;
         })()
-      : `${item.pr?.weight}kg`;
+      : `${formatKg(item.pr?.weight)}kg`;
     const prText = item.pr
       ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
       : "PRなし";
@@ -867,7 +868,7 @@ const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = 
       `${item.exerciseName} (${item.bodyPart})`,
       `最新 ${item.latestDate} ${item.latestSetCount}セット ${latestSets}`,
       prText,
-      `直近最高重量 ${item.recentMaxWeightLabel ?? `${item.recentMaxWeight || 0}kg`}`,
+      `直近最高重量 ${item.recentMaxWeightLabel ?? `${formatKg(item.recentMaxWeight)}kg`}`,
       recommendationText,
       `最近: ${recentRecords}`,
     ].join(" | ");

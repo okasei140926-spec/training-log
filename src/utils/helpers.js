@@ -635,6 +635,24 @@ export function formatBWSetLabel(set) {
   return added > 0 ? `自重+${added}kg` : "自重";
 }
 
+// ─── kg 値を小数1桁に丸めて文字列化 ─────────────────────
+// lb→kg 変換後の端数（例: 73.481904kg）が UI や AI プロンプトに漏れるのを防ぐ。
+// 計算（1RM・ボリューム）は生値を使い、この関数は文字列化の直前だけで呼ぶ。
+//
+// ⚠️ 重複あり・統合未実施:
+// 「小数1桁に丸めて文字列化」は以下にも散在している:
+//   - HistoryExerciseItem.jsx の fmtKg（ローカル定義）
+//   - WorkoutSessionShareModal.jsx の formatWeightValue（ローカル定義）
+//   - FeedSection.jsx の formatSummaryItemSetsText のインライン式
+//   - useFriendsData.js の formatSessionSetDisplay のインライン式
+// 今回は統合しない（いずれも表示専用で現時点では正しく動いている）。
+// 次に桁数を変えるときは上記も合わせて変更すること。
+export const formatKg = (value) => {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return "0";
+  return String(Math.round(num * 10) / 10);
+};
+
 // ─── 自重セットの実効重量を解決 ──────────────────────────
 // "BW" セット: set.body_weight_kg → bodyWeightKg の順で解決。有効値なければ null
 // 数値セット: Number(set.weight) が正有限値なら返す。無効なら null

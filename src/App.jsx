@@ -7,6 +7,7 @@ import {
     KG_TO_LBS,
     formatBWSetLabel,
     formatDateKey,
+    formatKg,
     getValidWorkoutDatesFromHistory,
     hasValidWorkoutOnDate,
     mergeHistoryMaps,
@@ -3781,6 +3782,9 @@ export default function GymApp() {
                             onOpenPaywall={billingEnabled ? openPaywall : null}
                             initialTab="growth"
                             onAskWhyStagnant={(exerciseName, recentRecords) => {
+                                // lb で記録された重量は formatKg を通して小数1桁に丸める。
+                                // この変換ロジックは JSX コールバックにインライン埋めのため
+                                // 自動テストで保護されていない（切り出すには App.jsx リファクタが必要）。
                                 const lines = (recentRecords || []).slice(0, 8).map((r) => {
                                     const setsText = (r?.sets || [])
                                         .filter((s) => {
@@ -3789,7 +3793,7 @@ export default function GymApp() {
                                             const w = s?.weight;
                                             return w === "BW" || (Number.isFinite(Number(w)) && Number(w) > 0);
                                         })
-                                        .map((s) => `${formatBWSetLabel(s) ?? `${s.weight}kg`}×${s.reps}回`)
+                                        .map((s) => `${formatBWSetLabel(s) ?? `${formatKg(s.weight)}kg`}×${s.reps}回`)
                                         .join(", ");
                                     return `${r?.date || ""}: ${setsText || "記録なし"}`;
                                 }).join("\n");
