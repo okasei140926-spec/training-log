@@ -75,6 +75,16 @@ const getCachedFriendIdsForUser = (userId) => (
         : []
 );
 
+export const buildDetailedItemsFromSummary = (summaryItems = []) =>
+    summaryItems.map((exercise) => ({
+        exercise_name: exercise.exercise_name,
+        body_part: exercise.body_part,
+        set_count: Number(exercise.set_count || 0),
+        max_weight: Number(exercise.max_weight || 0),
+        order: Number(exercise.order || 999),
+        sets: Array.isArray(exercise.sets) ? exercise.sets : [],
+    }));
+
 const areStringArraysEqual = (a = [], b = []) => {
     if (a.length !== b.length) return false;
     return a.every((value, index) => value === b[index]);
@@ -812,13 +822,7 @@ export function useFriendsData({
             summary_json: summary,
             summary,
             summaryItems,
-            detailedItems: detailedItems.length ? detailedItems : summaryItems.map((exercise) => ({
-                exercise_name: exercise.exercise_name,
-                body_part: exercise.body_part,
-                set_count: Number(exercise.set_count || 0),
-                order: Number(exercise.order || 999),
-                sets: Array.isArray(exercise.sets) ? exercise.sets : [],
-            })),
+            detailedItems: detailedItems.length ? detailedItems : buildDetailedItemsFromSummary(summaryItems),
             likeCount: Number(sessionMeta?.likeCount || 0),
             likedByMe: Boolean(sessionMeta?.likedByMe),
             commentCount: Number(sessionMeta?.commentCount || 0),
