@@ -40,6 +40,26 @@ export async function fetchWorkoutRowFromWorkoutsData({
   return fetchWorkoutRowForDateFromStorage(supabaseClient, userId, normalizedDate);
 }
 
+// ─── Pure: build a single workout_sets row from one set object ────────────────
+// 切り出し理由: saveExercisesAndSets は Supabase を呼ぶため直接テストできない。
+// この関数だけを export してカラム集合をテストする。
+// ── 制約 ──────────────────────────────────────────────────────────────────────
+// 呼び出し元は saveExercisesAndSets の .map() 1箇所のみ。
+// 出力は切り出し前の inline オブジェクトリテラルと完全に同一。
+export function buildWorkoutSetRow(s, idx, { exercise_id, user_id }) {
+  return {
+    exercise_id,
+    user_id,
+    set_number:     idx + 1,
+    weight:         s.weight === "BW" ? null : (Number(s.weight) || null),
+    reps:           Number(s.reps) || 0,
+    unit:           s.unit || s.weightUnit || (s.weight === "BW" ? "BW" : "kg"),
+    display_weight: s.displayWeight != null ? Number(s.displayWeight) : (s.weight === "BW" ? null : Number(s.weight) || null),
+    display_unit:   s.displayUnit || s.unit || "kg",
+    added_weight_kg: s.added_weight_kg != null ? Number(s.added_weight_kg) : null,
+  };
+}
+
 // ─── New helper: save to workout_exercises + workout_sets ─────────────────────
 async function saveExercisesAndSets(supabase, workoutId, userId, date, historyForDate) {
   // historyForDate is like: { "Bench Press": [{date, bodyPart, order, sets:[...]}], ... }
@@ -93,17 +113,7 @@ async function saveExercisesAndSets(supabase, workoutId, userId, date, historyFo
     // Insert sets
     const setsToInsert = record.sets
       .filter(s => s && (Number(s.reps) > 0 || s.weight === "BW"))
-      .map((s, idx) => ({
-        exercise_id:      exRow.id,
-        user_id:          userId,
-        set_number:       idx + 1,
-        weight:           s.weight === "BW" ? null : (Number(s.weight) || null),
-        reps:             Number(s.reps) || 0,
-        unit:             s.unit || s.weightUnit || (s.weight === "BW" ? "BW" : "kg"),
-        display_weight:   s.displayWeight != null ? Number(s.displayWeight) : (s.weight === "BW" ? null : Number(s.weight) || null),
-        display_unit:     s.displayUnit || s.unit || "kg",
-        added_weight_kg:  s.added_weight_kg != null ? Number(s.added_weight_kg) : null,
-      }));
+      .map((s, idx) => buildWorkoutSetRow(s, idx, { exercise_id: exRow.id, user_id: userId }));
 
     if (setsToInsert.length > 0) {
       await supabase.from("workout_sets").insert(setsToInsert);
@@ -112,7 +122,7 @@ async function saveExercisesAndSets(supabase, workoutId, userId, date, historyFo
 }
 
 // ─── New helper: reconstruct data-compatible object from normalized rows ───────
-function buildDataFromNormalizedRows(exercises, sets, date) {
+export function buildDataFromNormalizedRows(exercises, sets, date) {
   // exercises: [{id, workout_id, exercise_name, body_part, display_order}]
   // sets: [{id, exercise_id, set_number, weight, reps, unit, display_weight, display_unit}]
   // Returns: { "Bench Press": [{date, bodyPart, order, sets:[...]}], ... }

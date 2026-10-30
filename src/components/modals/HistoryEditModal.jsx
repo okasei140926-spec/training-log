@@ -12,7 +12,7 @@ export default function HistoryEditModal({ exName, record, onSave, onDelete, onC
 
   const addSet = () => {
     const last = sets[sets.length - 1] || { weight: "", reps: "" };
-    setSets(p => [...p, { weight: last.weight, reps: last.reps, done: true }]);
+    setSets(p => [...p, { ...last, done: true }]);
   };
 
   const removeSet = (idx) => {
