@@ -88,6 +88,7 @@ import { useLogDraftApplicator } from "./hooks/useLogDraftApplicator";
 import { useWorkoutsDataHistorySync } from "./hooks/useWorkoutsDataHistorySync";
 import { useAuthSetup } from "./hooks/useAuthSetup";
 import { useProfileSync } from "./hooks/useProfileSync";
+import { useWeeklySetTargetsSync } from "./hooks/useWeeklySetTargetsSync";
 import { useCustomExercises } from "./hooks/useCustomExercises";
 import {
     applyHistoryDeleteMarkers,
@@ -289,16 +290,18 @@ export default function GymApp() {
         setScreen,
     });
 
+    // eslint-disable-next-line no-unused-vars
+    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding, weekStartDay, setWeekStartDay, weeklySetTargets, setWeeklySetTargets } = useSettings();
+
     useProfileSync({
         user,
         setOnboardingAnswers,
         setBodyWeightKg,
         setBodyWeightUpdatedAt,
         setMuscleEx,
+        setWeekStartDay,
+        setWeeklySetTargets,
     });
-
-    // eslint-disable-next-line no-unused-vars
-    const { isDark, setIsDark, unit, setUnit, showOnboarding, completeOnboarding, weekStartDay, setWeekStartDay, weeklySetTargets, setWeeklySetTargets } = useSettings();
 
     const {
         showPushPrompt,
@@ -1136,7 +1139,7 @@ export default function GymApp() {
     }, [user?.id]);
 
 
-    const handleSaveCustomSplit = useCallback((customSequence) => {
+    const handleSaveCustomSplit = useCallback(async (customSequence) => {
         // Persist custom sequence independently (survives plan resets)
         save("customSplitSequence", customSequence);
         // Update onboardingAnswers.preferredSplit = "custom"
@@ -1149,8 +1152,39 @@ export default function GymApp() {
         const newMuscleEx = buildMuscleExFromAnswers(newAnswers);
         setMuscleEx(newMuscleEx);
         save("routineEx", newMuscleEx);
+        if (user?.id) {
+            const { error, count } = await supabase
+                .from("profiles")
+                .update({ custom_split_sequence: customSequence }, { count: "exact" })
+                .eq("id", user.id);
+            if (error) {
+                console.error("[customSplit] Supabase update failed:", error?.message, error);
+            } else if (count === 0) {
+                console.error("[customSplit] profiles row not found — update wrote 0 rows", { userId: user.id });
+            }
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [resetPlanProgress, setMuscleEx]);
+    }, [user?.id, resetPlanProgress, setMuscleEx]);
+
+    const handleSaveWeekStartDay = useCallback(async (value) => {
+        setWeekStartDay(value);
+        if (user?.id) {
+            const { error, count } = await supabase
+                .from("profiles")
+                .update({ week_start_day: value }, { count: "exact" })
+                .eq("id", user.id);
+            if (error) {
+                console.error("[weekStartDay] Supabase update failed:", error?.message, error);
+            } else if (count === 0) {
+                console.error("[weekStartDay] profiles row not found — update wrote 0 rows", { userId: user.id });
+            }
+        }
+    }, [user?.id, setWeekStartDay]);
+
+    const {
+        handleSave: handleSaveWeeklySetTargets,
+        flush: flushWeeklySetTargets,
+    } = useWeeklySetTargetsSync({ userId: user?.id, setWeeklySetTargets });
 
     const { applyWorkoutsDataHistorySnapshot } = useWorkoutsDataHistorySync({        workoutsDataHistory,        workoutsDataHistoryRef,        user,        setWorkoutsDataHistory,    });
     const commitHistoryDeleteMarkers = useCallback((nextMarkers) => {
@@ -4032,7 +4066,7 @@ export default function GymApp() {
                     />
                     <SettingsModal
                         isOpen={showSettingsModal}
-                        onClose={() => setShowSettingsModal(false)}
+                        onClose={() => { flushWeeklySetTargets(); setShowSettingsModal(false); }}
                         user={user}
                         onLogout={handleLogout}
                         onExportData={handleExportData}
@@ -4051,9 +4085,9 @@ export default function GymApp() {
                         aiUsageCount={aiUsageCount}
                         onForceSyncHistory={forceSyncLocalHistory}
                         weekStartDay={weekStartDay}
-                        setWeekStartDay={setWeekStartDay}
+                        setWeekStartDay={handleSaveWeekStartDay}
                         weeklySetTargets={weeklySetTargets}
-                        setWeeklySetTargets={setWeeklySetTargets}
+                        setWeeklySetTargets={handleSaveWeeklySetTargets}
                         aiPlanEnabled={aiPlanEnabled}
                         onSetAiPlanEnabled={setAiPlanEnabled}
                         onboardingAnswers={onboardingAnswers}
@@ -4148,6 +4182,7 @@ export default function GymApp() {
                             // Auto-save any in-progress profile editor input before
                             // closing. The × button path never calls this ref.
                             settingsModalAutoSaveRef.current?.();
+                            flushWeeklySetTargets();
                             setShowSettingsModal(false);
                         }
                         if (workoutDayShareTarget) setWorkoutDayShareTarget(null);

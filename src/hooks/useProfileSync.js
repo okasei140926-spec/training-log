@@ -71,6 +71,105 @@ const FIELD_MAP = [
 ];
 
 /**
+ * customSplitSequence / weekStartDay / weeklySetTargets の解決ロジック。
+ * useProfileSync の .then() 内から呼ばれる。純関数として export することでテスト可能にする。
+ *
+ * 解決ルール:
+ *   profiles に値あり → profiles が勝つ → localUpdates に追加
+ *   profiles が null かつ localStorage に値あり → localStorage が勝つ → uploadPayload に追加
+ *   両方 null → 何もしない
+ *
+ * 競合ガード:
+ *   snapshot が非 null かつ current と異なる → ユーザーが SELECT 中に変更した → スキップ
+ *   snapshot が null（localStorage に値がなかった）→ ガードを適用しない。
+ *   初回ログイン時に useSettings の初期化 effect がローカルに書き込んでも
+ *   誤って競合と判定されないようにするため。
+ *
+ * weekly_set_targets について:
+ *   {} は「ユーザーが全部外した状態」であり「値なし」ではない。
+ *   null のみ「値なし」とする。これにより「全部外した」設定も正しく同期される。
+ *   undefined は DB からの欠損値として null 扱いにする。
+ *
+ * @param {{ data: object,
+ *   snapshotCustomSplit: *, currentCustomSplit: *,
+ *   snapshotWeekStartDay: *, currentWeekStartDay: *,
+ *   snapshotWeeklySetTargets: *, currentWeeklySetTargets: *
+ * }} params
+ * @returns {{
+ *   localUpdates: { customSplitSequence?: *, weekStartDay?: *, weeklySetTargets?: * },
+ *   uploadPayload: { custom_split_sequence?: *, week_start_day?: *, weekly_set_targets?: * }
+ * }}
+ */
+export function resolveNewSyncFields({
+    data,
+    snapshotCustomSplit, currentCustomSplit,
+    snapshotWeekStartDay, currentWeekStartDay,
+    snapshotWeeklySetTargets, currentWeeklySetTargets,
+}) {
+    const localUpdates = {};
+    const uploadPayload = {};
+
+    // ── custom_split_sequence ─────────────────────────────────────────────
+    // snapshot が null = localStorage に値がなかった → 競合チェック不要
+    const customSplitConflict =
+        snapshotCustomSplit !== null &&
+        JSON.stringify(currentCustomSplit) !== JSON.stringify(snapshotCustomSplit);
+    if (!customSplitConflict) {
+        const dbVal = data.custom_split_sequence ?? null;
+        if (dbVal !== null) {
+            // profiles 優先
+            if (JSON.stringify(dbVal) !== JSON.stringify(currentCustomSplit)) {
+                localUpdates.customSplitSequence = dbVal;
+            }
+        } else if (currentCustomSplit !== null) {
+            // localStorage 優先 → 書き上げ
+            uploadPayload.custom_split_sequence = currentCustomSplit;
+        }
+        // 両方 null → 何もしない
+    }
+
+    // ── week_start_day ────────────────────────────────────────────────────
+    const weekStartDayConflict =
+        snapshotWeekStartDay !== null &&
+        currentWeekStartDay !== snapshotWeekStartDay;
+    if (!weekStartDayConflict) {
+        const dbVal = data.week_start_day ?? null;
+        if (dbVal !== null) {
+            // profiles 優先
+            if (dbVal !== currentWeekStartDay) {
+                localUpdates.weekStartDay = dbVal;
+            }
+        } else if (currentWeekStartDay !== null) {
+            // localStorage 優先 → 書き上げ
+            uploadPayload.week_start_day = currentWeekStartDay;
+        }
+        // 両方 null → 何もしない
+    }
+
+    // ── weekly_set_targets ────────────────────────────────────────────────
+    // {} は「値なし」ではなく「全部外した状態」。null のみ「値なし」とする。
+    // undefined は DB 欠損値として null 扱い。
+    const weeklySetTargetsConflict =
+        snapshotWeeklySetTargets !== null &&
+        JSON.stringify(currentWeeklySetTargets) !== JSON.stringify(snapshotWeeklySetTargets);
+    if (!weeklySetTargetsConflict) {
+        const dbVal = data.weekly_set_targets ?? null;
+        if (dbVal !== null) {
+            // profiles 優先
+            if (JSON.stringify(dbVal) !== JSON.stringify(currentWeeklySetTargets)) {
+                localUpdates.weeklySetTargets = dbVal;
+            }
+        } else if (currentWeeklySetTargets !== null) {
+            // localStorage 優先 → 書き上げ（{} も含む）
+            uploadPayload.weekly_set_targets = currentWeeklySetTargets;
+        }
+        // 両方 null → 何もしない
+    }
+
+    return { localUpdates, uploadPayload };
+}
+
+/**
  * ログイン直後に profiles から設定を復元し、localStorage と React state に反映する。
  *
  * 解決ルール（一般列）:
@@ -95,6 +194,8 @@ export function useProfileSync({
     setBodyWeightKg,
     setBodyWeightUpdatedAt,
     setMuscleEx,
+    setWeekStartDay,
+    setWeeklySetTargets,
 }) {
     // ログアウト→再ログインで再実行するため、user.id を追跡する
     const syncedUserIdRef = useRef(null);
@@ -111,11 +212,20 @@ export function useProfileSync({
         // .then() の中で再度読み込み、変化していた列はユーザーが変更したとみなしてスキップする。
         const snapshotAnswers = load("onboardingAnswers", {}) || {};
 
+        // 新3項目のスナップショット（独立した localStorage キー）。
+        // load が null を返す = キー未存在 = 初回ログイン時のフレッシュインストール。
+        // このとき競合ガードを適用しないことで useSettings の初期化 effect による
+        // 書き込みを誤って「ユーザー操作」と判定しないようにする（resolveNewSyncFields 参照）。
+        const snapshotCustomSplit      = load("customSplitSequence", null);
+        const snapshotWeekStartDay     = load("weekStartDay",        null);
+        const snapshotWeeklySetTargets = load("weeklySetTargets",    null);
+
         const selectCols = [
             "gender", "birth_date", "fitness_goal", "fitness_level",
             "workout_frequency", "training_years", "workout_location",
             "has_dumbbells", "preferred_split",
             "body_weight_kg", "weight_updated_at",
+            "custom_split_sequence", "week_start_day", "weekly_set_targets",
         ].join(", ");
 
         supabase
@@ -217,6 +327,21 @@ export function useProfileSync({
                     }
                 }
 
+                // ── 新3項目（customSplitSequence / weekStartDay / weeklySetTargets）──
+                const currentCustomSplit      = load("customSplitSequence", null);
+                const currentWeekStartDay     = load("weekStartDay",        null);
+                const currentWeeklySetTargets = load("weeklySetTargets",    null);
+
+                const { localUpdates, uploadPayload: extraPayload } = resolveNewSyncFields({
+                    data,
+                    snapshotCustomSplit,      currentCustomSplit,
+                    snapshotWeekStartDay,     currentWeekStartDay,
+                    snapshotWeeklySetTargets, currentWeeklySetTargets,
+                });
+
+                // 新3項目の書き上げペイロードを既存ペイロードにマージ
+                Object.assign(uploadPayload, extraPayload);
+
                 // ── ローカル値を profiles へ一括書き上げ ───────────────────────
                 if (Object.keys(uploadPayload).length > 0) {
                     supabase
@@ -252,6 +377,19 @@ export function useProfileSync({
                     const newMuscleEx = buildMuscleExFromAnswers(nextAnswers);
                     setMuscleEx(newMuscleEx);
                     save("routineEx", newMuscleEx);
+                }
+
+                // 新3項目の localUpdates を適用
+                if (localUpdates.customSplitSequence !== undefined) {
+                    save("customSplitSequence", localUpdates.customSplitSequence);
+                }
+                if (localUpdates.weekStartDay !== undefined) {
+                    save("weekStartDay", localUpdates.weekStartDay);
+                    setWeekStartDay?.(localUpdates.weekStartDay);
+                }
+                if (localUpdates.weeklySetTargets !== undefined) {
+                    save("weeklySetTargets", localUpdates.weeklySetTargets);
+                    setWeeklySetTargets?.(localUpdates.weeklySetTargets);
                 }
             })
             .catch(() => {});
