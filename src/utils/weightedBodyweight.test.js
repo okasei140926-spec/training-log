@@ -3,7 +3,7 @@
  * Run with: npm test -- --testPathPattern=weightedBodyweight
  */
 
-import { formatBWSetLabel, resolveEffectiveWeightKg } from "./helpers";
+import { buildPrWeightLabel, formatBWSetLabel, resolveEffectiveWeightKg } from "./helpers";
 import {
   getHistoryMetricsForDate as getHistoryMetricsFromWorkoutHistory,
 } from "./workoutHistory";
@@ -180,5 +180,71 @@ describe("getHistoryMetricsForDate — workoutHistory vs appHelpers の一致", 
     // setCount は volume と独立して計算される
     expect(a.setCount).toBe(1);
     expect(b.setCount).toBe(1);
+  });
+});
+
+// ── buildPrWeightLabel ────────────────────────────────────────────────────────
+// useAI.js の2箇所（formatBig3MatchedExercise / buildExerciseHistoryContextTextFromStats）
+// が formatBWSetLabel 経由でラベルを生成していることを検証する。
+// formatBWSetLabel は ${added}kg（丸めなし）を使うため、
+// added_weight_kg=5.55 のとき inline（formatKg 経由）と結果が異なる。
+// このテストは inline に戻したとき FAIL する。
+describe("buildPrWeightLabel", () => {
+  // ── BW セット ────────────────────────────────────────────────────────────
+  test("BW + added=10 → 自重+10kg", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 10 }))
+      .toBe("自重+10kg");
+  });
+
+  test("BW + added=0 → 自重", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 0 }))
+      .toBe("自重");
+  });
+
+  test("BW + added=null → 自重", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: null }))
+      .toBe("自重");
+  });
+
+  test("BW + added=5.5 → 自重+5.5kg", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 5.5 }))
+      .toBe("自重+5.5kg");
+  });
+
+  // formatBWSetLabel は ${added}kg（丸めなし）。
+  // inline（formatKg 経由）は formatKg(5.55) = "5.6" になる。
+  // 置き換え前に戻したとき、このテストが FAIL する。
+  test("BW + added=5.55 → 自重+5.55kg（丸めなし: formatBWSetLabel 経由の確認）", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 5.55 }))
+      .toBe("自重+5.55kg");
+  });
+
+  // ── effectiveKg あり ─────────────────────────────────────────────────────
+  test("BW + added=10 + effectiveKg=80 → 自重+10kg(80kg)", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 10, effectiveKg: 80 }))
+      .toBe("自重+10kg(80kg)");
+  });
+
+  test("BW + added=0 + effectiveKg=70 → 自重(70kg)", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 0, effectiveKg: 70 }))
+      .toBe("自重(70kg)");
+  });
+
+  test("BW + effectiveKg=null → effectiveKg なしの bwLabel のみ", () => {
+    expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 10, effectiveKg: null }))
+      .toBe("自重+10kg");
+  });
+
+  // ── 数値セット ────────────────────────────────────────────────────────────
+  test("weight=100 → 100kg", () => {
+    expect(buildPrWeightLabel({ weight: 100 })).toBe("100kg");
+  });
+
+  test("weight=72.5 → 72.5kg", () => {
+    expect(buildPrWeightLabel({ weight: 72.5 })).toBe("72.5kg");
+  });
+
+  test("pr=null → 0kg（呼び出し元が pr 非 null を保証するが境界値確認）", () => {
+    expect(buildPrWeightLabel(null)).toBe("0kg");
   });
 });

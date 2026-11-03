@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   buildHistoryFromWorkoutRows,
+  buildPrWeightLabel,
   calc1RM,
   formatBWSetLabel,
   formatDateKey,
@@ -788,13 +789,7 @@ const summarizeBig3Matches = (stats, message) => {
 
 const formatBig3MatchedExercise = (item) => {
   const latestSets = (item.latestSets || []).map((set) => set.label).join(" / ");
-  const prWeightLabel = item.pr?.weight === "BW"
-    ? (() => {
-        const added = Number(item.pr?.added_weight_kg);
-        const bwLabel = added > 0 ? `自重+${formatKg(added)}kg` : "自重";
-        return item.pr.effectiveKg != null ? `${bwLabel}(${formatKg(item.pr.effectiveKg)}kg)` : bwLabel;
-      })()
-    : `${formatKg(item.pr?.weight)}kg`;
+  const prWeightLabel = buildPrWeightLabel(item.pr);
   const prText = item.pr
     ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
     : "PRなし";
@@ -847,13 +842,7 @@ const buildExerciseHistoryContextTextFromStats = (stats, message, big3Summary = 
     const recentRecords = item.recentRecords
       .map((record) => `${record.date} ${record.setCount}セット ${record.sets.map((set) => set.label).join(" / ")}`)
       .join(" ; ");
-    const prWeightLabel = item.pr?.weight === "BW"
-      ? (() => {
-          const added = Number(item.pr?.added_weight_kg);
-          const bwLabel = added > 0 ? `自重+${formatKg(added)}kg` : "自重";
-          return item.pr.effectiveKg != null ? `${bwLabel}(${formatKg(item.pr.effectiveKg)}kg)` : bwLabel;
-        })()
-      : `${formatKg(item.pr?.weight)}kg`;
+    const prWeightLabel = buildPrWeightLabel(item.pr);
     const prText = item.pr
       ? `PR ${prWeightLabel}×${item.pr.reps}回 推定1RM${item.pr.estimated1RM}kg (${item.pr.date})`
       : "PRなし";

@@ -653,6 +653,19 @@ export const formatKg = (value) => {
   return String(Math.round(num * 10) / 10);
 };
 
+// ─── AI コンテキスト用の PR 重量ラベル ───────────────────
+// pr = { weight, added_weight_kg, effectiveKg, ... }
+// BW セットは formatBWSetLabel 経由で生成し、effectiveKg があれば (Xkg) を付加する。
+// useAI.js の2箇所（formatBig3MatchedExercise / buildExerciseHistoryContextTextFromStats）
+// が共通して使う。純粋関数として helpers に置くことでテスト可能にする。
+export function buildPrWeightLabel(pr) {
+  if (pr?.weight === "BW") {
+    const bwLabel = formatBWSetLabel(pr) ?? "自重";
+    return pr.effectiveKg != null ? `${bwLabel}(${formatKg(pr.effectiveKg)}kg)` : bwLabel;
+  }
+  return `${formatKg(pr?.weight)}kg`;
+}
+
 // ─── 自重セットの実効重量を解決 ──────────────────────────
 // "BW" セット: set.body_weight_kg → bodyWeightKg の順で解決。有効値なければ null
 // 数値セット: Number(set.weight) が正有限値なら返す。無効なら null
