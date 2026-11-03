@@ -1,11 +1,4 @@
-import { formatBWSetLabel } from "../../utils/helpers";
-
-const fmtKg = (w) => {
-    if (w === "BW" || w === null || w === undefined) return null;
-    const n = Number(w);
-    if (!Number.isFinite(n)) return String(w);
-    return String(Math.round(n * 10) / 10);
-};
+import { formatBWSetLabel, formatKg } from "../../utils/helpers";
 
 export default function HistoryExerciseItem({
     name,
@@ -66,7 +59,7 @@ export default function HistoryExerciseItem({
                         >
                             <span>
                                 {i + 1}{" "}
-                                {(formatBWSetLabel(s) ?? `${fmtKg(s.weight)}kg`) + ` × ${s.reps}reps`}
+                                {(formatBWSetLabel(s) ?? `${formatKg(s.weight)}kg`) + ` × ${s.reps}reps`}
                             </span>
 
                             <button

@@ -629,24 +629,22 @@ export function hasMeaningfulPRIncrease(currentSets, previousSets, previousRM = 
 // set.weight === "BW" かつ added_weight_kg > 0 → "自重+Xkg"
 // set.weight === "BW" かつ added_weight_kg なし/0/負  → "自重"
 // set.weight !== "BW" → null（呼び出し元が数値フォーマットを担当）
+//
+// added_weight_kg は formatKg で小数1桁に丸める。
+// ユーザー直接入力（lb→kg 変換経路なし）だが、UI 表示の一貫性のため丸める。
+// 計算には resolveEffectiveWeightKg が生値を使うため、この丸めは計算に影響しない。
 export function formatBWSetLabel(set) {
   if (set?.weight !== "BW") return null;
   const added = Number(set?.added_weight_kg);
-  return added > 0 ? `自重+${added}kg` : "自重";
+  return added > 0 ? `自重+${formatKg(added)}kg` : "自重";
 }
 
 // ─── kg 値を小数1桁に丸めて文字列化 ─────────────────────
 // lb→kg 変換後の端数（例: 73.481904kg）が UI や AI プロンプトに漏れるのを防ぐ。
 // 計算（1RM・ボリューム）は生値を使い、この関数は文字列化の直前だけで呼ぶ。
-//
-// ⚠️ 重複あり・統合未実施:
-// 「小数1桁に丸めて文字列化」は以下にも散在している:
-//   - HistoryExerciseItem.jsx の fmtKg（ローカル定義）
-//   - WorkoutSessionShareModal.jsx の formatWeightValue（ローカル定義）
-//   - FeedSection.jsx の formatSummaryItemSetsText のインライン式
-//   - useFriendsData.js の formatSessionSetDisplay のインライン式
-// 今回は統合しない（いずれも表示専用で現時点では正しく動いている）。
-// 次に桁数を変えるときは上記も合わせて変更すること。
+// 以前散在していた重複実装（HistoryExerciseItem.fmtKg / WorkoutSessionShareModal.formatWeightValue /
+// FeedSection.formatSummaryItemSetsText インライン / useFriendsData.formatSessionSetDisplay インライン）
+// は全てこの関数に統合済み。
 export const formatKg = (value) => {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return "0";

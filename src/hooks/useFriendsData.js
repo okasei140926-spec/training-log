@@ -15,6 +15,7 @@ import {
     sanitizeHistoryRecord,
     hasMeaningfulPRIncrease,
     formatBWSetLabel,
+    formatKg,
     resolveEffectiveWeightKg,
 } from "../utils/helpers";
 import {
@@ -746,8 +747,7 @@ export function useFriendsData({
         if (bwLabel != null) {
             return `${bwLabel} × ${repLabel}`;
         }
-        const weight = Math.round(Number(set.weight || 0) * 10) / 10;
-        return `${weight}kg × ${repLabel}`;
+        return `${formatKg(set.weight)}kg × ${repLabel}`;
     }, []);
 
     const buildFeedItemFromHistoryDate = useCallback(({

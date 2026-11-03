@@ -1,5 +1,6 @@
 // src/components/friends/FeedSection.jsx
 import React, { useRef, useState } from "react";
+import { formatKg } from "../../utils/helpers";
 import { supabase } from "../../utils/supabase";
 import { S } from "../../utils/styles";
 import InviteCard from "./InviteCard";
@@ -734,7 +735,7 @@ const buildSessionSummary = (detailedExercises) => {
 
 export const formatSummaryItemSetsText = (summaryItem) =>
     summaryItem.max_weight
-        ? `${Math.round(Number(summaryItem.max_weight) * 10) / 10}kg × ${summaryItem.set_count}`
+        ? `${formatKg(summaryItem.max_weight)}kg × ${summaryItem.set_count}`
         : `${summaryItem.set_count}セット`;
 
 export default FeedSection;

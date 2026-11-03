@@ -168,3 +168,31 @@ describe('formatSummaryItemSetsText: sets ありの行はフォールバック�
         expect(display).toBe('2セット');
     });
 });
+
+// ─── ④ formatKg 統合テスト（FeedSection.formatSummaryItemSetsText） ──────────
+// 旧実装: `${Math.round(Number(summaryItem.max_weight) * 10) / 10}kg × ...`
+// 新実装: `${formatKg(summaryItem.max_weight)}kg × ...`
+//
+// 通常の有限数値では両実装の出力は同一。
+// FAIL 検証可能なケース:
+//   max_weight = Infinity → 旧実装は "Infinitykg × N"、formatKg は "0kg × N"
+//   max_weight = "BW"    → 旧実装は "NaNkg × N"、     formatKg は "0kg × N"
+//   （どちらも実データには現れないが、Infinity/"BW" は truthy なので
+//     三項演算子の真側に入り旧インラインに到達する）
+describe('formatSummaryItemSetsText: ④ formatKg 統合 — formatKg でのみ正しい出力になるケース', () => {
+    test('lb→kg 変換後の端数（73.481904）が小数1桁に丸まる', () => {
+        // 162lbs × 0.453592 = 73.481904
+        const item = { set_count: 3, max_weight: 73.481904 };
+        expect(formatSummaryItemSetsText(item)).toBe('73.5kg × 3');
+    });
+
+    test('max_weight=Infinity → "0kg × N"（旧インラインは "Infinitykg × N"）', () => {
+        const item = { set_count: 2, max_weight: Infinity };
+        expect(formatSummaryItemSetsText(item)).toBe('0kg × 2');
+    });
+
+    test('max_weight="BW"（truthy 文字列）→ "0kg × N"（旧インラインは "NaNkg × N"）', () => {
+        const item = { set_count: 1, max_weight: 'BW' };
+        expect(formatSummaryItemSetsText(item)).toBe('0kg × 1');
+    });
+});

@@ -82,6 +82,13 @@ describe("formatBWSetLabel", () => {
     expect(formatBWSetLabel({ weight: "BW", added_weight_kg: 5.5 })).toBe("自重+5.5kg");
   });
 
+  // formatKg で小数1桁に丸める（5.55 → 5.6）。
+  // 元は ${added}kg で丸めなし。formatKg を通すことで inline の旧挙動と一致する。
+  // この期待値を "自重+5.55kg" に戻すと丸めなし（旧挙動）に戻ったとき FAIL する。
+  test("BW + added_weight_kg=5.55 → '自重+5.6kg'（formatKg で小数1桁に丸め）", () => {
+    expect(formatBWSetLabel({ weight: "BW", added_weight_kg: 5.55 })).toBe("自重+5.6kg");
+  });
+
   test("数値セット → null（呼び出し元が処理）", () => {
     expect(formatBWSetLabel({ weight: 60, reps: 5 })).toBeNull();
   });
@@ -211,12 +218,11 @@ describe("buildPrWeightLabel", () => {
       .toBe("自重+5.5kg");
   });
 
-  // formatBWSetLabel は ${added}kg（丸めなし）。
-  // inline（formatKg 経由）は formatKg(5.55) = "5.6" になる。
-  // 置き換え前に戻したとき、このテストが FAIL する。
-  test("BW + added=5.55 → 自重+5.55kg（丸めなし: formatBWSetLabel 経由の確認）", () => {
+  // formatBWSetLabel が formatKg を通すため 5.55 → 5.6 に丸められる。
+  // formatBWSetLabel の丸めなし（${added}kg）に戻すと "自重+5.55kg" になり FAIL する。
+  test("BW + added=5.55 → 自重+5.6kg（formatBWSetLabel 経由で丸め）", () => {
     expect(buildPrWeightLabel({ weight: "BW", added_weight_kg: 5.55 }))
-      .toBe("自重+5.55kg");
+      .toBe("自重+5.6kg");
   });
 
   // ── effectiveKg あり ─────────────────────────────────────────────────────
@@ -246,5 +252,21 @@ describe("buildPrWeightLabel", () => {
 
   test("pr=null → 0kg（呼び出し元が pr 非 null を保証するが境界値確認）", () => {
     expect(buildPrWeightLabel(null)).toBe("0kg");
+  });
+});
+
+// ── resolveEffectiveWeightKg は生値のまま（formatBWSetLabel の丸めと独立） ───────
+
+describe("resolveEffectiveWeightKg — added_weight_kg は生値で計算される", () => {
+  test("added_weight_kg=5.55 → 70 + 5.55 = 75.55（丸めなし）", () => {
+    expect(resolveEffectiveWeightKg(
+      { weight: "BW", added_weight_kg: 5.55, body_weight_kg: 70 }
+    )).toBeCloseTo(75.55, 2);
+  });
+
+  test("formatBWSetLabel は '自重+5.6kg' だが計算は 75.55 のまま", () => {
+    const set = { weight: "BW", added_weight_kg: 5.55, body_weight_kg: 70 };
+    expect(formatBWSetLabel(set)).toBe("自重+5.6kg");          // 表示: 丸め
+    expect(resolveEffectiveWeightKg(set)).toBeCloseTo(75.55, 2); // 計算: 生値
   });
 });

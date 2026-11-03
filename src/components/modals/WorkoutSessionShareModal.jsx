@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
-import { formatBWSetLabel } from "../../utils/helpers";
+import { formatBWSetLabel, formatKg } from "../../utils/helpers";
 const CARD_PRESETS = {
     square: {
         key: "square",
@@ -103,11 +103,6 @@ const normalizeUnitLabel = (unit) => {
     return "kg";
 };
 
-const formatWeightValue = (value) => {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return String(value || "");
-    return Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10);
-};
 
 const isDisplayableShareSet = (set) => {
     const reps = Number(set?.reps);
@@ -119,7 +114,7 @@ const isDisplayableShareSet = (set) => {
 };
 
 const formatShareSet = (set, index) => {
-    const reps = formatWeightValue(set?.reps);
+    const reps = formatKg(set?.reps);
     const rawWeight = set?.displayWeight ?? set?.weight;
     if (String(rawWeight || "").toUpperCase() === "BW") {
         return `${index + 1}. ${formatBWSetLabel(set) ?? "自重"} × ${reps}`;
@@ -128,7 +123,7 @@ const formatShareSet = (set, index) => {
     const unit = normalizeUnitLabel(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit);
     const weightNum = Number(rawWeight);
     const kgWeight = unit === "lb" ? weightNum * 0.453592 : weightNum;
-    return `${index + 1}. ${formatWeightValue(kgWeight)}kg × ${reps}`;
+    return `${index + 1}. ${formatKg(kgWeight)}kg × ${reps}`;
 };
 
 const getExerciseDetails = (items) =>
