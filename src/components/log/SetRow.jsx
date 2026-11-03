@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatBWSetLabel } from "../../utils/helpers";
 
 const normalizeUnitLabel = (unit) => {
     const value = String(unit || "kg").toLowerCase();
@@ -47,7 +48,7 @@ const convertWeightForUnit = (weight, sourceUnit, targetUnit) => {
     return num;
 };
 
-const formatPreviousSet = (previousSet, fallbackUnit, targetUnit) => {
+export const formatPreviousSet = (previousSet, fallbackUnit, targetUnit) => {
     if (!previousSet) return "前回 -";
 
     const reps = Number(previousSet.reps);
@@ -57,7 +58,11 @@ const formatPreviousSet = (previousSet, fallbackUnit, targetUnit) => {
 
     const sourceUnit = getSourceUnit(previousSet, fallbackUnit);
 
-    if (sourceUnit === "BW" || rawWeight.toUpperCase() === "BW") {
+    const bwLabel = formatBWSetLabel(previousSet);
+    if (bwLabel !== null) {
+        return `前回 ${bwLabel} × ${repsLabel}`;
+    }
+    if (sourceUnit === "BW") {
         return `前回 自重 × ${repsLabel}`;
     }
 

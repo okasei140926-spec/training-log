@@ -259,7 +259,7 @@ const PROG_WEIGHT_INC_KG = 2.5; // 重量アップ幅（kg）
  * 前回のセット群からオートプログレッションの目標を計算する。
  * @returns {{ weightDisplay: string, unit: string, reps: number } | null}
  */
-const calcProgressionTarget = (prevSets, prevUnit, dispUnit) => {
+export const calcProgressionTarget = (prevSets, prevUnit, dispUnit) => {
     if (!prevSets?.length) return null;
     // 重量セット: 推定1RM（Epley式: weight×(1+reps/30)）最大を基準（同率は高重量優先）
     // 自重セット: 最大回数を記録
@@ -289,6 +289,12 @@ const calcProgressionTarget = (prevSets, prevUnit, dispUnit) => {
 
     // 重量ベース
     if (refWKg !== null) {
+        const normalizedUnit = normalizeWeightUnit(dispUnit || "kg");
+        // dispUnit が BW のとき（前回は重量セット、今回は自重モード）: 自重ベースに fallback
+        if (normalizedUnit === "BW") {
+            const bwReps = maxBWReps > 0 ? maxBWReps + 1 : PROG_REP_MIN;
+            return { weightDisplay: "自重", unit: "", reps: bwReps };
+        }
         let targetWKg, targetReps;
         if (refReps < PROG_REP_MAX) {
             targetWKg = refWKg;
@@ -297,7 +303,6 @@ const calcProgressionTarget = (prevSets, prevUnit, dispUnit) => {
             targetWKg = refWKg + PROG_WEIGHT_INC_KG;
             targetReps = PROG_REP_MIN;
         }
-        const normalizedUnit = normalizeWeightUnit(dispUnit || "kg");
         const targetWeightDisplay = formatConvertedWeight(convertKgValueForDisplayUnit(targetWKg, normalizedUnit));
         const unitLabel = formatWeightUnit(normalizedUnit);
         return { weightDisplay: targetWeightDisplay, unit: unitLabel, reps: targetReps };

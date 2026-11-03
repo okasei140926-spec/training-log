@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { LABEL_COLORS } from "../constants/suggestions";
-import { dispW } from "../utils/helpers";
+import { dispW, formatBWSetLabel } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 
 export default function PrepScreen({
@@ -58,8 +58,17 @@ export default function PrepScreen({
   const prevText = (name) => {
     const prev = getPrev(name);
     if (!prev) return "記録なし";
-    const sets = prev.sets?.map(s => `${dispW(s.weight, unit)}${unit}×${s.reps}`).join(" / ");
-    return `前回: ${sets || `${dispW(prev.weight, unit)}${unit}×${prev.reps}`}`;
+    // NOTE: この関数の formatBWSetLabel 呼び出しはテストで保護されていない。
+    // PrepScreen は React コンポーネント内のクロージャであり、
+    // コンポーネントを render せずに prevText 単体をインポートできないため。
+    const fmtSet = (s) => {
+      const bwLabel = formatBWSetLabel(s);
+      if (bwLabel !== null) return `${bwLabel}×${s.reps}`;
+      return `${dispW(s.weight, unit)}${unit}×${s.reps}`;
+    };
+    const sets = prev.sets?.map(fmtSet).join(" / ");
+    const fallback = fmtSet(prev);
+    return `前回: ${sets || fallback}`;
   };
 
   const ExCard = ({ ex }) => {
