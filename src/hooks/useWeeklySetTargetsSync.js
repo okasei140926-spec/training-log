@@ -35,7 +35,7 @@ export function useWeeklySetTargetsSync({ userId, setWeeklySetTargets }) {
             timerRef.current = null;
         }
         const pending = pendingRef.current;
-        if (pending === null || !userId) return;
+        if (pending == null || !userId) return;
         pendingRef.current = null;
         const { error, count } = await supabase
             .from("profiles")
@@ -48,9 +48,12 @@ export function useWeeklySetTargetsSync({ userId, setWeeklySetTargets }) {
         }
     }, [userId]);
 
-    const handleSave = useCallback((newTargets) => {
-        setWeeklySetTargets(newTargets);
-        pendingRef.current = newTargets;
+    const handleSave = useCallback((next) => {
+        setWeeklySetTargets((prev) => {
+            const resolved = typeof next === "function" ? next(prev) : next;
+            pendingRef.current = resolved;
+            return resolved;
+        });
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(flush, WEEKLY_SET_TARGETS_DEBOUNCE_MS);
     }, [setWeeklySetTargets, flush]);

@@ -47,6 +47,16 @@ import { resolveNewSyncFields } from '../hooks/useProfileSync';
 import { renderHook, act } from '@testing-library/react';
 import { useWeeklySetTargetsSync } from '../hooks/useWeeklySetTargetsSync';
 
+// handleSave は setWeeklySetTargets を updater 形式で呼ぶ。
+// jest.fn() だと updater が実行されず pendingRef.current が設定されないため、
+// 実際に state を更新するスマートモックを使う。
+const makeStateMock = (initial = {}) => {
+    let state = initial;
+    return jest.fn((updaterOrValue) => {
+        state = typeof updaterOrValue === "function" ? updaterOrValue(state) : updaterOrValue;
+    });
+};
+
 // ── resolveNewSyncFields のテスト ──────────────────────────────────────────
 
 const EXPECTED_UPLOAD_KEYS = new Set([
@@ -255,7 +265,7 @@ describe('useWeeklySetTargetsSync: デバウンスと flush', () => {
     });
 
     test('flush: handleSave 後にタイマーが発火する前に flush → Supabase に送信される', async () => {
-        const setWeeklySetTargets = jest.fn();
+        const setWeeklySetTargets = makeStateMock({});
         const userId = 'user-123';
         const { result } = renderHook(() =>
             useWeeklySetTargetsSync({ userId, setWeeklySetTargets })
@@ -278,7 +288,7 @@ describe('useWeeklySetTargetsSync: デバウンスと flush', () => {
     });
 
     test('flush: 複数回 handleSave → flush は最後の値を送信する', async () => {
-        const setWeeklySetTargets = jest.fn();
+        const setWeeklySetTargets = makeStateMock({});
         const { result } = renderHook(() =>
             useWeeklySetTargetsSync({ userId: 'user-456', setWeeklySetTargets })
         );
@@ -298,13 +308,103 @@ describe('useWeeklySetTargetsSync: デバウンスと flush', () => {
     });
 
     test('flush: handleSave を呼ばずに flush → Supabase に送信されない', async () => {
-        const setWeeklySetTargets = jest.fn();
+        const setWeeklySetTargets = makeStateMock({});
         const { result } = renderHook(() =>
             useWeeklySetTargetsSync({ userId: 'user-789', setWeeklySetTargets })
         );
 
         await act(async () => { await result.current.flush(); });
 
+        expect(__mockFrom).not.toHaveBeenCalled();
+    });
+
+    // ── ペイロード内容の検証（バグ修正: handleSave が updater 関数を解決しなかった問題） ──
+    //
+    // 修正前の状態:
+    //   SettingsModal.jsx が setWeeklySetTargets?.((prev) => ({...})) と呼ぶ
+    //   → handleSave は関数を受け取り pendingRef.current に関数を格納
+    //   → flush は { weekly_set_targets: [Function] } を送信
+    //   → JSON.stringify で関数は消え {} になり PostgREST は 204 を返す（空更新）
+    //
+    // 修正後: handleSave が setWeeklySetTargets((prev) => {...}) 形式で呼ぶことで
+    //   updater 関数を解決し、resolved な値を pendingRef.current に格納する
+    //   SettingsModal は updater 形式のまま（連打時の累積を担保するため変更しない）
+
+    test('handleSave に渡したオブジェクトが Supabase の weekly_set_targets に格納される', async () => {
+        const setWeeklySetTargets = makeStateMock({});
+        const { result } = renderHook(() =>
+            useWeeklySetTargetsSync({ userId: 'payload-check', setWeeklySetTargets })
+        );
+
+        const targets = { 胸: 12, 背中: 14, 脚: 10 };
+        act(() => { result.current.handleSave(targets); });
+        await act(async () => { await result.current.flush(); });
+
+        const payload = __mockUpdate.mock.calls[0][0];
+        // weekly_set_targets がオブジェクトであること（関数・undefined ではないこと）
+        expect(typeof payload.weekly_set_targets).toBe('object');
+        expect(payload.weekly_set_targets).toEqual(targets);
+        // JSON.stringify で空にならないこと（関数/undefined は stringify すると {} になる）
+        expect(JSON.stringify(payload.weekly_set_targets)).not.toBe('{}');
+    });
+
+    test('handleSave に updater 関数を渡したとき、解決後のオブジェクトが Supabase ペイロードに入る', async () => {
+        // SettingsModal は (prev) => ({...prev, [bp]: next}) 形式で呼ぶ。
+        // handleSave が updater 関数を解決しなければ pendingRef.current に関数が入り
+        // flush 時に {} が送信される（バグ）。
+        const setWeeklySetTargets = makeStateMock({ 胸: 10 });
+        const { result } = renderHook(() =>
+            useWeeklySetTargetsSync({ userId: 'updater-check', setWeeklySetTargets })
+        );
+
+        const updater = (prev) => ({ ...prev, 胸: (prev['胸'] ?? 10) + 1 });
+        act(() => { result.current.handleSave(updater); });
+        await act(async () => { await result.current.flush(); });
+
+        const payload = __mockUpdate.mock.calls[0][0];
+        // 関数ではなくオブジェクトが格納されること
+        expect(typeof payload.weekly_set_targets).toBe('object');
+        expect(payload.weekly_set_targets).toEqual({ 胸: 11 });
+        // JSON.stringify で空にならないこと
+        expect(JSON.stringify(payload.weekly_set_targets)).not.toBe('{}');
+    });
+
+    test('連打: updater 関数で 3 回 handleSave → 累積した値が Supabase に送信される', async () => {
+        // 連打（+1 を 3 回）しても、makeStateMock が updater を実行するため
+        // pendingRef.current には最終累積値が入る。
+        // SettingsModal が updater 形式を維持している理由: 連打時の累積を担保するため。
+        const setWeeklySetTargets = makeStateMock({ 胸: 10 });
+        const { result } = renderHook(() =>
+            useWeeklySetTargetsSync({ userId: 'rapid-click', setWeeklySetTargets })
+        );
+
+        const inc = (prev) => ({ ...prev, 胸: (prev['胸'] ?? 10) + 1 });
+        act(() => { result.current.handleSave(inc); });
+        act(() => { result.current.handleSave(inc); });
+        act(() => { result.current.handleSave(inc); });
+
+        await act(async () => { await result.current.flush(); });
+
+        expect(__mockUpdate).toHaveBeenCalledTimes(1);
+        expect(__mockUpdate).toHaveBeenCalledWith(
+            { weekly_set_targets: { 胸: 13 } },
+            { count: "exact" }
+        );
+    });
+
+    test('handleSave に undefined を渡した後 flush → Supabase に送信されない（== null ガード）', async () => {
+        // pending == null は null と undefined を両方弾く。
+        // === null のままだと undefined !== null になりガードを通過してしまう。
+        const setWeeklySetTargets = makeStateMock({});
+        const { result } = renderHook(() =>
+            useWeeklySetTargetsSync({ userId: 'undef-guard', setWeeklySetTargets })
+        );
+
+        // undefined を渡すと pendingRef.current = undefined になる
+        act(() => { result.current.handleSave(undefined); });
+        await act(async () => { await result.current.flush(); });
+
+        // == null ガードにより Supabase は呼ばれないこと
         expect(__mockFrom).not.toHaveBeenCalled();
     });
 });
@@ -334,7 +434,7 @@ describe('useWeeklySetTargetsSync: 画面離脱イベントで flush', () => {
     });
 
     test('visibilitychange(hidden) で flush が走る', async () => {
-        const setWeeklySetTargets = jest.fn();
+        const setWeeklySetTargets = makeStateMock({});
         const { result } = renderHook(() =>
             useWeeklySetTargetsSync({ userId: 'ev-user-1', setWeeklySetTargets })
         );
@@ -359,7 +459,7 @@ describe('useWeeklySetTargetsSync: 画面離脱イベントで flush', () => {
     });
 
     test('visibilitychange(visible) では flush しない', async () => {
-        const setWeeklySetTargets = jest.fn();
+        const setWeeklySetTargets = makeStateMock({});
         renderHook(() =>
             useWeeklySetTargetsSync({ userId: 'ev-user-2', setWeeklySetTargets })
         );
@@ -374,7 +474,7 @@ describe('useWeeklySetTargetsSync: 画面離脱イベントで flush', () => {
     });
 
     test('pagehide で flush が走る', async () => {
-        const setWeeklySetTargets = jest.fn();
+        const setWeeklySetTargets = makeStateMock({});
         const { result } = renderHook(() =>
             useWeeklySetTargetsSync({ userId: 'ev-user-3', setWeeklySetTargets })
         );
@@ -396,7 +496,7 @@ describe('useWeeklySetTargetsSync: 画面離脱イベントで flush', () => {
     });
 
     test('アンマウント時に flush が走る', async () => {
-        const setWeeklySetTargets = jest.fn();
+        const setWeeklySetTargets = makeStateMock({});
         const { result, unmount } = renderHook(() =>
             useWeeklySetTargetsSync({ userId: 'ev-user-4', setWeeklySetTargets })
         );
