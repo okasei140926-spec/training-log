@@ -459,6 +459,8 @@ export const buildManualBestMap = (manualBests = [], ctx) => {
   const bodyWeightKg = ctx?.bodyWeightKg ?? null;
   const bestMap = {};
 
+  // manual_bests テーブルは weight / reps のみのフラットスキーマで sets を持たない。
+  // buildValidSets に { weight, reps } を渡すのは旧フォーマットのフォールバックではなく通常の単一セット生成。
   (manualBests || []).forEach((entry) => {
     if (!entry?.exercise_name) return;
     const normalizedName = normalizeExerciseName(entry.exercise_name);
@@ -578,6 +580,8 @@ export const buildManualRecordMap = (manualBests = [], ctx) => {
   const bodyWeightKg = ctx?.bodyWeightKg ?? null;
   const recordMap = {};
 
+  // manual_bests テーブルは weight / reps のみのフラットスキーマで sets を持たない。
+  // buildValidSets に { weight, reps } を渡すのは旧フォーマットのフォールバックではなく通常の単一セット生成。
   (manualBests || []).forEach((entry, index) => {
     if (!entry?.exercise_name) return;
     const normalizedName = normalizeExerciseName(entry.exercise_name);

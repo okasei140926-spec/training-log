@@ -7,6 +7,18 @@ export default function PRGraphModal({ exName, history, unit = "kg", onClose }) 
   if (!recs.length) return null;
 
   const toU = (kg) => unit === "lbs" ? kg * KG_TO_LBS : kg;
+  // フォールバック（sets なしの旧フォーマットレコード）:
+  // sets フィールドが追加される以前に workouts.data に保存されたレコード向け。
+  // added_weight_kg を引き継がないのは正しい — フラットレコードにそのフィールドは存在しない。
+  //
+  // 2026-11-04 時点で Supabase の workouts.data を全行集計したところ
+  // sets を持たないレコードは 0 件だった。現行の書き込みパスは常に sets を含み、
+  // localStorage の旧キャッシュはスキーマバージョン不一致で破棄される。
+  // 削除しないのは長期間起動していない端末のローカルデータなど
+  // 列挙しきれない経路が残るため。通らないパスなので維持コストはない。
+  //
+  // 再調査クエリ（個人情報を返さない）:
+  //   select count(*) from workouts where data is not null and not (data::text like '%"sets":%');
   const vals = recs.map(r => ({
     date: r.date,
     rm: Math.round(toU(calc1RM(Array.isArray(r.sets) && r.sets.length ? r.sets : [{ weight: r.weight, reps: r.reps }], { bodyWeightKg }))),

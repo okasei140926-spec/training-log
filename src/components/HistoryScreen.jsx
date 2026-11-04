@@ -345,6 +345,8 @@ export default function HistoryScreen({
 
       const key = `${bodyPart}::${normalizeExerciseName(entry?.exercise_name)}`;
       if (!map[key]) map[key] = [];
+      // manual_bests テーブルは weight / reps のみのフラットスキーマで sets を持たない。
+      // これは旧フォーマットのフォールバックではなく通常の単一セット生成。
       map[key].push(
         ...sanitizeWorkoutSets([{ weight: entry.weight, reps: entry.reps }], {
           allowBodyweight: false,
@@ -623,6 +625,8 @@ export default function HistoryScreen({
               return;
             }
 
+            // manual_bests テーブルは weight / reps のみのフラットスキーマで sets を持たない。
+            // これは旧フォーマットのフォールバックではなく通常の単一セット生成。
             previousSets.push(
               ...sanitizeWorkoutSets(
                 [{ weight: best.weight, reps: best.reps }],

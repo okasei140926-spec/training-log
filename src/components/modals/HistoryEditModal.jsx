@@ -2,6 +2,18 @@ import { useState } from "react";
 import { calc1RM, sanitizeWorkoutSets } from "../../utils/helpers";
 
 export default function HistoryEditModal({ exName, record, onSave, onDelete, onClose }) {
+  // フォールバック（sets なしの旧フォーマットレコード）:
+  // sets フィールドが追加される以前に workouts.data に保存されたレコード向け。
+  // added_weight_kg を引き継がないのは正しい — フラットレコードにそのフィールドは存在しない。
+  //
+  // 2026-11-04 時点で Supabase の workouts.data を全行集計したところ
+  // sets を持たないレコードは 0 件だった。現行の書き込みパスは常に sets を含み、
+  // localStorage の旧キャッシュはスキーマバージョン不一致で破棄される。
+  // 削除しないのは長期間起動していない端末のローカルデータなど
+  // 列挙しきれない経路が残るため。通らないパスなので維持コストはない。
+  //
+  // 再調査クエリ（個人情報を返さない）:
+  //   select count(*) from workouts where data is not null and not (data::text like '%"sets":%');
   const [sets, setSets] = useState(
     (record.sets?.length ? record.sets : [{ weight: record.weight ?? "", reps: record.reps ?? "" }])
       .map(s => ({ ...s }))
