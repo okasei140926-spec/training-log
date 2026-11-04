@@ -1,4 +1,4 @@
-import { formatBWSetLabel, sanitizeHistoryRecord } from "../../utils/helpers";
+import { estimate1RM, formatBWSetLabel, sanitizeHistoryRecord } from "../../utils/helpers";
 import { normalizeExerciseName } from "../../utils/exerciseName";
 import { normalizeBodyPartLabel } from "../../utils/bodyPartClassification";
 import { getSetCountByBodyPart } from "../../utils/setCountByBodyPart";
@@ -62,13 +62,7 @@ const getWeightKgForCalculation = (set, bodyWeightKg = null) => {
   return displayUnit === "lb" ? rawWeight * LB_TO_KG : rawWeight;
 };
 
-const calcEstimated1RMFromKg = (weightKg, reps) => {
-  const weight = Number(weightKg);
-  const repCount = Number(reps);
-  if (!Number.isFinite(weight) || !Number.isFinite(repCount) || weight <= 0 || repCount <= 0) return 0;
-  if (repCount === 1) return weight;
-  return weight * (1 + repCount / 30);
-};
+const calcEstimated1RMFromKg = (weightKg, reps) => estimate1RM(weightKg, reps);
 
 export function historyToWorkoutSessions(trustedHistory = {}, { bodyWeightKg = null } = {}) {
   const byDate = new Map();

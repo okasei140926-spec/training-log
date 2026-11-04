@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUserSettings } from "../context/UserSettingsContext";
-import { calc1RM, countValidSets, formatBWSetLabel, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, resolveEffectiveWeightKg, storeW } from "../utils/helpers";
+import { calc1RM, countValidSets, estimate1RM, formatBWSetLabel, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, resolveEffectiveWeightKg, storeW } from "../utils/helpers";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -278,7 +278,7 @@ export const calcProgressionTarget = (prevSets, prevUnit, dispUnit) => {
             if (r > maxBWReps) maxBWReps = r;
         } else if (Number.isFinite(Number(wKgRaw)) && Number(wKgRaw) > 0) {
             const wKg = Number(wKgRaw);
-            const e1rm = wKg * (1 + r / 30);
+            const e1rm = estimate1RM(wKg, r);
             if (e1rm > maxE1rm || (e1rm === maxE1rm && wKg > refWKg)) {
                 maxE1rm = e1rm;
                 refWKg = wKg;

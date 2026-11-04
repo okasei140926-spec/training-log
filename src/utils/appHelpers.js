@@ -860,6 +860,28 @@ export const getEmptyWorkoutMetrics = (updatedAt = null) => ({
 
 export const roundWorkoutMetric = (value) => Math.round(Number(value || 0) * 10) / 10;
 
+// ⚠️ 同名の関数が utils/workoutHistory.js:35 にも存在する。
+//
+// 【差異】setCount の数え方が異なる:
+//   - この版（appHelpers.js）: sanitizeHistoryRecord 後の sets.length
+//     → sanitize で除外された（weight 不正など）セットは含まない。
+//   - workoutHistory.js 版: countValidSets(getRecordSourceSets(record))
+//     → reps >= 1 のセットのみカウント。weight の有効性を問わない。
+//
+// 【使い分け】
+//   - この版 → G1:supabase（useHistorySave.js:585）、
+//               G8b:startup-no-diff（useHistorySave.js:505）
+//   - workoutHistory.js 版 → G2:repository-guard（workoutRepository.js:387）
+//
+// 各ガードは同一版の中で local と remote を比較している。
+// 版をまたいだ比較は存在しない（2026-11-04 時点で確認）。
+//
+// 【差異が顕在化する条件】
+//   「reps は有効（>= 1）だが weight が不正（例: "?"）」なセットが混在する場合。
+//   通常の書き込みパスでは sanitize を通るため発生しないが、
+//   旧スキーマや古い localStorage 由来のデータでは起こりうる。
+//
+// ⚠️ 片方だけ変更しないこと。変更するときは両方のファイルを確認すること。
 export const getHistoryMetricsForDate = (historyMap, targetDate, { updatedAt = null, bodyWeightKg = null } = {}) => {
     const normalizedDate = String(targetDate || "").slice(0, 10);
     if (!normalizedDate) return getEmptyWorkoutMetrics(updatedAt);

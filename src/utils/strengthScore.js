@@ -3,6 +3,7 @@
  * All functions are pure — no side effects, no imports from React.
  */
 import { EQUIPMENT_COEFFICIENTS, PRESET_EQUIPMENT, inferEquipment } from "./equipmentTypes";
+import { estimate1RM } from "./helpers";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,9 +97,8 @@ const FEMALE_COEFFICIENT = 0.6;
 export function calcCappedE1RM(weightKg, reps) {
     if (!Number.isFinite(weightKg) || weightKg <= 0) return 0;
     const r = Math.min(Math.max(1, Math.round(Number(reps) || 0)), 12);
-    if (r <= 0) return 0;
-    if (r === 1) return weightKg;
-    return weightKg * (1 + r / 30);
+    // r は Math.max(1, ...) により常に >= 1。r <= 0 になることはない。
+    return estimate1RM(weightKg, r);
 }
 
 /**

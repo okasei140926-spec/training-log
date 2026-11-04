@@ -679,6 +679,24 @@ export function resolveEffectiveWeightKg(set, bodyWeightKg = null) {
 }
 
 // ─── 推定1RM計算（Epley式）────────────────────────────
+
+/**
+ * Epley 式で推定 1RM を計算する低レベル純粋関数。
+ * 丸めは行わない（表示側の責務）。
+ *
+ * @param {number} weightKg - 重量（kg）。BW 解決済みであること
+ * @param {number} reps     - 回数
+ * @returns {number} 推定 1RM（kg）。不正値のとき 0
+ */
+export function estimate1RM(weightKg, reps) {
+  const w = Number(weightKg);
+  const r = Number(reps);
+  if (!Number.isFinite(w) || w <= 0) return 0;
+  if (!Number.isFinite(r) || r <= 0) return 0;
+  if (r === 1) return w;
+  return w * (1 + r / 30);
+}
+
 export function calc1RM(sets, { bodyWeightKg = null } = {}) {
   const validSets = sanitizeWorkoutSets(sets, { allowBodyweight: true });
   if (!validSets.length) return 0;
@@ -696,8 +714,7 @@ export function calc1RM(sets, { bodyWeightKg = null } = {}) {
         return 0;
       }
     }
-    if (reps === 1) return weight;
-    return weight * (1 + reps / 30);
+    return estimate1RM(weight, reps);
   }));
 }
 
