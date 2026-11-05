@@ -177,7 +177,7 @@ export function useHistoryHandlers({
             requestedDate === currentLogDate &&
             workoutStartedForDate === requestedDate &&
             hasDraftContent(currentDraft);
-        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(requestedDate) || {};
+        const pendingChange = pendingWorkoutContentChangeDatesRef.current.get(requestedDate);
         const explicitLocalEdit = Boolean(
             isExplicitWorkoutEditChange(pendingChange) ||
             explicitWorkoutEditDatesRef.current.has(requestedDate)
@@ -205,16 +205,19 @@ export function useHistoryHandlers({
         // getDraftMetricsForDate and shouldPreserveRawDraftOverIncoming are logData/volume-based
         // and cannot see exercises without sets, so we compare sessionEx directly.
         //
-        // Guard: persistently-deleted dates MUST NOT be bypassed by this condition.
-        // Gate A (below) only fires when shouldUseLocalDraft=false. If localHasMoreExercises
-        // makes shouldUseLocalDraft=true, Gate A is never reached and a stale plan draft could
-        // resurrect a deleted workout. The normal deletion path writes hasUnsavedChanges:false
-        // (localDraftCanOverrideSaved=false), which prevents this in practice, but we add an
-        // explicit guard as defense-in-depth. persistentDeletedDates is used here for display/
-        // restore suppression only — it does not touch the save path.
-        const _persistentDeletedForGuard = loadPersistentDeletedDates(user?.id);
+        // DO NOT add a persistentDeletedDates guard here.
+        // Reason 1 — it is redundant: deleteAllHistoryForDate always writes hasUnsavedChanges:false,
+        // so localDraftCanOverrideSaved is already false for any draft that existed before the
+        // deletion. localHasMoreExercises therefore cannot trigger shouldUseLocalDraft for stale
+        // pre-deletion drafts regardless of a guard here.
+        // Reason 2 — it causes a regression: a post-deletion plan draft (user pressed "start plan"
+        // after deleting) has hasUnsavedChanges:true because plan-start wrote it after the deletion
+        // cleared the flag. Adding a guard here silently discards those plan exercises when the user
+        // navigates away and returns — "delete → start plan → navigate back → exercises gone".
+        // This was confirmed by test: gateA.test.js "削除後プラン種目（sets未記録）は navigate-back でも消えない".
+        // Gate A (below) remains the correct place to block Supabase content restoration for
+        // deleted dates; it fires when shouldUseLocalDraft=false (no post-deletion user action).
         const localHasMoreExercises =
-            !_persistentDeletedForGuard[requestedDate] &&
             (draftForDate.sessionEx || []).length > (savedDraftForDate.sessionEx || []).length;
         const shouldUseLocalDraft = localDraftCanOverrideSaved && (
             explicitLocalEdit ||
