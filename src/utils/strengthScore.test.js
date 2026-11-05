@@ -145,8 +145,8 @@ describe("calcStrengthRanks", () => {
     test("computes 胸 score correctly", () => {
         const { categories } = calcStrengthRanks(mockHistory, mockMuscleEx, {}, bodyWeight, "male");
         expect(categories["胸"].hasData).toBe(true);
-        expect(categories["胸"].scoreKg).toBeCloseTo(100, 0);
-        expect(categories["胸"].scoreRatio).toBeCloseTo(100 / 70, 1);
+        expect(categories["胸"].scoreKg).toBeCloseTo(90, 0);
+        expect(categories["胸"].scoreRatio).toBeCloseTo(90 / 70, 1);
         expect(categories["胸"].rankIndex).toBe(2); // 上級
         expect(categories["胸"].rankLabel).toBe(RANKS[2]);
     });

@@ -10,7 +10,14 @@ import { estimate1RM } from "./helpers";
 /** Score is computed from the last N weeks of history */
 export const SCORE_WEEK_WINDOW = 8;
 
-/** Weighted average weights for top-N exercises per category */
+/**
+ * Weighted average coefficients for top-N exercises per category.
+ *
+ * [2] と [3] の合計はちょうど 1.0。
+ * [1] のみ 0.9 — 種目が 1 つしかない部位への意図的な減点であり、打ち間違いではない。
+ * 根拠: コミット 40196ab
+ *   「■2 Weighted top-3: 50/30/20%, 2ex: 60/40%, 1ex: ×0.9」
+ */
 export const SCORE_TOP_WEIGHTS = {
     3: [0.50, 0.30, 0.20],
     2: [0.60, 0.40],

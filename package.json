@@ -46,6 +46,11 @@
       "react-app/jest"
     ]
   },
+  "jest": {
+    "moduleNameMapper": {
+      "^@revenuecat/purchases-capacitor$": "<rootDir>/src/__mocks__/@revenuecat/purchases-capacitor.js"
+    }
+  },
   "browserslist": {
     "production": [
       ">0.2%",
