@@ -332,16 +332,34 @@ export const attachRecordFetchContext = (error, context) => {
     return wrapped;
 };
 
-export const getHistoryLoadErrorMessage = (error) => {
-    const message = String(error?.message || "");
-    const context = error?.__recordFetchContext;
-    if (context?.table || context?.query || message) {
-        return `記録の取得に失敗しました: ${context?.table || "unknown"} ${context?.operation || ""} - ${message || "unknown error"}`;
+export const classifyNetworkError = (error) => {
+    const message = String(error?.message || "").toLowerCase();
+    const name = String(error?.name || "").toLowerCase();
+    const status = Number(error?.status || error?.statusCode || error?.code || 0);
+
+    if (
+        name === "aborterror" ||
+        message.includes("aborted") ||
+        message.includes("abort") ||
+        message.includes("failed to fetch") ||
+        message.includes("err_failed") ||
+        message.includes("statement timeout") ||
+        message.includes("canceling statement") ||
+        error?.__offlineEarlyExit
+    ) {
+        return "通信環境を確認してください";
     }
-    if (message.includes("statement timeout") || message.includes("canceling statement")) {
-        return "記録の取得に時間がかかっています。再取得してください。";
+
+    if (
+        status === 401 ||
+        message.includes("jwt") ||
+        message.includes("unauthorized") ||
+        message.includes("not authenticated")
+    ) {
+        return "ログインし直してください";
     }
-    return "記録の取得に失敗しました。再取得してください。";
+
+    return "記録を読み込めませんでした";
 };
 
 export const getRuntimeEnvironmentLabel = () => {

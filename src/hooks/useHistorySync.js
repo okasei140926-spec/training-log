@@ -46,7 +46,7 @@ export function useHistorySync({
     isTransientSupabaseFetchError,
     logRecordFetchError,
     attachRecordFetchContext,
-    getHistoryLoadErrorMessage,
+    classifyNetworkError,
     getCurrentWeekRangeForHomeSummary,
     getHistoryOverallMetrics,
     getHistoryMetricsForDate,
@@ -855,7 +855,7 @@ export function useHistorySync({
                         });
                         return;
                     }
-                    setHistoryLoadError("記録データの復元形式を確認中です。再取得してください。");
+                    setHistoryLoadError("記録を読み込めませんでした");
                     return;
                 }
 
@@ -1020,7 +1020,7 @@ export function useHistorySync({
 
                 historyRemoteLoadFailedRef.current = true;
                 setHistoryRemoteReady(false);
-                setHistoryLoadError(getHistoryLoadErrorMessage(error));
+                setHistoryLoadError(classifyNetworkError(error));
                 const fallbackHistory = applyHistoryDeleteMarkers(localMergeCandidate, effectiveDeleteMarkers);
                 const currentDisplayedHistory = latestHistoryRef.current || {};
                 const hasCurrentData = getHistoryOverallMetrics(currentDisplayedHistory).setCount > 0;
@@ -1129,7 +1129,7 @@ export function useHistorySync({
         getCurrentWeekRangeForHomeSummary,
         getDateDaysAgoKey,
         getHistoryDeleteMarkersKey,
-        getHistoryLoadErrorMessage,
+        classifyNetworkError,
         getHistoryOverallMetrics,
         getHomeWeeklySourceDebug,
         getHomeWeeklySummaryDebug,
@@ -1524,7 +1524,7 @@ export function useHistorySync({
                     currentDisplayed: getHistoryOverallMetrics(latestHistoryRef.current || {}),
                     currentWorkoutsDataDisplayed: getHistoryOverallMetrics(workoutsDataHistoryRef.current || {}),
                 });
-                setHistoryLoadError(getHistoryLoadErrorMessage(error));
+                setHistoryLoadError(classifyNetworkError(error));
             }
         };
 
@@ -1552,7 +1552,7 @@ export function useHistorySync({
         buildRemoteHistoryWithWorkoutRowsPriority,
         getCurrentWeekRangeForHomeSummary,
         getDateDaysAgoKey,
-        getHistoryLoadErrorMessage,
+        classifyNetworkError,
         getHistoryMetricsForDate,
         getHistoryOverallMetrics,
         getHomeWeeklySourceDebug,

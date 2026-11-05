@@ -485,6 +485,45 @@ export function collectRecentSessions(history, muscleEx, overrides, workoutDurat
         });
 }
 
+/**
+ * リカバリーカードの初期選択部位を決定する。
+ * AI プランの今日のメニュー先頭部位が recoveries に存在する場合はそれを返す。
+ * 存在しない（プランなし・部位が hidden 等）場合は recoveries[0].part を返す。
+ */
+export function getDefaultRecoveryPart(nextPlanDay, recoveries) {
+    const planPart = nextPlanDay?.bodyParts?.[0];
+    if (planPart && recoveries.some(r => r.part === planPart)) return planPart;
+    return recoveries[0]?.part ?? null;
+}
+
+/**
+ * 今月と先月同期カットオフ内のトレーニング日数を集計する。
+ *
+ * "トレーニングした日"の定義: allSessions の各エントリが1日。
+ * allSessions は collectRecentSessions から生成され、setCount > 0 を通過した
+ * セッションのみ含むため、記録なし日は除外されている。
+ *
+ * @param {Array} allSessions - collectRecentSessions の結果
+ * @param {Date}  now         - 基準日（省略時は new Date()）
+ * @returns {{ thisDays: number, prevDays: number } | null}
+ */
+export function calcMonthlyTrainingDays(allSessions, now = new Date()) {
+    const todayDay = String(now.getDate()).padStart(2, "0");
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+    const prevMonthCutoff = `${prevMonth}-${todayDay}`;
+    let thisDays = 0;
+    let prevDays = 0;
+    (allSessions || []).forEach(session => {
+        const m = session.date.slice(0, 7);
+        if (m === thisMonth) thisDays++;
+        else if (m === prevMonth && session.date <= prevMonthCutoff) prevDays++;
+    });
+    if (thisDays === 0 && prevDays === 0) return null;
+    return { thisDays, prevDays };
+}
+
 export function collectWeeklySetsFromSessions(sessions = []) {
     return (sessions || []).reduce((acc, session) => {
         (session.exercises || []).forEach((exercise) => {

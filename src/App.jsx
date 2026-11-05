@@ -119,7 +119,7 @@ import {
     getHistoryDebugDiffForDate,
     getHistoryDebugSummaryForDate,
     getHistoryDeleteMarkersKey,
-    getHistoryLoadErrorMessage,
+    classifyNetworkError,
     getHistoryMetricsForDate,
     getHistoryOverallMetrics,
     getHomePropsDateDebug,
@@ -1377,7 +1377,7 @@ export default function GymApp() {
         isTransientSupabaseFetchError,
         logRecordFetchError,
         attachRecordFetchContext,
-        getHistoryLoadErrorMessage,
+        classifyNetworkError,
         getCurrentWeekRangeForHomeSummary,
         getHistoryOverallMetrics,
         getHistoryMetricsForDate,
@@ -3469,11 +3469,8 @@ export default function GymApp() {
                             justifyContent: "space-between",
                             gap: 12,
                         }}>
-                            <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 900 }}>記録の取得に失敗しました</div>
-                                <div style={{ color: "var(--text2)", fontSize: 12 }}>
-                                    {historyLoadError}
-                                </div>
+                            <div style={{ minWidth: 0, fontWeight: 800 }}>
+                                {historyLoadError}
                             </div>
                             <button
                                 type="button"

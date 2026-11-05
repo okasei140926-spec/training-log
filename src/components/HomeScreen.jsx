@@ -21,6 +21,8 @@ import {
     sumBodyPartCounts,
     getRegressedBodyParts,
     bodyPartCountsSignature,
+    getDefaultRecoveryPart,
+    calcMonthlyTrainingDays,
 } from "./home/homeUtils";
 import WeeklyTrainingModal from "./home/WeeklyTrainingModal";
 import RecoveryModal from "./home/RecoveryModal";
@@ -301,24 +303,11 @@ export default function HomeScreen({
         });
     }, [homeMetricsReady, recordsLoading, history, muscleEx, exerciseBodyPartOverrides, partsToShow]);
 
-    const monthlyVolume = useMemo(() => {
+    const defaultRecoveryPart = getDefaultRecoveryPart(nextPlanDay, recoveries);
+
+    const monthlyTrainingDays = useMemo(() => {
         if (!homeMetricsReady || recordsLoading) return null;
-        const now = new Date();
-        const todayDay = String(now.getDate()).padStart(2, "0");
-        const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-        const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
-        // 先月の同期カットオフ: 先月の1日〜今日と同じ日付まで
-        const prevMonthCutoff = `${prevMonth}-${todayDay}`;
-        let thisVol = 0;
-        let prevVol = 0;
-        (allSessions || []).forEach(session => {
-            const m = session.date.slice(0, 7);
-            if (m === thisMonth) thisVol += session.volume || 0;
-            else if (m === prevMonth && session.date <= prevMonthCutoff) prevVol += session.volume || 0;
-        });
-        if (thisVol === 0 && prevVol === 0) return null;
-        return { thisVol: Math.round(thisVol), prevVol: Math.round(prevVol) };
+        return calcMonthlyTrainingDays(allSessions);
     }, [homeMetricsReady, recordsLoading, allSessions]);
 
     const isLateWeek = (() => {
@@ -420,7 +409,7 @@ export default function HomeScreen({
                 <div style={{ display: "flex", gap: 7, overflowX: "auto", marginBottom: 14, paddingBottom: 2, scrollbarWidth: "none" }}>
                     {recoveries.map(item => {
                         const meta = RECOVERY_META[item.status];
-                        const isActive = (selectedRecoveryPart || recoveries[0]?.part) === item.part;
+                        const isActive = (selectedRecoveryPart || defaultRecoveryPart) === item.part;
                         return (
                             <button
                                 key={item.part}
@@ -430,7 +419,7 @@ export default function HomeScreen({
                                     flexShrink: 0,
                                     padding: "6px 13px",
                                     borderRadius: 999,
-                                    border: `1.5px solid ${isActive ? meta.color : "var(--home-inner-border)"}`,
+                                    border: `1.5px solid ${isActive ? meta.color : `${meta.color}99`}`,
                                     background: isActive ? `${meta.color}22` : "var(--home-inner-card)",
                                     color: isActive ? meta.color : "var(--home-muted2)",
                                     fontSize: 13,
@@ -445,7 +434,7 @@ export default function HomeScreen({
 
                 {/* 選択部位のプログレスバー */}
                 {(() => {
-                    const activePart = selectedRecoveryPart || recoveries[0]?.part;
+                    const activePart = selectedRecoveryPart || defaultRecoveryPart;
                     const item = recoveries.find(r => r.part === activePart);
                     if (!item) return null;
                     const meta = RECOVERY_META[item.status];
@@ -629,7 +618,7 @@ export default function HomeScreen({
                         })}
                     </div>
                 )}
-                {monthlyVolume && (
+                {monthlyTrainingDays && (
                     <div style={{
                         marginTop: 14,
                         paddingTop: 12,
@@ -640,15 +629,14 @@ export default function HomeScreen({
                     }}>
                         <span style={{ fontSize: 12, color: "var(--home-muted)", fontWeight: 800 }}>今月</span>
                         <span style={{ fontSize: 17, fontWeight: 950, color: "var(--home-text)" }}>
-                            {monthlyVolume.thisVol.toLocaleString("ja-JP")}kg
+                            {monthlyTrainingDays.thisDays}日
                         </span>
-                        {monthlyVolume.prevVol > 0 && (() => {
-                            const diff = monthlyVolume.thisVol - monthlyVolume.prevVol;
-                            const pct = Math.round(Math.abs(diff) / monthlyVolume.prevVol * 100);
+                        {(() => {
+                            const diff = monthlyTrainingDays.thisDays - monthlyTrainingDays.prevDays;
                             const isUp = diff >= 0;
                             return (
                                 <span style={{ fontSize: 12, fontWeight: 800, color: isUp ? "var(--accent)" : "var(--home-muted)" }}>
-                                    {isUp ? "▲" : "▼"}{pct}% 先月同期比
+                                    {isUp ? "▲" : "▼"}{Math.abs(diff)}日 先月同期比
                                 </span>
                             );
                         })()}
