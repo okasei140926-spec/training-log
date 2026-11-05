@@ -86,7 +86,7 @@ export function useHistoryHandlers({
     invalidateSupabaseFetchFreshByPrefix,
     bodyWeightKg = null,
 }) {
-    const handleLogForDate = (dateStr) => {
+    const handleLogForDate = (dateStr, { planExercises = null, planLabels = null } = {}) => {
         const requestedDate = normalizeDraftDateKey(dateStr);
         const currentLogDate = normalizeDraftDateKey(logDate);
         const currentDraft = withDraftDateMeta(currentLogDate, getCurrentLogDraftSnapshot(), {
@@ -100,6 +100,53 @@ export function useHistoryHandlers({
 
         setLogMode(requestedDate === getTodayKey() ? "today" : "past");
         setLogDate(requestedDate);
+
+        // プラン開始パス: 保存済み記録・未保存入力を保持したままプランの種目をマージする。
+        // 通常の restore 分岐（shouldUseSavedWorkout / shouldUseLocalDraft）を経由すると
+        // handleLogForDate が explicit_date_nav で externalDraft を上書きし、useWorkoutLog の
+        // useEffect がドラフトを baseExercises にリセットしてしまうため、ここで早期リターンする。
+        //
+        // データ保護方針:
+        //   既存の記録（Supabase 保存済み / 未保存ローカル）が存在する場合は
+        //   それを残したままプランの種目を追加する。既存にない種目のみを末尾に追加し、
+        //   logData（セット記録）は既存を引き継ぐ。
+        if (planExercises) {
+            // ① 今日のローカルドラフトを取得（直前の saveDraftForDate 後の最新状態）
+            const existingDraftForDate = loadDraftForDate(requestedDate);
+            const savedDraftForDate = buildSavedWorkoutDraftForDate(requestedDate, trustedHistory);
+
+            // ② 既存の exercises / logData を決定（優先順: 未保存ローカル > Supabase 保存済み > 空）
+            let baseSessionEx = [];
+            let baseLogData = {};
+            let baseExerciseUnits = {};
+            if (hasDraftContent(existingDraftForDate) && existingDraftForDate?.meta?.hasUnsavedChanges) {
+                baseSessionEx = existingDraftForDate.sessionEx || [];
+                baseLogData = existingDraftForDate.logData || {};
+                baseExerciseUnits = existingDraftForDate.exerciseUnits || {};
+            } else if (savedDraftForDate.hasSavedWorkout) {
+                baseSessionEx = savedDraftForDate.sessionEx || [];
+                baseLogData = savedDraftForDate.logData || {};
+                baseExerciseUnits = savedDraftForDate.exerciseUnits || {};
+            }
+
+            // ③ プランの種目のうち既存にない種目だけを末尾に追加する
+            const normalize = (n) => String(n || "").trim();
+            const existingNameSet = new Set(baseSessionEx.map(e => normalize(e.name)));
+            const addedPlanExercises = planExercises.filter(
+                e => !existingNameSet.has(normalize(e.name))
+            );
+            const mergedSessionEx = [...baseSessionEx, ...addedPlanExercises];
+
+            const planDraft = withDraftDateMeta(requestedDate, {
+                todayLabels: planLabels || [],
+                sessionEx: mergedSessionEx,
+                logData: baseLogData,
+                exerciseUnits: baseExerciseUnits,
+            }, { source: "explicit_date_nav", hasUnsavedChanges: true });
+            applyLogDraftState(planDraft);
+            setScreen("log");
+            return;
+        }
 
         const draftForDate = loadDraftForDate(requestedDate);
         const savedDraftForDate = withDraftDateMeta(
@@ -153,12 +200,29 @@ export function useHistoryHandlers({
         const localDraftCanOverrideSaved = hasDraftContent(draftForDate) &&
             !localDraftIsCleanPersisted &&
             localDraftHasUnsavedChanges;
+        // localHasMoreExercises: the local draft has more sessionEx entries than the saved workout.
+        // This occurs when plan-start added new exercises that have no recorded sets yet.
+        // getDraftMetricsForDate and shouldPreserveRawDraftOverIncoming are logData/volume-based
+        // and cannot see exercises without sets, so we compare sessionEx directly.
+        //
+        // Guard: persistently-deleted dates MUST NOT be bypassed by this condition.
+        // Gate A (below) only fires when shouldUseLocalDraft=false. If localHasMoreExercises
+        // makes shouldUseLocalDraft=true, Gate A is never reached and a stale plan draft could
+        // resurrect a deleted workout. The normal deletion path writes hasUnsavedChanges:false
+        // (localDraftCanOverrideSaved=false), which prevents this in practice, but we add an
+        // explicit guard as defense-in-depth. persistentDeletedDates is used here for display/
+        // restore suppression only — it does not touch the save path.
+        const _persistentDeletedForGuard = loadPersistentDeletedDates(user?.id);
+        const localHasMoreExercises =
+            !_persistentDeletedForGuard[requestedDate] &&
+            (draftForDate.sessionEx || []).length > (savedDraftForDate.sessionEx || []).length;
         const shouldUseLocalDraft = localDraftCanOverrideSaved && (
             explicitLocalEdit ||
             isActiveLocalRecording ||
             localDraftIsRicher ||
             preserveRawLocalDraft ||
-            isUnsavedUserWorkoutDraft(draftForDate)
+            isUnsavedUserWorkoutDraft(draftForDate) ||
+            localHasMoreExercises
         );
         const hasPendingDeleteIntent = Boolean(pendingChange?.explicitDelete);
         const shouldUseSavedWorkout = hasSavedWorkout && !shouldUseLocalDraft && !hasPendingDeleteIntent;
@@ -212,7 +276,10 @@ export function useHistoryHandlers({
             // stale restore labels ("autosave_draft", "active_local_recording_restore", …).
             // Exception: isActiveLocalRecording means the timer is running right now on this
             // exact date, so we must always preserve it.
-            const isGenuineUnsaved = isActiveLocalRecording || isUnsavedUserWorkoutDraft(draftForDate);
+            // Exception: localDraftIsRicher / localHasMoreExercises / preserveRawLocalDraft mean
+            // the local draft was deliberately enriched (e.g. plan-start added exercises that
+            // have no sets recorded yet). Must not be zombie-cleared in those cases.
+            const isGenuineUnsaved = isActiveLocalRecording || isUnsavedUserWorkoutDraft(draftForDate) || localDraftIsRicher || preserveRawLocalDraft || localHasMoreExercises;
             if (!isGenuineUnsaved) {
                 clearDraftForDate(requestedDate);
                 const zombieEmptyDraft = withDraftDateMeta(requestedDate, {

@@ -290,6 +290,13 @@ export function makeHarness({
             });
         },
 
+        /** handleLogForDate(date, { planExercises, planLabels }) を act() でラップして呼ぶ */
+        logForDateWithPlan(date, planExercises, planLabels = []) {
+            act(() => {
+                result.current.handleLogForDate(date, { planExercises, planLabels });
+            });
+        },
+
         /** handleDeleteHistory(exName, historyIdx, recordDate, setIdx) を act() でラップして呼ぶ */
         deleteHistory(exName, historyIdx, recordDate, setIdx) {
             act(() => {

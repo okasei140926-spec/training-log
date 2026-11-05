@@ -44,6 +44,7 @@ export default function HomeScreen({
     weeklySetTargets = {},
     onNavigateToWeeklyAnalytics,
     nextPlanDay = null,
+    nextPlanDayExerciseCount = 0,
     aiPlanEnabled = true,
     isTodayCompleted = false,
     onStartNextPlanDay,
@@ -471,9 +472,7 @@ export default function HomeScreen({
 
             {/* AIプラン次のメニューカード */}
             {aiPlanEnabled && nextPlanDay && (() => {
-                const exCount = (nextPlanDay.bodyParts || []).reduce(
-                    (sum, bp) => sum + (muscleEx?.[bp]?.length || 0), 0
-                );
+                const exCount = nextPlanDayExerciseCount;
                 const bodyPartLabel = (nextPlanDay.bodyParts || []).join(" · ");
 
                 return (

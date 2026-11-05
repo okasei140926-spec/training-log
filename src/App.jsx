@@ -3877,7 +3877,14 @@ export default function GymApp() {
                         />
                     )}
 
-                    {screen === "history" && (
+                    {screen === "history" && (() => {
+                        const _nextPlanDay = aiPlanEnabled ? getNextPlanDay() : null;
+                        let _planAnswers = null;
+                        try { _planAnswers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
+                        const _nextPlanDayExerciseCount = _nextPlanDay
+                            ? buildSessionExercisesForPlanDay({ bodyParts: _nextPlanDay.bodyParts, answers: _planAnswers, history: trustedHistory }).length
+                            : 0;
+                        return (
                         <HomeScreen
                             history={trustedHistory}
                             muscleEx={muscleEx}
@@ -3896,31 +3903,24 @@ export default function GymApp() {
                             weekStartDay={weekStartDay}
                             weeklySetTargets={weeklySetTargets}
                             onNavigateToWeeklyAnalytics={() => setScreen("analytics")}
-                            nextPlanDay={aiPlanEnabled ? getNextPlanDay() : null}
+                            nextPlanDay={_nextPlanDay}
+                            nextPlanDayExerciseCount={_nextPlanDayExerciseCount}
                             aiPlanEnabled={aiPlanEnabled}
                             isTodayCompleted={Boolean(getPlanDayForDate(getTodayKey())?.completed)}
                             onStartNextPlanDay={() => {
-                                const nextDay = getNextPlanDay();
-                                if (!nextDay) return;
+                                if (!_nextPlanDay) return;
                                 const todayKey = getTodayKey();
-                                const bodyParts = nextDay.bodyParts;
-                                workoutLog.setTodayLabels(bodyParts);
-                                setTodayLabels(bodyParts);
-                                workoutLogExercises.forEach((ex) => removeEx(ex.name, ex.id));
-                                (() => {
-                                    let answers = null;
-                                    try { answers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
-                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: trustedHistory })
-                                        .forEach((ex) => addExToSession(ex.name, ex.bodyPart));
-                                })();
+                                const bodyParts = _nextPlanDay.bodyParts;
+                                const planExercises = buildSessionExercisesForPlanDay({ bodyParts, answers: _planAnswers, history: trustedHistory });
                                 setPlanBannerDismissedForDate(todayKey);
                                 handlePlanAccepted();
                                 aiPlanActiveDateRef.current = todayKey;
                                 markAiPlanAcceptedDate(todayKey);
-                                handleLogForDate(todayKey);
+                                handleLogForDate(todayKey, { planExercises, planLabels: bodyParts });
                             }}
                         />
-                    )}
+                        );
+                    })()}
 
                     {screen === "calendar" && (() => {
                         const minCalendarYearMonth = null; // 全ユーザー全期間閲覧可
