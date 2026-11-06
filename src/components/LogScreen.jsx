@@ -8,6 +8,7 @@ import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
 import SetRow from "./log/SetRow";
 import WorkoutElapsedTimer from "./WorkoutElapsedTimer";
 import { buildWorkoutSessionPayloadFromDraft } from "../utils/workoutSessions";
+import { buildPrDetail, computeWeeklyDays } from "../utils/shareCardUtils";
 import { S } from "../utils/styles";
 import { getSetCountByBodyPart } from "../utils/setCountByBodyPart";
 
@@ -621,6 +622,9 @@ export default function LogScreen({
     );
 
     const prCount = prEntriesForCount.length;
+    const prDetail = buildPrDetail(prEntriesForCount);
+    const weeklyDays = computeWeeklyDays(logDate, history, logDate);
+    const weeklyTrainedCount = weeklyDays.filter((d) => d.trained).length;
     const totalVolumeKg = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
@@ -656,6 +660,9 @@ export default function LogScreen({
                     ...(rawSessionSharePayload.session?.summary_json || {}),
                     prCount,
                     prDetails: prEntriesForCount,
+                    prDetail,
+                    weeklyDays,
+                    weeklyTrainedCount,
                 },
             },
         }

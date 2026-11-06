@@ -1,602 +1,487 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
-import { formatBWSetLabel, formatKg } from "../../utils/helpers";
 import { formatWorkoutDuration } from "../../utils/workoutTimer";
+import {
+  buildExerciseItems,
+  buildStoryExerciseList,
+  formatHeaderDate,
+  formatPrDetailValue,
+  getBodyPartDisplayData,
+} from "../../utils/shareCardUtils";
+
 const CARD_PRESETS = {
-    square: {
-        key: "square",
-        label: "1:1",
-        width: 360,
-        height: 360,
-        scale: 0.84,
-    },
-    story: {
-        key: "story",
-        label: "9:16",
-        width: 360,
-        height: 640,
-        scale: 0.58,
-    },
+  square: { key: "square", label: "1:1",  width: 360, height: 360, scale: 0.84 },
+  story:  { key: "story",  label: "9:16", width: 360, height: 640, scale: 0.58 },
 };
 
 const MAX_REASONABLE_DURATION_SEC = 12 * 60 * 60;
 
-const formatDate = (date) => {
-    const value = String(date || "");
-    if (!value) return "";
-    const [year, month, day] = value.split("-");
-    return `${year}/${month}/${day}`;
-};
-
+const BAR_COLORS = ["#14A99C", "#4FC4B9", "#9BDDD6"];
 
 const resolveDurationSec = (payload) => {
-    const session = payload?.session || {};
-    const candidates = [
-        { value: payload?.durationSec, unit: "seconds" },
-        { value: payload?.duration_sec, unit: "seconds" },
-        { value: session?.durationSec, unit: "seconds" },
-        { value: session?.duration_sec, unit: "seconds" },
-        { value: payload?.durationMinutes, unit: "minutes" },
-        { value: payload?.elapsedMinutes, unit: "minutes" },
-        { value: session?.durationMinutes, unit: "minutes" },
-        { value: session?.elapsedMinutes, unit: "minutes" },
-    ];
-
-    for (const candidate of candidates) {
-        const rawValue = Number(candidate.value);
-        if (!Number.isFinite(rawValue) || rawValue <= 0) continue;
-
-        const durationSec =
-            candidate.unit === "minutes"
-                ? Math.floor(rawValue * 60)
-                : Math.floor(rawValue);
-
-        if (durationSec > 0 && durationSec < MAX_REASONABLE_DURATION_SEC) {
-            return durationSec;
-        }
-    }
-
-    return 0;
+  const session = payload?.session || {};
+  const candidates = [
+    { value: payload?.durationSec,     unit: "seconds" },
+    { value: payload?.duration_sec,    unit: "seconds" },
+    { value: session?.durationSec,     unit: "seconds" },
+    { value: session?.duration_sec,    unit: "seconds" },
+    { value: payload?.durationMinutes, unit: "minutes" },
+    { value: payload?.elapsedMinutes,  unit: "minutes" },
+    { value: session?.durationMinutes, unit: "minutes" },
+    { value: session?.elapsedMinutes,  unit: "minutes" },
+  ];
+  for (const c of candidates) {
+    const raw = Number(c.value);
+    if (!Number.isFinite(raw) || raw <= 0) continue;
+    const sec = c.unit === "minutes" ? Math.floor(raw * 60) : Math.floor(raw);
+    if (sec > 0 && sec < MAX_REASONABLE_DURATION_SEC) return sec;
+  }
+  return 0;
 };
 
 const formatLargeNumber = (value) => {
-    const num = Math.round(Number(value || 0));
-    if (!Number.isFinite(num)) return "0";
-    return num.toLocaleString("ja-JP");
+  const num = Math.round(Number(value || 0));
+  if (!Number.isFinite(num)) return "0";
+  return num.toLocaleString("ja-JP");
+};
+
+// maxRows: 種目行＋ラベル行を含む総行数の上限。
+// list.length > maxRows のとき、(maxRows-1) 件を表示し、残りを hiddenCount で返す。
+// 上限以内なら全件表示。
+const limitList = (list, maxRows) => {
+  if (maxRows == null || list.length <= maxRows) return { visible: list, hiddenCount: 0 };
+  const visibleCount = maxRows - 1;
+  return { visible: list.slice(0, visibleCount), hiddenCount: list.length - visibleCount };
 };
 
 const getBodyPartCards = (summary, items) => {
-    const counts = Array.isArray(summary?.setCountByBodyPart) && summary.setCountByBodyPart.length > 0
-        ? summary.setCountByBodyPart
-        : items;
-
-    return (counts || [])
-        .map((item) => ({
-            bodyPart: item.bodyPart || item.body_part || "その他",
-            count: Number(item.count ?? item.set_count ?? 0),
-        }))
-        .filter((item) => Number.isFinite(item.count) && item.count > 0);
-};
-
-// 全部位を短縮形式で表示。6部位以上は先頭5件 + "他N"
-const formatBodyPartBreakdown = (bodyPartCards) => {
-    const all = bodyPartCards || [];
-    const MAX_VISIBLE = 5;
-    const visible = all.length > MAX_VISIBLE ? all.slice(0, MAX_VISIBLE) : all;
-    const hidden = all.length - visible.length;
-    const parts = visible.map((item) => `${item.bodyPart}${item.count}`).join(" / ");
-    return hidden > 0 ? `${parts} / 他${hidden}` : parts;
-};
-
-const normalizeUnitLabel = (unit) => {
-    const value = String(unit || "kg").toLowerCase();
-    if (value === "lbs" || value === "lb" || value === "pound" || value === "pounds") return "lb";
-    if (value === "bw" || value === "bodyweight") return "自重";
-    return "kg";
-};
-
-
-const isDisplayableShareSet = (set) => {
-    const reps = Number(set?.reps);
-    if (!Number.isFinite(reps) || reps <= 0) return false;
-    const rawWeight = set?.displayWeight ?? set?.weight;
-    if (String(rawWeight || "").toUpperCase() === "BW") return true;
-    const weight = Number(rawWeight);
-    return Number.isFinite(weight) && weight > 0;
-};
-
-const formatShareSet = (set, index) => {
-    const reps = formatKg(set?.reps);
-    const rawWeight = set?.displayWeight ?? set?.weight;
-    if (String(rawWeight || "").toUpperCase() === "BW") {
-        return `${index + 1}. ${formatBWSetLabel(set) ?? "自重"} × ${reps}`;
-    }
-
-    const unit = normalizeUnitLabel(set?.displayUnit || set?.unit || set?.weightUnit || set?.weight_unit);
-    const weightNum = Number(rawWeight);
-    const kgWeight = unit === "lb" ? weightNum * 0.453592 : weightNum;
-    return `${index + 1}. ${formatKg(kgWeight)}kg × ${reps}`;
-};
-
-const getExerciseDetails = (items) =>
-    (items || [])
-        .map((item) => {
-            const sets = (Array.isArray(item?.sets) ? item.sets : [])
-                .filter(isDisplayableShareSet)
-                .map(formatShareSet);
-            if (!sets.length) return null;
-
-            return {
-                name: item.exercise_name || item.name || "種目",
-                sets,
-            };
-        })
-        .filter(Boolean);
-
-// Estimate display width: CJK chars ≈ 1 unit, others ≈ 0.6 units
-const estimateCharWidth = (str) => {
-    let w = 0;
-    for (const ch of String(str || "")) {
-        w += ch >= "\u3000" && ch <= "\u9FFF" ? 1.0 : 0.6;
-    }
-    return w;
-};
-
-// Build exercise name line for 1:1 card fitting ~2 lines (≈68 width units at 9px/316px)
-const buildSquareExerciseNameLine = (names) => {
-    if (!names || !names.length) return "";
-    const sep = " · ";
-    const sepW = estimateCharWidth(sep);
-    const maxW = 68;
-    let line = "";
-    let lineW = 0;
-    for (let i = 0; i < names.length; i++) {
-        const nameW = estimateCharWidth(names[i]);
-        const addW = i === 0 ? nameW : sepW + nameW;
-        if (lineW + addW > maxW && i > 0) {
-            return line + `  他${names.length - i}種目`;
-        }
-        line = i === 0 ? names[i] : line + sep + names[i];
-        lineW += addW;
-    }
-    return line;
+  const counts =
+    Array.isArray(summary?.setCountByBodyPart) && summary.setCountByBodyPart.length > 0
+      ? summary.setCountByBodyPart
+      : items;
+  return (counts || [])
+    .map((item) => ({
+      bodyPart: item.bodyPart || item.body_part || "その他",
+      count: Number(item.count ?? item.set_count ?? 0),
+    }))
+    .filter((item) => Number.isFinite(item.count) && item.count > 0);
 };
 
 export default function WorkoutSessionShareModal({
-    isOpen,
-    onClose,
-    workoutDate,
-    sessionPayload,
-    photoRows = [],
+  isOpen,
+  onClose,
+  workoutDate,
+  sessionPayload,
+  photoRows = [],
 }) {
-    const [sizeKey, setSizeKey] = useState("story");
-    const [sharing, setSharing] = useState(false);
-    const cardRef = useRef(null);
-    const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
+  const [sizeKey, setSizeKey] = useState("story");
+  const [sharing, setSharing] = useState(false);
+  const cardRef = useRef(null);
+  const scrollLockRef = useRef({ top: 0, body: {}, html: {} });
 
-    const preset = CARD_PRESETS[sizeKey] || CARD_PRESETS.story;
-    const dateLabel = formatDate(workoutDate);
-    const summary = useMemo(
-        () => sessionPayload?.session?.summary_json || {},
-        [sessionPayload]
-    );
-    const items = useMemo(
-        () => sessionPayload?.preview_items || sessionPayload?.exercises || [],
-        [sessionPayload]
-    );
-    const bodyPartCards = useMemo(() => getBodyPartCards(summary, items), [items, summary]);
-    const bodyPartBreakdownLabel = formatBodyPartBreakdown(bodyPartCards);
-    const durationLabel = formatWorkoutDuration(resolveDurationSec(sessionPayload));
-    const prCount = Number(summary?.prCount || 0);
-    const previewScale = preset.scale || 0.58;
-    const isStory = sizeKey === "story";
-    const prLabel = prCount > 0 ? `PR更新 ${prCount}件` : "";
-    const exerciseDetails = useMemo(
-        () => (isStory ? getExerciseDetails(items) : []),
-        [isStory, items]
-    );
-    const squareExerciseNames = useMemo(
-        () => !isStory
-            ? (items || []).map((item) => item.exercise_name || item.name).filter(Boolean)
-            : [],
-        [isStory, items]
-    );
-    const squareExerciseNameLine = buildSquareExerciseNameLine(squareExerciseNames);
-    const exerciseDetailCount = exerciseDetails.length;
-    const exerciseDetailSetCount = exerciseDetails.reduce((sum, item) => sum + item.sets.length, 0);
-    const denseStoryMenu = isStory && (exerciseDetailCount >= 5 || exerciseDetailSetCount >= 13);
-    const extraStoryMenuHeight = isStory
-        ? Math.max(0, exerciseDetailCount - 5) * (denseStoryMenu ? 42 : 52)
-            + Math.max(0, exerciseDetailSetCount - 15) * 10
-        : 0;
-    const cardHeight = isStory ? preset.height + extraStoryMenuHeight : preset.height;
+  const preset   = CARD_PRESETS[sizeKey] || CARD_PRESETS.story;
+  const isStory  = sizeKey === "story";
 
-    useEffect(() => {
-        if (!isOpen) return undefined;
+  const summary = useMemo(
+    () => sessionPayload?.session?.summary_json || {},
+    [sessionPayload]
+  );
+  const items = useMemo(
+    () => sessionPayload?.preview_items || sessionPayload?.exercises || [],
+    [sessionPayload]
+  );
 
-        const body = document.body;
-        const html = document.documentElement;
-        const scrollTop = window.scrollY || window.pageYOffset || 0;
-        const scrollLock = scrollLockRef.current;
+  const durationSec  = resolveDurationSec(sessionPayload);
+  const durationLabel = formatWorkoutDuration(durationSec);
+  const headerLabel  = useMemo(() => {
+    const dateStr = formatHeaderDate(workoutDate);
+    return durationLabel ? `${dateStr}・${durationLabel}` : dateStr;
+  }, [workoutDate, durationLabel]);
 
-        scrollLock.top = scrollTop;
-        scrollLock.body = {
-            overflow: body.style.overflow,
-            position: body.style.position,
-            top: body.style.top,
-            width: body.style.width,
-            touchAction: body.style.touchAction,
-        };
-        scrollLock.html = {
-            overflow: html.style.overflow,
-            overscrollBehavior: html.style.overscrollBehavior,
-        };
+  const bodyPartCards = useMemo(() => getBodyPartCards(summary, items), [summary, items]);
 
-        body.style.overflow = "hidden";
-        body.style.position = "fixed";
-        body.style.top = `-${scrollTop}px`;
-        body.style.width = "100%";
-        body.style.touchAction = "none";
-        html.style.overflow = "hidden";
-        html.style.overscrollBehavior = "none";
+  // ─── 分岐判定（全て1箇所にまとめる） ─────────────────────────────────────
+  const weeklyDays = summary?.weeklyDays || [];
+  const weeklyTrainedCount =
+    typeof summary?.weeklyTrainedCount === "number"
+      ? summary.weeklyTrainedCount
+      : weeklyDays.filter((d) => d.trained).length;
+  const prDetail = summary?.prDetail ?? null;
+  const hasPr    = prDetail != null;                     // PR あり/なし
 
-        return () => {
-            body.style.overflow = scrollLock.body.overflow || "";
-            body.style.position = scrollLock.body.position || "";
-            body.style.top = scrollLock.body.top || "";
-            body.style.width = scrollLock.body.width || "";
-            body.style.touchAction = scrollLock.body.touchAction || "";
-            html.style.overflow = scrollLock.html.overflow || "";
-            html.style.overscrollBehavior = scrollLock.html.overscrollBehavior || "";
-            window.scrollTo(0, scrollLock.top || 0);
-        };
-    }, [isOpen]);
+  const bodyPartMaxVisible = isStory ? 4 : 3;           // 9:16: 4件 / 1:1: 3件
+  const { visible: visibleBodyParts, hiddenCount: hiddenBodyPartCount, maxCount: maxBodyPartCount } =
+    useMemo(() => getBodyPartDisplayData(bodyPartCards, bodyPartMaxVisible), [bodyPartCards, bodyPartMaxVisible]);
 
-    if (!isOpen || !sessionPayload) return null;
+  const exerciseItems    = useMemo(() => buildExerciseItems(items), [items]);
+  const isCompactList    = exerciseItems.length >= 4;    // 4+: 1行コンパクト / 3-: 2段全セット
+  const storyExerciseList = useMemo(
+    () => buildStoryExerciseList(exerciseItems, isCompactList),
+    [exerciseItems, isCompactList]
+  );
+  // 総行数上限（種目行＋ラベル行）: 部位4件→5行 / 部位3件以下→6行（9:16 のみ）
+  const maxListRows = isStory ? (visibleBodyParts.length >= 4 ? 5 : 6) : null;
+  const { visible: visibleExerciseList, hiddenCount: hiddenExerciseCount } = useMemo(
+    () => limitList(storyExerciseList, maxListRows),
+    [storyExerciseList, maxListRows]
+  );
+  // ─────────────────────────────────────────────────────────────────────────
 
-    const handleShare = async () => {
-        if (!cardRef.current || sharing) return;
+  const previewScale = preset.scale;
+  const cardHeight   = preset.height; // 常に固定
 
-        setSharing(true);
-
-        try {
-            if (document.fonts?.ready) {
-                await document.fonts.ready;
-            }
-
-            const blob = await toBlob(cardRef.current, {
-                pixelRatio: 3,
-                cacheBust: true,
-                backgroundColor: "#05070b",
-            });
-
-            if (!blob) {
-                throw new Error("session share card blob generation failed");
-            }
-
-            const file = new File([blob], `pump-workout-${workoutDate}-${preset.key}.png`, {
-                type: "image/png",
-            });
-
-            const shareData = {
-                title: "PUMP",
-                text: `${dateLabel} のワークアウト`,
-                files: [file],
-            };
-
-            if (navigator.canShare && navigator.canShare(shareData) && navigator.share) {
-                await navigator.share(shareData);
-                return;
-            }
-
-            const objectUrl = URL.createObjectURL(blob);
-            const anchor = document.createElement("a");
-            anchor.href = objectUrl;
-            anchor.download = file.name;
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-            URL.revokeObjectURL(objectUrl);
-        } catch (error) {
-            console.error("session share failed", error);
-            alert("シェアカードの作成に失敗しました。");
-        } finally {
-            setSharing(false);
-        }
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollTop = window.scrollY || window.pageYOffset || 0;
+    const scrollLock = scrollLockRef.current;
+    scrollLock.top = scrollTop;
+    scrollLock.body = { overflow: body.style.overflow, position: body.style.position, top: body.style.top, width: body.style.width, touchAction: body.style.touchAction };
+    scrollLock.html = { overflow: html.style.overflow, overscrollBehavior: html.style.overscrollBehavior };
+    body.style.overflow = "hidden"; body.style.position = "fixed"; body.style.top = `-${scrollTop}px`;
+    body.style.width = "100%"; body.style.touchAction = "none";
+    html.style.overflow = "hidden"; html.style.overscrollBehavior = "none";
+    return () => {
+      body.style.overflow = scrollLock.body.overflow || "";   body.style.position = scrollLock.body.position || "";
+      body.style.top      = scrollLock.body.top || "";        body.style.width    = scrollLock.body.width || "";
+      body.style.touchAction = scrollLock.body.touchAction || "";
+      html.style.overflow = scrollLock.html.overflow || "";   html.style.overscrollBehavior = scrollLock.html.overscrollBehavior || "";
+      window.scrollTo(0, scrollLock.top || 0);
     };
+  }, [isOpen]);
 
-    return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                background: "rgba(15, 23, 42, 0.72)",
-                zIndex: 750,
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "center",
-                padding: "calc(16px + var(--safe-top, 0px)) 0 0",
-            }}
-            onClick={onClose}
-        >
-            <div
-                style={{
-                    width: "100%",
-                    maxWidth: 420,
-                    background: "var(--card-modal)",
-                    borderRadius: "24px 24px 0 0",
-                    border: "1px solid var(--border2)",
-                    boxShadow: "0 22px 44px rgba(15, 23, 42, 0.18)",
+  if (!isOpen || !sessionPayload) return null;
+
+  const handleShare = async () => {
+    if (!cardRef.current || sharing) return;
+    setSharing(true);
+    try {
+      if (document.fonts?.ready) await document.fonts.ready;
+      const blob = await toBlob(cardRef.current, {
+        pixelRatio: 3,
+        cacheBust: true,
+        backgroundColor: "#EDF3F2",
+      });
+      if (!blob) throw new Error("session share card blob generation failed");
+      const file = new File([blob], `pump-workout-${workoutDate}-${preset.key}.png`, { type: "image/png" });
+      const shareData = { title: "PUMP", text: `${workoutDate} のワークアウト`, files: [file] };
+      if (navigator.canShare && navigator.canShare(shareData) && navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+      const url    = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = file.name;
+      document.body.appendChild(anchor); anchor.click(); document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("session share failed", error);
+      alert("シェアカードの作成に失敗しました。");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  // ─── カード内セクション ────────────────────────────────────────────────────
+
+  // (1) ヘッダー行
+  const CardHeader = (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+      <div style={{ fontSize: isStory ? 12 : 11, fontWeight: 600, color: "#5A6B68", letterSpacing: "0.03em" }}>
+        {headerLabel}
+      </div>
+      <div style={{ fontSize: isStory ? 13 : 12, fontWeight: 800, letterSpacing: "0.1em", color: "#12201E" }}>
+        PUMP
+      </div>
+    </div>
+  );
+
+  // (2) 数値タイル行
+  const StatsTiles = (
+    <div style={{ marginTop: isStory ? 16 : 10, display: "flex", gap: isStory ? 8 : 7 }}>
+      {/* 総ボリューム */}
+      <div style={{ flex: 1.5, background: "#FFFFFF", borderRadius: isStory ? 14 : 12, padding: isStory ? "14px 16px" : "11px 13px" }}>
+        <div style={{ fontSize: isStory ? 10 : 9, fontWeight: 700, letterSpacing: "0.1em", color: "#5A6B68" }}>
+          総ボリューム
+        </div>
+        <div style={{ marginTop: 4, fontSize: isStory ? 36 : 28, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.05, color: "#12201E" }}>
+          {formatLargeNumber(summary?.totalVolume)}
+          <span style={{ fontSize: isStory ? 15 : 12, fontWeight: 600, color: "#5A6B68" }}> kg</span>
+        </div>
+      </div>
+      {/* セット */}
+      <div style={{ flex: 1, background: "#FFFFFF", borderRadius: isStory ? 14 : 12, padding: isStory ? "14px 16px" : "11px 13px" }}>
+        <div style={{ fontSize: isStory ? 10 : 9, fontWeight: 700, letterSpacing: "0.1em", color: "#5A6B68" }}>
+          セット
+        </div>
+        <div style={{ marginTop: 4, fontSize: isStory ? 36 : 28, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.05, color: "#12201E" }}>
+          {Number(summary?.setCount || 0)}
+        </div>
+      </div>
+    </div>
+  );
+
+  // (3) 部位別カード
+  const BodyPartCard = visibleBodyParts.length > 0 && (
+    <div style={{ marginTop: isStory ? 14 : 9, background: "#FFFFFF", borderRadius: isStory ? 14 : 12, padding: isStory ? "15px 16px" : "13px 14px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: isStory ? 11 : 10, fontWeight: 700, letterSpacing: "0.08em", color: "#5A6B68" }}>
+          部位別セット数
+        </div>
+        {hiddenBodyPartCount > 0 && (
+          <div style={{ fontSize: 10, fontWeight: 500, color: "#5A6B68" }}>
+            他{hiddenBodyPartCount}部位
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: isStory ? 12 : 10, display: "flex", flexDirection: "column", gap: isStory ? 10 : 8 }}>
+        {visibleBodyParts.map((item, index) => (
+          <div key={item.bodyPart} data-testid="body-part-row" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: isStory ? 42 : 38, fontSize: isStory ? 13 : 12, fontWeight: 600, color: "#12201E", flexShrink: 0 }}>
+              {item.bodyPart}
+            </div>
+            <div style={{ flex: 1, height: isStory ? 18 : 14, borderRadius: isStory ? 5 : 4, background: "#E0EAE8", position: "relative", overflow: "hidden" }}>
+              <div style={{
+                position: "absolute", left: 0, top: 0, bottom: 0,
+                width: `${(item.count / maxBodyPartCount) * 100}%`,
+                borderRadius: isStory ? 5 : 4,
+                background: BAR_COLORS[Math.min(index, BAR_COLORS.length - 1)],
+              }} />
+            </div>
+            <div style={{ width: isStory ? 22 : 20, textAlign: "right", fontSize: isStory ? 15 : 13, fontWeight: 700, color: "#12201E", flexShrink: 0 }}>
+              {item.count}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // (4) 今週カード + 右カード（story）/ 横長帯（square）
+  const WeeklyPrSection = isStory ? (
+    <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
+      {/* 今週カード */}
+      <div style={{ flex: 1, background: "#FFFFFF", borderRadius: 14, padding: "15px 14px" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#5A6B68" }}>
+          今週
+        </div>
+        <div style={{ marginTop: 11, display: "flex", gap: 5 }}>
+          {weeklyDays.map((day) => {
+            const isCardDate = day.dateKey === workoutDate;
+            return (
+              <div key={day.dateKey} style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 10, fontWeight: isCardDate ? 700 : 600, color: isCardDate ? "#12201E" : "#5A6B68" }}>
+                  {day.weekdayLabel}
+                </div>
+                <div
+                  data-testid="weekly-day-block"
+                  data-date={day.dateKey}
+                  data-trained={day.trained ? "true" : "false"}
+                  data-is-card-date={isCardDate ? "true" : "false"}
+                  style={{
+                    marginTop: 5, height: 20, borderRadius: 6,
+                    background: isCardDate ? "#0C6B62" : day.trained ? "#14A99C" : "#E0EAE8",
+                    ...(isCardDate ? { boxShadow: "0 0 0 2px #FFFFFF, 0 0 0 4px #0C6B62" } : {}),
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* 右カード */}
+      <div
+        data-testid="pr-stats-card"
+        style={{ width: 132, background: "#0C6B62", color: "#FFFFFF", borderRadius: 14, padding: "15px 14px", boxSizing: "border-box" }}
+      >
+        {hasPr ? (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", opacity: 0.9 }}>
+              自己ベスト更新
+            </div>
+            <div data-testid="pr-exercise-name" style={{ marginTop: 8, fontSize: 11, fontWeight: 600, lineHeight: 1.3 }}>
+              {prDetail.exerciseName}
+            </div>
+            <div data-testid="pr-value" style={{ marginTop: 3, fontSize: 17, fontWeight: 800, letterSpacing: "-0.01em" }}>
+              {formatPrDetailValue(prDetail)}
+            </div>
+          </>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", opacity: 0.9 }}>
+              今週
+            </div>
+            <div style={{ marginTop: 4, display: "flex", alignItems: "baseline", gap: 3 }}>
+              <span data-testid="weekly-trained-count" style={{ fontSize: 38, fontWeight: 800, lineHeight: 1 }}>
+                {weeklyTrainedCount}
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>日目</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  ) : (
+    // 1:1 card: 横長の帯
+    <div
+      data-testid="pr-stats-strip"
+      style={{ marginTop: 9, background: "#0C6B62", color: "#FFFFFF", borderRadius: 12, padding: "11px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}
+    >
+      {hasPr ? (
+        <>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", opacity: 0.9 }}>
+              自己ベスト更新
+            </div>
+            <div data-testid="pr-exercise-name" style={{ marginTop: 2, fontSize: 12, fontWeight: 600 }}>
+              {prDetail.exerciseName}
+            </div>
+          </div>
+          <div data-testid="pr-value" style={{ fontSize: 17, fontWeight: 800, whiteSpace: "nowrap" }}>
+            {formatPrDetailValue(prDetail)}
+          </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", opacity: 0.9 }}>
+              今週
+            </div>
+            <div style={{ marginTop: 2, fontSize: 12, fontWeight: 600 }}>
+              トレーニング
+            </div>
+          </div>
+          <div data-testid="weekly-trained-count" style={{ fontSize: 17, fontWeight: 800, whiteSpace: "nowrap" }}>
+            {weeklyTrainedCount}日目
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  // (5) 種目リスト（story のみ）
+  const ExerciseList = isStory && visibleExerciseList.length > 0 && (
+    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: isCompactList ? 9 : 13, flex: "1 1 auto", overflow: "hidden" }}>
+      {visibleExerciseList.map((item) =>
+        isCompactList ? (
+          <div key={item.name} data-testid="exercise-item" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+            <div data-testid="exercise-name" style={{ fontSize: 12.5, fontWeight: 600, color: "#12201E" }}>
+              {item.name}
+            </div>
+            <div data-testid="exercise-sets-label" style={{ fontSize: 10.5, fontWeight: 500, color: "#5A6B68", whiteSpace: "nowrap" }}>
+              {item.setsLabel}
+            </div>
+          </div>
+        ) : (
+          <div key={item.name} data-testid="exercise-item">
+            <div data-testid="exercise-name" style={{ fontSize: 13, fontWeight: 600, color: "#12201E" }}>
+              {item.name}
+            </div>
+            <div data-testid="exercise-sets-label" style={{ marginTop: 3, fontSize: 11, fontWeight: 500, color: "#5A6B68" }}>
+              {item.setsLabel}
+            </div>
+          </div>
+        )
+      )}
+      {hiddenExerciseCount > 0 && (
+        <div data-testid="hidden-exercise-label" style={{ fontSize: 10.5, fontWeight: 500, color: "#5A6B68" }}>
+          他{hiddenExerciseCount}種目
+        </div>
+      )}
+    </div>
+  );
+
+  // (6) フッター
+  const Footer = (
+    <div style={{ marginTop: "auto", paddingTop: isStory ? 14 : 10, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexShrink: 0 }}>
+      <div style={{ fontSize: isStory ? 18 : 16, fontWeight: 800, letterSpacing: "0.06em", color: "#12201E" }}>
+        PUMP
+      </div>
+      <div style={{ fontSize: isStory ? 10 : 9.5, fontWeight: 500, color: "#5A6B68" }}>
+        トレーニング記録アプリ
+      </div>
+    </div>
+  );
+
+  // ─── モーダル本体 ──────────────────────────────────────────────────────────
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.72)", zIndex: 750, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "calc(16px + var(--safe-top, 0px)) 0 0" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ width: "100%", maxWidth: 420, background: "var(--card-modal)", borderRadius: "24px 24px 0 0", border: "1px solid var(--border2)", boxShadow: "0 22px 44px rgba(15, 23, 42, 0.18)", boxSizing: "border-box", maxHeight: "calc(100dvh - 16px - var(--safe-top, 0px))", display: "flex", flexDirection: "column", overflow: "hidden" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* モーダルヘッダー */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "18px 18px 12px" }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>シェアカードを作成</div>
+            <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>ワークアウト要約を画像で共有できます</div>
+          </div>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 20 }}>×</button>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", padding: "0 18px calc(20px + var(--safe-bottom, 0px))" }}>
+          {/* サイズ切替 */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {Object.values(CARD_PRESETS).map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setSizeKey(option.key)}
+                style={{ padding: "8px 12px", borderRadius: 999, border: "1px solid rgba(18, 199, 194, 0.12)", background: sizeKey === option.key ? "linear-gradient(135deg, #0F5E63, #12C7C2)" : "var(--card2)", color: sizeKey === option.key ? "#fff" : "var(--text2)", fontSize: 12, fontWeight: 800 }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {/* カードプレビュー */}
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, overflow: "hidden" }}>
+            <div style={{ width: preset.width * previewScale, height: cardHeight * previewScale, overflow: "hidden", borderRadius: 22, boxShadow: "0 24px 48px rgba(15, 23, 42, 0.18)", flexShrink: 0 }}>
+              <div style={{ width: preset.width, height: cardHeight, transform: `scale(${previewScale})`, transformOrigin: "top left" }}>
+                {/* ── カード本体 ── */}
+                <div
+                  ref={cardRef}
+                  style={{
+                    width: preset.width,
+                    height: cardHeight,
                     boxSizing: "border-box",
-                    maxHeight: "calc(100dvh - 16px - var(--safe-top, 0px))",
+                    padding: isStory ? 22 : 20,
                     display: "flex",
                     flexDirection: "column",
+                    background: "#EDF3F2",
+                    borderRadius: 30,
                     overflow: "hidden",
-                }}
-                onClick={(event) => event.stopPropagation()}
-            >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "18px 18px 12px" }}>
-                    <div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)" }}>シェアカードを作成</div>
-                        <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>
-                            ワークアウト要約を画像で共有できます
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        style={{ background: "none", border: "none", color: "var(--text3)", fontSize: 20 }}
-                    >
-                        ×
-                    </button>
-                </div>
-
-                <div
-                    style={{
-                        flex: 1,
-                        minHeight: 0,
-                        overflowY: "auto",
-                        WebkitOverflowScrolling: "touch",
-                        overscrollBehavior: "contain",
-                        padding: "0 18px calc(20px + var(--safe-bottom, 0px))",
-                    }}
+                    color: "#12201E",
+                    fontFamily: "-apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif",
+                  }}
                 >
-                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                        {Object.values(CARD_PRESETS).map((option) => (
-                            <button
-                                key={option.key}
-                                type="button"
-                                onClick={() => setSizeKey(option.key)}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: 999,
-                                    border: "1px solid rgba(18, 199, 194, 0.12)",
-                                    background: sizeKey === option.key
-                                        ? "linear-gradient(135deg, #0F5E63, #12C7C2)"
-                                        : "var(--card2)",
-                                    color: sizeKey === option.key ? "#fff" : "var(--text2)",
-                                    fontSize: 12,
-                                    fontWeight: 800,
-                                }}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, overflow: "hidden" }}>
-                        <div
-                            style={{
-                                width: preset.width * previewScale,
-                                height: cardHeight * previewScale,
-                                overflow: "hidden",
-                                borderRadius: 22,
-                                boxShadow: "0 24px 48px rgba(15, 23, 42, 0.18)",
-                                flexShrink: 0,
-                            }}
-                        >
-                            <div
-                                style={{
-                                    width: preset.width,
-                                    height: cardHeight,
-                                    transform: `scale(${previewScale})`,
-                                    transformOrigin: "top left",
-                                }}
-                            >
-                                <div
-                                    ref={cardRef}
-                                    style={{
-                                        width: preset.width,
-                                        height: cardHeight,
-                                        borderRadius: 30,
-                                        overflow: "hidden",
-                                        background:
-                                            "radial-gradient(circle at 50% 42%, rgba(87, 195, 255, 0.18), transparent 34%), radial-gradient(circle at 86% 82%, rgba(111, 66, 255, 0.16), transparent 30%), linear-gradient(160deg, #05070b 0%, #0d1117 54%, #141016 100%)",
-                                        border: "1px solid rgba(255,255,255,0.08)",
-                                        boxShadow: "0 30px 60px rgba(15, 23, 42, 0.24)",
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        color: "#fff",
-                                        boxSizing: "border-box",
-                                        padding: isStory ? "24px 22px 22px" : "22px",
-                                    }}
-                                >
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: isStory ? 18 : 16 }}>
-                                        <div>
-                                            <div style={{ fontSize: 10, letterSpacing: 3.4, color: "rgba(255,255,255,0.45)", fontWeight: 900, marginBottom: 8 }}>
-                                                {dateLabel}
-                                            </div>
-                                        </div>
-                                        {bodyPartBreakdownLabel && (
-                                            <div style={{ maxWidth: isStory ? 230 : 190, padding: "7px 10px", borderRadius: 999, background: "rgba(87,195,255,0.12)", border: "1px solid rgba(87,195,255,0.34)", color: "#62caff", fontSize: isStory ? 10 : 9, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                {bodyPartBreakdownLabel}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.9fr", gap: isStory ? 14 : 10, marginBottom: isStory ? 16 : 14 }}>
-                                        <div>
-                                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", fontWeight: 800, letterSpacing: 1.1 }}>
-                                                VOLUME
-                                            </div>
-                                            <div style={{ marginTop: 7, fontSize: isStory ? 46 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
-                                                {formatLargeNumber(summary?.totalVolume)}
-                                            </div>
-                                            <div style={{ marginTop: 4, fontSize: isStory ? 19 : 14, color: "rgba(255,255,255,0.56)", fontWeight: 900 }}>
-                                                kg
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", fontWeight: 800, letterSpacing: 1.1 }}>
-                                                SETS
-                                            </div>
-                                            <div style={{ marginTop: 7, fontSize: isStory ? 46 : 38, fontWeight: 950, lineHeight: 0.9, letterSpacing: -1 }}>
-                                                {Number(summary?.setCount || 0)}
-                                            </div>
-                                            <div style={{ marginTop: 4, fontSize: isStory ? 19 : 14, color: "rgba(255,255,255,0.56)", fontWeight: 900 }}>
-                                                sets
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isStory ? 16 : 16 }}>
-                                        <div style={{ width: isStory ? 28 : 22, height: isStory ? 28 : 22, borderRadius: 999, border: "2px solid rgba(255,255,255,0.42)", position: "relative", boxSizing: "border-box" }}>
-                                            <div style={{ position: "absolute", left: "50%", top: 5, width: 2, height: isStory ? 8 : 6, background: "rgba(255,255,255,0.42)", transform: "translateX(-50%)" }} />
-                                            <div style={{ position: "absolute", left: "50%", top: "50%", width: isStory ? 8 : 6, height: 2, background: "rgba(255,255,255,0.42)", transformOrigin: "left center", transform: "translateY(-50%) rotate(25deg)" }} />
-                                        </div>
-                                        <div style={{ fontSize: isStory ? 22 : 16, color: "#fff", fontWeight: 950 }}>
-                                            {durationLabel || "-"}
-                                        </div>
-                                    </div>
-
-                                    {isStory && prLabel && (
-                                        <div style={{ width: "100%", borderRadius: 999, background: "rgba(87, 195, 255, 0.12)", border: "1px solid rgba(87, 195, 255, 0.34)", color: "#62caff", padding: "8px 11px", fontSize: 12, fontWeight: 900, boxSizing: "border-box", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 10 }}>
-                                            {prLabel}
-                                        </div>
-                                    )}
-
-                                    {isStory && exerciseDetails.length > 0 && (
-                                        <div>
-                                            <div style={{ color: "rgba(255,255,255,0.34)", fontSize: denseStoryMenu ? 11 : 12, fontWeight: 800, marginBottom: denseStoryMenu ? 5 : 7 }}>
-                                                メニュー
-                                            </div>
-                                            <div style={{ display: "grid", gap: denseStoryMenu ? 5 : 7 }}>
-                                                {exerciseDetails.map((item) => (
-                                                    <div
-                                                        key={item.name}
-                                                        style={{
-                                                            borderRadius: denseStoryMenu ? 11 : 13,
-                                                            background: "rgba(17, 24, 39, 0.72)",
-                                                            border: "1px solid rgba(255,255,255,0.07)",
-                                                            padding: denseStoryMenu ? "6px 8px" : "8px 10px",
-                                                        }}
-                                                    >
-                                                        <div style={{ color: "#fff", fontSize: denseStoryMenu ? 10 : 12, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                            {item.name}
-                                                        </div>
-                                                        <div style={{ marginTop: denseStoryMenu ? 3 : 4, color: "#7DE7E2", fontSize: denseStoryMenu ? 8.5 : 10, fontWeight: 800, lineHeight: denseStoryMenu ? 1.25 : 1.35 }}>
-                                                            {item.sets.join(" / ")}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {!isStory && (
-                                        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 8, minHeight: 0 }}>
-                                            {bodyPartCards.length > 0 && (() => {
-                                                const SQUARE_MAX = 4;
-                                                const visibleCards = bodyPartCards.slice(0, SQUARE_MAX);
-                                                const hiddenCount = bodyPartCards.length - visibleCards.length;
-                                                return (
-                                                <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-                                                    {visibleCards.map((item) => (
-                                                        <div key={item.bodyPart}>
-                                                            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.42)", fontWeight: 800, letterSpacing: 0.5 }}>
-                                                                {item.bodyPart}
-                                                            </div>
-                                                            <div style={{ fontSize: 30, fontWeight: 950, lineHeight: 1, letterSpacing: -1, color: "#fff", marginTop: 3 }}>
-                                                                {item.count}
-                                                            </div>
-                                                            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.32)", fontWeight: 800, marginTop: 3 }}>
-                                                                セット
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {hiddenCount > 0 && (
-                                                        <div>
-                                                            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.42)", fontWeight: 800, letterSpacing: 0.5 }}>
-                                                                他{hiddenCount}部位
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                );
-                                            })()}
-                                            {squareExerciseNameLine && (
-                                                <div style={{ color: "rgba(255,255,255,0.36)", fontSize: 9, fontWeight: 800, lineHeight: 1.7, wordBreak: "keep-all" }}>
-                                                    {squareExerciseNameLine}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {isStory && exerciseDetails.length === 0 && (
-                                        <div style={{ flex: 1 }} />
-                                    )}
-
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: isStory && exerciseDetails.length > 0 ? 16 : isStory ? 22 : 12 }}>
-                                        <div style={{ color: "#12C7C2", fontSize: isStory ? 18 : 14, fontWeight: 950, lineHeight: 1 }}>
-                                            Pump
-                                        </div>
-                                        <div style={{ color: "rgba(255,255,255,0.44)", fontSize: isStory ? 11 : 8, fontWeight: 900, letterSpacing: 3 }}>
-                                            WORKOUT TRACKER
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 10 }}>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{
-                                flex: 1,
-                                padding: "14px",
-                                borderRadius: 14,
-                                background: "var(--card2)",
-                                border: "1px solid var(--border2)",
-                                color: "var(--text2)",
-                                fontSize: 14,
-                                fontWeight: 700,
-                            }}
-                        >
-                            閉じる
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleShare}
-                            disabled={sharing}
-                            style={{
-                                flex: 2,
-                                padding: "14px",
-                                borderRadius: 14,
-                                background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                                border: "none",
-                                color: "#fff",
-                                fontSize: 15,
-                                fontWeight: 800,
-                                opacity: sharing ? 0.7 : 1,
-                            }}
-                        >
-                            {sharing ? "作成中..." : "共有する"}
-                        </button>
-                    </div>
+                  {CardHeader}
+                  {StatsTiles}
+                  {BodyPartCard}
+                  {WeeklyPrSection}
+                  {ExerciseList}
+                  {Footer}
                 </div>
+              </div>
             </div>
+          </div>
+
+          {/* 共有ボタン */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: "14px", borderRadius: 14, background: "var(--card2)", border: "1px solid var(--border2)", color: "var(--text2)", fontSize: 14, fontWeight: 700 }}>
+              閉じる
+            </button>
+            <button type="button" onClick={handleShare} disabled={sharing} style={{ flex: 2, padding: "14px", borderRadius: 14, background: "linear-gradient(135deg, var(--accent), var(--accent2))", border: "none", color: "#fff", fontSize: 15, fontWeight: 800, opacity: sharing ? 0.7 : 1 }}>
+              {sharing ? "作成中..." : "共有する"}
+            </button>
+          </div>
         </div>
-    );
+      </div>
+    </div>
+  );
 }

@@ -31,6 +31,7 @@ import {
 } from "../utils/workoutTimer";
 import { buildWorkoutSessionPayloadFromHistory } from "../utils/workoutSessions";
 import { calcPrEntries } from "../utils/prCalculation";
+import { buildPrDetail, computeWeeklyDays } from "../utils/shareCardUtils";
 import { getExerciseCountByBodyPart, getExerciseCountTotal } from "../utils/exerciseCountByBodyPart";
 import {
   formatSetCountByBodyPart,
@@ -643,6 +644,9 @@ export default function HistoryScreen({
         normalizedDate,
         { bodyWeightKg }
       );
+      const prDetail = buildPrDetail(prEntries);
+      const weeklyDays = computeWeeklyDays(normalizedDate, history);
+      const weeklyTrainedCount = weeklyDays.filter((d) => d.trained).length;
       const historyDurationSec = entries.reduce(
         (max, entry) => Math.max(max, normalizeDurationSec(entry.durationSec)),
         0
@@ -710,6 +714,13 @@ export default function HistoryScreen({
                     ...sessionPayload.session,
                     durationSec,
                     duration_sec: durationSec,
+                    summary_json: {
+                      ...(sessionPayload.session?.summary_json || {}),
+                      prCount: prEntries.length,
+                      prDetail,
+                      weeklyDays,
+                      weeklyTrainedCount,
+                    },
                   },
                 },
               }
