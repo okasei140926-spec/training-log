@@ -1,10 +1,7 @@
 import { useCallback } from "react";
 import { supabase } from "../utils/supabase";
 import {
-    calc1RM,
     countValidSets,
-    hasMeaningfulPRIncrease,
-    PR_UPDATE_TOLERANCE_KG,
     resolveEffectiveWeightKg,
     sanitizeWorkoutSets,
 } from "../utils/helpers";
@@ -19,6 +16,7 @@ import {
     buildWorkoutDaySummary,
     buildWorkoutDaySummaryPrKey,
 } from "../utils/workoutDaySummary";
+import { calcPrEntries } from "../utils/prCalculation";
 
 export function useWorkoutDaySummaryBuilder({
     logDate,
@@ -72,29 +70,6 @@ export function useWorkoutDaySummaryBuilder({
                     return sum + weight * reps;
                 }, 0);
 
-                const validBWSets = sets.filter((set) => {
-                    const weight = resolveEffectiveWeightKg(set, bodyWeightKg);
-                    if (weight == null) return false;
-                    const reps = Number(set?.reps);
-                    return Number.isFinite(reps) && reps > 0;
-                });
-
-                const previousPr = getPreviousPR
-                    ? getPreviousPR(exercise, { excludeDate: normalizedDate })
-                    : (getPR ? getPR(exercise) : null);
-                const previousSets = previousPr?.sets || [];
-                const previousRm = previousPr?.rm ?? calc1RM(previousSets, { bodyWeightKg });
-                const isPr = Boolean(
-                    validBWSets.length
-                    && hasMeaningfulPRIncrease(
-                        validBWSets,
-                        previousSets,
-                        previousRm,
-                        PR_UPDATE_TOLERANCE_KG,
-                        { bodyWeightKg }
-                    )
-                );
-
                 return {
                     id: `${exerciseName}-${normalizedDate}-${index}`,
                     name: exerciseName,
@@ -102,14 +77,31 @@ export function useWorkoutDaySummaryBuilder({
                     sets,
                     setCount: validSetCount,
                     volume,
-                    isPr,
                 };
             })
             .filter(Boolean);
 
-        const prKeys = entries
-            .filter((entry) => entry.isPr)
-            .map((entry) => buildWorkoutDaySummaryPrKey(entry.bodyPart, entry.name));
+        const prEntryItems = calcPrEntries(
+            entries.map((entry) => ({
+                exerciseName: entry.name,
+                bodyPart: entry.bodyPart,
+                sets: entry.sets,
+            })),
+            getPreviousPR || getPR
+                ? (exerciseObj, opts) => {
+                    const ex = exercises.find((e) => e.name === exerciseObj.name) || exerciseObj;
+                    return getPreviousPR
+                        ? getPreviousPR(ex, opts)
+                        : (getPR ? getPR(ex) : null);
+                }
+                : null,
+            normalizedDate,
+            { bodyWeightKg }
+        );
+
+        const prKeys = prEntryItems.map((e) =>
+            buildWorkoutDaySummaryPrKey(e.bodyPart, e.exerciseName)
+        );
 
         const currentTimerState = workoutTimerStateRef.current;
         const timerEndedAt =

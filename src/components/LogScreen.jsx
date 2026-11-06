@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUserSettings } from "../context/UserSettingsContext";
 import { calc1RM, countValidSets, estimate1RM, formatBWSetLabel, formatDateKey, getBestRmSet, getRecordSourceSets, hasMeaningfulPRIncrease, PR_UPDATE_TOLERANCE_KG, resolveEffectiveWeightKg, storeW } from "../utils/helpers";
+import { calcPrEntries } from "../utils/prCalculation";
 import AddExModal from "./modals/AddExModal";
 import LogExerciseHistoryModal from "./modals/LogExerciseHistoryModal";
 import WorkoutSessionShareModal from "./modals/WorkoutSessionShareModal";
@@ -599,23 +600,31 @@ export default function LogScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [setCount, workoutFinished, logDate]);
 
-    const { prCount, totalVolumeKg } = exercises.reduce((acc, ex) => {
+    const prEntriesForCount = calcPrEntries(
+        exercises.map((ex) => {
+            const sets = logData[ex.name] || getExSets(ex);
+            const exUnit = getExUnit ? getExUnit(ex.name) : unit;
+            return {
+                exerciseName: ex.name,
+                bodyPart: ex.bodyPart,
+                sets: buildNormalizedDoneSets(sets, exUnit).filter(Boolean),
+            };
+        }),
+        getPreviousPR || getPR ? (exerciseObj, opts) => {
+            const ex = exercises.find((e) => e.name === exerciseObj.name) || exerciseObj;
+            return getPreviousPR
+                ? getPreviousPR(ex, opts)
+                : (getPR ? getPR(ex) : null);
+        } : null,
+        logDate,
+        { bodyWeightKg }
+    );
+
+    const prCount = prEntriesForCount.length;
+    const totalVolumeKg = exercises.reduce((acc, ex) => {
         const sets = logData[ex.name] || getExSets(ex);
         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
-
-        const doneSets = buildNormalizedDoneSets(sets, exUnit);
-
-        const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
-        const prSets = pr?.sets?.filter((s) => {
-            if (s.weight === "BW") return Number(s.reps) > 0;
-            const w = Number(s.weight);
-            const r = Number(s.reps);
-            return Number.isFinite(w) && Number.isFinite(r) && w > 0 && r > 0;
-        }) || [];
-
-        const pr1RM = pr?.rm ?? calc1RM(prSets, { bodyWeightKg });
-        const isPR = hasMeaningfulPRIncrease(doneSets, prSets, pr1RM, PR_UPDATE_TOLERANCE_KG, { bodyWeightKg });
-
+        const doneSets = buildNormalizedDoneSets(sets, exUnit).filter(Boolean);
         const exVolumeKg = doneSets.reduce((sum, s) => {
             const w = resolveEffectiveWeightKg(s, bodyWeightKg);
             if (w == null) return sum;
@@ -623,12 +632,8 @@ export default function LogScreen({
             if (!Number.isFinite(r) || r <= 0) return sum;
             return sum + w * r;
         }, 0);
-
-        return {
-            prCount: acc.prCount + (isPR ? 1 : 0),
-            totalVolumeKg: acc.totalVolumeKg + exVolumeKg,
-        };
-    }, { prCount: 0, totalVolumeKg: 0 });
+        return acc + exVolumeKg;
+    }, 0);
     const formattedVolumeKg = Math.round(totalVolumeKg).toLocaleString("ja-JP");
     const shareDurationSec = Math.max(
         Math.floor(Number(workoutElapsedSec) || 0),
@@ -650,6 +655,7 @@ export default function LogScreen({
                 summary_json: {
                     ...(rawSessionSharePayload.session?.summary_json || {}),
                     prCount,
+                    prDetails: prEntriesForCount,
                 },
             },
         }
@@ -1147,7 +1153,7 @@ export default function LogScreen({
                         const prev = getPrev ? getPrev(ex) : null;
                         const previousSets = getPreviousRecordSets(prev);
                         const previousUnit = prev?.displayUnit || prev?.unit || prev?.weightUnit || prev?.weight_unit || "kg";
-                        const pr = getPreviousPR ? getPreviousPR(ex, { excludeDate: logDate }) : (getPR ? getPR(ex) : null);
+                        const pr = getPreviousPR ? getPreviousPR(ex, { beforeDate: logDate }) : (getPR ? getPR(ex) : null);
                         const exUnit = getExUnit ? getExUnit(ex.name) : unit;
                         const displayUnit = getExerciseDisplayUnit(sets, exUnit);
                         const progressionTarget = calcProgressionTarget(previousSets, previousUnit, displayUnit);

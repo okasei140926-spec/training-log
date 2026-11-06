@@ -13,15 +13,12 @@ import {
   buildWorkoutDaySummaryPrKey,
 } from "../utils/workoutDaySummary";
 import {
-  PR_UPDATE_TOLERANCE_KG,
   dispW,
   formatDateKey,
   countValidSets,
-  getBestRmSet,
   getRecordSourceSets,
   getValidWorkoutDatesFromHistory,
   hasValidWorkoutOnDate,
-  hasMeaningfulPRIncrease,
   resolveEffectiveWeightKg,
   sanitizeHistoryRecord,
   sanitizeWorkoutSets,
@@ -33,6 +30,7 @@ import {
   readWorkoutTimerState,
 } from "../utils/workoutTimer";
 import { buildWorkoutSessionPayloadFromHistory } from "../utils/workoutSessions";
+import { calcPrEntries } from "../utils/prCalculation";
 import { getExerciseCountByBodyPart, getExerciseCountTotal } from "../utils/exerciseCountByBodyPart";
 import {
   formatSetCountByBodyPart,
@@ -318,6 +316,10 @@ export default function HistoryScreen({
     [resolvedEntries, todayKey]
   );
 
+  // NOTE: previousSetsMap は allowBodyweight: false で構築しているため、
+  // 自重種目（BW セット）はベースラインに含まれず、カレンダー経路での PR 判定からも除外される。
+  // 自重 PR をカレンダーでも表示したい場合は allowBodyweight: true にして
+  // bodyWeightKg を sanitizeHistoryRecord / sanitizeWorkoutSets の両方に渡す必要がある。
   const previousSetsMap = useMemo(() => {
     const map = {};
 
@@ -366,25 +368,21 @@ export default function HistoryScreen({
 
   const todayPrEntries = useMemo(
     () =>
-      todayEntries
-        .map((entry) => {
-          const previousSets =
-            previousSetsMap[`${entry.bodyPart}::${normalizeExerciseName(entry.name)}`] || [];
-          const bestSet = getBestRmSet(entry.sets, { allowBodyweight: false });
-          if (
-            !bestSet ||
-            !hasMeaningfulPRIncrease(entry.sets, previousSets, null, PR_UPDATE_TOLERANCE_KG)
-          ) {
-            return null;
-          }
-
-          return {
-            ...entry,
-            bestSet,
-          };
-        })
-        .filter(Boolean),
-    [todayEntries, previousSetsMap]
+      calcPrEntries(
+        todayEntries.map((entry) => ({
+          exerciseName: entry.name,
+          bodyPart: entry.bodyPart,
+          sets: entry.sets,
+        })),
+        (exerciseObj) => {
+          const key = `${exerciseObj.bodyPart}::${normalizeExerciseName(exerciseObj.name)}`;
+          const prevSets = previousSetsMap[key] || [];
+          return prevSets.length ? { sets: prevSets } : null;
+        },
+        todayKey,
+        { bodyWeightKg }
+      ),
+    [todayEntries, previousSetsMap, todayKey, bodyWeightKg]
   );
 
   const todaySummary = useMemo(() => {
@@ -481,13 +479,13 @@ export default function HistoryScreen({
         subtitle: `${todaySummary.prCount}件`,
         emptyText: "今日はまだPR更新がありません",
         items: todayPrEntries.map((entry) => ({
-          key: `${entry.id}-pr`,
-          title: entry.name,
+          key: `${entry.exerciseName}-${entry.bodyPart}-pr`,
+          title: entry.exerciseName,
           badge: entry.bodyPart,
           meta: formatSetDisplay(
-            entry.bestSet.weight,
-            entry.bestSet.reps,
-            (getExUnit ? getExUnit(entry.name) : unit) || "kg"
+            entry.weight,
+            entry.reps,
+            (getExUnit ? getExUnit(entry.exerciseName) : unit) || "kg"
           ),
         })),
       };
@@ -592,13 +590,18 @@ export default function HistoryScreen({
 
       if (!entries.length) return;
 
-      const prEntries = entries
-        .map((entry) => {
-          const summaryKey = buildWorkoutDaySummaryPrKey(entry.bodyPart, entry.name);
+      const prEntries = calcPrEntries(
+        entries.map((entry) => ({
+          exerciseName: entry.name,
+          bodyPart: entry.bodyPart,
+          sets: entry.sets,
+        })),
+        (exerciseObj) => {
+          const summaryKey = buildWorkoutDaySummaryPrKey(exerciseObj.bodyPart, exerciseObj.name);
           const previousSets = [];
 
           Object.entries(history || {}).forEach(([exerciseName, records]) => {
-            if (normalizeExerciseName(exerciseName) !== normalizeExerciseName(entry.name)) return;
+            if (normalizeExerciseName(exerciseName) !== normalizeExerciseName(exerciseObj.name)) return;
 
             (records || []).forEach((record) => {
               const sanitized = sanitizeHistoryRecord(record, { allowBodyweight: false });
@@ -635,18 +638,11 @@ export default function HistoryScreen({
             );
           });
 
-          const bestSet = getBestRmSet(entry.sets, { allowBodyweight: false });
-          if (
-            !bestSet
-            || !hasMeaningfulPRIncrease(entry.sets, previousSets, null, PR_UPDATE_TOLERANCE_KG)
-          ) {
-            return null;
-          }
-
-          return entry;
-        })
-        .filter(Boolean);
-
+          return previousSets.length ? { sets: previousSets } : null;
+        },
+        normalizedDate,
+        { bodyWeightKg }
+      );
       const historyDurationSec = entries.reduce(
         (max, entry) => Math.max(max, normalizeDurationSec(entry.durationSec)),
         0
@@ -700,7 +696,7 @@ export default function HistoryScreen({
           entries,
           getExUnit,
           fallbackUnit: unit,
-          prKeys: prEntries.map((entry) => buildWorkoutDaySummaryPrKey(entry.bodyPart, entry.name)),
+          prKeys: prEntries.map((entry) => buildWorkoutDaySummaryPrKey(entry.bodyPart, entry.exerciseName)),
           durationSec,
           isShared,
           openWorkoutDate: normalizedDate,
@@ -740,6 +736,7 @@ export default function HistoryScreen({
       workoutDurationSecByDate,
       getExUnit,
       unit,
+      bodyWeightKg,
     ]
   );
 

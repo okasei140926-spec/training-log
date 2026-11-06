@@ -132,7 +132,7 @@ export const useWorkout = ({
         return filtered.length ? filtered[filtered.length - 1] : null;
     };
 
-    const getHistoryPrCandidates = (targetInfo, { excludeDate } = {}) => {
+    const getHistoryPrCandidates = (targetInfo, { beforeDate } = {}) => {
         const candidates = [];
 
         Object.entries(history || {}).forEach(([historyName, recs]) => {
@@ -140,7 +140,7 @@ export const useWorkout = ({
 
             (recs || []).forEach((r) => {
                 const recordDate = String(r?.date || r?.workoutDate || r?.workout_date || "").slice(0, 10);
-                if (excludeDate && recordDate === excludeDate) return;
+                if (beforeDate && recordDate >= beforeDate) return;
                 const key = buildRecordKey(historyName, r, targetInfo);
                 if (!isTargetMatch(key, targetInfo)) return;
 
@@ -352,16 +352,38 @@ export const useWorkout = ({
         return getSqlCachePR(targetInfo);
     };
 
-    const getPreviousPR = (target, { excludeDate } = {}) => {
+    const getPreviousPR = (target, { beforeDate } = {}) => {
         const targetInfo = getTargetInfo(target);
-        const historyBest = getBestHistoryPR(targetInfo, { excludeDate });
+
+        // Gather result from the first available source.
+        // getHistoryPrCandidates already filters by beforeDate internally,
+        // but manualPR and sqlCachePR have no date filter — the invariant
+        // check at the exit handles them.
+        let result;
+        const historyBest = getBestHistoryPR(targetInfo, { beforeDate });
         if (historyBest) {
-            getManualPR(targetInfo, historyBest);
-            return historyBest;
+            getManualPR(targetInfo, historyBest); // side-effect: marks manual_bests as superseded
+            result = historyBest;
+        } else {
+            const manualPR = getManualPR(targetInfo);
+            result = manualPR ?? getSqlCachePR(targetInfo);
         }
-        const manualPR = getManualPR(targetInfo);
-        if (manualPR) return manualPR;
-        return getSqlCachePR(targetInfo);
+
+        // 出口ガード: beforeDate が指定されているとき、
+        // 日付が確認できて かつ beforeDate 以降であれば除外する。
+        //
+        // 日付が無い（null）手動PR・キャッシュエントリは「日付不明の歴代ベスト」として残す。
+        // 捨てると baseline が下がり偽PR が増える恐れがある。
+        // 例: 手動PR 100kg（日付なし）、今日 95kg → 捨てると履歴 90kg が基準になり 95>90 で偽PR。
+        // 一度 !resultDate のときも捨てる実装をしたが、この理由で元に戻した。
+        if (beforeDate) {
+            const resultDate = result?.date;
+            if (resultDate && resultDate >= beforeDate) {
+                return null;
+            }
+        }
+
+        return result;
     };
 
     const copySetDown = (name, idx) => {

@@ -191,3 +191,21 @@ export const getWorkoutAutoFinishState = (state = {}, currentDateKey = "", now =
     endedAt: dateChanged || idleTimedOut ? referenceAt : null,
   };
 };
+
+/**
+ * Format workout duration seconds into a human-readable string.
+ * Uses Math.floor throughout — elapsed time is never rounded up.
+ *
+ * @param {number} totalSec
+ * @returns {string}  e.g. "73分" or "1時間13分" or "" (if totalSec <= 0)
+ */
+export function formatWorkoutDuration(totalSec) {
+  const sec = Number(totalSec || 0);
+  if (!Number.isFinite(sec) || sec <= 0) return "";
+  const totalMin = Math.floor(sec / 60);
+  if (totalMin <= 0) return "";
+  const hours = Math.floor(totalMin / 60);
+  const minutes = totalMin % 60;
+  if (hours <= 0) return `${totalMin}分`;
+  return minutes > 0 ? `${hours}時間${minutes}分` : `${hours}時間`;
+}

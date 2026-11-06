@@ -1,14 +1,7 @@
 import React from "react";
+import { formatWorkoutDuration } from "../utils/workoutTimer";
 
 const pad2 = (value) => String(Math.max(0, Number(value) || 0)).padStart(2, "0");
-const formatFinishedDuration = (totalSec) => {
-  const totalMin = Math.floor(totalSec / 60);
-  const hours = Math.floor(totalMin / 60);
-  const minutes = totalMin % 60;
-
-  if (hours <= 0) return `${totalMin}分`;
-  return `${hours}時間${minutes}分`;
-};
 
 export default function WorkoutElapsedTimer({
   elapsedSec = 0,
@@ -21,7 +14,7 @@ export default function WorkoutElapsedTimer({
   const isFinished = status === "finished";
   const isActive = status === "active";
   const label = isFinished
-    ? formatFinishedDuration(totalSec)
+    ? formatWorkoutDuration(totalSec)
     : `${pad2(minutes)}:${pad2(seconds)}`;
   const isInteractive = typeof onClick === "function" && isActive;
 

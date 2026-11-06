@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
 import { formatBWSetLabel, formatKg } from "../../utils/helpers";
+import { formatWorkoutDuration } from "../../utils/workoutTimer";
 const CARD_PRESETS = {
     square: {
         key: "square",
@@ -27,15 +28,6 @@ const formatDate = (date) => {
     return `${year}/${month}/${day}`;
 };
 
-const formatDuration = (durationSec) => {
-    const sec = Number(durationSec || 0);
-    if (!Number.isFinite(sec) || sec <= 0) return "";
-    const totalMinutes = Math.max(1, Math.round(sec / 60));
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    if (hours <= 0) return `${minutes}分`;
-    return minutes > 0 ? `${hours}時間${minutes}分` : `${hours}時間`;
-};
 
 const resolveDurationSec = (payload) => {
     const session = payload?.session || {};
@@ -194,7 +186,7 @@ export default function WorkoutSessionShareModal({
     );
     const bodyPartCards = useMemo(() => getBodyPartCards(summary, items), [items, summary]);
     const bodyPartBreakdownLabel = formatBodyPartBreakdown(bodyPartCards);
-    const durationLabel = formatDuration(resolveDurationSec(sessionPayload));
+    const durationLabel = formatWorkoutDuration(resolveDurationSec(sessionPayload));
     const prCount = Number(summary?.prCount || 0);
     const previewScale = preset.scale || 0.58;
     const isStory = sizeKey === "story";
