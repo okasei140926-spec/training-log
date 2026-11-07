@@ -5,6 +5,7 @@ import {
   buildLastWeekComparison,
   getCurrentWeekBoundaries,
 } from "./analyticsUtils";
+import { WEEKLY_SET_TARGET_MIN, WEEKLY_SET_TARGET_MAX } from "../../hooks/useSettings";
 
 const TRACKED_BODY_PARTS = FIXED_BODY_PART_LABELS.filter((bp) => bp !== "その他");
 
@@ -45,7 +46,7 @@ export default function WeeklyTab({
     if (!setWeeklySetTargets) return;
     setWeeklySetTargets((prev) => {
       const current = prev[bp] ?? 10;
-      const next = Math.max(0, Math.min(50, current + delta));
+      const next = Math.max(WEEKLY_SET_TARGET_MIN, Math.min(WEEKLY_SET_TARGET_MAX, current + delta));
       return { ...prev, [bp]: next };
     });
   };

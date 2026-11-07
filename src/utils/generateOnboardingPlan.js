@@ -272,6 +272,52 @@ export function buildMuscleExFromAnswers(answers) {
 }
 
 /**
+ * Returns true if changing this profile field should reset AI plan progress
+ * (completedDates cleared).
+ * @param {string} fieldId
+ * @returns {boolean}
+ */
+const PLAN_PROGRESS_RESET_FIELDS = new Set(["level", "frequency", "location", "hasDumbbells", "preferredSplit"]);
+export function shouldResetPlanProgress(fieldId) {
+    return PLAN_PROGRESS_RESET_FIELDS.has(fieldId);
+}
+
+/**
+ * Returns true if changing this profile field should trigger a muscleEx template
+ * rebuild (buildMuscleExFromAnswers is affected by level, location, hasDumbbells only).
+ * frequency and preferredSplit affect split routing, not template content.
+ * @param {string} fieldId
+ * @returns {boolean}
+ */
+const MUSCLE_EX_REBUILD_FIELDS = new Set(["level", "location", "hasDumbbells"]);
+export function shouldRebuildMuscleEx(fieldId) {
+    return MUSCLE_EX_REBUILD_FIELDS.has(fieldId);
+}
+
+/**
+ * Merge two muscleEx objects: newMuscleEx exercises come first (template result),
+ * then any extra exercises from prevMuscleEx that are not already present (custom additions).
+ * No duplicates by exercise id. All body parts from both objects are preserved.
+ *
+ * @param {object} newMuscleEx - freshly built (e.g. from buildMuscleExFromAnswers)
+ * @param {object} prevMuscleEx - existing muscleEx (may contain post-onboarding custom exercises)
+ * @returns {object} merged muscleEx
+ */
+export function mergeMuscleEx(newMuscleEx, prevMuscleEx) {
+    if (!prevMuscleEx || typeof prevMuscleEx !== "object") return newMuscleEx;
+    const result = {};
+    const allParts = new Set([...Object.keys(newMuscleEx), ...Object.keys(prevMuscleEx)]);
+    for (const part of allParts) {
+        const newExs = newMuscleEx[part] || [];
+        const prevExs = prevMuscleEx[part] || [];
+        const newIds = new Set(newExs.map((e) => e.id));
+        const extras = prevExs.filter((e) => !newIds.has(e.id));
+        result[part] = [...newExs, ...extras];
+    }
+    return result;
+}
+
+/**
  * Build the exercise list for a single AI plan session.
  *
  * Priority per body part: onboarding favorites → history-frequent → templates

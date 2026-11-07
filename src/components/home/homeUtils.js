@@ -717,3 +717,30 @@ export function getRecoveryAdvice(part, pct, detail) {
 
     return `${part}は疲労が強めです。今日は休ませるか、別部位を優先するのが良さそうです。`;
 }
+
+// ─── 週間セットバー表示データ ─────────────────────────────────────────────────
+
+/**
+ * HomeScreen の週間セットバー表示データを計算する純粋関数。
+ * target=0 は「この部位を追跡しない」扱いで、達成色も bar fill も出さない。
+ *
+ * @param {number}  done       今週の実施セット数
+ * @param {number}  target     目標セット数
+ * @param {boolean} isLateWeek 週後半（水曜以降など）かどうか
+ * @returns {{ ratio: number, color: string, isZeroTarget: boolean }}
+ */
+export function computeWeeklyPartBarDisplay(done, target, isLateWeek) {
+    const isZeroTarget = target === 0;
+    const ratio = isZeroTarget ? 0 : done / target;
+    let color;
+    if (isZeroTarget) {
+        color = "var(--home-muted)";
+    } else if (ratio >= 1.0) {
+        color = "#55D89E";
+    } else if (ratio < 0.7 && isLateWeek) {
+        color = "#F6A623";
+    } else {
+        color = "var(--home-text)";
+    }
+    return { ratio, color, isZeroTarget };
+}

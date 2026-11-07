@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { load, save } from "../utils/helpers";
 
+export const WEEKLY_SET_TARGET_MIN = 0;
+export const WEEKLY_SET_TARGET_MAX = 50;
+
+/** 週間セット目標値を [MIN, MAX] にクランプする純粋関数 */
+export function clampWeeklySetTarget(value) {
+  return Math.max(WEEKLY_SET_TARGET_MIN, Math.min(WEEKLY_SET_TARGET_MAX, value));
+}
+
 const DEFAULT_WEEKLY_SET_TARGETS = Object.fromEntries(
   ["胸", "背中", "四頭", "ハム", "尻", "肩", "二頭", "三頭", "腹筋"].map((bp) => [bp, 10])
 );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import NotificationSettings from "../NotificationSettings";
 import { SPLIT_TYPE_DESCRIPTIONS } from "../../utils/generateOnboardingPlan";
+import { clampWeeklySetTarget } from "../../hooks/useSettings";
 
 const isNativeApp = () =>
   typeof window !== "undefined" && window.location?.protocol === "capacitor:";
@@ -25,6 +26,7 @@ const PROFILE_FIELD_DEFS = [
         label: "経験レベル",
         type: "single",
         resetsPlan: true,
+        rebuildsTemplates: true,
         options: [
             { label: "初心者（1年未満）", value: "初心者" },
             { label: "中級者（1〜3年）",  value: "中級者" },
@@ -69,6 +71,7 @@ const PROFILE_FIELD_DEFS = [
         label: "トレーニング場所",
         type: "single",
         resetsPlan: true,
+        rebuildsTemplates: true,
         options: [
             { label: "ジム", value: "ジム" },
             { label: "自宅", value: "自宅" },
@@ -79,6 +82,7 @@ const PROFILE_FIELD_DEFS = [
         label: "ダンベルの有無",
         type: "single",
         resetsPlan: true,
+        rebuildsTemplates: true,
         showIf: (answers) => (answers?.location || "") === "自宅",
         options: [
             { label: "ある（ダンベルあり）", value: "ある" },
@@ -1088,7 +1092,7 @@ export default function SettingsModal({
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <button
                               type="button"
-                              onClick={() => setWeeklySetTargets?.((prev) => ({ ...prev, [bp]: Math.max(1, (prev[bp] ?? 10) - 1) }))}
+                              onClick={() => setWeeklySetTargets?.((prev) => ({ ...prev, [bp]: clampWeeklySetTarget((prev[bp] ?? 10) - 1) }))}
                               style={{
                                 width: 32, height: 32, borderRadius: 999,
                                 border: "1px solid var(--border2)", background: "var(--card2)",
@@ -1103,7 +1107,7 @@ export default function SettingsModal({
                             </span>
                             <button
                               type="button"
-                              onClick={() => setWeeklySetTargets?.((prev) => ({ ...prev, [bp]: Math.min(50, (prev[bp] ?? 10) + 1) }))}
+                              onClick={() => setWeeklySetTargets?.((prev) => ({ ...prev, [bp]: clampWeeklySetTarget((prev[bp] ?? 10) + 1) }))}
                               style={{
                                 width: 32, height: 32, borderRadius: 999,
                                 border: "1px solid var(--border2)", background: "var(--card2)",
@@ -1143,9 +1147,14 @@ export default function SettingsModal({
                       >
                         <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
                           {fieldDef.label}
-                          {fieldDef.resetsPlan && (
+                          {fieldDef.rebuildsTemplates && (
                             <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 5, fontWeight: 900 }}>
                               AIプラン再構築
+                            </span>
+                          )}
+                          {!fieldDef.rebuildsTemplates && fieldDef.resetsPlan && (
+                            <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: 5, fontWeight: 900 }}>
+                              AIプランリセット
                             </span>
                           )}
                         </div>
@@ -1513,7 +1522,12 @@ export default function SettingsModal({
                 </div>
               ) : (
                 <>
-                  {profileEditorField.resetsPlan && (
+                  {profileEditorField.rebuildsTemplates && (
+                    <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, marginBottom: 12, background: "rgba(18,199,194,0.08)", borderRadius: 10, padding: "7px 10px" }}>
+                      この項目を変更するとAIプランの種目が再構築され、進行がリセットされます（追加した種目は保持されます）
+                    </div>
+                  )}
+                  {!profileEditorField.rebuildsTemplates && profileEditorField.resetsPlan && (
                     <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 900, marginBottom: 12, background: "rgba(18,199,194,0.08)", borderRadius: 10, padding: "7px 10px" }}>
                       この項目を変更するとAIプランの進行がリセットされます
                     </div>

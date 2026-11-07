@@ -44,7 +44,7 @@ import {
     buildBaseExercises,
     getExSetsHelper,
 } from "./utils/workoutHelpers";
-import { buildSessionExercisesForPlanDay, findBestMatchingPlanDayIndex, buildMuscleExFromAnswers } from "./utils/generateOnboardingPlan";
+import { buildSessionExercisesForPlanDay, findBestMatchingPlanDayIndex, buildMuscleExFromAnswers, mergeMuscleEx, shouldResetPlanProgress, shouldRebuildMuscleEx } from "./utils/generateOnboardingPlan";
 // buildWorkoutSessionPayloadFromDraft → useWorkoutDaySummaryBuilder
 import WorkoutSessionShareModal from "./components/modals/WorkoutSessionShareModal";
 import SettingsModal from "./components/modals/SettingsModal";
@@ -1064,9 +1064,6 @@ export default function GymApp() {
         unmarkPlanDayCompleted(logDate);
     }, [unmarkPlanDayCompleted, logDate]);
 
-    // Plan-affecting fields: changing any of these resets AI plan progress + rebuilds muscleEx
-    const PLAN_RESET_FIELDS = ["level", "frequency", "location", "hasDumbbells", "preferredSplit"];
-
     const handleSaveProfileField = useCallback(async (fieldId, newValue) => {
         // Merge into onboardingAnswers
         const prevAnswers = load("onboardingAnswers", {}) || {};
@@ -1102,14 +1099,17 @@ export default function GymApp() {
             }
         }
 
-        // If plan-affecting field changed, reset plan progress and rebuild muscleEx
-        if (PLAN_RESET_FIELDS.includes(fieldId)) {
+        // If plan-affecting field changed, reset plan progress; also rebuild muscleEx if needed
+        if (shouldResetPlanProgress(fieldId)) {
             // For custom split, customSequence will be set via handleSaveCustomSplit instead
             if (newValue !== "custom") {
                 resetPlanProgress(newAnswers);
-                const newMuscleEx = buildMuscleExFromAnswers(newAnswers);
-                setMuscleEx(newMuscleEx);
-                save("routineEx", newMuscleEx);
+                if (shouldRebuildMuscleEx(fieldId)) {
+                    const rebuilt = buildMuscleExFromAnswers(newAnswers);
+                    const merged = mergeMuscleEx(rebuilt, load("routineEx", {}));
+                    setMuscleEx(merged);
+                    save("routineEx", merged);
+                }
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1147,11 +1147,8 @@ export default function GymApp() {
         const newAnswers = { ...prevAnswers, preferredSplit: "custom" };
         save("onboardingAnswers", newAnswers);
         setOnboardingAnswers(newAnswers);
-        // Reset plan progress with new custom sequence
+        // Reset plan progress with new custom sequence (preferredSplit doesn't affect templates)
         resetPlanProgress(newAnswers, customSequence);
-        const newMuscleEx = buildMuscleExFromAnswers(newAnswers);
-        setMuscleEx(newMuscleEx);
-        save("routineEx", newMuscleEx);
         if (user?.id) {
             const { error, count } = await supabase
                 .from("profiles")
@@ -3770,8 +3767,17 @@ export default function GymApp() {
                                 (() => {
                                     let answers = null;
                                     try { answers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
-                                    buildSessionExercisesForPlanDay({ bodyParts, answers, history: trustedHistory })
-                                        .forEach((ex) => addExToSession(ex.name, ex.bodyPart));
+                                    const _planExs = buildSessionExercisesForPlanDay({ bodyParts, answers, history: trustedHistory });
+                                    // [plan-debug] 現状の種目選定ログ
+                                    const _byPart = _planExs.reduce((acc, ex) => { (acc[ex.bodyPart] = acc[ex.bodyPart] || []).push(ex.name); return acc; }, {});
+                                    console.log("[plan-debug] onLoadPlanDay selection", {
+                                        bodyParts,
+                                        total: _planExs.length,
+                                        byBodyPart: Object.entries(_byPart).map(([bp, names]) => `${bp}${names.length}種目: ${names.join(", ")}`),
+                                        exercises: _planExs.map(ex => `${ex.bodyPart}: ${ex.name}`),
+                                        weeklySetTargets,
+                                    });
+                                    _planExs.forEach((ex) => addExToSession(ex.name, ex.bodyPart));
                                 })();
                                 setPlanBannerDismissedForDate(logDate);
                                 handlePlanAccepted();
@@ -3912,6 +3918,15 @@ export default function GymApp() {
                                 const todayKey = getTodayKey();
                                 const bodyParts = _nextPlanDay.bodyParts;
                                 const planExercises = buildSessionExercisesForPlanDay({ bodyParts, answers: _planAnswers, history: trustedHistory });
+                                // [plan-debug] 現状の種目選定ログ
+                                const _byPart2 = planExercises.reduce((acc, ex) => { (acc[ex.bodyPart] = acc[ex.bodyPart] || []).push(ex.name); return acc; }, {});
+                                console.log("[plan-debug] onStartNextPlanDay selection", {
+                                    bodyParts,
+                                    total: planExercises.length,
+                                    byBodyPart: Object.entries(_byPart2).map(([bp, names]) => `${bp}${names.length}種目: ${names.join(", ")}`),
+                                    exercises: planExercises.map(ex => `${ex.bodyPart}: ${ex.name}`),
+                                    weeklySetTargets,
+                                });
                                 setPlanBannerDismissedForDate(todayKey);
                                 handlePlanAccepted();
                                 aiPlanActiveDateRef.current = todayKey;

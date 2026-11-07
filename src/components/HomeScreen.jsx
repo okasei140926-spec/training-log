@@ -23,6 +23,7 @@ import {
     bodyPartCountsSignature,
     getDefaultRecoveryPart,
     calcMonthlyTrainingDays,
+    computeWeeklyPartBarDisplay,
 } from "./home/homeUtils";
 import WeeklyTrainingModal from "./home/WeeklyTrainingModal";
 import RecoveryModal from "./home/RecoveryModal";
@@ -575,12 +576,7 @@ export default function HomeScreen({
                     }}>
                         {weeklyItems.map((x, index, arr) => {
                             const target = weeklySetTargets[x.part] ?? 10;
-                            const ratio = target > 0 ? x.sets / target : 1;
-                            const partColor = ratio >= 1.0
-                                ? "#55D89E"
-                                : (ratio < 0.7 && isLateWeek)
-                                    ? "#F6A623"
-                                    : "var(--home-text)";
+                            const { ratio, color: partColor } = computeWeeklyPartBarDisplay(x.sets, target, isLateWeek);
                             return (
                             <button
                                 key={x.part}
