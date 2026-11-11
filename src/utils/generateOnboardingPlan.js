@@ -1,4 +1,5 @@
 import { save, load } from "./helpers";
+import { getEightWeeksAgoDate } from "./strengthScore";
 
 /**
  * Calculate current age from an ISO birth date string ("YYYY-MM-DD").
@@ -20,9 +21,6 @@ const ROUTINE_KEY = "routineEx";
 
 // exercises per body part by level (used for onboarding muscleEx setup)
 const PART_COUNT = { 初心者: 2, 中級者: 3, 上級者: 3 };
-
-// total exercises per AI plan session by level
-const SESSION_COUNT = { 初心者: 4, 中級者: 5, 上級者: 6 };
 
 // Default sets/reps surfaced for potential future use
 export const DEFAULT_PLAN_PARAMS = {
@@ -318,72 +316,192 @@ export function mergeMuscleEx(newMuscleEx, prevMuscleEx) {
 }
 
 /**
- * Build the exercise list for a single AI plan session.
- *
- * Priority per body part: onboarding favorites → history-frequent → templates
- * Total count is capped at SESSION_COUNT[level].
- * Round-robin selection across body parts ensures even distribution.
+ * Build the exercise list for a single AI plan session using weekly set targets.
  *
  * @param {object} params
  * @param {string[]} params.bodyParts - Body parts for this plan day
  * @param {object|null} params.answers - onboardingAnswers from localStorage
- * @param {object} params.history - trustedHistory ({ exName: [{ date, bodyPart, sets }] })
+ * @param {object} params.history - trustedHistory ({ exName: [{ date, bodyPart, sets, order }] })
+ * @param {object} [params.weeklySetTargets={}] - { [bp]: number } weekly set targets per body part
+ * @param {string|null} [params.splitType=null] - resolved split type; if null, derived from answers
  * @returns {{ name: string, bodyPart: string, label: string }[]}
  */
-export function buildSessionExercisesForPlanDay({ bodyParts, answers, history }) {
-    const { level = "初心者", favorites = [] } = answers || {};
-    const locationType = getLocationType(answers || {});
-    const templates = TEMPLATES[locationType];
-    const target = SESSION_COUNT[level] || 4;
+/** 直近8週の履歴から1種目あたりの平均完了セット数を算出する。
+ *  出現回数が MIN_OCCURRENCES 未満のとき、または履歴がないときは
+ *  DEFAULT_PLAN_PARAMS[level].sets にフォールバックする。
+ *  算出値は [SPS_MIN, SPS_MAX] にクランプする。
+ *
+ * @param {object} history  trustedHistory { exName: [{ date, sets:[{done}] }] }
+ * @param {string} level    "初心者" | "中級者" | "上級者"
+ * @returns {{ value: number, source: "history"|"default", totalSets: number,
+ *             totalOccurrences: number, raw: number|null }}
+ */
+const SPS_MIN_OCCURRENCES = 10;
+const SPS_MIN = 2;
+const SPS_MAX = 5;
 
-    // Build priority-ordered candidate list per body part (no duplicates)
-    const candidatesByPart = {};
-    for (const bp of bodyParts) {
-        const favNames = (favorites || [])
-            .filter(f => f.bodyPart === bp)
-            .map(f => f.name);
+export function computeSetsPerExerciseFromHistory(history, level = "初心者") {
+    const cutoff = getEightWeeksAgoDate();
+    const fallback = DEFAULT_PLAN_PARAMS[level]?.sets ?? 3;
+    let totalSets = 0;
+    let totalOccurrences = 0;
 
-        // Count how many times each exercise appears for this body part in history
-        const histFreq = {};
-        Object.entries(history || {}).forEach(([exName, records]) => {
-            const count = (records || []).filter(r =>
-                String(r?.bodyPart || r?.body_part || "").trim() === bp
-            ).length;
-            if (count > 0) histFreq[exName] = count;
+    Object.values(history || {}).forEach((records) => {
+        (records || []).forEach((record) => {
+            if (!record || record.date < cutoff) return;
+            const doneSets = (record.sets || []).filter((s) => s?.done).length;
+            if (doneSets === 0) return; // 完了セットなし → 出現回数にも含めない
+            totalSets += doneSets;
+            totalOccurrences++;
         });
-        const histNames = Object.entries(histFreq)
-            .sort((a, b) => b[1] - a[1])
-            .map(([name]) => name)
-            .filter(name => !favNames.includes(name));
+    });
 
-        // Template fallback: exercises not already covered by favorites or history
-        const tmplNames = (templates[bp] || [])
-            .filter(name => !favNames.includes(name) && !histNames.includes(name));
-
-        candidatesByPart[bp] = [...favNames, ...histNames, ...tmplNames];
+    if (totalOccurrences < SPS_MIN_OCCURRENCES) {
+        return { value: fallback, source: "default", totalSets, totalOccurrences, raw: null };
     }
 
-    // Round-robin selection: pick 1 from each body part in turn until target reached
-    const selected = [];
-    const usedByPart = {};
-    bodyParts.forEach(bp => { usedByPart[bp] = 0; });
+    const raw = totalSets / totalOccurrences;
+    const value = Math.min(SPS_MAX, Math.max(SPS_MIN, raw));
+    return { value, source: "history", totalSets, totalOccurrences, raw };
+}
 
-    let added = true;
-    while (selected.length < target && added) {
-        added = false;
-        for (const bp of bodyParts) {
-            if (selected.length >= target) break;
-            const idx = usedByPart[bp];
-            const candidates = candidatesByPart[bp] || [];
-            if (idx < candidates.length) {
-                selected.push({ name: candidates[idx], bodyPart: bp, label: bp });
-                usedByPart[bp]++;
-                added = true;
-            }
+export function buildSessionExercisesForPlanDay({ bodyParts, answers, history, weeklySetTargets = {}, splitType = null }) {
+    const { level = "初心者", favorites = [], frequency = 3 } = answers || {};
+    const locationType = getLocationType(answers || {});
+    const templates = TEMPLATES[locationType];
+    const spsResult = computeSetsPerExerciseFromHistory(history, level);
+    const setsPerExercise = spsResult.value;
+
+    // ── Step 1: Compute per-body-part exercise count ──────────────────────────
+    const resolvedSplitType = splitType ?? getSplitTypeFromPreference(answers?.preferredSplit ?? null, frequency);
+    const sequence = buildPlanDaySequence(resolvedSplitType);
+    const cycleLength = Math.max(1, sequence.length);
+    const sessionsPerWeek = Number(frequency) || 3;
+    const cyclesPerWeek = Math.max(sessionsPerWeek / cycleLength, 0.01);
+
+    const rawCountByPart = {};
+    const setsThisSessionByPart = {};
+
+    for (const bp of bodyParts) {
+        const weeklyTarget = weeklySetTargets[bp] ?? 10;
+        if (weeklyTarget === 0) {
+            rawCountByPart[bp] = 0;
+            setsThisSessionByPart[bp] = 0;
+            continue;
+        }
+        const stsSession = weeklyTarget / cyclesPerWeek;
+        setsThisSessionByPart[bp] = stsSession;
+        rawCountByPart[bp] = Math.min(Math.round(stsSession / setsPerExercise), 3);
+    }
+
+    // ── Step 2: Apply 8-exercise day cap (priority = most setsThisSession) ───
+    const activeParts = bodyParts.filter(bp => rawCountByPart[bp] > 0);
+    const totalRaw = activeParts.reduce((sum, bp) => sum + rawCountByPart[bp], 0);
+
+    const finalCountByPart = { ...rawCountByPart };
+
+    if (totalRaw > 8) {
+        // Sort by setsThisSession descending (stable — Array.sort is stable in V8)
+        const sorted = [...activeParts].sort((a, b) => setsThisSessionByPart[b] - setsThisSessionByPart[a]);
+        let remaining = 8;
+        // Zero out all first
+        sorted.forEach(bp => { finalCountByPart[bp] = 0; });
+        for (const bp of sorted) {
+            if (remaining <= 0) break;
+            const give = Math.min(rawCountByPart[bp], remaining);
+            finalCountByPart[bp] = give;
+            remaining -= give;
         }
     }
 
-    return selected;
+    // ── Step 3: Build 8-week history structures ───────────────────────────────
+    const cutoff = getEightWeeksAgoDate();
+    const relevantBpSet = new Set(bodyParts);
+
+    // histFreqByPart[bp][exName] = count of records within 8 weeks
+    const histFreqByPart = {};
+    // avgOrderByPart[bp][exName] = { sum, count } → will convert to avg
+    const avgOrderAccByPart = {};
+
+    for (const bp of bodyParts) {
+        histFreqByPart[bp] = {};
+        avgOrderAccByPart[bp] = {};
+    }
+
+    Object.entries(history || {}).forEach(([exName, records]) => {
+        (records || []).forEach(record => {
+            if (!record || record.date < cutoff) return;
+            const bp = String(record.bodyPart || record.body_part || "").trim();
+            if (!relevantBpSet.has(bp)) return;
+
+            histFreqByPart[bp][exName] = (histFreqByPart[bp][exName] || 0) + 1;
+
+            const orderVal = record.order;
+            if (Number.isFinite(orderVal)) {
+                if (!avgOrderAccByPart[bp][exName]) {
+                    avgOrderAccByPart[bp][exName] = { sum: 0, count: 0 };
+                }
+                avgOrderAccByPart[bp][exName].sum += orderVal;
+                avgOrderAccByPart[bp][exName].count += 1;
+            }
+        });
+    });
+
+    // Convert accumulator to avg
+    const avgOrderByPart = {};
+    for (const bp of bodyParts) {
+        avgOrderByPart[bp] = {};
+        for (const [exName, acc] of Object.entries(avgOrderAccByPart[bp])) {
+            avgOrderByPart[bp][exName] = acc.sum / acc.count;
+        }
+    }
+
+    // ── Step 4: Select and order exercises per body part ─────────────────────
+    const result = [];
+    const intermediates = {};
+
+    for (const bp of bodyParts) {
+        const count = finalCountByPart[bp] ?? 0;
+        const weeklyTarget = weeklySetTargets[bp] ?? 10;
+
+        intermediates[bp] = {
+            weeklyTarget,
+            setsThisSession: +( setsThisSessionByPart[bp] ?? 0).toFixed(1),
+            rawCount: rawCountByPart[bp] ?? 0,
+            finalCount: count,
+        };
+
+        if (count === 0) continue;
+
+        // candidates: history (sorted by freq desc) → favorites (not in hist) → templates (not in hist/favs)
+        const histSorted = Object.entries(histFreqByPart[bp])
+            .sort((a, b) => b[1] - a[1])
+            .map(([name]) => name);
+
+        const histSet = new Set(histSorted);
+        const favNames = (favorites || [])
+            .filter(f => f.bodyPart === bp)
+            .map(f => f.name)
+            .filter(name => !histSet.has(name));
+
+        const favSet = new Set(favNames);
+        const tmplNames = (templates[bp] || [])
+            .filter(name => !histSet.has(name) && !favSet.has(name));
+
+        const candidates = [...histSorted, ...favNames, ...tmplNames];
+        const selected = candidates.slice(0, count);
+
+        // Sort by avg order ascending (no-history → Infinity → goes last)
+        selected.sort((a, b) => {
+            const aAvg = avgOrderByPart[bp][a] ?? Infinity;
+            const bAvg = avgOrderByPart[bp][b] ?? Infinity;
+            return aAvg - bAvg;
+        });
+
+        result.push(...selected.map(name => ({ name, bodyPart: bp, label: bp })));
+    }
+
+    return result;
 }
 
 /**

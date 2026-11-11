@@ -1763,7 +1763,6 @@ export default function GymApp() {
         return dates.length;
     }, [history, markWorkoutContentChanged]); // eslint-disable-line react-hooks/exhaustive-deps
 
-
     // ─── Persist ──────────────────────────────────────
     useEffect(() => { save("routineEx", muscleEx); }, [muscleEx]);
     useEffect(() => {
@@ -3767,7 +3766,7 @@ export default function GymApp() {
                                 (() => {
                                     let answers = null;
                                     try { answers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
-                                    const _planExs = buildSessionExercisesForPlanDay({ bodyParts, answers, history: trustedHistory });
+                                    const _planExs = buildSessionExercisesForPlanDay({ bodyParts, answers, history: trustedHistory, weeklySetTargets, splitType: aiPlanProgress?.splitType ?? null });
                                     // [plan-debug] 現状の種目選定ログ
                                     const _byPart = _planExs.reduce((acc, ex) => { (acc[ex.bodyPart] = acc[ex.bodyPart] || []).push(ex.name); return acc; }, {});
                                     console.log("[plan-debug] onLoadPlanDay selection", {
@@ -3888,7 +3887,7 @@ export default function GymApp() {
                         let _planAnswers = null;
                         try { _planAnswers = JSON.parse(localStorage.getItem("onboardingAnswers") || "null"); } catch {}
                         const _nextPlanDayExerciseCount = _nextPlanDay
-                            ? buildSessionExercisesForPlanDay({ bodyParts: _nextPlanDay.bodyParts, answers: _planAnswers, history: trustedHistory }).length
+                            ? buildSessionExercisesForPlanDay({ bodyParts: _nextPlanDay.bodyParts, answers: _planAnswers, history: trustedHistory, weeklySetTargets, splitType: aiPlanProgress?.splitType ?? null }).length
                             : 0;
                         return (
                         <HomeScreen
@@ -3917,7 +3916,7 @@ export default function GymApp() {
                                 if (!_nextPlanDay) return;
                                 const todayKey = getTodayKey();
                                 const bodyParts = _nextPlanDay.bodyParts;
-                                const planExercises = buildSessionExercisesForPlanDay({ bodyParts, answers: _planAnswers, history: trustedHistory });
+                                const planExercises = buildSessionExercisesForPlanDay({ bodyParts, answers: _planAnswers, history: trustedHistory, weeklySetTargets, splitType: aiPlanProgress?.splitType ?? null });
                                 // [plan-debug] 現状の種目選定ログ
                                 const _byPart2 = planExercises.reduce((acc, ex) => { (acc[ex.bodyPart] = acc[ex.bodyPart] || []).push(ex.name); return acc; }, {});
                                 console.log("[plan-debug] onStartNextPlanDay selection", {

@@ -75,13 +75,17 @@ const BASE_ANSWERS = {
 // ─────────────────────────────────────────────────────────────
 
 describe('planCardExerciseCount: buildSessionExercisesForPlanDay の出力が表示値の源泉', () => {
-    test('中級者 Push: 戻り値は 5 種目（SESSION_COUNT[中級者]）', () => {
+    // 新アルゴリズム: weeklySetTargets 未指定 → デフォルト 10/部位
+    // freq=3, ppl (cycleLength=3) → cyclesPerWeek=1
+    // setsThisSession=10 → rawCount=min(round(10/4),3)=3 per part
+    // 3部位×3 = 9 > 8 → 8種目に削減
+    test('中級者 Push: 戻り値は 8 種目（1日上限）', () => {
         const exercises = buildSessionExercisesForPlanDay({
             bodyParts: PUSH_PARTS,
             answers: BASE_ANSWERS,
             history: {},
         });
-        expect(exercises.length).toBe(5);
+        expect(exercises.length).toBe(8);
     });
 
     test('muscleEx ベース計算は 11 になり生成種目数と一致しない（旧実装が誤っていた証明）', () => {
@@ -94,7 +98,8 @@ describe('planCardExerciseCount: buildSessionExercisesForPlanDay の出力が表
             history: {},
         });
         expect(oldCount).toBe(11);
-        expect(exercises.length).toBe(5);
+        // 新アルゴリズムでは 8種目（1日上限）
+        expect(exercises.length).toBe(8);
         expect(oldCount).not.toBe(exercises.length);
     });
 });
